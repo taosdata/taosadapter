@@ -1,0 +1,77 @@
+debug = false
+port = 6041
+logLevel = "info"
+
+[pool]
+maxConnect = 4000
+maxIdle = 4000
+idleTimeout = "1h"
+
+[ssl]
+enable = false
+certFile = ""
+keyFile = ""
+
+[log]
+path = "/var/log/taos"
+rotationCount = 30
+rotationTime = "24h"
+rotationSize = "1GB"
+
+[opentsdb]
+enable = true
+
+[influxdb]
+enable = true
+
+[statsd]
+enable = true
+port = 6044
+db = "statsd"
+user = "root"
+password = "taosdata"
+worker = 10
+gatherInterval = "5s"
+protocol = "udp"
+maxTCPConnections = 250
+tcpKeepAlive = false
+allowPendingMessages = 50000
+deleteCounters = true
+deleteGauges = true
+deleteSets = true
+deleteTimings = true
+
+[collectd]
+enable = true
+port = 6045
+db = "collectd"
+user = "root"
+password = "taosdata"
+worker = 10
+
+
+[opentsdb_telnet]
+enable = false
+port = 6046
+maxTCPConnections = 250
+tcpKeepAlive = false
+db = "opentsdb_telnet"
+user = "root"
+password = "taosdata"
+worker = 1000
+
+[node_exporter]
+enable = false
+db = "node_exporter"
+user = "root"
+password = "taosdata"
+urls = ["http://localhost:9100"]
+responseTimeout = "5s"
+httpUsername = ""
+httpPassword = ""
+httpBearerTokenString = ""
+caCertFile = ""
+certFile = ""
+keyFile = ""
+insecureSkipVerify = true
+gatherDuration = "5s"
