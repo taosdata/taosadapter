@@ -10,11 +10,12 @@ import (
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/config"
+	"github.com/taosdata/taosadapter/tools/pool"
 )
 
 var logger = logrus.New()
 var ServerID = randomID()
-var globalLogFormatter = &TaosLogFormatter{buffer: &bytes.Buffer{}}
+var globalLogFormatter = &TaosLogFormatter{}
 
 type FileHook struct {
 	formatter logrus.Formatter
@@ -85,25 +86,26 @@ func randomID() string {
 }
 
 type TaosLogFormatter struct {
-	buffer *bytes.Buffer
 }
 
 func (t *TaosLogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
-	t.buffer.Reset()
-	t.buffer.WriteString(entry.Time.Format("01/02 15:04:05.000000"))
-	t.buffer.WriteByte(' ')
-	t.buffer.WriteString(ServerID)
-	t.buffer.WriteString(" TAOS_ADAPTER ")
-	t.buffer.WriteString(entry.Level.String())
-	t.buffer.WriteString(` "`)
-	t.buffer.WriteString(entry.Message)
-	t.buffer.WriteByte('"')
+	b := pool.BytesPoolGet()
+	defer pool.BytesPoolPut(b)
+	b.Reset()
+	b.WriteString(entry.Time.Format("01/02 15:04:05.000000"))
+	b.WriteByte(' ')
+	b.WriteString(ServerID)
+	b.WriteString(" TAOS_ADAPTER ")
+	b.WriteString(entry.Level.String())
+	b.WriteString(` "`)
+	b.WriteString(entry.Message)
+	b.WriteByte('"')
 	for k, v := range entry.Data {
-		t.buffer.WriteByte(' ')
-		t.buffer.WriteString(k)
-		t.buffer.WriteByte('=')
-		t.buffer.WriteString(fmt.Sprintf("%v", v))
+		b.WriteByte(' ')
+		b.WriteString(k)
+		b.WriteByte('=')
+		b.WriteString(fmt.Sprintf("%v", v))
 	}
-	t.buffer.WriteByte('\n')
-	return t.buffer.Bytes(), nil
+	b.WriteByte('\n')
+	return b.Bytes(), nil
 }
