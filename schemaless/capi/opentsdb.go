@@ -33,7 +33,7 @@ func InsertOpentsdbTelnet(taosConnect unsafe.Pointer, data, db string) error {
 	if code != httperror.SUCCESS {
 		return tErrors.GetError(code)
 	}
-	result := wrapper.TaosSchemalessInsert(taosConnect, []string{strings.TrimSpace(data)}, wrapper.OpenTSDBTelnetLineProtocol, "")
+	result := wrapper.TaosSchemalessInsert(taosConnect, []string{strings.TrimPrefix(strings.TrimSpace(data), "put ")}, wrapper.OpenTSDBTelnetLineProtocol, "")
 	code = wrapper.TaosError(result)
 	if code != 0 {
 		errStr := wrapper.TaosErrorStr(result)
