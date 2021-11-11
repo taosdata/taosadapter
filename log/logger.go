@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"sync"
 
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"github.com/sirupsen/logrus"
@@ -21,6 +22,7 @@ type FileHook struct {
 	formatter logrus.Formatter
 	writer    io.Writer
 	buf       *bytes.Buffer
+	sync.RWMutex
 }
 
 func NewFileHook(formatter logrus.Formatter, writer io.Writer) *FileHook {
@@ -36,6 +38,8 @@ func (f *FileHook) Fire(entry *logrus.Entry) error {
 	if err != nil {
 		return err
 	}
+	f.Lock()
+	defer f.Unlock()
 	f.buf.Write(data)
 	if f.buf.Len() > 1024 {
 		_, err = f.writer.Write(f.buf.Bytes())

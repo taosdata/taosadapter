@@ -135,6 +135,12 @@ func (p *Plugin) handler(conn *net.TCPConn, id uint64) {
 					if len(line) == 0 {
 						continue
 					}
+					if line[len(line)-1] == '\r' {
+						line = line[:len(line)-1]
+					}
+					if len(line) == 0 {
+						continue
+					}
 					if line == versionCommand {
 						conn.Write([]byte{'1'})
 						continue
@@ -142,12 +148,14 @@ func (p *Plugin) handler(conn *net.TCPConn, id uint64) {
 						insertLines = append(insertLines, line)
 					}
 				}
+				if len(insertLines) == 0 {
+					continue
+				}
 				select {
 				case p.in <- insertLines:
 				default:
 					logger.Errorln("can not handle more message so far. increase opentsdb_telnet.worker")
 				}
-
 			}
 		}
 	}
@@ -169,7 +177,13 @@ func (p *Plugin) tcp(port int) error {
 	go func() {
 		defer p.wg.Done()
 		if err := p.tcpListen(listener); err != nil {
-			logger.WithError(err).Panic()
+			select {
+			case <-p.done:
+				return
+			default:
+				logger.WithError(err).Panic()
+			}
+
 		}
 	}()
 
@@ -264,7 +278,7 @@ func (p *Plugin) handleData(lines []string) {
 		logger.Debug(start, "insert telnet payload", line)
 		err = capi.InsertOpentsdbTelnet(taosConn.TaosConnection, line, p.conf.DB)
 		if err != nil {
-			logger.WithError(err).Error("insert telnet payload error", line)
+			logger.WithError(err).Errorln("insert telnet payload error :", line)
 		}
 		logger.Debug("insert telnet payload cost:", time.Now().Sub(start))
 	}

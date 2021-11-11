@@ -58,6 +58,7 @@ func (a *ConnectorPool) Get() (unsafe.Pointer, error) {
 }
 
 func (a *ConnectorPool) Put(c unsafe.Pointer) error {
+	wrapper.TaosResetCurrentDB(c)
 	return a.pool.Put(c)
 }
 

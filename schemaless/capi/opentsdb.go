@@ -29,6 +29,9 @@ func InsertOpentsdbJson(taosConnect unsafe.Pointer, data []byte, db string) erro
 }
 
 func InsertOpentsdbTelnet(taosConnect unsafe.Pointer, data, db string) error {
+	if len(data) == 0 {
+		return nil
+	}
 	code := wrapper.TaosSelectDB(taosConnect, db)
 	if code != httperror.SUCCESS {
 		return tErrors.GetError(code)

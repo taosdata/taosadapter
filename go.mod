@@ -19,7 +19,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.9.0
 	github.com/stretchr/testify v1.7.0
-	github.com/taosdata/driver-go/v2 v2.0.1-0.20211029033648-a87ab9dee7ce
+	github.com/taosdata/driver-go/v2 v2.0.1-0.20211110082107-d42ee9e2be3c
 	github.com/valyala/fastjson v1.6.3
 	go.uber.org/automaxprocs v1.4.0
 )
