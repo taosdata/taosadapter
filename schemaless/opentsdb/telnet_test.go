@@ -13,6 +13,7 @@ func TestInsertTelnet(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	defer wrapper.TaosClose(conn)
 	type args struct {
 		conn unsafe.Pointer
 		data string

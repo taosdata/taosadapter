@@ -1648,8 +1648,8 @@ github.com/subosito/gotenv v1.2.0/go.mod h1:N0PQaV/YGNqwC0u51sEeR/aUtSLEXKX9iv69
 github.com/syndtr/gocapability v0.0.0-20170704070218-db04d3cc01c8/go.mod h1:hkRG7XYTFWNJGYcbNJQlaLq0fg1yr4J4t/NcTQtrfww=
 github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2/go.mod h1:hkRG7XYTFWNJGYcbNJQlaLq0fg1yr4J4t/NcTQtrfww=
 github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635/go.mod h1:hkRG7XYTFWNJGYcbNJQlaLq0fg1yr4J4t/NcTQtrfww=
-github.com/taosdata/driver-go/v2 v2.0.1-0.20211029033648-a87ab9dee7ce h1:+rB56Tz1vbdN9SupCJfTI1bir8tMg3rgT5/UrpuH0xA=
-github.com/taosdata/driver-go/v2 v2.0.1-0.20211029033648-a87ab9dee7ce/go.mod h1:W7pu74rSvDmGjJPO6fzp+GCtwOelrMgXEhPD0aQJ1xw=
+github.com/taosdata/driver-go/v2 v2.0.1-0.20211110082107-d42ee9e2be3c h1:QBBUhlrZTSQ5iXM+LaKQL0otDRD5SNk0bp2QkIz5ASQ=
+github.com/taosdata/driver-go/v2 v2.0.1-0.20211110082107-d42ee9e2be3c/go.mod h1:W7pu74rSvDmGjJPO6fzp+GCtwOelrMgXEhPD0aQJ1xw=
 github.com/tbrandon/mbserver v0.0.0-20170611213546-993e1772cc62 h1:Oj2e7Sae4XrOsk3ij21QjjEgAcVSeo9nkp0dI//cD2o=
 github.com/tbrandon/mbserver v0.0.0-20170611213546-993e1772cc62/go.mod h1:qUzPVlSj2UgxJkVbH0ZwuuiR46U8RBMDT5KLY78Ifpw=
 github.com/tchap/go-patricia v2.2.6+incompatible/go.mod h1:bmLyhP68RS6kStMGxByiQ23RP/odRBOTVjwp2cDyi6I=
