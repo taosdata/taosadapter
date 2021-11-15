@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v2/af"
 	"github.com/taosdata/taosadapter/db/commonpool"
+	"github.com/taosdata/taosadapter/db/tool"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/plugin"
 	"github.com/taosdata/taosadapter/schemaless/capi"
@@ -93,6 +94,12 @@ func (p *Influxdb) write(c *gin.Context) {
 			Err:     err.Error(),
 			Line:    0,
 		})
+		return
+	}
+	err = tool.CreateDB(user, password, db)
+	if err != nil {
+		logger.WithError(err).Errorln("create db error")
+		p.commonResponse(c, http.StatusInternalServerError, &message{Code: "internal error", Message: err.Error()})
 		return
 	}
 	taosConn, err := commonpool.GetConnection(user, password)

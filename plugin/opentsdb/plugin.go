@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v2/af"
 	"github.com/taosdata/taosadapter/db/commonpool"
+	"github.com/taosdata/taosadapter/db/tool"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/plugin"
 	"github.com/taosdata/taosadapter/schemaless/capi"
@@ -78,6 +79,12 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		p.errorResponse(c, http.StatusBadRequest, err)
 		return
 	}
+	err = tool.CreateDB(user, password, db)
+	if err != nil {
+		logger.WithError(err).Errorln("create db error")
+		p.errorResponse(c, http.StatusInternalServerError, err)
+		return
+	}
 	taosConn, err := commonpool.GetConnection(user, password)
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
@@ -140,6 +147,12 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 	if err != nil {
 		logger.WithError(err).Error("get auth error")
 		p.errorResponse(c, http.StatusBadRequest, err)
+		return
+	}
+	err = tool.CreateDB(user, password, db)
+	if err != nil {
+		logger.WithError(err).Errorln("create db error")
+		p.errorResponse(c, http.StatusInternalServerError, err)
 		return
 	}
 	taosConn, err := commonpool.GetConnection(user, password)

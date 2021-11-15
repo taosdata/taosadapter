@@ -36,6 +36,7 @@ func Init(r gin.IRouter) {
 			logger.WithError(err).Panicf("init plugin %s", name)
 		}
 	}
+	logger.Infoln("all plugin init finish")
 }
 
 func Start() {
@@ -45,6 +46,7 @@ func Start() {
 			logger.WithError(err).Panicf("start plugin %s", name)
 		}
 	}
+	logger.Infoln("all plugin start finish")
 }
 
 func Stop() {

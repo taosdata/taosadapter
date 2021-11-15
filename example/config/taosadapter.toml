@@ -51,11 +51,11 @@ worker = 10
 
 
 [opentsdb_telnet]
-enable = false
-port = 6046
+enable = true
 maxTCPConnections = 250
 tcpKeepAlive = false
-db = "opentsdb_telnet"
+dbs = ["opentsdb_telnet", "collectd", "icinga2", "tcollecter"]
+ports = [6046, 6047, 6048, 6049]
 user = "root"
 password = "taosdata"
 worker = 1000
