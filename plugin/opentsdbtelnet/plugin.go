@@ -13,7 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/db/commonpool"
-	"github.com/taosdata/taosadapter/db/tool"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/plugin"
 	"github.com/taosdata/taosadapter/schemaless/capi"
@@ -260,10 +259,6 @@ func (p *Plugin) Version() string {
 }
 
 func (p *Plugin) tcp(port int, index int) error {
-	err := tool.CreateDB(p.conf.User, p.conf.Password, p.conf.DBList[index])
-	if err != nil {
-		return err
-	}
 	address, err := net.ResolveTCPAddr("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return err

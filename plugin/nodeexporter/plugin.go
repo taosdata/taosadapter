@@ -20,7 +20,6 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/prometheus"
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
 	"github.com/taosdata/taosadapter/db/commonpool"
-	"github.com/taosdata/taosadapter/db/tool"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/plugin"
 	"github.com/taosdata/taosadapter/schemaless/capi"
@@ -55,10 +54,6 @@ func (p *NodeExporter) Init(_ gin.IRouter) error {
 func (p *NodeExporter) Start() error {
 	if !p.conf.Enable {
 		return nil
-	}
-	err := tool.CreateDB(p.conf.User, p.conf.Password, p.conf.DB)
-	if err != nil {
-		return err
 	}
 	p.exitChan = make(chan struct{})
 	ticker := time.NewTicker(p.conf.GatherDuration)

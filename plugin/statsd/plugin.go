@@ -11,7 +11,6 @@ import (
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/db/commonpool"
-	"github.com/taosdata/taosadapter/db/tool"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/plugin"
 	"github.com/taosdata/taosadapter/schemaless/capi"
@@ -67,11 +66,7 @@ func (p *Plugin) Start() error {
 	if !p.conf.Enable {
 		return nil
 	}
-	err := tool.CreateDB(p.conf.User, p.conf.Password, p.conf.DB)
-	if err != nil {
-		return err
-	}
-	err = p.input.Start(p.ac)
+	err := p.input.Start(p.ac)
 	if err != nil {
 		return err
 	}
