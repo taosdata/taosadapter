@@ -10,19 +10,14 @@ import (
 	"github.com/influxdata/influxdb/v2/models"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/schemaless"
+	"github.com/taosdata/taosadapter/schemaless/proto"
 	"github.com/taosdata/taosadapter/tools/pool"
 )
 
-type Result struct {
-	SuccessCount int
-	FailCount    int
-	ErrorList    []string
-}
-
 var logger = log.GetLogger("schemaless").WithField("protocol", "influxdb")
 
-func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision string) (*Result, error) {
-	result := &Result{}
+func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision string) (*proto.InfluxResult, error) {
+	result := &proto.InfluxResult{}
 	executor, err := schemaless.NewExecutor(taosConnect)
 	if err != nil {
 		return result, err
@@ -34,31 +29,45 @@ func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision strin
 	lines := make([]*schemaless.InsertLine, len(points))
 	result.ErrorList = make([]string, len(points))
 	b := pool.BytesPoolGet()
+	tmpB := pool.BytesPoolGet()
 	for i, point := range points {
 		b.Reset()
-		name := point.Name()
+		b.WriteByte('`')
+		b.Write(point.Name())
+		b.WriteByte('`')
+		stableName := b.String()
 		tags := point.Tags()
 		sort.Sort(tags)
-		b.Write(name)
-		b.WriteByte(' ')
-		b.WriteString(tags.String())
-		tableName := fmt.Sprintf("_%x", md5.Sum(b.Bytes()))
+		tagNames := make([]string, tags.Len())
+		tagValues := make([]string, tags.Len())
 		b.Reset()
+		b.WriteString(stableName)
+		for i, tag := range tags {
+			tmpB.Reset()
+
+			tmpB.WriteByte('`')
+			tmpB.WriteString(string(tag.Key))
+			tmpB.WriteByte('`')
+			name := tmpB.String()
+			pool.BytesPoolPut(tmpB)
+			tagNames[i] = name
+			tagValues[i] = string(tag.Value)
+			b.WriteByte(',')
+			b.WriteString(name)
+			b.WriteByte('=')
+			b.WriteString(string(tag.Value))
+		}
+		tableName := fmt.Sprintf("t_%x", md5.Sum(b.Bytes()))
 		fields, err := point.Fields()
 		if err != nil {
 			result.ErrorList[i] = err.Error()
 			continue
 		}
-		tagNames := tags.Keys()
-		tagValues := tags.Values()
-		b.WriteByte('`')
-		b.Write(name)
-		b.WriteByte('`')
 		lines[i] = &schemaless.InsertLine{
 			DB:         db,
 			Ts:         point.Time(),
 			TableName:  tableName,
-			STableName: b.String(),
+			STableName: stableName,
 			Fields:     fields,
 			TagNames:   tagNames,
 			TagValues:  tagValues,

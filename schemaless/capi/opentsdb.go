@@ -23,10 +23,7 @@ func InsertOpentsdbJson(taosConnect unsafe.Pointer, data []byte, db string) erro
 	if code != 0 {
 		errStr := wrapper.TaosErrorStr(result)
 		wrapper.TaosFreeResult(result)
-		return &tErrors.TaosError{
-			Code:   int32(code) & 0xffff,
-			ErrStr: errStr,
-		}
+		return tErrors.NewError(code, errStr)
 	}
 	wrapper.TaosFreeResult(result)
 	return nil
@@ -47,10 +44,7 @@ func InsertOpentsdbTelnet(taosConnect unsafe.Pointer, data, db string) error {
 	if code != 0 {
 		errStr := wrapper.TaosErrorStr(result)
 		wrapper.TaosFreeResult(result)
-		return &tErrors.TaosError{
-			Code:   int32(code) & 0xffff,
-			ErrStr: errStr,
-		}
+		return tErrors.NewError(code, errStr)
 	}
 	wrapper.TaosFreeResult(result)
 	return nil

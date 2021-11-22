@@ -28,11 +28,9 @@ func CleanPoint(point *Point) {
 
 func (p *Point) unmarshal(s string) (*Point, error) {
 	s = strings.TrimSpace(s)
-	if !strings.HasPrefix(s, "put ") {
-		return nil, fmt.Errorf("missing `put ` prefix in %q", s)
+	if strings.HasPrefix(s, "put ") {
+		s = s[4:]
 	}
-	//len("put ")
-	s = s[4:]
 	s = strings.TrimLeft(s, " ")
 	n := strings.IndexByte(s, ' ')
 	if n < 0 {
@@ -138,6 +136,7 @@ func unmarshalTags(s string) (Tags, error) {
 			}
 			return nil, err
 		}
+		dst = append(dst, tag)
 		s = s[n+1:]
 		if len(tag.Key) == 0 || len(tag.Value) == 0 {
 			// Skip empty tag

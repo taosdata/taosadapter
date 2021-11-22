@@ -15,7 +15,7 @@ import (
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/plugin"
-	"github.com/taosdata/taosadapter/schemaless/capi"
+	"github.com/taosdata/taosadapter/schemaless/inserter"
 )
 
 var logger = log.GetLogger("opentsdb_telnet")
@@ -315,7 +315,7 @@ func (p *Plugin) handleData(message *telnetMessage) {
 	}
 	for _, line := range message.body {
 		logger.Debugln(start, " insert telnet payload ", line)
-		err = capi.InsertOpentsdbTelnet(taosConn.TaosConnection, line, p.conf.DBList[message.index])
+		err = inserter.InsertOpentsdbTelnet(taosConn.TaosConnection, line, p.conf.DBList[message.index])
 		if err != nil {
 			logger.WithError(err).Errorln("insert telnet payload error :", line)
 		}

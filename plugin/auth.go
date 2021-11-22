@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"bytes"
 	"encoding/base64"
 	"errors"
 	"net/http"
@@ -97,7 +96,9 @@ func RegisterGenerateAuth(r gin.IRouter) {
 			c.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
-		b := bytes.NewBufferString(user)
+		b := pool.BytesPoolGet()
+		defer pool.BytesPoolPut(b)
+		b.WriteString(user)
 		b.WriteByte(':')
 		b.WriteString(password)
 		keyBytes := make([]byte, 16)

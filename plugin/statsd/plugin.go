@@ -13,7 +13,7 @@ import (
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/plugin"
-	"github.com/taosdata/taosadapter/schemaless/capi"
+	"github.com/taosdata/taosadapter/schemaless/inserter"
 )
 
 var logger = log.GetLogger("statsd")
@@ -128,7 +128,7 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metric telegraf.Me
 
 	start := time.Now()
 	logger.Debugln(start, "insert line", string(data))
-	result, err := capi.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns")
+	result, err := inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns")
 	logger.Debugln("insert line finish cost:", time.Now().Sub(start), string(data))
 	if err != nil || result.FailCount != 0 {
 		logger.WithError(err).WithField("result", result).Errorln("insert lines error", string(data))

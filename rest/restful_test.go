@@ -40,3 +40,30 @@ func BenchmarkRestful(b *testing.B) {
 		assert.Equal(b, 200, w.Code)
 	}
 }
+
+func TestSql(t *testing.T) {
+	w := httptest.NewRecorder()
+	body := strings.NewReader("show databases")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql?db=log", body)
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+}
+
+func TestSqlt(t *testing.T) {
+	w := httptest.NewRecorder()
+	body := strings.NewReader("show databases")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sqlt?db=log", body)
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+}
+
+func TestSqlutc(t *testing.T) {
+	w := httptest.NewRecorder()
+	body := strings.NewReader("show databases")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sqlutc?db=log", body)
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+}

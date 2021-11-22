@@ -12,7 +12,7 @@ import (
 func selectDB(taosConnect unsafe.Pointer, db string) error {
 	code := wrapper.TaosSelectDB(taosConnect, db)
 	if code != httperror.SUCCESS {
-		if code == int(tErrors.TSC_DB_NOT_SELECTED) {
+		if int32(code)&0xffff == tErrors.TSC_DB_NOT_SELECTED || int32(code)&0xffff == tErrors.MND_INVALID_DB {
 			err := tool.CreateDBWithConnection(taosConnect, db)
 			if err != nil {
 				return err

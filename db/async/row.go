@@ -5,7 +5,9 @@ import (
 	"errors"
 	"unsafe"
 
+	tErrors "github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/taosadapter/httperror"
 	"github.com/taosdata/taosadapter/thread"
 )
 
@@ -35,6 +37,11 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, sql string, timeFormat wrap
 		return nil, err
 	}
 	res := result.res
+	code := wrapper.TaosError(res)
+	if code != httperror.SUCCESS {
+		errStr := wrapper.TaosErrorStr(res)
+		return nil, tErrors.NewError(code, errStr)
+	}
 	var fieldsCount int
 	fieldsCount = wrapper.TaosNumFields(res)
 	execResult := &ExecResult{FieldCount: fieldsCount}
@@ -99,4 +106,27 @@ type ExecResult struct {
 	FieldCount   int
 	Header       *wrapper.RowsHeader
 	Data         [][]driver.Value
+}
+
+func (a *Async) TaosExecWithoutResult(taosConnect unsafe.Pointer, sql string) error {
+	handler := a.handlerPool.Get()
+	defer a.handlerPool.Put(handler)
+	result, err := a.TaosQuery(taosConnect, sql, handler)
+	defer func() {
+		if result != nil && result.res != nil {
+			thread.Lock()
+			wrapper.TaosFreeResult(result.res)
+			thread.Unlock()
+		}
+	}()
+	if err != nil {
+		return err
+	}
+	res := result.res
+	code := wrapper.TaosError(res)
+	if code != httperror.SUCCESS {
+		errStr := wrapper.TaosErrorStr(res)
+		return tErrors.NewError(code, errStr)
+	}
+	return nil
 }
