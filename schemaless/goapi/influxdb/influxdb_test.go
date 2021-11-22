@@ -36,7 +36,7 @@ func TestInsertInfluxdb(t *testing.T) {
 			args: args{
 				conn:      conn,
 				data:      []byte("measurement,host=host1 field1=2i,field2=2.0 1577836800000000000"),
-				db:        "test",
+				db:        "test_goapi",
 				precision: "",
 			},
 			want: &proto.InfluxResult{

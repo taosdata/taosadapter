@@ -1,4 +1,4 @@
-package capi
+package capi_test
 
 import (
 	"reflect"
@@ -6,14 +6,11 @@ import (
 	"unsafe"
 
 	"github.com/taosdata/driver-go/v2/wrapper"
-	"github.com/taosdata/taosadapter/config"
-	"github.com/taosdata/taosadapter/db"
+	"github.com/taosdata/taosadapter/schemaless/capi"
 	"github.com/taosdata/taosadapter/schemaless/proto"
 )
 
 func TestInsertInfluxdb(t *testing.T) {
-	config.Init()
-	db.PrepareConnection()
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Error(err)
@@ -37,7 +34,7 @@ func TestInsertInfluxdb(t *testing.T) {
 			args: args{
 				taosConnect: conn,
 				data:        []byte("measurement,host=host1 field1=2i,field2=2.0 1577836800000000000"),
-				db:          "test",
+				db:          "test_capi",
 			},
 			want: &proto.InfluxResult{
 				SuccessCount: 1,
@@ -49,7 +46,7 @@ func TestInsertInfluxdb(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := InsertInfluxdb(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.precision)
+			got, err := capi.InsertInfluxdb(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.precision)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("InsertInfluxdb() error = %v, wantErr %v", err, tt.wantErr)
 				return

@@ -1,4 +1,4 @@
-package capi
+package capi_test
 
 import (
 	"testing"
@@ -6,13 +6,10 @@ import (
 
 	tErrors "github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/driver-go/v2/wrapper"
-	"github.com/taosdata/taosadapter/config"
-	"github.com/taosdata/taosadapter/db"
+	"github.com/taosdata/taosadapter/schemaless/capi"
 )
 
 func Test_selectDB(t *testing.T) {
-	config.Init()
-	db.PrepareConnection()
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Error(err)
@@ -48,7 +45,7 @@ func Test_selectDB(t *testing.T) {
 				return
 			}
 			wrapper.TaosFreeResult(result)
-			if err := selectDB(tt.args.taosConnect, tt.args.db); (err != nil) != tt.wantErr {
+			if err := capi.SelectDB(tt.args.taosConnect, tt.args.db); (err != nil) != tt.wantErr {
 				t.Errorf("selectDB() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

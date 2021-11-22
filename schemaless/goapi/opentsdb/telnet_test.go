@@ -36,7 +36,7 @@ func TestInsertTelnet(t *testing.T) {
 			args: args{
 				conn: conn,
 				data: "put sys.if.bytes.out 1479496100 1.3E3 host=web01 interface=eth0",
-				db:   "test",
+				db:   "test_goapi",
 			},
 			wantErr: false,
 		},
@@ -45,7 +45,7 @@ func TestInsertTelnet(t *testing.T) {
 			args: args{
 				conn: conn,
 				data: "put metric.foo notatime 42 host=web01",
-				db:   "test",
+				db:   "test_goapi",
 			},
 			wantErr: true,
 		},
@@ -54,7 +54,7 @@ func TestInsertTelnet(t *testing.T) {
 			args: args{
 				conn: conn,
 				data: "put ",
-				db:   "test",
+				db:   "test_goapi",
 			},
 			wantErr: true,
 		},

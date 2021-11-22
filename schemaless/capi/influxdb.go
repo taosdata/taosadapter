@@ -10,7 +10,7 @@ import (
 )
 
 func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision string) (*proto.InfluxResult, error) {
-	err := selectDB(taosConnect, db)
+	err := SelectDB(taosConnect, db)
 	if err != nil {
 		return nil, err
 	}

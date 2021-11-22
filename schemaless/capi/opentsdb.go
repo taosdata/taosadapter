@@ -12,7 +12,7 @@ func InsertOpentsdbJson(taosConnect unsafe.Pointer, data []byte, db string) erro
 	if len(data) == 0 {
 		return nil
 	}
-	err := selectDB(taosConnect, db)
+	err := SelectDB(taosConnect, db)
 	if err != nil {
 		return err
 	}
@@ -33,7 +33,7 @@ func InsertOpentsdbTelnet(taosConnect unsafe.Pointer, data, db string) error {
 	if len(data) == 0 {
 		return nil
 	}
-	err := selectDB(taosConnect, db)
+	err := SelectDB(taosConnect, db)
 	if err != nil {
 		return err
 	}

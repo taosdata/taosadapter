@@ -9,7 +9,7 @@ import (
 	"github.com/taosdata/taosadapter/httperror"
 )
 
-func selectDB(taosConnect unsafe.Pointer, db string) error {
+func SelectDB(taosConnect unsafe.Pointer, db string) error {
 	code := wrapper.TaosSelectDB(taosConnect, db)
 	if code != httperror.SUCCESS {
 		if int32(code)&0xffff == tErrors.TSC_DB_NOT_SELECTED || int32(code)&0xffff == tErrors.MND_INVALID_DB {

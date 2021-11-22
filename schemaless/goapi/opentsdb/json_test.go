@@ -37,7 +37,7 @@ func TestInsertJson(t *testing.T) {
        "dc": "lga"
     }
 }`),
-				db: "test",
+				db: "test_goapi",
 			},
 			wantErr: false,
 		},
@@ -67,7 +67,7 @@ func TestInsertJson(t *testing.T) {
     }
 ]
 `),
-				db: "test",
+				db: "test_goapi",
 			},
 			wantErr: false,
 		},
