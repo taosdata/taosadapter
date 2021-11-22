@@ -5,9 +5,13 @@ import (
 	"unsafe"
 
 	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/taosadapter/config"
+	"github.com/taosdata/taosadapter/db"
 )
 
 func TestInsertOpentsdbTelnet(t *testing.T) {
+	config.Init()
+	db.PrepareConnection()
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Error(err)
@@ -44,6 +48,8 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 }
 
 func BenchmarkTelnet(b *testing.B) {
+	config.Init()
+	db.PrepareConnection()
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		b.Error(err)

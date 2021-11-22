@@ -6,10 +6,14 @@ import (
 	"unsafe"
 
 	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/taosadapter/config"
+	"github.com/taosdata/taosadapter/db"
 	"github.com/taosdata/taosadapter/schemaless/proto"
 )
 
 func TestInsertInfluxdb(t *testing.T) {
+	config.Init()
+	db.PrepareConnection()
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Error(err)
