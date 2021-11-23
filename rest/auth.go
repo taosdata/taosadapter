@@ -42,10 +42,7 @@ func DecodeDes(auth string) (user, password string, err error) {
 	if len(d) != 48 {
 		return "", "", errors.New("wrong des length")
 	}
-	block, err := des.NewCipher(desKey)
-	if err != nil {
-		return "", "", err
-	}
+	block, _ := des.NewCipher(desKey)
 	b := pool.BytesPoolGet()
 	defer pool.BytesPoolPut(b)
 	for i := 0; i < 6; i++ {
@@ -83,10 +80,7 @@ func EncodeDes(user, password string) (string, error) {
 	if exist {
 		return v.(string), nil
 	}
-	block, err := des.NewCipher(desKey)
-	if err != nil {
-		return "", err
-	}
+	block, _ := des.NewCipher(desKey)
 	buf := pool.BytesPoolGet()
 	defer pool.BytesPoolPut(buf)
 	for i := 0; i < 6; i++ {

@@ -63,7 +63,7 @@ func TestInsertTelnet(t *testing.T) {
 			args: args{
 				conn: conn,
 				data: "put key.create 1479496100 42 create=reserved",
-				db:   "test",
+				db:   "test_goapi",
 			},
 			wantErr: false,
 		},

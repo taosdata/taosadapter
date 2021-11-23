@@ -228,5 +228,5 @@ func (ctl *Restful) des(c *gin.Context) {
 }
 
 func (ctl *Restful) Close() {
-
+	return
 }

@@ -24,6 +24,14 @@ func TestEncodeDes(t *testing.T) {
 			},
 			want:    "/KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04",
 			wantErr: false,
+		}, {
+			name: "wrong length",
+			args: args{
+				user:     "aaaaaaaaaaaaaaaaaaaaaaaaa",
+				password: "",
+			},
+			want:    "",
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
@@ -59,6 +67,22 @@ func TestDecodeDes(t *testing.T) {
 			wantUser:     "root",
 			wantPassword: "taosdata",
 			wantErr:      false,
+		}, {
+			name: "wrong",
+			args: args{
+				auth: "/",
+			},
+			wantUser:     "",
+			wantPassword: "",
+			wantErr:      true,
+		}, {
+			name: "wrong length",
+			args: args{
+				auth: "YQ==",
+			},
+			wantUser:     "",
+			wantPassword: "",
+			wantErr:      true,
 		},
 	}
 	for _, tt := range tests {

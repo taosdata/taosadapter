@@ -1,7 +1,6 @@
 package log
 
 import (
-	"net/http"
 	"sync/atomic"
 	"time"
 
@@ -37,7 +36,7 @@ type recoverLog struct {
 }
 
 func (r *recoverLog) Write(p []byte) (n int, err error) {
-	logger.Errorln(p)
+	r.logger.Errorln(string(p))
 	return len(p), nil
 }
 
@@ -46,8 +45,6 @@ func GinRecoverLog() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.MustGet("currentID").(uint32)
 		writer := &recoverLog{logger: logger.WithField("id", id)}
-		gin.RecoveryWithWriter(writer, func(c *gin.Context, err interface{}) {
-			c.AbortWithStatus(http.StatusInternalServerError)
-		})
+		gin.RecoveryWithWriter(writer)(c)
 	}
 }

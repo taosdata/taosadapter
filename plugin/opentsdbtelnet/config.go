@@ -46,8 +46,8 @@ func init() {
 	viper.SetDefault("opentsdb_telnet.tcpKeepAlive", false)
 
 	_ = viper.BindEnv("opentsdb_telnet.dbs", "TAOS_ADAPTER_OPENTSDB_TELNET_DBS")
-	pflag.StringSlice("opentsdb_telnet.dbs", []string{"opentsdb_telnet", "collectd", "icinga2", "tcollector"}, `opentsdb_telnet db names. Env "TAOS_ADAPTER_OPENTSDB_TELNET_DBS"`)
-	viper.SetDefault("opentsdb_telnet.dbs", []string{"opentsdb_telnet", "collectd", "icinga2", "tcollector"})
+	pflag.StringSlice("opentsdb_telnet.dbs", []string{"opentsdb_telnet", "collectd_tsdb", "icinga2_tsdb", "tcollector_tsdb"}, `opentsdb_telnet db names. Env "TAOS_ADAPTER_OPENTSDB_TELNET_DBS"`)
+	viper.SetDefault("opentsdb_telnet.dbs", []string{"opentsdb_telnet", "collectd_tsdb", "icinga2_tsdb", "tcollector_tsdb"})
 
 	_ = viper.BindEnv("opentsdb_telnet.user", "TAOS_ADAPTER_OPENTSDB_TELNET_USER")
 	pflag.String("opentsdb_telnet.user", common.DefaultUser, `opentsdb_telnet user. Env "TAOS_ADAPTER_OPENTSDB_TELNET_USER"`)

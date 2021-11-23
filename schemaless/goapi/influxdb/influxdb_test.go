@@ -50,8 +50,8 @@ func TestInsertInfluxdb(t *testing.T) {
 			name: "millisecond",
 			args: args{
 				conn:      conn,
-				data:      []byte("measurement,host=host1 field1=2i,field2=2.0 1577836900000"),
-				db:        "test",
+				data:      []byte("measurement,host=host1 field1=2i,field2=2.0,fieldKey=\"Launch 🚀\" 1577836900001"),
+				db:        "test_goapi",
 				precision: "ms",
 			},
 			want: &proto.InfluxResult{

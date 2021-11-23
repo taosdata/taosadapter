@@ -98,6 +98,12 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metrics []telegraf
 	if len(metrics) == 0 {
 		return
 	}
+
+	for _, metric := range metrics {
+		if metric.Time().IsZero() {
+			metric.SetTime(time.Now())
+		}
+	}
 	data, err := serializer.SerializeBatch(metrics)
 	if err != nil {
 		logger.WithError(err).Error("serialize collectd error")

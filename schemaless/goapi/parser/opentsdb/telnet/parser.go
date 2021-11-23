@@ -38,9 +38,6 @@ func (p *Point) unmarshal(s string) (*Point, error) {
 	}
 
 	p.Metric = s[:n]
-	if len(p.Metric) == 0 {
-		return nil, fmt.Errorf("metric cannot be empty")
-	}
 	tail := strings.TrimLeft(s[n+1:], " ")
 	n = strings.IndexByte(tail, ' ')
 	if n < 0 {

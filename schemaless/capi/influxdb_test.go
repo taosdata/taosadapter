@@ -33,7 +33,7 @@ func TestInsertInfluxdb(t *testing.T) {
 			name: "test",
 			args: args{
 				taosConnect: conn,
-				data:        []byte("measurement,host=host1 field1=2i,field2=2.0 1577836800000000000"),
+				data:        []byte("measurement,host=host1 field1=2i,field2=2.0,fieldKey=\"Launch 🚀\" 1577836800000000001"),
 				db:          "test_capi",
 			},
 			want: &proto.InfluxResult{
@@ -42,6 +42,24 @@ func TestInsertInfluxdb(t *testing.T) {
 				ErrorList:    make([]string, 1),
 			},
 			wantErr: false,
+		}, {
+			name: "wrong",
+			args: args{
+				taosConnect: conn,
+				data:        []byte("wrong,host=host1 field1=wrong 1577836800000000001"),
+				db:          "test_capi",
+			},
+			want:    nil,
+			wantErr: true,
+		}, {
+			name: "wrongdb",
+			args: args{
+				taosConnect: conn,
+				data:        []byte("wrong,host=host1 field1=wrong 1577836800000000001"),
+				db:          "1'test_capi",
+			},
+			want:    nil,
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {

@@ -67,3 +67,27 @@ func TestGetConnection(t *testing.T) {
 		})
 	}
 }
+
+func TestReGetConnection(t *testing.T) {
+	conn, err := GetConnection("root", "taosdata")
+	assert.NoError(t, err)
+	conn2, err := GetConnection("root", "wrong")
+	assert.Error(t, err)
+	assert.Nil(t, conn2)
+	err = conn.Put()
+	assert.NoError(t, err)
+}
+
+func TestConnectorPool_Close(t *testing.T) {
+	pool, err := NewConnectorPool("root", "taosdata")
+	assert.NoError(t, err)
+	conn, err := pool.Get()
+	assert.NoError(t, err)
+	err = pool.Put(conn)
+	assert.NoError(t, err)
+	conn2, err := pool.Get()
+	assert.NoError(t, err)
+	err = pool.Close(conn2)
+	assert.NoError(t, err)
+	pool.Release()
+}

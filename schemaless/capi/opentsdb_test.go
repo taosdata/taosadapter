@@ -41,6 +41,30 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 				db:          "test_capi",
 			},
 			wantErr: false,
+		}, {
+			name: "wrong",
+			args: args{
+				taosConnect: conn,
+				data:        "df.data.df_complex.used 163653962000 21393473536 fqdn=vm130  status=production",
+				db:          "test_capi",
+			},
+			wantErr: true,
+		}, {
+			name: "wrongdb",
+			args: args{
+				taosConnect: conn,
+				data:        "df.data.df_complex.used 1636539620 21393473536 fqdn=vm130  status=production",
+				db:          "1'test_capi",
+			},
+			wantErr: true,
+		}, {
+			name: "nodata",
+			args: args{
+				taosConnect: conn,
+				data:        "",
+				db:          "test_capi",
+			},
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
@@ -102,6 +126,48 @@ func TestInsertOpentsdbJson(t *testing.T) {
     }
 }`),
 				db: "test_capi",
+			},
+			wantErr: false,
+		}, {
+			name: "wrong",
+			args: args{
+				taosConnect: conn,
+				data: []byte(`
+{
+    "metric": "sys.cpu.nice",
+    "timestamp": 1346846400,
+    "value": 18,
+    "tags": {
+       "host": "web01",
+       "dc": "lga"
+    },
+}`),
+				db: "test_capi",
+			},
+			wantErr: true,
+		}, {
+			name: "wrongdb",
+			args: args{
+				taosConnect: conn,
+				data: []byte(`
+{
+    "metric": "sys.cpu.nice",
+    "timestamp": 1346846400,
+    "value": 18,
+    "tags": {
+       "host": "web01",
+       "dc": "lga"
+    },
+}`),
+				db: "1'test_capi",
+			},
+			wantErr: true,
+		}, {
+			name: "nodata",
+			args: args{
+				taosConnect: conn,
+				data:        nil,
+				db:          "test_capi",
 			},
 			wantErr: false,
 		},

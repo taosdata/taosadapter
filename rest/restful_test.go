@@ -44,8 +44,8 @@ func BenchmarkRestful(b *testing.B) {
 func TestSql(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("show databases")
-	req, _ := http.NewRequest(http.MethodPost, "/rest/sql?db=log", body)
-	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql/log", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 }
@@ -53,7 +53,7 @@ func TestSql(t *testing.T) {
 func TestSqlt(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("show databases")
-	req, _ := http.NewRequest(http.MethodPost, "/rest/sqlt?db=log", body)
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sqlt/log", body)
 	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -62,8 +62,36 @@ func TestSqlt(t *testing.T) {
 func TestSqlutc(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("show databases")
-	req, _ := http.NewRequest(http.MethodPost, "/rest/sqlutc?db=log", body)
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sqlutc/log", body)
 	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+}
+
+func TestLogin(t *testing.T) {
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/rest/login/root/password", nil)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	req, _ = http.NewRequest(http.MethodGet, "/rest/login/root111111111111111111111111111/password", nil)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+}
+
+func TestWrongSql(t *testing.T) {
+	w := httptest.NewRecorder()
+	body := strings.NewReader("wrong sql")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql/log", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+}
+
+func TestNoSql(t *testing.T) {
+	w := httptest.NewRecorder()
+	body := strings.NewReader("")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql/log", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 }

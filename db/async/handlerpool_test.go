@@ -2,6 +2,7 @@ package async
 
 import (
 	"testing"
+	"time"
 )
 
 func BenchmarkName(b *testing.B) {
@@ -39,4 +40,15 @@ func TestNewHandlerPool(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHandlerPool_Get(t *testing.T) {
+	pool := NewHandlerPool(1)
+	h := pool.Get()
+	go func() {
+		time.Sleep(time.Millisecond)
+		pool.Put(h)
+	}()
+	h2 := pool.Get()
+	pool.Put(h2)
 }

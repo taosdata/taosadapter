@@ -64,4 +64,6 @@ func TestNodeExporter_Gather(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, float64(1), d[0])
 	t.Logf("%#v", d)
+	err = n.Stop()
+	assert.NoError(t, err)
 }
