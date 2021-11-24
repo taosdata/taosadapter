@@ -45,6 +45,7 @@ func NewExecutor(conn unsafe.Pointer) (*Executor, error) {
 }
 
 func (e *Executor) InsertTDengine(line *InsertLine) (string, error) {
+	prepareField(line)
 	//insert into table() using stable(tagName ...) tags(tagValue...) (field ...) values (values...)
 	sql := e.generateInsertSql(line)
 	if len(line.DB) == 0 {
@@ -194,12 +195,11 @@ func (e *Executor) createStable(info *InsertLine) error {
 	})
 	fmt.Println(time.Now().Sub(s))
 	if err != nil {
-		//返回错误
 		var tdErr *tErrors.TaosError
 		if errors.As(err, &tdErr) {
 			switch tdErr.Code {
 			case tErrors.MND_TABLE_ALREADY_EXIST:
-				//表已经创建,返回正常
+				// table already created
 			default:
 				return tdErr
 			}
@@ -245,18 +245,14 @@ func (e *Executor) CreateSTable(db string, tableName string, info *TableInfo) er
 func (e *Executor) generateFieldSql(info *FieldInfo) string {
 	b := pool.BytesPoolGet()
 	defer pool.BytesPoolPut(b)
-	if info.Type == NCHARType || info.Type == BINARYType {
-		b.WriteString(info.Name)
-		b.WriteByte(' ')
-		b.WriteString(info.Type)
-		b.WriteByte('(')
-		b.WriteString(strconv.Itoa(info.Length))
-		b.WriteByte(')')
-		return b.String()
-	}
 	b.WriteString(info.Name)
 	b.WriteByte(' ')
 	b.WriteString(info.Type)
+	if info.Type == NCHARType || info.Type == BINARYType {
+		b.WriteByte('(')
+		b.WriteString(strconv.Itoa(info.Length))
+		b.WriteByte(')')
+	}
 	return b.String()
 }
 
@@ -626,4 +622,28 @@ func (e *Executor) generateInsertSql(line *InsertLine) string {
 	}
 	b.WriteByte(')')
 	return b.String()
+}
+
+func prepareField(line *InsertLine) {
+	b := pool.BytesPoolGet()
+	defer pool.BytesPoolPut(b)
+	for i, name := range line.TagNames {
+		if name[0] != '`' {
+			b.Reset()
+			b.WriteByte('`')
+			b.WriteString(name)
+			b.WriteByte('`')
+			line.TagNames[i] = b.String()
+		}
+	}
+	for k, v := range line.Fields {
+		if k[0] != '`' {
+			b.Reset()
+			b.WriteByte('`')
+			b.WriteString(k)
+			b.WriteByte('`')
+			line.Fields[b.String()] = v
+			delete(line.Fields, k)
+		}
+	}
 }
