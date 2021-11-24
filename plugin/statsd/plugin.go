@@ -32,6 +32,14 @@ func (p *Plugin) Init(_ gin.IRouter) error {
 		logger.Info("statsd disabled")
 		return nil
 	}
+	return nil
+}
+
+func (p *Plugin) Start() error {
+	if !p.conf.Enable {
+		return nil
+	}
+	p.closeChan = make(chan struct{})
 	p.metricChan = make(chan telegraf.Metric, 2*p.conf.Worker)
 	for i := 0; i < p.conf.Worker; i++ {
 		go func() {
@@ -59,18 +67,10 @@ func (p *Plugin) Init(_ gin.IRouter) error {
 		Log:                    logger,
 	}
 	p.ac = agent.NewAccumulator(&MetricMaker{logger: logger}, p.metricChan)
-	return nil
-}
-
-func (p *Plugin) Start() error {
-	if !p.conf.Enable {
-		return nil
-	}
 	err := p.input.Start(p.ac)
 	if err != nil {
 		return err
 	}
-	p.closeChan = make(chan struct{})
 	ticker := time.NewTicker(p.conf.GatherInterval)
 	go func() {
 		for {
