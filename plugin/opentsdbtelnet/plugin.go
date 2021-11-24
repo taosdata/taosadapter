@@ -291,7 +291,10 @@ func (p *Plugin) parser() {
 		select {
 		case <-p.done:
 			return
-		case in := <-p.in:
+		case in, ok := <-p.in:
+			if !ok {
+				return
+			}
 			p.handleData(in)
 		}
 	}
