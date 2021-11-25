@@ -5,8 +5,15 @@ import (
 	"unsafe"
 
 	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/taosadapter/config"
+	"github.com/taosdata/taosadapter/db"
 )
 
+func TestMain(m *testing.M) {
+	config.Init()
+	db.PrepareConnection()
+	m.Run()
+}
 func TestInsertTelnet(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
@@ -29,7 +36,7 @@ func TestInsertTelnet(t *testing.T) {
 			args: args{
 				conn: conn,
 				data: "put sys.if.bytes.out 1479496100 1.3E3 host=web01 interface=eth0",
-				db:   "test",
+				db:   "test_goapi",
 			},
 			wantErr: false,
 		},
@@ -38,7 +45,7 @@ func TestInsertTelnet(t *testing.T) {
 			args: args{
 				conn: conn,
 				data: "put metric.foo notatime 42 host=web01",
-				db:   "test",
+				db:   "test_goapi",
 			},
 			wantErr: true,
 		},
@@ -47,7 +54,7 @@ func TestInsertTelnet(t *testing.T) {
 			args: args{
 				conn: conn,
 				data: "put ",
-				db:   "test",
+				db:   "test_goapi",
 			},
 			wantErr: true,
 		},
@@ -56,16 +63,31 @@ func TestInsertTelnet(t *testing.T) {
 			args: args{
 				conn: conn,
 				data: "put key.create 1479496100 42 create=reserved",
-				db:   "test",
+				db:   "test_goapi",
 			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := InsertTelnet(tt.args.conn, tt.args.data, tt.args.db); (err != nil) != tt.wantErr {
+			if err := InsertOpentsdbTelnet(tt.args.conn, tt.args.data, tt.args.db); (err != nil) != tt.wantErr {
 				t.Errorf("InsertTelnet() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func BenchmarkTelnet(b *testing.B) {
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		b.Error(err)
+		return
+	}
+	defer wrapper.TaosClose(conn)
+	for i := 0; i < b.N; i++ {
+		err := InsertOpentsdbTelnet(conn, "put sys.if.bytes.out 1479496100 1.3E3 host=web01 interface=eth0", "test")
+		if err != nil {
+			b.Error(err)
+		}
 	}
 }

@@ -27,7 +27,7 @@ const (
 	objectJson
 )
 
-func InsertJson(taosConnect unsafe.Pointer, data []byte, db string) error {
+func InsertOpentsdbJson(taosConnect unsafe.Pointer, data []byte, db string) error {
 	if len(data) == 0 {
 		return fmt.Errorf("empty data")
 	}
@@ -80,6 +80,10 @@ func InsertJson(taosConnect unsafe.Pointer, data []byte, db string) error {
 			//millisecond
 			ts = time.Unix(0, point.Timestamp*1e6)
 		}
+		b.WriteByte('`')
+		b.WriteString(point.Metric)
+		b.WriteByte('`')
+		stableName := b.String()
 		tagNames := make([]string, len(point.Tags))
 		tagValues := make([]string, len(point.Tags))
 		index := 0
@@ -91,25 +95,29 @@ func InsertJson(taosConnect unsafe.Pointer, data []byte, db string) error {
 		for i, tagName := range tagNames {
 			tagValues[i] = point.Tags[tagName]
 		}
-		b.WriteString(point.Metric)
-		for i := 0; i < len(tagNames); i++ {
-			b.WriteString(tagNames[i])
-			b.WriteByte('=')
-			b.WriteString(tagValues[i])
-			if i != len(tagNames)-1 {
-				b.WriteByte(' ')
-			}
-		}
-		tableName := fmt.Sprintf("_%x", md5.Sum(b.Bytes()))
 		b.Reset()
-		b.WriteByte('`')
-		b.WriteString(point.Metric)
-		b.WriteByte('`')
+		b.WriteString(stableName)
+		for i, tag := range tagNames {
+			tmpB := pool.BytesPoolGet()
+			tmpB.WriteByte('`')
+			tmpB.WriteString(tag)
+			tmpB.WriteByte('`')
+			name := tmpB.String()
+			pool.BytesPoolPut(tmpB)
+			tagNames[i] = name
+			tagValues[i] = point.Tags[tag]
+			b.WriteByte(',')
+			b.WriteString(name)
+			b.WriteByte('=')
+			b.WriteString(point.Tags[tag])
+		}
+		tableName := fmt.Sprintf("t_%x", md5.Sum(b.Bytes()))
+
 		sql, err := executor.InsertTDengine(&schemaless.InsertLine{
 			DB:         db,
 			Ts:         ts,
 			TableName:  tableName,
-			STableName: b.String(),
+			STableName: stableName,
 			Fields: map[string]interface{}{
 				valueField: point.Value,
 			},

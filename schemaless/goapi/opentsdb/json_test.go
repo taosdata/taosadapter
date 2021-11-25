@@ -37,7 +37,7 @@ func TestInsertJson(t *testing.T) {
        "dc": "lga"
     }
 }`),
-				db: "test",
+				db: "test_goapi",
 			},
 			wantErr: false,
 		},
@@ -67,14 +67,14 @@ func TestInsertJson(t *testing.T) {
     }
 ]
 `),
-				db: "test",
+				db: "test_goapi",
 			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := InsertJson(tt.args.conn, tt.args.data, tt.args.db); (err != nil) != tt.wantErr {
+			if err := InsertOpentsdbJson(tt.args.conn, tt.args.data, tt.args.db); (err != nil) != tt.wantErr {
 				t.Errorf("InsertJson() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

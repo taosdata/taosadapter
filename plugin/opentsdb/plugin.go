@@ -14,7 +14,7 @@ import (
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/plugin"
-	"github.com/taosdata/taosadapter/schemaless/capi"
+	"github.com/taosdata/taosadapter/schemaless/inserter"
 	"github.com/taosdata/taosadapter/tools/pool"
 	"github.com/taosdata/taosadapter/tools/web"
 )
@@ -95,7 +95,7 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		start = time.Now()
 	}
 	logger.Debug(start, "insert json payload", string(data))
-	err = capi.InsertOpentsdbJson(taosConn.TaosConnection, data, db)
+	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db)
 	logger.Debug("insert json payload cost:", time.Now().Sub(start))
 	if err != nil {
 		logger.WithError(err).Error("insert json payload error", string(data))
@@ -161,7 +161,7 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 	logger.Debug(start, "insert telnet payload", lines)
 	var errorList = make([]string, 0, len(lines))
 	for _, line := range lines {
-		err := capi.InsertOpentsdbTelnet(taosConn.TaosConnection, line, db)
+		err := inserter.InsertOpentsdbTelnet(taosConn.TaosConnection, line, db)
 		if err != nil {
 			errorList = append(errorList, err.Error())
 		}

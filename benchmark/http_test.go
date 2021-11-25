@@ -17,3 +17,22 @@ func BenchmarkRoute(b *testing.B) {
 		assert.Equal(b, 200, w.Code)
 	}
 }
+
+func Test_setupRouter(t *testing.T) {
+	router := setupRouter()
+	w := httptest.NewRecorder()
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "common",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, _ := http.NewRequest("POST", "/rest/sql", nil)
+			router.ServeHTTP(w, req)
+			assert.Equal(t, 200, w.Code)
+		})
+	}
+}

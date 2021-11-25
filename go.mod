@@ -5,6 +5,7 @@ go 1.14
 require (
 	cloud.google.com/go/kms v1.0.0 // indirect
 	cloud.google.com/go/monitoring v1.0.0 // indirect
+	collectd.org v0.5.0
 	github.com/gin-contrib/cors v1.3.1
 	github.com/gin-contrib/gzip v0.0.3
 	github.com/gin-contrib/pprof v1.3.0
@@ -19,7 +20,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.9.0
 	github.com/stretchr/testify v1.7.0
-	github.com/taosdata/driver-go/v2 v2.0.1-0.20211110082107-d42ee9e2be3c
+	github.com/taosdata/driver-go/v2 v2.0.1-0.20211116040418-1b9d80235aa7
 	github.com/valyala/fastjson v1.6.3
 	go.uber.org/automaxprocs v1.4.0
 )

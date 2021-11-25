@@ -82,7 +82,6 @@ func (c *HandlerPool) Get() *Handler {
 			c.mu.Unlock()
 			ret := <-req
 			return ret.idleHandler
-
 		}
 	}
 }

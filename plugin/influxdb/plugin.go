@@ -11,7 +11,7 @@ import (
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/plugin"
-	"github.com/taosdata/taosadapter/schemaless/capi"
+	"github.com/taosdata/taosadapter/schemaless/inserter"
 	"github.com/taosdata/taosadapter/tools"
 	"github.com/taosdata/taosadapter/tools/web"
 )
@@ -113,7 +113,7 @@ func (p *Influxdb) write(c *gin.Context) {
 		start = time.Now()
 	}
 	logger.WithTime(start).Debugln("start insert influxdb:", string(data))
-	result, err := capi.InsertInfluxdb(conn, data, db, precision)
+	result, err := inserter.InsertInfluxdb(conn, data, db, precision)
 	logger.Debugln("finish insert influxdb cost:", time.Now().Sub(start))
 	if err != nil {
 		logger.WithField("result", result).WithError(err).Errorln("insert line error")

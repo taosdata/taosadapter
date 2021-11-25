@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/driver-go/v2/af"
 	"github.com/taosdata/taosadapter/config"
+	"github.com/taosdata/taosadapter/db"
 )
 
 var s = `
@@ -32,12 +33,13 @@ test_metric{label="value"} 1.0 1490802350000
 `
 
 func TestNodeExporter_Gather(t *testing.T) {
+	config.Init()
+	db.PrepareConnection()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(s))
 	}))
 	defer ts.Close()
 	api := ts.URL
-	config.Init()
 	viper.Set("node_exporter.enable", true)
 	viper.Set("node_exporter.urls", []string{api})
 	viper.Set("node_exporter.gatherDuration", time.Second)
@@ -64,4 +66,6 @@ func TestNodeExporter_Gather(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, float64(1), d[0])
 	t.Logf("%#v", d)
+	err = n.Stop()
+	assert.NoError(t, err)
 }

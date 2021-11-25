@@ -2,11 +2,27 @@
 
 ## Function
 
-* Compatible with restful interface
-* Compatible with influxdb v1 write interface
-* Compatible with opentsdb json and telnet format writing
-* Seamless connection collectd
-* Seamless connection with statsd
+* Compatible with restful interface.  
+  [https://www.taosdata.com/cn/documentation/connector#restful](https://www.taosdata.com/cn/documentation/connector#restful)
+* Compatible with influxdb v1 write interface.  
+  [https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/](https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/)
+* Compatible with opentsdb json and telnet format writing.  
+  [http://opentsdb.net/docs/build/html/api_http/put.html](http://opentsdb.net/docs/build/html/api_http/put.html)
+* Seamless connection with collectd  
+  The system statistics collection daemon.  
+  [https://collectd.org/](https://collectd.org/)
+* Seamless connection with statsd  
+  Daemon for easy but powerful stats aggregation.  
+  [https://github.com/statsd/statsd](https://github.com/statsd/statsd)
+* Seamless connection with icinga2   
+  Collect check result metrics and performance data.  
+  [https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer](https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer)
+* Seamless connection with tcollector.  
+  TCollector is a client-side process that gathers data from local collectors and pushes the data to OpenTSDB  
+  [http://opentsdb.net/docs/build/html/user_guide/utilities/tcollector.html](http://opentsdb.net/docs/build/html/user_guide/utilities/tcollector.html)
+* Seamless connection with node_exporter
+* Exporter for machine metrics.  
+  [https://github.com/prometheus/node_exporter](https://github.com/prometheus/node_exporter)
 
 ## Interface
 
@@ -25,10 +41,11 @@
 ```
 
 Support query parameters
-> `db` Specify the necessary parameters for the database
-> `precision` time precision non-essential parameter
-> `u` user non-essential parameters
-> `p` password Optional parameter
+
+* `db` Specify the necessary parameters for the database
+* `precision` time precision non-essential parameter
+* `u` user non-essential parameters
+* `p` password Optional parameter
 
 ### opentsdb
 
@@ -39,7 +56,8 @@ Support query parameters
 
 ### collectd
 
-Need to manually create database first `collectd.db`  
+#### direct collection
+
 Modify the collectd configuration `/etc/collectd/collectd.conf`
 
 ```
@@ -49,9 +67,25 @@ LoadPlugin network
 </Plugin>
 ```
 
+#### tsdb writer
+
+Modify the collectd configuration `/etc/collectd/collectd.conf`
+
+```
+LoadPlugin write_tsdb
+<Plugin write_tsdb>
+        <Node>
+                Host "localhost"
+                Port "6047"
+                HostTags "status=production"
+                StoreRates false
+                AlwaysAppendDS false
+        </Node>
+</Plugin>
+```
+
 ### statsd
 
-Need to manually create database first `statsd.db`  
 statsd modify the configuration file `path_to_statsd/config.js`
 
 * > `backends` add `"./backends/repeater"`
@@ -67,11 +101,10 @@ port: 8125
 }
 ```
 
-## icinga2 opentsdb writer
+### icinga2 opentsdb writer
 
 collect check result metrics and performance data
 
-* Need to manually create database first `opentsdb_telnet.db`
 * Follow the doc to enable
   opentsdb-writer [https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer](https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer)
 * Enable taosadapter configuration `opentsdb_telnet.enable`
@@ -80,33 +113,31 @@ collect check result metrics and performance data
 ```
 object OpenTsdbWriter "opentsdb" {
   host = "host to taosadapter"
-  port = 6046
+  port = 6048
 }
 ```
 
-## TCollector
+### TCollector
 
 tcollector is a client-side process that gathers data from local collectors and pushes the data to OpenTSDB. You run it
 on all your hosts, and it does the work of sending each host’s data to the TSD.
 
-* Need to manually create database first `opentsdb_telnet.db`
 * Enable taosadapter configuration `opentsdb_telnet.enable`
-* Modify the TCollector configuration file, modify the opentsdb host to the host where taosadapter is deployed, and modify the
-  port to 6046
+* Modify the TCollector configuration file, modify the opentsdb host to the host where taosadapter is deployed, and
+  modify the port to 6049
 
-## node_exporter
+### node_exporter
 
 exporter for hardware and OS metrics exposed by *NIX kernels
 
-* Need to manually create database first `node_exporter.db`
 * Enable taosadapter configuration `node_exporter.enable`
 * Set the relevant configuration of node_exporter
 * Restart taosadapter
 
 ## Configuration
 
-Support command line parameters, environment variables and configuration files
-`Command line parameters take precedence over environment variables take precedence over configuration files`
+Support command line parameters, environment variables and configuration files  
+`Command line parameters take precedence over environment variables take precedence over configuration files`  
 The command line usage is arg=val such as `taosadapter -p=30000 --debug=true`
 
 ```shell
@@ -147,11 +178,11 @@ Usage of taosadapter:
       --node_exporter.urls strings                   node_exporter urls. Env "TAOS_ADAPTER_NODE_EXPORTER_URLS" (default [http://localhost:9100])
       --node_exporter.user string                    node_exporter user. Env "TAOS_ADAPTER_NODE_EXPORTER_USER" (default "root")
       --opentsdb.enable                              enable opentsdb. Env "TAOS_ADAPTER_OPENTSDB_ENABLE" (default true)
-      --opentsdb_telnet.db string                    opentsdb_telnet db name. Env "TAOS_ADAPTER_OPENTSDB_TELNET_DB" (default "opentsdb_telnet")
+      --opentsdb_telnet.dbs strings                  opentsdb_telnet db names. Env "TAOS_ADAPTER_OPENTSDB_TELNET_DBS" (default [opentsdb_telnet,collectd_tsdb,icinga2_tsdb,tcollector_tsdb])
       --opentsdb_telnet.enable                       enable opentsdb telnet,warning: without auth info(default false). Env "TAOS_ADAPTER_OPENTSDB_TELNET_ENABLE"
       --opentsdb_telnet.maxTCPConnections int        max tcp connections. Env "TAOS_ADAPTER_OPENTSDB_TELNET_MAX_TCP_CONNECTIONS" (default 250)
       --opentsdb_telnet.password string              opentsdb_telnet password. Env "TAOS_ADAPTER_OPENTSDB_TELNET_PASSWORD" (default "taosdata")
-      --opentsdb_telnet.port int                     opentsdb telnet tcp port. Env "TAOS_ADAPTER_OPENTSDB_TELNET_PORT" (default 6046)
+      --opentsdb_telnet.ports ints                   opentsdb telnet tcp port. Env "TAOS_ADAPTER_OPENTSDB_TELNET_PORTS" (default [6046,6047,6048,6049])
       --opentsdb_telnet.tcpKeepAlive                 enable tcp keep alive. Env "TAOS_ADAPTER_OPENTSDB_TELNET_TCP_KEEP_ALIVE"
       --opentsdb_telnet.user string                  opentsdb_telnet user. Env "TAOS_ADAPTER_OPENTSDB_TELNET_USER" (default "root")
       --opentsdb_telnet.worker int                   opentsdb_telnet write worker. Env "TAOS_ADAPTER_OPENTSDB_TELNET_WORKER" (default 1000)

@@ -3,16 +3,15 @@ package schemaless
 import (
 	"database/sql/driver"
 	"errors"
-	"io"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 	"unsafe"
 
-	"github.com/taosdata/driver-go/v2/af"
 	tErrors "github.com/taosdata/driver-go/v2/errors"
+	"github.com/taosdata/taosadapter/db/async"
 	"github.com/taosdata/taosadapter/log"
-	"github.com/taosdata/taosadapter/tools"
 	"github.com/taosdata/taosadapter/tools/pool"
 )
 
@@ -38,18 +37,15 @@ type InsertLine struct {
 }
 
 type Executor struct {
-	conn *af.Connector
+	taosConn unsafe.Pointer
 }
 
 func NewExecutor(conn unsafe.Pointer) (*Executor, error) {
-	afConnector, err := af.NewConnector(conn)
-	if err != nil {
-		return nil, err
-	}
-	return &Executor{conn: afConnector}, nil
+	return &Executor{taosConn: conn}, nil
 }
 
 func (e *Executor) InsertTDengine(line *InsertLine) (string, error) {
+	prepareField(line)
 	//insert into table() using stable(tagName ...) tags(tagValue...) (field ...) values (values...)
 	sql := e.generateInsertSql(line)
 	if len(line.DB) == 0 {
@@ -178,8 +174,8 @@ func (e *Executor) createStable(info *InsertLine) error {
 	tags := make([]*FieldInfo, 0, len(info.TagNames))
 	for i, s := range info.TagNames {
 		tags = append(tags, &FieldInfo{
-			Name:   tools.RepairName(s),
-			Type:   BINARYType,
+			Name:   s,
+			Type:   NCHARType,
 			Length: len(info.TagValues[i]),
 		})
 	}
@@ -192,17 +188,18 @@ func (e *Executor) createStable(info *InsertLine) error {
 			columns = append(columns, filed)
 		}
 	}
+	s := time.Now()
 	err := e.CreateSTable(info.DB, info.STableName, &TableInfo{
 		Fields: columns,
 		Tags:   tags,
 	})
+	fmt.Println(time.Now().Sub(s))
 	if err != nil {
-		//返回错误
 		var tdErr *tErrors.TaosError
 		if errors.As(err, &tdErr) {
 			switch tdErr.Code {
 			case tErrors.MND_TABLE_ALREADY_EXIST:
-				//表已经创建,返回正常
+				// table already created
 			default:
 				return tdErr
 			}
@@ -248,24 +245,19 @@ func (e *Executor) CreateSTable(db string, tableName string, info *TableInfo) er
 func (e *Executor) generateFieldSql(info *FieldInfo) string {
 	b := pool.BytesPoolGet()
 	defer pool.BytesPoolPut(b)
-	if info.Type == NCHARType || info.Type == BINARYType {
-		b.WriteString(info.Name)
-		b.WriteByte(' ')
-		b.WriteString(info.Type)
-		b.WriteByte('(')
-		b.WriteString(strconv.Itoa(info.Length))
-		b.WriteByte(')')
-		return b.String()
-	}
 	b.WriteString(info.Name)
 	b.WriteByte(' ')
 	b.WriteString(info.Type)
+	if info.Type == NCHARType || info.Type == BINARYType {
+		b.WriteByte('(')
+		b.WriteString(strconv.Itoa(info.Length))
+		b.WriteByte(')')
+	}
 	return b.String()
 }
 
 func (e *Executor) DoExec(sql string) error {
-	_, err := e.conn.Exec(sql)
-	return err
+	return async.GlobalAsync.TaosExecWithoutResult(e.taosConn, sql)
 }
 
 func (e *Executor) createFieldInfo(name string, value interface{}) *FieldInfo {
@@ -275,29 +267,29 @@ func (e *Executor) createFieldInfo(name string, value interface{}) *FieldInfo {
 	switch value.(type) {
 	case float64, float32:
 		return &FieldInfo{
-			Name: tools.RepairName(name),
+			Name: name,
 			Type: DOUBLEType,
 		}
 	case int64, int, int8, int16, int32:
 		return &FieldInfo{
-			Name: tools.RepairName(name),
+			Name: name,
 			Type: BIGINTType,
 		}
 	case uint64, uint, uint8, uint16, uint32:
 		return &FieldInfo{
-			Name:   tools.RepairName(name),
+			Name:   name,
 			Type:   UBIGINTType,
 			Length: 0,
 		}
 	case string:
 		return &FieldInfo{
-			Name:   tools.RepairName(name),
+			Name:   name,
 			Type:   BINARYType,
 			Length: len(value.(string)),
 		}
 	case bool:
 		return &FieldInfo{
-			Name:   tools.RepairName(name),
+			Name:   name,
 			Type:   BOOLType,
 			Length: 0,
 		}
@@ -308,13 +300,13 @@ func (e *Executor) modifyTag(db string, stableName string, tableInfo *TableInfo,
 
 	tagMap := map[string]string{}
 	for i := 0; i < len(tagName); i++ {
-		tagMap[tools.RepairName(tagName[i])] = tagValue[i]
+		tagMap[tagName[i]] = tagValue[i]
 	}
 	modifyLen := map[string]int{}
 	for _, tag := range tableInfo.Tags {
 		t, exist := tagMap[tag.Name]
 		if exist {
-			if tag.Type == BINARYType && tag.Length < len(t) {
+			if tag.Type == NCHARType && tag.Length < len(t) {
 				modifyLen[tag.Name] = len(t)
 			}
 		}
@@ -324,7 +316,7 @@ func (e *Executor) modifyTag(db string, stableName string, tableInfo *TableInfo,
 		for tag, tagValue := range tagMap {
 			err := e.AddTag(db, stableName, &FieldInfo{
 				Name:   tag,
-				Type:   BINARYType,
+				Type:   NCHARType,
 				Length: len(tagValue),
 			})
 			if err != nil {
@@ -345,7 +337,7 @@ func (e *Executor) modifyTag(db string, stableName string, tableInfo *TableInfo,
 		for s, i := range modifyLen {
 			err := e.ModifyTagLength(db, stableName, &FieldInfo{
 				Name:   s,
-				Type:   BINARYType,
+				Type:   NCHARType,
 				Length: i,
 			})
 			if err != nil {
@@ -368,7 +360,7 @@ func (e *Executor) modifyTag(db string, stableName string, tableInfo *TableInfo,
 func (e *Executor) modifyColumn(db string, stableName string, tableInfo *TableInfo, column map[string]interface{}) error {
 	columnMap := make(map[string]interface{}, len(column))
 	for s, i := range column {
-		columnMap[tools.RepairName(s)] = i
+		columnMap[s] = i
 	}
 	modifyLen := map[string]int{}
 	for _, column := range tableInfo.Fields {
@@ -431,12 +423,15 @@ func (e *Executor) DescribeTable(db, tableName string) (*TableInfo, error) {
 	b.WriteString(db)
 	b.WriteByte('.')
 	b.WriteString(tableName)
-	rows, err := e.conn.Query(b.String())
+	result, err := async.GlobalAsync.TaosExec(e.taosConn, b.String(), func(ts int64, precision int) driver.Value {
+		return ts
+	})
+	//rows, err := e.conn.Query(b.String())
+
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	columnNames := rows.Columns()
+	columnNames := result.Header.ColNames
 	var (
 		FieldIndex  int
 		TypeIndex   int
@@ -457,18 +452,13 @@ func (e *Executor) DescribeTable(db, tableName string) (*TableInfo, error) {
 			NoteIndex = i
 		}
 	}
-	for {
-		d := make([]driver.Value, len(columnNames))
-		err = rows.Next(d)
-		if err != nil {
-			if err == io.EOF {
-				break
-			} else {
-				return nil, err
-			}
-		}
+	for _, d := range result.Data {
+		b.Reset()
+		b.WriteByte('`')
+		b.WriteString(d[FieldIndex].(string))
+		b.WriteByte('`')
 		f := &FieldInfo{
-			Name:   d[FieldIndex].(string),
+			Name:   b.String(),
 			Type:   d[TypeIndex].(string),
 			Length: int(d[LengthIndex].(int32)),
 		}
@@ -478,7 +468,6 @@ func (e *Executor) DescribeTable(db, tableName string) (*TableInfo, error) {
 			fields = append(fields, f)
 		}
 	}
-
 	return &TableInfo{
 		Fields: fields,
 		Tags:   tags,
@@ -547,6 +536,7 @@ type FieldInfo struct {
 
 func (e *Executor) generateInsertSql(line *InsertLine) string {
 	b := pool.BytesPoolGet()
+	defer pool.BytesPoolPut(b)
 	b.WriteString("insert into ")
 	b.WriteString(line.DB)
 	b.WriteByte('.')
@@ -558,7 +548,7 @@ func (e *Executor) generateInsertSql(line *InsertLine) string {
 	if len(line.TagNames) > 0 {
 		b.WriteString(" (")
 		for i, name := range line.TagNames {
-			b.WriteString(tools.RepairName(name))
+			b.WriteString(name)
 			if i != len(line.TagNames)-1 {
 				b.WriteByte(',')
 			}
@@ -581,7 +571,7 @@ func (e *Executor) generateInsertSql(line *InsertLine) string {
 			continue
 		}
 		b.WriteByte(',')
-		b.WriteString(tools.RepairName(k))
+		b.WriteString(k)
 		values = append(values, v)
 	}
 	b.WriteString(") values('")
@@ -632,4 +622,28 @@ func (e *Executor) generateInsertSql(line *InsertLine) string {
 	}
 	b.WriteByte(')')
 	return b.String()
+}
+
+func prepareField(line *InsertLine) {
+	b := pool.BytesPoolGet()
+	defer pool.BytesPoolPut(b)
+	for i, name := range line.TagNames {
+		if name[0] != '`' {
+			b.Reset()
+			b.WriteByte('`')
+			b.WriteString(name)
+			b.WriteByte('`')
+			line.TagNames[i] = b.String()
+		}
+	}
+	for k, v := range line.Fields {
+		if k[0] != '`' {
+			b.Reset()
+			b.WriteByte('`')
+			b.WriteString(k)
+			b.WriteByte('`')
+			line.Fields[b.String()] = v
+			delete(line.Fields, k)
+		}
+	}
 }

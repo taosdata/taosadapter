@@ -14,7 +14,7 @@ import (
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/plugin"
-	"github.com/taosdata/taosadapter/schemaless/capi"
+	"github.com/taosdata/taosadapter/schemaless/inserter"
 )
 
 var logger = log.GetLogger("collectd")
@@ -98,6 +98,12 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metrics []telegraf
 	if len(metrics) == 0 {
 		return
 	}
+
+	for _, metric := range metrics {
+		if metric.Time().IsZero() {
+			metric.SetTime(time.Now())
+		}
+	}
 	data, err := serializer.SerializeBatch(metrics)
 	if err != nil {
 		logger.WithError(err).Error("serialize collectd error")
@@ -116,7 +122,7 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metrics []telegraf
 	}()
 	start := time.Now()
 	logger.Debugln(start, "insert lines", string(data))
-	result, err := capi.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns")
+	result, err := inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns")
 	logger.Debugln("insert lines finish cost:", time.Now().Sub(start), string(data))
 	if err != nil || result.FailCount != 0 {
 		logger.WithError(err).WithField("result", result).Errorln("insert lines error", string(data))

@@ -10,11 +10,3 @@ func setupRouter() *gin.Engine {
 	})
 	return r
 }
-
-func main() {
-	r := setupRouter()
-	err := r.Run(":6041")
-	if err != nil {
-		panic(err)
-	}
-}

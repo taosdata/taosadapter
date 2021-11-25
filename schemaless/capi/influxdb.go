@@ -6,37 +6,30 @@ import (
 
 	tErrors "github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/driver-go/v2/wrapper"
-	"github.com/taosdata/taosadapter/httperror"
+	"github.com/taosdata/taosadapter/schemaless/proto"
 )
 
-type Result struct {
-	SuccessCount int
-	FailCount    int
-	ErrorList    []string
-}
-
-func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision string) (*Result, error) {
-	code := wrapper.TaosSelectDB(taosConnect, db)
-	if code != httperror.SUCCESS {
-		return nil, tErrors.GetError(code)
+func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision string) (*proto.InfluxResult, error) {
+	err := SelectDB(taosConnect, db)
+	if err != nil {
+		return nil, err
 	}
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	locker.Lock()
 	result := wrapper.TaosSchemalessInsert(taosConnect, lines, wrapper.InfluxDBLineProtocol, precision)
-	code = wrapper.TaosError(result)
+	locker.Unlock()
+	code := wrapper.TaosError(result)
 	if code != 0 {
 		errStr := wrapper.TaosErrorStr(result)
 		wrapper.TaosFreeResult(result)
-		return nil, &tErrors.TaosError{
-			Code:   int32(code) & 0xffff,
-			ErrStr: errStr,
-		}
+		return nil, tErrors.NewError(code, errStr)
 	}
 	successCount := wrapper.TaosAffectedRows(result)
 	failCount := len(lines) - successCount
-	r := &Result{
+	r := &proto.InfluxResult{
 		SuccessCount: successCount,
 		FailCount:    failCount,
-		ErrorList:    nil,
+		ErrorList:    make([]string, len(lines)),
 	}
 	wrapper.TaosFreeResult(result)
 	return r, nil
