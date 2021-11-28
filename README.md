@@ -1,4 +1,4 @@
-# taosadapter
+# taosAdapter
 
 ## Function
 
@@ -6,7 +6,7 @@
   [https://www.taosdata.com/cn/documentation/connector#restful](https://www.taosdata.com/cn/documentation/connector#restful)
 * Compatible with influxdb v1 write interface.  
   [https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/](https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/)
-* Compatible with opentsdb json and telnet format writing.  
+* Compatible with opentsdb JSON and telnet format writing.  
   [http://opentsdb.net/docs/build/html/api_http/put.html](http://opentsdb.net/docs/build/html/api_http/put.html)
 * Seamless connection with collectd  
   The system statistics collection daemon.  
@@ -89,7 +89,7 @@ LoadPlugin write_tsdb
 statsd modify the configuration file `path_to_statsd/config.js`
 
 * > `backends` add `"./backends/repeater"`
-* > `repeater` add `{ host:'host to taosadapter', port: 6044}`
+* > `repeater` add `{ host:'host to taosAdapter', port: 6044}`
 
 example config
 
@@ -107,12 +107,12 @@ collect check result metrics and performance data
 
 * Follow the doc to enable
   opentsdb-writer [https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer](https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer)
-* Enable taosadapter configuration `opentsdb_telnet.enable`
+* Enable taosAdapter configuration `opentsdb_telnet.enable`
 * Modify the configuration file `/etc/icinga2/features-enabled/opentsdb.conf`
 
 ```
 object OpenTsdbWriter "opentsdb" {
-  host = "host to taosadapter"
+  host = "host to taosAdapter"
   port = 6048
 }
 ```
@@ -122,17 +122,17 @@ object OpenTsdbWriter "opentsdb" {
 tcollector is a client-side process that gathers data from local collectors and pushes the data to OpenTSDB. You run it
 on all your hosts, and it does the work of sending each host’s data to the TSD.
 
-* Enable taosadapter configuration `opentsdb_telnet.enable`
-* Modify the TCollector configuration file, modify the opentsdb host to the host where taosadapter is deployed, and
+* Enable taosAdapter configuration `opentsdb_telnet.enable`
+* Modify the TCollector configuration file, modify the opentsdb host to the host where taosAdapter is deployed, and
   modify the port to 6049
 
 ### node_exporter
 
 exporter for hardware and OS metrics exposed by *NIX kernels
 
-* Enable taosadapter configuration `node_exporter.enable`
+* Enable taosAdapter configuration `node_exporter.enable`
 * Set the relevant configuration of node_exporter
-* Restart taosadapter
+* Restart taosAdapter
 
 ## Configuration
 
@@ -141,7 +141,7 @@ Support command line parameters, environment variables and configuration files
 The command line usage is arg=val such as `taosadapter -p=30000 --debug=true`
 
 ```shell
-Usage of taosadapter:
+Usage of taosAdapter:
       --collectd.db string                           collectd db name. Env "TAOS_ADAPTER_COLLECTD_DB" (default "collectd")
       --collectd.enable                              enable collectd. Env "TAOS_ADAPTER_COLLECTD_ENABLE" (default true)
       --collectd.password string                     collectd password. Env "TAOS_ADAPTER_COLLECTD_PASSWORD" (default "taosdata")
