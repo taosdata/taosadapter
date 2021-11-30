@@ -1,5 +1,12 @@
 package main
 
+// @title taosAdapter
+// @version 1.0
+// @description taosAdapter restful API
+
+// @host http://127.0.0.1:6041
+// @query.collection.format multi
+
 import (
 	"context"
 	"net/http"
@@ -13,8 +20,11 @@ import (
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
+	files "github.com/swaggo/files"
+	swagger "github.com/swaggo/gin-swagger"
 	"github.com/taosdata/taosadapter/config"
 	"github.com/taosdata/taosadapter/db"
+	"github.com/taosdata/taosadapter/docs"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/plugin"
 	_ "github.com/taosdata/taosadapter/plugin/collectd"
@@ -39,6 +49,8 @@ func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin
 	router.Use(log.GinLog())
 	router.Use(log.GinRecoverLog())
 	if debug {
+		docs.SwaggerInfo.Schemes = []string{"http", "https"}
+		router.GET("/swagger/*any", swagger.WrapHandler(files.Handler))
 		pprof.Register(router)
 	}
 	router.GET("-/ping", func(c *gin.Context) {
