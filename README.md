@@ -1,11 +1,11 @@
 # taosAdapter
 
-taosAdapter is a TDengine’s companion tool and is a bridge/adapter between TDengine cluster and application. It provides an easy to use and efficient way to ingest data from data collections agents (like Telegraf, StatsD, collectd) directly. It also provides influxDB/OpenTSDB compatible data ingestion interface to allow influxDB/OpenTSDB applications to immigrate to TDengine seamlessly.  taosAdapter provides the following detailed functions:
+taosAdapter is a TDengine’s companion tool and is a bridge/adapter between TDengine cluster and application. It provides an easy to use and efficient way to ingest data from data collections agents (like Telegraf, StatsD, collectd) directly. It also provides InfluxDB/OpenTSDB compatible data ingestion interface to allow InfluxDB/OpenTSDB applications to immigrate to TDengine seamlessly.
 
 taosAdapter provides the following functions.
 
     - RESTful interface
-    - Compatible with InfluxDB v1 write interface (via Telegraf)
+    - Compatible with InfluxDB v1 write interface
     - Compatible with OpenTSDB JSON and telnet format write
     - Seamless connect to Telegraf
     - Seamless connect to collectD
@@ -23,7 +23,7 @@ We strongly recommend to deploy taosAdapter with TDengine server and install tao
 
 ### Setup golang environment
 
-taosAdapter is developed by Go language. Please refer to golang.org's official documentation for golang environment setup.
+taosAdapter is developed by Go language. Please refer to golang [official documentation](https://go.dev/learn/) for golang environment setup.
 
 Please use golang version 1.14+. For the user in China, we recommend using a proxy to accelerate package downloading.
 ```
@@ -175,14 +175,14 @@ object OpenTsdbWriter "opentsdb" {
 
 ### TCollector
 
-TCollector is a client-side process that gathers data from local collectors and pushes the data to OpenTSDB. You run it on all your hosts, and it does the work of sending each host’s data to the TSD.
+TCollector is a client-side process that gathers data from local collectors and pushes the data to OpenTSDB. You run it on all your hosts, and it does the work of sending each host’s data to the TSD (OpenTSDB backend process).
 
 * Enable taosAdapter configuration `opentsdb_telnet.enable`
 * Modify the TCollector configuration file, modify the OpenTSDB host to the host where taosAdapter is deployed, and modify the port to 6049
 
 ### node_exporter
 
-exporter for hardware and OS metrics exposed by *NIX kernels
+Prometheus exporter for hardware and OS metrics exposed by *NIX kernels
 
 * Enable taosAdapter configuration `node_exporter.enable`
 * Set the relevant configuration of node_exporter

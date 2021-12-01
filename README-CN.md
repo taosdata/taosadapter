@@ -1,12 +1,12 @@
 # taosAdapter
 
-taosAdapter 是一个 TDengine 的配套工具，是 TDengine 集群和应用程序之间的桥梁和适配器。它提供了一种易于使用和高效的方式来直接从数据收集代理软件（如 Telegraf、StatsD、collectd 等）摄取数据。它还提供了influxDB/OpenTSDB兼容的数据摄取接口，允许influxDB/OpenTSDB应用程序无缝移植到TDengine。 taosAdapter提供了以下详细功能。
+taosAdapter 是一个 TDengine 的配套工具，是 TDengine 集群和应用程序之间的桥梁和适配器。它提供了一种易于使用和高效的方式来直接从数据收集代理软件（如 Telegraf、StatsD、collectd 等）摄取数据。它还提供了 InfluxDB/OpenTSDB 兼容的数据摄取接口，允许 InfluxDB/OpenTSDB 应用程序无缝移植到 TDengine。
 
-taosAdapter提供以下功能。
+taosAdapter提供以下功能：
 
-    - RESTful接口
-    - 兼容 InfluxDB v1写接口（通过Telegraf）。
-    - 兼容 OpenTSDB JSON和telnet格式写入
+    - RESTful 接口
+    - 兼容 InfluxDB v1写接口
+    - 兼容 OpenTSDB JSON 和 telnet 格式写入
     - 无缝连接到 Telegraf
     - 无缝连接到 collectd
     - 无缝连接到 StatsD
@@ -25,7 +25,7 @@ taosAdapter 从 TDengine v2.3.0.0 版本开始成为 TDengine 服务端软件 �
 
 ### 设置 golang 开发环境
 
-taosAdapter 是由 Go 语言开发的。关于 golang 开发环境的设置，请参考 golang.org 的官方文档。
+taosAdapter 是由 Go 语言开发的。关于 golang 开发环境的设置，请参考 golang 的[官方文档](https://go.dev/learn/)。
 
 请使用1.14以上版本的 golang。对于中国的用户，我们建议使用代理服务来加速软件包的下载。
 ```
@@ -53,7 +53,7 @@ sudo make install
 如果你已经部署了 TDengine 服务器 v2.3.0.0 或以上的版本，taosAdapter 也可以作为一个独立的应用程序被构建。
 
 ### 安装 TDengine 服务器或客户端安装包
-请从官方网站下载TDengine服务器或客户端安装包。
+请从官方网站下载 TDengine 服务器或客户端安装包。
 
 ### 构建 taosAdapter
 ```
@@ -62,7 +62,7 @@ cd taosadapter
 go build
 ```
 
-然后您应该在工作目录中找到taosAdapter的二进制可执行文件。您需要将 systemd 服务配置文件 taosadapter.service 复制到 /etc/systemd/system 目录，并将可执行的 taosAdapter 二进制文件复制到 Linux 的 $PATH 环境变量可以找到的路径下。
+然后您应该在工作目录中找到 taosAdapter 的二进制可执行文件。您需要将 systemd 服务配置文件 taosadapter.service 复制到 /etc/systemd/system 目录，并将可执行的 taosAdapter 二进制文件复制到 Linux 的 $PATH 环境变量可以找到的路径下。
 
 
 ## 功能列表
@@ -179,14 +179,14 @@ object OpenTsdbWriter "opentsdb" {
 
 ### TCollector
 
-Tcollector是一个客户端进程，它从本地收集器中收集数据并将数据推送到 OpenTSDB。你在你的所有主机上运行它，它完成将每个主机的数据发送到TSD的工作。
+Tcollector 是一个客户端进程，它从本地收集器中收集数据并将数据推送到 OpenTSDB。你在你的所有主机上运行它，它完成将每个主机的数据发送到 TSD （OpenTSDB 后台服务进程）的工作。
 
-* 启用taosAdapter配置opentsdb_telnet.enable
-* 修改TCollector配置文件，将OpenTSDB主机修改为部署taosAdapter的主机，并修改端口为6049
+* 启用 taosAdapter 配置 opentsdb_telnet.enable
+* 修改 TCollector 配置文件，将 OpenTSDB 主机修改为部署 taosAdapter 的主机，并修改端口为6049
 
 ### node_exporter
 
-由*NIX内核暴露的硬件和操作系统指标的输出器
+Prometheus 使用的由*NIX内核暴露的硬件和操作系统指标的输出器
 
 * 启用 taosAdapter 的配置 node_exporter.enable
 * 设置 node_exporter 的相关配置
