@@ -15,6 +15,7 @@ type Config struct {
 	Debug         bool
 	Port          int
 	LogLevel      string
+	EnableGzip    bool
 	SSl           SSl
 	Log           Log
 	Pool          Pool
@@ -62,6 +63,7 @@ func Init() {
 		Port:          viper.GetInt("port"),
 		LogLevel:      viper.GetString("logLevel"),
 		TaosConfigDir: viper.GetString("taosConfigDir"),
+		EnableGzip:    viper.GetBool("enableGzip"),
 	}
 	Conf.Log.setValue()
 	Conf.Cors.setValue()
@@ -86,6 +88,10 @@ func init() {
 	viper.SetDefault("taosConfigDir", "")
 	_ = viper.BindEnv("taosConfigDir", "TAOS_ADAPTER_TAOS_CONFIG_FILE")
 	pflag.String("taosConfigDir", "", `load taos client config path. Env "TAOS_ADAPTER_TAOS_CONFIG_FILE"`)
+
+	viper.SetDefault("enableGzip", false)
+	_ = viper.BindEnv("enableGzip", "TAOS_ADAPTER_ENABLE_GZIP")
+	pflag.Bool("enableGzip", false, `enable http gzip response. Env "TAOS_ADAPTER_ENABLE_GZIP"`)
 
 	initLog()
 	initSSL()

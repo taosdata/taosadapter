@@ -20,11 +20,8 @@ import (
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
-	files "github.com/swaggo/files"
-	swagger "github.com/swaggo/gin-swagger"
 	"github.com/taosdata/taosadapter/config"
 	"github.com/taosdata/taosadapter/db"
-	"github.com/taosdata/taosadapter/docs"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/plugin"
 	_ "github.com/taosdata/taosadapter/plugin/collectd"
@@ -49,8 +46,8 @@ func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin
 	router.Use(log.GinLog())
 	router.Use(log.GinRecoverLog())
 	if debug {
-		docs.SwaggerInfo.Schemes = []string{"http", "https"}
-		router.GET("/swagger/*any", swagger.WrapHandler(files.Handler))
+		//docs.SwaggerInfo.Schemes = []string{"http", "https"}
+		//router.GET("/swagger/*any", swagger.WrapHandler(files.Handler))
 		pprof.Register(router)
 	}
 	router.GET("-/ping", func(c *gin.Context) {
@@ -68,18 +65,18 @@ func main() {
 	log.ConfigLog()
 	db.PrepareConnection()
 	logger.Info("start server:", log.ServerID)
-	router := createRouter(config.Conf.Debug, &config.Conf.Cors, false)
+	router := createRouter(config.Conf.Debug, &config.Conf.Cors, config.Conf.EnableGzip)
 	r := rest.Restful{}
 	_ = r.Init(router)
 	plugin.RegisterGenerateAuth(router)
 	plugin.Init(router)
 	plugin.Start()
 	server := &http.Server{
-		Addr:              ":" + strconv.Itoa(config.Conf.Port),
-		Handler:           router,
-		ReadHeaderTimeout: 20 * time.Second,
-		ReadTimeout:       200 * time.Second,
-		WriteTimeout:      90 * time.Second,
+		Addr:    ":" + strconv.Itoa(config.Conf.Port),
+		Handler: router,
+		//ReadHeaderTimeout: 20 * time.Second,
+		//ReadTimeout:       200 * time.Second,
+		//WriteTimeout:      90 * time.Second,
 	}
 	logger.Println("server on :", config.Conf.Port)
 	if config.Conf.SSl.Enable {
