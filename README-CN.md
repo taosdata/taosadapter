@@ -1,38 +1,41 @@
 # taosAdapter
 
-taosAdapter is a TDengine’s companion tool and is a bridge/adapter between TDengine cluster and application. It provides an easy to use and efficient way to ingest data from data collections agents (like Telegraf, StatsD, collectd) directly. It also provides influxDB/OpenTSDB compatible data ingestion interface to allow influxDB/OpenTSDB applications to immigrate to TDengine seamlessly.  taosAdapter provides the following detailed functions:
+taosAdapter 是一个 TDengine 的配套工具，是 TDengine 集群和应用程序之间的桥梁和适配器。它提供了一种易于使用和高效的方式来直接从数据收集代理软件（如 Telegraf、StatsD、collectd 等）摄取数据。它还提供了influxDB/OpenTSDB兼容的数据摄取接口，允许influxDB/OpenTSDB应用程序无缝移植到TDengine。 taosAdapter提供了以下详细功能。
 
-taosAdapter provides the following functions.
+taosAdapter提供以下功能。
 
-    - RESTful interface
-    - Compatible with InfluxDB v1 write interface (via Telegraf)
-    - Compatible with OpenTSDB JSON and telnet format write
-    - Seamless connect to Telegraf
-    - Seamless connect to collectD
-    - Seamless connect to StatsD
+    - RESTful接口
+    - 兼容 InfluxDB v1写接口（通过Telegraf）。
+    - 兼容 OpenTSDB JSON和telnet格式写入
+    - 无缝连接到 Telegraf
+    - 无缝连接到 collectd
+    - 无缝连接到 StatsD
 
-## taosAdapter architecture
+
+## taosAdapter 架构图
 ![taosAdapter-architecture](taosAdapter-architecture-for-public.png)
 
-taosAdapter is part of the TDengine server from TDengine v2.3.0.0. You don't need any additional steps to set taosAdapter up. taosAdapter will be managed by the TDengine server via systemd, which means it will be automatically launched by starting taosd service command `systemctl start taosd` and be stopped by exiting taosd service command `systemctl stop taosd`. You can also start taosAdapter by `systemctl start taosadapter` and stop taosAdapter by `systemctl stop taosadapter` too. Start/stop taosAdapter will not affect taosd service.
+taosAdapter 从 TDengine v2.3.0.0 版本开始成为 TDengine 服务端软件 的一部分，您不需要任何额外的步骤来设置 taosAdapter。taosAdapter 将由 TDengine 服务端软件通过 systemd 管理，它将在启动 taosd 服务命令 systemctl start taosd 自动启动，通过退出 taosd 服务命令 systemctl stop taosd 停止。它也可以通过 systemctl start taosadapter 和 systemctl stop taosadapter 单独启动服务或停止服务。启动或停止 taosAdapter 并不会影响 taosd 自身的服务。
 
-You can download TDengine (taosAdapter be included in v2.3.0.0 and above version) from the (official website)[https://taosdata.com/cn/all-downloads/].
+你可以从(涛思数据官方网站)[https://taosdata.com/cn/all-downloads/]下载TDengine（taosAdapter包含在v2.3.0.0及以上版本）。
 
-## Build taosAdapter
-We strongly recommend to deploy taosAdapter with TDengine server and install taosAdapter with official TDengine installation package. If you want to debug or contribute to taosAdapter, you can build it seperately too.
+## 构建 taosAdapter
 
-### Setup golang environment
+我们强烈建议将 taosAdapter 和 TDengine 服务端共同部署在同一个系统上，并使用官方 TDengine 安装包安装 taosAdapter。如果你想对 taosAdapter 进行调试或贡献代码，你也可以单独构建它。
 
-taosAdapter is developed by Go language. Please refer to golang.org's official documentation for golang environment setup.
+### 设置 golang 开发环境
 
-Please use golang version 1.14+. For the user in China, we recommend using a proxy to accelerate package downloading.
+taosAdapter 是由 Go 语言开发的。关于 golang 开发环境的设置，请参考 golang.org 的官方文档。
+
+请使用1.14以上版本的 golang。对于中国的用户，我们建议使用代理服务来加速软件包的下载。
 ```
 go env -w GO111MODULE=on
 go env -w GOPROXY=https://goproxy.cn,direct
 ```
 
-## Build taosAdapter as a component of TDengine
-taosAdapter source code is hosted as a stand-alone repository and also is part of TDengine as a submodule. You can download TDengine source code and build both of them. Following are steps:
+## 作为 TDengine 的一个组件构建 taosAdapter
+
+taosAdapter 的源代码是作为一个独立的代码库托管的，也通过子模块的方式存在于 TDengine 中。你可以下载 TDengine 的源代码并同时构建它们。步骤如下：
 ```
 git clone https://github.com/taosdata/TDengine
 cd TDengine
@@ -44,47 +47,47 @@ make
 sudo make install
 ```
 
-Once make install is done, taosAdapter and its systemd service file be installed to the system with the TDengine server. You can use `sudo systemctl start taosd` and `sudo systemclt stop taosd` to launch both of them.
+一旦 make install 完成，taosAdapter 和它的 systemd 服务文件就会被安装到有 TDengine 服务端软件的系统中。您可以使用 sudo systemctl start taosd 和 sudo systemclt stop taosd 来启动它们。
 
-##  Build stand-alone taosAdapter
-taosAdapter can be built as a stand-alone application too if you already deployed TDengine server v2.3.0.0 or an above version.
+##  单独构建 taosAdapter
+如果你已经部署了 TDengine 服务器 v2.3.0.0 或以上的版本，taosAdapter 也可以作为一个独立的应用程序被构建。
 
-### Install TDengine server or client installation package
-Please download the TDengine server or client installation package from the [official website](https://www.taosdata.com/en/all-downloads/).
+### 安装 TDengine 服务器或客户端安装包
+请从官方网站下载TDengine服务器或客户端安装包。
 
-### Build taosAdapter
+### 构建 taosAdapter
 ```
 git clone https://github.com/taosdata/taosadapter
 cd taosadapter
 go build
 ```
 
-Then you should find taosAdapter binary executable file in the working directory. You need to copy the systemd file `taosadapter.service` to /etc/systemd/system and copy executable taosAdapter binary file to a place the Linux $PATH environment variable defined.
+然后您应该在工作目录中找到taosAdapter的二进制可执行文件。您需要将 systemd 服务配置文件 taosadapter.service 复制到 /etc/systemd/system 目录，并将可执行的 taosAdapter 二进制文件复制到 Linux 的 $PATH 环境变量可以找到的路径下。
 
 
-## Function
+## 功能列表
 
-* Compatible with RESTful interface.  
+* 与 RESTful 接口兼容
   [https://www.taosdata.com/cn/documentation/connector#restful](https://www.taosdata.com/cn/documentation/connector#restful)
-* Compatible with InfluxDB v1 write interface.  
+* 兼容 InfluxDB v1 写接口
   [https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/](https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/)
-* Compatible with opentsdb JSON and telnet format writing.  
+* 兼容 OpenTSDB JSON 和 telnet 格式写入
   [http://opentsdb.net/docs/build/html/api_http/put.html](http://opentsdb.net/docs/build/html/api_http/put.html)
-* Seamless connection with collectd.
-    collecd is a system statistics collection daemon. Pleae visit [https://collectd.org/](https://collectd.org/)for detail.
-* Seamless connection with StatsD. 
-    StatsD is a daemon for easy but powerful stats aggregation. Please visit [https://github.com/statsd/statsd](https://github.com/statsd/statsd) for detail.
-* Seamless connection with icinga2.
-    icinga2 is an agent to collect check result metrics and performance data. Please visit [https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer](https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer) for detail.
-* Seamless connection with tcollector.
-    TCollector is a client-side process that gathers data from local collectors and pushes the data to OpenTSDB. Please visit [http://opentsdb.net/docs/build/html/user_guide/utilities/tcollector.html](http://opentsdb.net/docs/build/html/user_guide/utilities/tcollector.html) for detail.
-* Seamless connection with node_exporter.
-    NodeExporter is an exporter software for machine metrics. Please visit [https://github.com/prometheus/node_exporter](https://github.com/prometheus/node_exporter) for detail.
+* 与collectd无缝连接
+    collectd 是一个系统统计收集守护程序，请访问 [https://collectd.org/](https://collectd.org/) 了解更多信息。
+* Seamless connection with StatsD
+  StatsD 是一个简单而强大的统计信息汇总的守护程序。请访问 [https://github.com/statsd/statsd](https://github.com/statsd/statsd) 了解更多信息。
+* 与 icinga2 的无缝连接
+  icinga2 是一个收集检查结果指标和性能数据的软件。请访问 [https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer](https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer) 了解更多信息。
+* 与 tcollector 无缝连接
+  TCollector是一个客户端进程，从本地收集器收集数据，并将数据推送到OpenTSDB。请访问 [http://opentsdb.net/docs/build/html/user_guide/utilities/tcollector.html](http://opentsdb.net/docs/build/html/user_guide/utilities/tcollector.html) 了解更多信息。
+* 无缝连接 node_exporter
+  node_export 是一个机器指标的导出器。请访问 [https://github.com/prometheus/node_exporter](https://github.com/prometheus/node_exporter) 了解更多信息。
 
-## Interface
+## 接口
 
-### TDengine RESTful interface
-You can use any http client to access the RESTful interface address "http://<fqdn>:6041/<APIEndPoint>" to insert to or query from TDengine. Please refer to the [official documentation](https://www.taosdata.com/cn/documentation/connector#restful) for detail. The end point could be following:
+### TDengine RESTful 接口
+您可以使用任何支持 http 协议的客户端通过访问 RESTful 接口地址 “https://<fqdn>:6041/<APIEndPoint>” 来写入数据到 TDengine 或从 TDengine 中查询数据。细节请参考[官方文档](https://www.taosdata.com/cn/documentation/connector#restful)。支持如下 EndPoint ：
 ```
 /rest/sql
 /rest/sqlt
@@ -92,19 +95,20 @@ You can use any http client to access the RESTful interface address "http://<fqd
 ```
 
 ### InfluxDB
-You can use any http client to access the RESTful interface address "http://<fqdn>:6041/<APIEndPoint>" to insert InfluxDB compatible protocol data to TDengine. The end point is:
+您可以使用任何支持 http 协议的客户端访问 Restful 接口地址 “https://<fqdn>:6041/<APIEndPoint>” 来写入 InfluxDB 兼容格式的数据到 TDengine。EndPoint 如下：
 ```
 /influxdb/v1/write
 ```
 
-Support following InfluxDB query parameters:
-* `db` Specify the necessary parameters for the database
-* `precision` time precision non-essential parameter
-* `u` user non-essential parameters
-* `p` password Optional parameter
+支持 InfluxDB 查询参数如下：
+
+* `db` 指定 TDengine 使用的数据库名
+* `precision` TDengine 使用的时间精度
+* `u` TDengine 用户名
+* `p` TDengine 密码
 
 ### OpenTSDB
-You can use any http client to access the RESTful interface address "http://<fqdn>:6041/<APIEndPoint>" to insert OpenTSDB compatible protocol data to TDengine. The end point is:
+您可以使用任何支持 http 协议的客户端访问 Restful 接口地址 “https://<fqdn>:6041/<APIEndPoint>” 来写入 OpenTSDB 兼容格式的数据到 TDengine。EndPoint 如下：
 ```
 /opentsdb/v1/put/json/:db
 /opentsdb/v1/put/telnet/:db
@@ -112,9 +116,9 @@ You can use any http client to access the RESTful interface address "http://<fqd
 
 ### collectd
 
-#### direct collection
+#### 直接采集
 
-Modify the collectd configuration `/etc/collectd/collectd.conf`. taosAdapter uses 6045 for collectd direct collection data write by default.
+修改 collectd 配置文件 `/etc/collectd/collectd.conf`，taosAdapter 默认使用端口 6045 来接收 collectd 直接采集方式的数据。
 
 ```
 LoadPlugin network
@@ -123,9 +127,9 @@ LoadPlugin network
 </Plugin>
 ```
 
-#### tsdb writer
+#### tsdb 写入方式
 
-Modify the collectd configuration `/etc/collectd/collectd.conf`. taosAdapter uses 6047 for collectd tsdb write by default.
+修改 collectd 配置文件 `/etc/collectd/collectd.conf`，taosAdapter 默认使用端口 6047 来接收 collectd tsdb 写入方式的数据。
 
 ```
 LoadPlugin write_tsdb
@@ -142,12 +146,12 @@ LoadPlugin write_tsdb
 
 ### StatsD
 
-modify the configuration file `path_to_statsd/config.js`
+修改 StatsD 配置文件 `config.js`，taosAdapter 默认使用 6044 端口接收 StatsD 的写入数据。
 
 * > `backends` add `"./backends/repeater"`
 * > `repeater` add `{ host:'host to taosAdapter', port: 6044}`
 
-An example configuration file as below:
+配置文件示例
 
 ```
 {
@@ -159,12 +163,12 @@ port: 8125
 
 ### icinga2 OpenTSDB writer
 
-Use icinga2 to collect check result metrics and performance data
+使用 icinga2 收集监控数据的方法参见：
 
-* Follow the doc to enable
+* 参考文档：
   opentsdb-writer [https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer](https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer)
-* Enable taosAdapter configuration `opentsdb_telnet.enable`
-* Modify the configuration file `/etc/icinga2/features-enabled/opentsdb.conf`
+* 使能 taosAdapter `opentsdb_telnet.enable` 来支持写入
+* 修改配置文件 `/etc/icinga2/features-enabled/opentsdb.conf`， taosAdapter 默认使用 6048 端口接收 icinga2 的数据。
 
 ```
 object OpenTsdbWriter "opentsdb" {
@@ -175,24 +179,24 @@ object OpenTsdbWriter "opentsdb" {
 
 ### TCollector
 
-TCollector is a client-side process that gathers data from local collectors and pushes the data to OpenTSDB. You run it on all your hosts, and it does the work of sending each host’s data to the TSD.
+Tcollector是一个客户端进程，它从本地收集器中收集数据并将数据推送到 OpenTSDB。你在你的所有主机上运行它，它完成将每个主机的数据发送到TSD的工作。
 
-* Enable taosAdapter configuration `opentsdb_telnet.enable`
-* Modify the TCollector configuration file, modify the OpenTSDB host to the host where taosAdapter is deployed, and modify the port to 6049
+* 启用taosAdapter配置opentsdb_telnet.enable
+* 修改TCollector配置文件，将OpenTSDB主机修改为部署taosAdapter的主机，并修改端口为6049
 
 ### node_exporter
 
-exporter for hardware and OS metrics exposed by *NIX kernels
+由*NIX内核暴露的硬件和操作系统指标的输出器
 
-* Enable taosAdapter configuration `node_exporter.enable`
-* Set the relevant configuration of node_exporter
-* Restart taosAdapter
+* 启用 taosAdapter 的配置 node_exporter.enable
+* 设置 node_exporter 的相关配置
+* 重新启动 taosAdapter
 
-## Configuration
+## 配置方法
 
-Support command line parameters, environment variables, and configuration files  
-`Command-line parameters take precedence over environment variables take precedence over configuration files`
-The command line usage is arg=val such as `taosadapter -p=30000 --debug=true`
+taosAdapter 支持通过命令行参数、环境变量和配置文件来进行配置。
+
+命令行参数优先于环境变量优先于配置文件，命令行用法是arg=val，如 taosadapter -p=30000 --debug=true，详细列表如下：
 
 ```shell
 Usage of taosAdapter:
@@ -266,4 +270,4 @@ Usage of taosAdapter:
       --version                                      Print the version and exit
 ```
 
-For the default configuration file, see [example/config/taosadapter.toml](example/config/taosadapter.toml)
+示例配置文件参见 [example/config/taosadapter.toml](example/config/taosadapter.toml)。
