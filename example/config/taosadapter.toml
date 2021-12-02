@@ -1,7 +1,6 @@
 debug = false
 port = 6041
 logLevel = "info"
-enableGzip = true
 
 [pool]
 maxConnect = 4000

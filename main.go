@@ -65,7 +65,7 @@ func main() {
 	log.ConfigLog()
 	db.PrepareConnection()
 	logger.Info("start server:", log.ServerID)
-	router := createRouter(config.Conf.Debug, &config.Conf.Cors, config.Conf.EnableGzip)
+	router := createRouter(config.Conf.Debug, &config.Conf.Cors, true)
 	r := rest.Restful{}
 	_ = r.Init(router)
 	plugin.RegisterGenerateAuth(router)
