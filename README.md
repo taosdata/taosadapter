@@ -16,7 +16,7 @@ taosAdapter provides the following functions.
 
 taosAdapter is part of the TDengine server from TDengine v2.3.0.0. You don't need any additional steps to set taosAdapter up. taosAdapter will be managed by the TDengine server via systemd, which means it will be automatically launched by starting taosd service command `systemctl start taosd` and be stopped by exiting taosd service command `systemctl stop taosd`. You can also start taosAdapter by `systemctl start taosadapter` and stop taosAdapter by `systemctl stop taosadapter` too. Start/stop taosAdapter will not affect taosd service.
 
-You can download TDengine (taosAdapter be included in v2.3.0.0 and above version) from the (official website)[https://taosdata.com/cn/all-downloads/].
+You can download TDengine (taosAdapter be included in v2.3.0.0 and above version) from the (official website)[https://taosdata.com/en/all-downloads/].
 
 ## Build taosAdapter
 We strongly recommend to deploy taosAdapter with TDengine server and install taosAdapter with official TDengine installation package. If you want to debug or contribute to taosAdapter, you can build it seperately too.
