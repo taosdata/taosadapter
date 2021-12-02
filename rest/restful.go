@@ -41,6 +41,27 @@ func (ctl *Restful) Init(r gin.IRouter) error {
 	return nil
 }
 
+type TDEngineRestfulRespDoc struct {
+	Status     string          `json:"status,omitempty"`
+	Head       []string        `json:"head,omitempty"`
+	ColumnMeta [][]interface{} `json:"column_meta,omitempty"`
+	Data       [][]interface{} `json:"data,omitempty"`
+	Rows       int             `json:"rows,omitempty"`
+	Code       int             `json:"code,omitempty"`
+	Desc       string          `json:"desc,omitempty"`
+}
+
+// @Tags rest
+// @Summary execute sql
+// @Description execute sql returns results in the time format "2006-01-02 15:04:05.000"
+// @Accept plain
+// @Produce json
+// @Param Authorization header string true "authorization token"
+// @Success 200 {object} TDEngineRestfulRespDoc
+// @Failure 401 {string} string "unauthorized"
+// @Failure 500 {string} string "internal error"
+// @Router /rest/sql/:db [post]
+// @Router /rest/sql [post]
 func (ctl *Restful) sql(c *gin.Context) {
 	db := c.Param("db")
 	ctl.doQuery(c, db, func(ts int64, precision int) driver.Value {
@@ -55,13 +76,36 @@ func (ctl *Restful) sql(c *gin.Context) {
 		panic("unsupported precision")
 	})
 }
+
+// @Tags rest
+// @Summary execute sqlt
+// @Description execute sql to return results, time formatted as timestamp
+// @Accept plain
+// @Produce json
+// @Param Authorization header string true "authorization token"
+// @Success 200 {object} TDEngineRestfulRespDoc
+// @Failure 401 {string} string "unauthorized"
+// @Failure 500 {string} string "internal error"
+// @Router /rest/sqlt/:db [post]
+// @Router /rest/sqlt [post]
 func (ctl *Restful) sqlt(c *gin.Context) {
 	db := c.Param("db")
 	ctl.doQuery(c, db, func(ts int64, precision int) driver.Value {
 		return ts
 	})
-
 }
+
+// @Tags rest
+// @Summary execute sqlutc
+// @Description execute sql to return results, time formatted as RFC3339Nano
+// @Accept plain
+// @Produce json
+// @Param Authorization header string true "authorization token"
+// @Success 200 {object} TDEngineRestfulRespDoc
+// @Failure 401 {string} string "unauthorized"
+// @Failure 500 {string} string "internal error"
+// @Router /rest/sqlutc/:db [post]
+// @Router /rest/sqlutc [post]
 func (ctl *Restful) sqlutc(c *gin.Context) {
 	db := c.Param("db")
 	ctl.doQuery(c, db, func(ts int64, precision int) driver.Value {
@@ -202,6 +246,14 @@ func (ctl *Restful) doQuery(c *gin.Context, db string, timeFunc wrapper.FormatTi
 	}
 }
 
+// @Tags rest
+// @Summary get login token
+// @Description get login token
+// @Accept plain
+// @Produce json
+// @Success 200 {object} Message
+// @Failure 500 {string} string "internal error"
+// @Router /rest/login/:user/:password [get]
 func (ctl *Restful) des(c *gin.Context) {
 	user := c.Param("user")
 	password := c.Param("password")
@@ -209,12 +261,12 @@ func (ctl *Restful) des(c *gin.Context) {
 		errorResponse(c, httperror.HTTP_GEN_TAOSD_TOKEN_ERR)
 		return
 	}
-	//conn, err := commonpool.GetConnection(user, password)
-	//if err != nil {
-	//	errorResponse(c, httperror.TSDB_CODE_RPC_AUTH_FAILURE)
-	//	return
-	//}
-	//conn.Put()
+	conn, err := commonpool.GetConnection(user, password)
+	if err != nil {
+		errorResponse(c, httperror.TSDB_CODE_RPC_AUTH_FAILURE)
+		return
+	}
+	conn.Put()
 	token, err := EncodeDes(user, password)
 	if err != nil {
 		errorResponse(c, httperror.HTTP_GEN_TAOSD_TOKEN_ERR)

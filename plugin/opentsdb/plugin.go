@@ -56,6 +56,17 @@ func (p *Plugin) Stop() error {
 	return nil
 }
 
+// @Tags opentsdb
+// @Summary opentsdb write
+// @Description opentsdb write json message
+// @Accept json
+// @Produce json
+// @Param Authorization header string false "basic authorization"
+// @Success 200 {object} message "success"
+// @Failure 401 {object} message "unauthorized"
+// @Failure 400 {string} string "badRequest"
+// @Failure 500 {string} string "internal server error"
+// @Router /opentsdb/v1/put/json/:db [post]
 func (p *Plugin) insertJson(c *gin.Context) {
 	isDebug := logger.Logger.IsLevelEnabled(logrus.DebugLevel)
 	id := web.GetRequestID(c)
@@ -105,6 +116,17 @@ func (p *Plugin) insertJson(c *gin.Context) {
 	p.successResponse(c)
 }
 
+// @Tags opentsdb
+// @Summary opentsdb write
+// @Description opentsdb write telent message over http
+// @Accept plain
+// @Produce json
+// @Param Authorization header string false "basic authorization"
+// @Success 200 {object} message "success"
+// @Failure 401 {object} message "unauthorized"
+// @Failure 400 {string} string "badRequest"
+// @Failure 500 {string} string "internal server error"
+// @Router /opentsdb/v1/put/telnet/:db [post]
 func (p *Plugin) insertTelnet(c *gin.Context) {
 	id := web.GetRequestID(c)
 	logger := logger.WithField("sessionID", id)

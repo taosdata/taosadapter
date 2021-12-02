@@ -5,8 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/patrickmn/go-cache"
 	"github.com/taosdata/taosadapter/tools"
 	"github.com/taosdata/taosadapter/tools/pool"
 )
@@ -15,6 +17,13 @@ const (
 	UserKey     = "user"
 	PasswordKey = "password"
 )
+
+type authInfo struct {
+	User     string
+	Password string
+}
+
+var authCache = cache.New(30*time.Minute, time.Hour)
 
 func Auth(errHandler func(c *gin.Context, code int, err error)) func(c *gin.Context) {
 	return func(c *gin.Context) {
@@ -25,6 +34,13 @@ func Auth(errHandler func(c *gin.Context, code int, err error)) func(c *gin.Cont
 			return
 		}
 		auth = strings.TrimSpace(auth)
+		v, exist := authCache.Get(auth)
+		if exist {
+			info := v.(*authInfo)
+			c.Set(UserKey, info.User)
+			c.Set(PasswordKey, info.Password)
+			return
+		}
 		if strings.HasPrefix(auth, "Basic") {
 			b, err := base64.StdEncoding.DecodeString(auth[6:])
 			if err != nil {
@@ -81,6 +97,10 @@ func Auth(errHandler func(c *gin.Context, code int, err error)) func(c *gin.Cont
 				c.Abort()
 				return
 			}
+			authCache.SetDefault(auth, &authInfo{
+				User:     user,
+				Password: password,
+			})
 			c.Set(UserKey, user)
 			c.Set(PasswordKey, password)
 		}

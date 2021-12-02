@@ -55,6 +55,21 @@ func (p *Influxdb) Stop() error {
 	return nil
 }
 
+// @Tags influxdb
+// @Summary influxdb write
+// @Description influxdb write v1 https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/
+// @Accept plain
+// @Produce json
+// @Param Authorization header string false "basic authorization"
+// @Param u query string false "username to authenticate the request"
+// @Param p query string false "username to authenticate the request"
+// @Param db query string true "the database to write data to"
+// @Param precision query string false "the precision of Unix timestamps in the line protocol"
+// @Success 204 {string} string "no content"
+// @Failure 401 {object} message
+// @Failure 400 {object} badRequest
+// @Failure 500 {object} message
+// @Router /influxdb/v1/write [post]
 func (p *Influxdb) write(c *gin.Context) {
 	id := web.GetRequestID(c)
 	logger := logger.WithField("sessionID", id)
