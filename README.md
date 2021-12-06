@@ -266,4 +266,4 @@ Usage of taosAdapter:
       --version                                      Print the version and exit
 ```
 
-For the default configuration file, see [example/config/taosadapter.toml](example/config/taosadapter.toml)
+For the default configuration file, see [example/config/taosadapter.toml](https://github.com/taosdata/taosadapter/blob/develop/example/config/taosadapter.toml)
