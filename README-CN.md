@@ -270,4 +270,4 @@ Usage of taosAdapter:
       --version                                      Print the version and exit
 ```
 
-示例配置文件参见 [example/config/taosadapter.toml](example/config/taosadapter.toml)。
+示例配置文件参见 [example/config/taosadapter.toml](https://github.com/taosdata/taosadapter/blob/develop/example/config/taosadapter.toml)。
