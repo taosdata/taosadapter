@@ -8,5 +8,13 @@ func setupRouter() *gin.Engine {
 	r.POST("/rest/sql", func(c *gin.Context) {
 		c.Status(200)
 	})
+	r.POST("/opentsdb/v1/put/telnet/test", func(c *gin.Context) {
+		c.Status(200)
+	})
 	return r
+}
+
+func main() {
+	r := setupRouter()
+	r.Run(":6041")
 }
