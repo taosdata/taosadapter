@@ -6,6 +6,7 @@ import (
 
 	tErrors "github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/taosadapter/thread"
 )
 
 func InsertOpentsdbJson(taosConnect unsafe.Pointer, data []byte, db string) error {
@@ -16,16 +17,20 @@ func InsertOpentsdbJson(taosConnect unsafe.Pointer, data []byte, db string) erro
 	if err != nil {
 		return err
 	}
-	locker.Lock()
+	thread.Lock()
 	result := wrapper.TaosSchemalessInsert(taosConnect, []string{string(data)}, wrapper.OpenTSDBJsonFormatProtocol, "")
-	locker.Unlock()
+	thread.Unlock()
 	code := wrapper.TaosError(result)
 	if code != 0 {
 		errStr := wrapper.TaosErrorStr(result)
+		thread.Lock()
 		wrapper.TaosFreeResult(result)
+		thread.Unlock()
 		return tErrors.NewError(code, errStr)
 	}
+	thread.Lock()
 	wrapper.TaosFreeResult(result)
+	thread.Unlock()
 	return nil
 }
 
@@ -37,15 +42,19 @@ func InsertOpentsdbTelnet(taosConnect unsafe.Pointer, data, db string) error {
 	if err != nil {
 		return err
 	}
-	locker.Lock()
+	thread.Lock()
 	result := wrapper.TaosSchemalessInsert(taosConnect, []string{strings.TrimPrefix(strings.TrimSpace(data), "put ")}, wrapper.OpenTSDBTelnetLineProtocol, "")
-	locker.Unlock()
+	thread.Unlock()
 	code := wrapper.TaosError(result)
 	if code != 0 {
 		errStr := wrapper.TaosErrorStr(result)
+		thread.Lock()
 		wrapper.TaosFreeResult(result)
+		thread.Unlock()
 		return tErrors.NewError(code, errStr)
 	}
+	thread.Lock()
 	wrapper.TaosFreeResult(result)
+	thread.Unlock()
 	return nil
 }
