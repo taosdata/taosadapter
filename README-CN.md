@@ -270,4 +270,19 @@ Usage of taosAdapter:
       --version                                      Print the version and exit
 ```
 
+备注：
+使用浏览器进行接口调用请根据实际情况设置如下跨源资源共享（CORS）参数：
+
+    AllowAllOrigins
+    AllowOrigins
+    AllowHeaders
+    ExposeHeaders
+    AllowCredentials
+    AllowWebSockets
+
+如果不通过浏览器进行接口调用无需关心这几项配置。
+
+关于 CORS 协议细节请参考：[https://www.w3.org/wiki/CORS_Enabled](https://www.w3.org/wiki/CORS_Enabled) 或 [https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CORS](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CORS)。
+
+
 示例配置文件参见 [example/config/taosadapter.toml](https://github.com/taosdata/taosadapter/blob/develop/example/config/taosadapter.toml)。

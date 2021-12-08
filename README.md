@@ -266,4 +266,19 @@ Usage of taosAdapter:
       --version                                      Print the version and exit
 ```
 
+Note:
+If you support users using the web browser to access the interfaces, please configure the following CORS parameters according to your practical network setting:
+
+    AllowAllOrigins
+    AllowOrigins
+    AllowHeaders
+    ExposeHeaders
+    AllowCredentials
+    AllowWebSockets
+
+If not, you don't need to configure them.
+
+Please visit the webpage [https://www.w3.org/wiki/CORS_Enabled](https://www.w3.org/wiki/CORS_Enabled) or [https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CORS](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CORS) for the detailed CORS protocol.
+
+
 For the default configuration file, see [example/config/taosadapter.toml](https://github.com/taosdata/taosadapter/blob/develop/example/config/taosadapter.toml)
