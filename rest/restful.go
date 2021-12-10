@@ -177,21 +177,12 @@ func (ctl *Restful) doQuery(c *gin.Context, db string, timeFunc wrapper.FormatTi
 		if isDebug {
 			s = time.Now()
 		}
-		var code int
+		// Attempt to select the database does not return even if there is an error
+		// To avoid error reporting in the `create database` statement
 		thread.Lock()
-		code = wrapper.TaosSelectDB(taosConnect.TaosConnection, db)
+		_ = wrapper.TaosSelectDB(taosConnect.TaosConnection, db)
 		thread.Unlock()
 		logger.Debugln("taos select db cost:", time.Now().Sub(s))
-		if code != httperror.SUCCESS {
-			if isDebug {
-				s = time.Now()
-			}
-			errorMsg := tErrors.GetError(code)
-			logger.Debugln("taos select db get error string cost:", time.Now().Sub(s))
-			logger.Errorln("taos select db error:", sql, code&0xffff, errorMsg.Error())
-			errorResponseWithMsg(c, code, errorMsg.Error())
-			return
-		}
 	}
 
 	startExec := time.Now()
