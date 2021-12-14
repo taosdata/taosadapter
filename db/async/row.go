@@ -72,12 +72,13 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, sql string, timeFormat wrap
 				thread.Lock()
 				row = wrapper.TaosFetchRow(res)
 				thread.Unlock()
+				lengths := wrapper.FetchLengths(res, len(rowsHeader.ColNames))
 				values := make([]driver.Value, len(rowsHeader.ColNames))
 				for j := range rowsHeader.ColTypes {
 					if row == nil {
 						return nil, FetchRowError
 					}
-					values[j] = wrapper.FetchRow(row, j, rowsHeader.ColTypes[j], precision, timeFormat)
+					values[j] = wrapper.FetchRow(row, j, rowsHeader.ColTypes[j], lengths[j], precision, timeFormat)
 				}
 				execResult.Data = append(execResult.Data, values)
 			}
