@@ -44,14 +44,16 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, sql string, timeFormat wrap
 		return nil, tErrors.NewError(code, errStr)
 	}
 	var fieldsCount int
-	fieldsCount = wrapper.TaosNumFields(res)
-	execResult := &ExecResult{FieldCount: fieldsCount}
-	if fieldsCount == 0 {
+	isUpdate := wrapper.TaosIsUpdateQuery(res)
+	execResult := &ExecResult{}
+	if isUpdate {
 		var affectRows int
 		affectRows = wrapper.TaosAffectedRows(res)
 		execResult.AffectedRows = affectRows
 		return execResult, nil
 	}
+	fieldsCount = wrapper.TaosNumFields(res)
+	execResult.FieldCount = fieldsCount
 	var rowsHeader *wrapper.RowsHeader
 	rowsHeader, err = wrapper.ReadColumn(res, fieldsCount)
 	if err != nil {
