@@ -17,6 +17,9 @@ import (
 	"github.com/taosdata/taosadapter/plugin/opentsdbtelnet"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:08
+// @description: test opentsdb_telnet plugin
 func TestPlugin(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	p := &opentsdbtelnet.Plugin{}

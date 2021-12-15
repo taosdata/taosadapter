@@ -11,6 +11,9 @@ import (
 	"github.com/taosdata/taosadapter/schemaless/proto"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:12
+// @description: test insert influxdb
 func TestInsertInfluxdb(t *testing.T) {
 	config.Init()
 	db.PrepareConnection()

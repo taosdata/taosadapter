@@ -12,6 +12,9 @@ func BenchmarkDecodeBasic(b *testing.B) {
 	}
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:17
+// @description: test decode Basic
 func TestDecodeBasic(t *testing.T) {
 	type args struct {
 		auth string

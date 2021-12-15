@@ -19,6 +19,9 @@ import (
 	"github.com/taosdata/taosadapter/db"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:07
+// @description: test influxdb plugin
 func TestInfluxdb(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	config.Init()

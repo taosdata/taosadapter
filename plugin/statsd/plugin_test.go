@@ -16,6 +16,9 @@ import (
 	"github.com/taosdata/taosadapter/db"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:08
+// @description: test statsd plugin
 func TestStatsd(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	p := &Plugin{}

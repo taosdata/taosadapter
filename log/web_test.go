@@ -10,6 +10,9 @@ import (
 	"github.com/taosdata/taosadapter/log"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:07
+// @description: test gin log middleware
 func TestGinLog(t *testing.T) {
 	router := gin.New()
 	router.Use(log.GinLog())

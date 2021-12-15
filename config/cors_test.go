@@ -8,6 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:00
+// @description: test cors config
 func TestCorsConfig_GetConfig(t *testing.T) {
 	type fields struct {
 		AllowAllOrigins  bool

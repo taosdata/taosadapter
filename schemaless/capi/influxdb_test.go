@@ -10,6 +10,9 @@ import (
 	"github.com/taosdata/taosadapter/schemaless/proto"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:11
+// @description: test insert influxdb
 func TestInsertInfluxdb(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {

@@ -24,6 +24,9 @@ func BenchmarkGetConnection(b *testing.B) {
 	}
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:03
+// @description: test connection get connection
 func TestGetConnection(t *testing.T) {
 	type args struct {
 		user     string
@@ -68,6 +71,9 @@ func TestGetConnection(t *testing.T) {
 	}
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:04
+// @description: test connection pool re-get connection
 func TestReGetConnection(t *testing.T) {
 	conn, err := GetConnection("root", "taosdata")
 	assert.NoError(t, err)
@@ -78,6 +84,9 @@ func TestReGetConnection(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:05
+// @description: test connect pool close
 func TestConnectorPool_Close(t *testing.T) {
 	pool, err := NewConnectorPool("root", "taosdata")
 	assert.NoError(t, err)

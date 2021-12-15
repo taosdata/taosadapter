@@ -18,6 +18,9 @@ func BenchmarkRoute(b *testing.B) {
 	}
 }
 
+// @author: xftan
+// @date: 2021/12/14 14:59
+// @description: test gin.Router
 func Test_setupRouter(t *testing.T) {
 	router := setupRouter()
 	w := httptest.NewRecorder()

@@ -8,6 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:14
+// @description: test parse opentsdb telnet string tag
 func TestTags_String(t *testing.T) {
 	var dst []*Tag
 	tag := tagPoolGet()
@@ -26,6 +29,9 @@ func TestTags_String(t *testing.T) {
 	assert.Equal(t, "k1=v1 k2=v2", str)
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:14
+// @description: test parse opentsdb telnet unmarshal
 func Test_Unmarshal(t *testing.T) {
 	point, err := Unmarshal("put sys.if.bytes.out 1479496100 1.3E3 host=web01 interface=eth0")
 	assert.NoError(t, err)

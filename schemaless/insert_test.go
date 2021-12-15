@@ -20,8 +20,11 @@ func TestMain(m *testing.M) {
 	rand.Seed(int64(time.Now().Nanosecond()))
 	m.Run()
 }
-func TestExecutor_InsertTDengine(t *testing.T) {
 
+// @author: xftan
+// @date: 2021/12/14 15:15
+// @description: test insert into TDengine with customized structure
+func TestExecutor_InsertTDengine(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Error(err)
@@ -98,6 +101,9 @@ func TestExecutor_InsertTDengine(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:15
+// @description: test create database
 func TestCreateDatabase(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
@@ -112,6 +118,9 @@ func TestCreateDatabase(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:16
+// @description: test create stable
 func TestExecutor_createStable(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {

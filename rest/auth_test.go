@@ -5,6 +5,9 @@ import (
 	"testing"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:09
+// @description: test encode des
 func TestEncodeDes(t *testing.T) {
 	type args struct {
 		user     string
@@ -48,6 +51,9 @@ func TestEncodeDes(t *testing.T) {
 	}
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:10
+// @description: test decode des
 func TestDecodeDes(t *testing.T) {
 	type args struct {
 		auth string

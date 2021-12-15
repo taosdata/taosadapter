@@ -7,6 +7,9 @@ import (
 	"github.com/taosdata/driver-go/v2/wrapper"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:13
+// @description: test insert opentsdb json
 func TestInsertJson(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
