@@ -2,6 +2,7 @@ package async
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"unsafe"
 
@@ -80,7 +81,7 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, sql string, timeFormat wrap
 					}
 					v := wrapper.FetchRow(row, j, rowsHeader.ColTypes[j], lengths[j], precision, timeFormat)
 					if vv, is := v.([]byte); is {
-						v = string(vv)
+						v = json.RawMessage(vv)
 					}
 					values[j] = v
 				}
