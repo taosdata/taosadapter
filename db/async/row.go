@@ -78,7 +78,11 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, sql string, timeFormat wrap
 					if row == nil {
 						return nil, FetchRowError
 					}
-					values[j] = wrapper.FetchRow(row, j, rowsHeader.ColTypes[j], lengths[j], precision, timeFormat)
+					v := wrapper.FetchRow(row, j, rowsHeader.ColTypes[j], lengths[j], precision, timeFormat)
+					if vv, is := v.([]byte); is {
+						v = string(vv)
+					}
+					values[j] = v
 				}
 				execResult.Data = append(execResult.Data, values)
 			}
