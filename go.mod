@@ -25,7 +25,7 @@ require (
 	github.com/spf13/viper v1.9.0
 	github.com/stretchr/testify v1.7.0
 	github.com/swaggo/swag v1.7.6
-	github.com/taosdata/driver-go/v2 v2.0.1-0.20211214050634-fdf239bd5bfa
+	github.com/taosdata/driver-go/v2 v2.0.1-0.20211215031937-7da3cc9e4ad1
 	github.com/valyala/fastjson v1.6.3
 	go.uber.org/automaxprocs v1.4.0
 	golang.org/x/net v0.0.0-20210805182204-aaa1db679c0d // indirect
