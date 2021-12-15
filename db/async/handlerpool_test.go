@@ -13,6 +13,9 @@ func BenchmarkName(b *testing.B) {
 	}
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:00
+// @description: test func NewHandlerPool
 func TestNewHandlerPool(t *testing.T) {
 	type args struct {
 		count int
@@ -42,6 +45,9 @@ func TestNewHandlerPool(t *testing.T) {
 	}
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:01
+// @description: test func HandlerPool.Get
 func TestHandlerPool_Get(t *testing.T) {
 	pool := NewHandlerPool(1)
 	h := pool.Get()

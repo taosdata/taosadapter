@@ -18,6 +18,9 @@ import (
 	"github.com/taosdata/taosadapter/db"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:07
+// @description: test collectd plugin
 func TestCollectd(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	p := &Plugin{}

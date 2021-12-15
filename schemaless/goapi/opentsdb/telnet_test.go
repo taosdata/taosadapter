@@ -14,6 +14,10 @@ func TestMain(m *testing.M) {
 	db.PrepareConnection()
 	m.Run()
 }
+
+// @author: xftan
+// @date: 2021/12/14 15:13
+// @description: test insert opentsdb telnet
 func TestInsertTelnet(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {

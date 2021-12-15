@@ -10,6 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:09
+// @description: test auth middleware
 func TestAuth(t *testing.T) {
 	router := gin.Default()
 	router.GET("/", Auth(func(c *gin.Context, code int, err error) {

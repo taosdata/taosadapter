@@ -29,6 +29,9 @@ func (f *fakePlugin) Version() string {
 	return "v1"
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:09
+// @description: test plugin register
 func TestRegister(t *testing.T) {
 	Register(&fakePlugin{})
 	r := gin.Default()

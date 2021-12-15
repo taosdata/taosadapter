@@ -6,6 +6,9 @@ import (
 	"time"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:13
+// @description: test telnet unmarshal
 func TestUnmarshal(t *testing.T) {
 	type args struct {
 		data string

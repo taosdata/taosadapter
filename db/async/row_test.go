@@ -8,6 +8,9 @@ import (
 	"github.com/taosdata/driver-go/v2/wrapper"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:02
+// @description: test Async Execute
 func TestAsync_TaosExec(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
@@ -94,6 +97,9 @@ func TestAsync_TaosExec(t *testing.T) {
 	}
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:03
+// @description: test async exec without result
 func TestAsync_TaosExecWithoutResult(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {

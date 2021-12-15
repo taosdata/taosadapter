@@ -32,6 +32,9 @@ go_goroutines 15
 test_metric{label="value"} 1.0 1490802350000
 `
 
+// @author: xftan
+// @date: 2021/12/14 15:08
+// @description: test node-exporter plugin
 func TestNodeExporter_Gather(t *testing.T) {
 	config.Init()
 	db.PrepareConnection()

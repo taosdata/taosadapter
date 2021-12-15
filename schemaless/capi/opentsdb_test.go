@@ -16,6 +16,9 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:11
+// @description: test insert opentsdb telnet
 func TestInsertOpentsdbTelnet(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
@@ -94,6 +97,9 @@ func BenchmarkTelnet(b *testing.B) {
 	}
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:12
+// @description: test insert opentsdb json
 func TestInsertOpentsdbJson(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {

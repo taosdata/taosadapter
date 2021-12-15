@@ -9,6 +9,9 @@ import (
 	"github.com/taosdata/taosadapter/schemaless/capi"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:12
+// @description:  test selectDB
 func Test_selectDB(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {

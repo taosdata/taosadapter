@@ -6,6 +6,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:17
+// @description: test gin middleware get request ID
 func TestGetRequestID(t *testing.T) {
 	c := &gin.Context{}
 	c.Set("currentID", uint32(1024))

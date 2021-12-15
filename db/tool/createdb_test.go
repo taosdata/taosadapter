@@ -10,6 +10,9 @@ import (
 	"github.com/taosdata/taosadapter/db"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:05
+// @description: test creat database with connection
 func TestCreateDBWithConnection(t *testing.T) {
 	config.Init()
 	db.PrepareConnection()

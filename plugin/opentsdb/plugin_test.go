@@ -19,6 +19,9 @@ import (
 	"github.com/taosdata/taosadapter/db"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:08
+// @description: test opentsdb test
 func TestOpentsdb(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	config.Init()

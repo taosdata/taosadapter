@@ -5,6 +5,9 @@ import (
 	"testing"
 )
 
+// @author: xftan
+// @date: 2021/12/14 15:17
+// @description: test aes encrypt
 func TestAesEncrypt(t *testing.T) {
 	type args struct {
 		origData []byte
@@ -49,6 +52,9 @@ func TestAesEncrypt(t *testing.T) {
 	}
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:17
+// @description: test aes decrypt
 func TestAesDecrypt(t *testing.T) {
 	type args struct {
 		encrypted []byte

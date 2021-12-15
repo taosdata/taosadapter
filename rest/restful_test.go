@@ -41,6 +41,9 @@ func BenchmarkRestful(b *testing.B) {
 	}
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:10
+// @description: test restful sql
 func TestSql(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("show databases")
@@ -50,6 +53,9 @@ func TestSql(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:10
+// @description: test restful sqlt
 func TestSqlt(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("show databases")
@@ -59,6 +65,9 @@ func TestSqlt(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:11
+// @description: test restful sqlutc
 func TestSqlutc(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("show databases")
@@ -68,6 +77,9 @@ func TestSqlutc(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:11
+// @description: test restful login
 func TestLogin(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/rest/login/root/password", nil)
@@ -78,6 +90,9 @@ func TestLogin(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:11
+// @description: test restful wrong sql
 func TestWrongSql(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("wrong sql")
@@ -87,6 +102,9 @@ func TestWrongSql(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 }
 
+// @author: xftan
+// @date: 2021/12/14 15:11
+// @description: test restful no sql
 func TestNoSql(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("")
