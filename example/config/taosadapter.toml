@@ -51,7 +51,7 @@ worker = 10
 
 
 [opentsdb_telnet]
-enable = true
+enable = false
 maxTCPConnections = 250
 tcpKeepAlive = false
 dbs = ["opentsdb_telnet", "collectd", "icinga2", "tcollector"]

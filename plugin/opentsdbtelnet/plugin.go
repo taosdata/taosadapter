@@ -1,11 +1,11 @@
 package opentsdbtelnet
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"net"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -115,65 +115,36 @@ func (l *TCPListener) handler(conn *net.TCPConn, id uint64) {
 		l.accept <- true
 		l.forget(id)
 	}()
-	buffer := make([]byte, 0, 1024)
-	d := make([]byte, 1024)
 	for {
 		select {
 		case <-l.done:
 			return
 		default:
-			n, err := conn.Read(d)
-			if err != nil {
-				if err != io.EOF {
-					logger.WithError(err).Error("conn read")
+			b := bufio.NewReader(conn)
+			for {
+				s, err := b.ReadString('\n')
+				if err != nil {
+					if err != io.EOF {
+						logger.WithError(err).Error("conn read")
+					}
+					return
 				}
-				return
-			}
-			if n == 0 {
-				continue
-			}
-			buffer = append(buffer, d[:n]...)
-			customIndex := 0
-			for i := len(buffer) - 1; i > 0; i-- {
-				if buffer[i] == '\n' {
-					customIndex = i
-					break
-				}
-			}
-
-			if customIndex > 0 {
-				data := make([]byte, customIndex)
-				copy(data, buffer[:customIndex])
-				buffer = buffer[customIndex+1:]
-				lines := strings.Split(string(data), "\n")
-				insertLines := make([]string, 0, len(lines))
-				for _, line := range lines {
-					if len(line) == 0 {
-						continue
-					}
-					if line[len(line)-1] == '\r' {
-						line = line[:len(line)-1]
-					}
-					if len(line) == 0 {
-						continue
-					}
-					if line == versionCommand {
-						conn.Write([]byte{'1'})
-						continue
-					} else {
-						insertLines = append(insertLines, line)
-					}
-				}
-				if len(insertLines) == 0 {
+				if len(s) == 0 {
 					continue
 				}
-				select {
-				case l.in <- &telnetMessage{
-					body:  insertLines,
-					index: l.index,
-				}:
-				default:
-					logger.Errorln("can not handle more message so far. increase opentsdb_telnet.worker")
+				s = s[:len(s)-1]
+				if s == versionCommand {
+					conn.Write([]byte{'1'})
+					continue
+				} else {
+					select {
+					case l.in <- &telnetMessage{
+						body:  []string{s},
+						index: l.index,
+					}:
+					default:
+						logger.Errorln("can not handle more message so far. increase opentsdb_telnet.worker")
+					}
 				}
 			}
 		}
