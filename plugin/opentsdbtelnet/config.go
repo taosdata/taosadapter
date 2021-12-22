@@ -14,7 +14,6 @@ type Config struct {
 	DBList            []string
 	User              string
 	Password          string
-	Worker            int
 }
 
 func (c *Config) setValue() {
@@ -25,7 +24,6 @@ func (c *Config) setValue() {
 	c.DBList = viper.GetStringSlice("opentsdb_telnet.dbs")
 	c.User = viper.GetString("opentsdb_telnet.user")
 	c.Password = viper.GetString("opentsdb_telnet.password")
-	c.Worker = viper.GetInt("opentsdb_telnet.worker")
 
 }
 func init() {
@@ -57,7 +55,4 @@ func init() {
 	pflag.String("opentsdb_telnet.password", common.DefaultPassword, `opentsdb_telnet password. Env "TAOS_ADAPTER_OPENTSDB_TELNET_PASSWORD"`)
 	viper.SetDefault("opentsdb_telnet.password", common.DefaultPassword)
 
-	_ = viper.BindEnv("opentsdb_telnet.worker", "TAOS_ADAPTER_OPENTSDB_TELNET_WORKER")
-	pflag.Int("opentsdb_telnet.worker", 1000, `opentsdb_telnet write worker. Env "TAOS_ADAPTER_OPENTSDB_TELNET_WORKER"`)
-	viper.SetDefault("opentsdb_telnet.worker", 1000)
 }

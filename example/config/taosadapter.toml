@@ -58,7 +58,6 @@ dbs = ["opentsdb_telnet", "collectd", "icinga2", "tcollector"]
 ports = [6046, 6047, 6048, 6049]
 user = "root"
 password = "taosdata"
-worker = 1000
 
 [node_exporter]
 enable = false
