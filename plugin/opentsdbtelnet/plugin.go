@@ -21,35 +21,28 @@ import (
 var logger = log.GetLogger("opentsdb_telnet")
 var versionCommand = "version"
 
-type telnetMessage struct {
-	body  []string
-	index int
-}
-
 type Plugin struct {
-	conf Config
-	done chan struct{}
-	in   chan *telnetMessage
-	wg   sync.WaitGroup
-
+	conf         Config
+	done         chan struct{}
+	wg           sync.WaitGroup
 	TCPListeners []*TCPListener
 }
 
 type TCPListener struct {
+	plugin    *Plugin
 	index     int
 	listener  *net.TCPListener
 	id        uint64
 	connList  map[uint64]*net.TCPConn
 	accept    chan bool
-	in        chan<- *telnetMessage
 	keepalive bool
 	cleanup   sync.Mutex
 	done      chan struct{}
 	wg        sync.WaitGroup
 }
 
-func NewTCPListener(index int, listener *net.TCPListener, in chan<- *telnetMessage, maxConnections int, keepalive bool) *TCPListener {
-	l := &TCPListener{listener: listener, in: in, index: index, keepalive: keepalive}
+func NewTCPListener(plugin *Plugin, index int, listener *net.TCPListener, maxConnections int, keepalive bool) *TCPListener {
+	l := &TCPListener{plugin: plugin, index: index, listener: listener, keepalive: keepalive}
 	l.done = make(chan struct{})
 	l.connList = make(map[uint64]*net.TCPConn)
 	l.accept = make(chan bool, maxConnections)
@@ -137,14 +130,7 @@ func (l *TCPListener) handler(conn *net.TCPConn, id uint64) {
 					conn.Write([]byte{'1'})
 					continue
 				} else {
-					select {
-					case l.in <- &telnetMessage{
-						body:  []string{s},
-						index: l.index,
-					}:
-					default:
-						logger.Errorln("can not handle more message so far. increase opentsdb_telnet.worker")
-					}
+					l.plugin.handleData(l.index, s)
 				}
 			}
 		}
@@ -187,16 +173,7 @@ func (p *Plugin) Start() error {
 		return nil
 	}
 	p.TCPListeners = make([]*TCPListener, len(p.conf.PortList))
-	p.in = make(chan *telnetMessage, p.conf.Worker*2)
 	p.done = make(chan struct{})
-	for i := 0; i < p.conf.Worker; i++ {
-		p.wg.Add(1)
-		go func() {
-			defer p.wg.Done()
-			p.parser()
-		}()
-	}
-
 	for i := 0; i < len(p.conf.PortList); i++ {
 		err := p.tcp(p.conf.PortList[i], i)
 		if err != nil {
@@ -216,7 +193,6 @@ func (p *Plugin) Stop() error {
 	for _, listener := range p.TCPListeners {
 		listener.stop()
 	}
-	close(p.in)
 	p.wg.Wait()
 	return nil
 }
@@ -240,7 +216,7 @@ func (p *Plugin) tcp(port int, index int) error {
 	}
 
 	logger.Infof("TCP listening on %q", listener.Addr().String())
-	tcpListener := NewTCPListener(index, listener, p.in, p.conf.MaxTCPConnections, p.conf.TCPKeepAlive)
+	tcpListener := NewTCPListener(p, index, listener, p.conf.MaxTCPConnections, p.conf.TCPKeepAlive)
 	p.TCPListeners[index] = tcpListener
 	p.wg.Add(1)
 	go func() {
@@ -257,21 +233,7 @@ func (p *Plugin) tcp(port int, index int) error {
 	return nil
 }
 
-func (p *Plugin) parser() {
-	for {
-		select {
-		case <-p.done:
-			return
-		case in, ok := <-p.in:
-			if !ok {
-				return
-			}
-			p.handleData(in)
-		}
-	}
-}
-
-func (p *Plugin) handleData(message *telnetMessage) {
+func (p *Plugin) handleData(index int, line string) {
 	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password)
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
@@ -287,14 +249,12 @@ func (p *Plugin) handleData(message *telnetMessage) {
 	if logger.Logger.IsLevelEnabled(logrus.DebugLevel) {
 		start = time.Now()
 	}
-	for _, line := range message.body {
-		logger.Debugln(start, " insert telnet payload ", line)
-		err = inserter.InsertOpentsdbTelnet(taosConn.TaosConnection, line, p.conf.DBList[message.index])
-		if err != nil {
-			logger.WithError(err).Errorln("insert telnet payload error :", line)
-		}
-		logger.Debug("insert telnet payload cost:", time.Now().Sub(start))
+	logger.Debugln(start, " insert telnet payload ", line)
+	err = inserter.InsertOpentsdbTelnet(taosConn.TaosConnection, line, p.conf.DBList[index])
+	if err != nil {
+		logger.WithError(err).Errorln("insert telnet payload error :", line)
 	}
+	logger.Debug("insert telnet payload cost:", time.Now().Sub(start))
 }
 
 func init() {
