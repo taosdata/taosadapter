@@ -2,6 +2,9 @@ debug = false
 port = 6041
 logLevel = "info"
 
+[cors]
+allowAllOrigins = true
+
 [pool]
 maxConnect = 4000
 maxIdle = 4000
