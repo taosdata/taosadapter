@@ -17,7 +17,6 @@ require (
 	github.com/lestrrat-go/file-rotatelogs v2.4.0+incompatible
 	github.com/lestrrat-go/strftime v1.0.5 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/prometheus/prometheus v1.8.2-0.20211209112917-bd21aafb66d6 // indirect
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/silenceper/pool v1.0.0
 	github.com/sirupsen/logrus v1.8.1
