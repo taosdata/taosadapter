@@ -21,7 +21,7 @@ func GinLog() gin.HandlerFunc {
 		reqUri := c.Request.RequestURI
 		statusCode := c.Writer.Status()
 		clientIP := c.ClientIP()
-		logger.WithField("sessionID", currentID).Infof("| %3d | %13v | %15s | %s | %s \n",
+		logger.WithField("sessionID", currentID).Infof("| %3d | %13v | %15s | %s | %s ",
 			statusCode,
 			latencyTime,
 			clientIP,

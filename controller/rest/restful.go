@@ -12,6 +12,7 @@ import (
 	"github.com/taosdata/driver-go/v2/common"
 	tErrors "github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/taosadapter/controller"
 	"github.com/taosdata/taosadapter/db/async"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/httperror"
@@ -29,16 +30,15 @@ var logger = log.GetLogger("restful")
 type Restful struct {
 }
 
-func (ctl *Restful) Init(r gin.IRouter) error {
+func (ctl *Restful) Init(r gin.IRouter) {
 	api := r.Group("rest")
-	api.POST("sql", checkAuth, ctl.sql)
-	api.POST("sqlt", checkAuth, ctl.sqlt)
-	api.POST("sqlutc", checkAuth, ctl.sqlutc)
-	api.POST("sql/:db", checkAuth, ctl.sql)
-	api.POST("sqlt/:db", checkAuth, ctl.sqlt)
-	api.POST("sqlutc/:db", checkAuth, ctl.sqlutc)
+	api.POST("sql", CheckAuth, ctl.sql)
+	api.POST("sqlt", CheckAuth, ctl.sqlt)
+	api.POST("sqlutc", CheckAuth, ctl.sqlutc)
+	api.POST("sql/:db", CheckAuth, ctl.sql)
+	api.POST("sqlt/:db", CheckAuth, ctl.sqlt)
+	api.POST("sqlutc/:db", CheckAuth, ctl.sqlutc)
 	api.GET("login/:user/:password", ctl.des)
-	return nil
 }
 
 type TDEngineRestfulRespDoc struct {
@@ -64,7 +64,7 @@ type TDEngineRestfulRespDoc struct {
 // @Router /rest/sql [post]
 func (ctl *Restful) sql(c *gin.Context) {
 	db := c.Param("db")
-	ctl.doQuery(c, db, func(ts int64, precision int) driver.Value {
+	DoQuery(c, db, func(ts int64, precision int) driver.Value {
 		switch precision {
 		case common.PrecisionMilliSecond:
 			return common.TimestampConvertToTime(ts, precision).Local().Format(LayoutMillSecond)
@@ -90,7 +90,7 @@ func (ctl *Restful) sql(c *gin.Context) {
 // @Router /rest/sqlt [post]
 func (ctl *Restful) sqlt(c *gin.Context) {
 	db := c.Param("db")
-	ctl.doQuery(c, db, func(ts int64, precision int) driver.Value {
+	DoQuery(c, db, func(ts int64, precision int) driver.Value {
 		return ts
 	})
 }
@@ -108,7 +108,7 @@ func (ctl *Restful) sqlt(c *gin.Context) {
 // @Router /rest/sqlutc [post]
 func (ctl *Restful) sqlutc(c *gin.Context) {
 	db := c.Param("db")
-	ctl.doQuery(c, db, func(ts int64, precision int) driver.Value {
+	DoQuery(c, db, func(ts int64, precision int) driver.Value {
 		return common.TimestampConvertToTime(ts, precision).Format(time.RFC3339Nano)
 	})
 }
@@ -121,7 +121,7 @@ type TDEngineRestfulResp struct {
 	Rows       int              `json:"rows"`
 }
 
-func (ctl *Restful) doQuery(c *gin.Context, db string, timeFunc wrapper.FormatTimeFunc) {
+func DoQuery(c *gin.Context, db string, timeFunc wrapper.FormatTimeFunc) {
 	var s time.Time
 	isDebug := logger.Logger.IsLevelEnabled(logrus.DebugLevel)
 	id := web.GetRequestID(c)
@@ -129,18 +129,18 @@ func (ctl *Restful) doQuery(c *gin.Context, db string, timeFunc wrapper.FormatTi
 	b, err := c.GetRawData()
 	if err != nil {
 		logger.WithError(err).Error("get request body error")
-		errorResponse(c, httperror.HTTP_INVALID_CONTENT_LENGTH)
+		ErrorResponse(c, httperror.HTTP_INVALID_CONTENT_LENGTH)
 		return
 	}
 	if len(b) == 0 {
 		logger.Errorln("no msg got")
-		errorResponse(c, httperror.HTTP_NO_MSG_INPUT)
+		ErrorResponse(c, httperror.HTTP_NO_MSG_INPUT)
 		return
 	}
 	sql := strings.TrimSpace(string(b))
 	if len(sql) == 0 {
 		logger.Errorln("no sql got")
-		errorResponse(c, httperror.HTTP_NO_SQL_INPUT)
+		ErrorResponse(c, httperror.HTTP_NO_SQL_INPUT)
 		return
 	}
 	user := c.MustGet(UserKey).(string)
@@ -155,10 +155,10 @@ func (ctl *Restful) doQuery(c *gin.Context, db string, timeFunc wrapper.FormatTi
 		logger.WithError(err).Error("connect taosd error")
 		var tError *tErrors.TaosError
 		if errors.As(err, &tError) {
-			errorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
+			ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
 			return
 		} else {
-			errorResponseWithMsg(c, 0xffff, err.Error())
+			ErrorResponseWithMsg(c, 0xffff, err.Error())
 			return
 		}
 	}
@@ -193,9 +193,9 @@ func (ctl *Restful) doQuery(c *gin.Context, db string, timeFunc wrapper.FormatTi
 	if err != nil {
 		tError, ok := err.(*tErrors.TaosError)
 		if ok {
-			errorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
+			ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
 		} else {
-			errorResponseWithMsg(c, 0xffff, err.Error())
+			ErrorResponseWithMsg(c, 0xffff, err.Error())
 		}
 		return
 	}
@@ -249,18 +249,18 @@ func (ctl *Restful) des(c *gin.Context) {
 	user := c.Param("user")
 	password := c.Param("password")
 	if len(user) < 0 || len(user) > 24 || len(password) < 0 || len(password) > 24 {
-		errorResponse(c, httperror.HTTP_GEN_TAOSD_TOKEN_ERR)
+		ErrorResponse(c, httperror.HTTP_GEN_TAOSD_TOKEN_ERR)
 		return
 	}
 	conn, err := commonpool.GetConnection(user, password)
 	if err != nil {
-		errorResponse(c, httperror.TSDB_CODE_RPC_AUTH_FAILURE)
+		ErrorResponse(c, httperror.TSDB_CODE_RPC_AUTH_FAILURE)
 		return
 	}
 	conn.Put()
 	token, err := EncodeDes(user, password)
 	if err != nil {
-		errorResponse(c, httperror.HTTP_GEN_TAOSD_TOKEN_ERR)
+		ErrorResponse(c, httperror.HTTP_GEN_TAOSD_TOKEN_ERR)
 		return
 	}
 	c.JSON(http.StatusOK, &Message{
@@ -272,4 +272,9 @@ func (ctl *Restful) des(c *gin.Context) {
 
 func (ctl *Restful) Close() {
 	return
+}
+
+func init() {
+	r := &Restful{}
+	controller.AddController(r)
 }

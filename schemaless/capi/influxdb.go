@@ -6,12 +6,13 @@ import (
 
 	tErrors "github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/taosadapter/db/tool"
 	"github.com/taosdata/taosadapter/schemaless/proto"
 	"github.com/taosdata/taosadapter/thread"
 )
 
 func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision string) (*proto.InfluxResult, error) {
-	err := SelectDB(taosConnect, db)
+	err := tool.SelectDB(taosConnect, db)
 	if err != nil {
 		return nil, err
 	}

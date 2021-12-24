@@ -16,28 +16,28 @@ var FetchRowError = errors.New("fetch row error")
 var GlobalAsync *Async
 
 type Async struct {
-	handlerPool *HandlerPool
+	HandlerPool *HandlerPool
 }
 
 func NewAsync(handlerPool *HandlerPool) *Async {
-	return &Async{handlerPool: handlerPool}
+	return &Async{HandlerPool: handlerPool}
 }
 
 func (a *Async) TaosExec(taosConnect unsafe.Pointer, sql string, timeFormat wrapper.FormatTimeFunc) (*ExecResult, error) {
-	handler := a.handlerPool.Get()
-	defer a.handlerPool.Put(handler)
+	handler := a.HandlerPool.Get()
+	defer a.HandlerPool.Put(handler)
 	result, err := a.TaosQuery(taosConnect, sql, handler)
 	defer func() {
-		if result != nil && result.res != nil {
+		if result != nil && result.Res != nil {
 			thread.Lock()
-			wrapper.TaosFreeResult(result.res)
+			wrapper.TaosFreeResult(result.Res)
 			thread.Unlock()
 		}
 	}()
 	if err != nil {
 		return nil, err
 	}
-	res := result.res
+	res := result.Res
 	code := wrapper.TaosError(res)
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosErrorStr(res)
@@ -66,11 +66,11 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, sql string, timeFormat wrap
 		if err != nil {
 			return nil, err
 		}
-		if result.n == 0 {
+		if result.N == 0 {
 			return execResult, nil
 		} else {
-			res = result.res
-			for i := 0; i < result.n; i++ {
+			res = result.Res
+			for i := 0; i < result.N; i++ {
 				var row unsafe.Pointer
 				thread.Lock()
 				row = wrapper.TaosFetchRow(res)
@@ -117,20 +117,20 @@ type ExecResult struct {
 }
 
 func (a *Async) TaosExecWithoutResult(taosConnect unsafe.Pointer, sql string) error {
-	handler := a.handlerPool.Get()
-	defer a.handlerPool.Put(handler)
+	handler := a.HandlerPool.Get()
+	defer a.HandlerPool.Put(handler)
 	result, err := a.TaosQuery(taosConnect, sql, handler)
 	defer func() {
-		if result != nil && result.res != nil {
+		if result != nil && result.Res != nil {
 			thread.Lock()
-			wrapper.TaosFreeResult(result.res)
+			wrapper.TaosFreeResult(result.Res)
 			thread.Unlock()
 		}
 	}()
 	if err != nil {
 		return err
 	}
-	res := result.res
+	res := result.Res
 	code := wrapper.TaosError(res)
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosErrorStr(res)

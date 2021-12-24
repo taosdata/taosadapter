@@ -30,6 +30,7 @@ func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision strin
 	result.ErrorList = make([]string, len(points))
 	b := pool.BytesPoolGet()
 	tmpB := pool.BytesPoolGet()
+	defer pool.BytesPoolPut(tmpB)
 	for i, point := range points {
 		b.Reset()
 		b.WriteByte('`')
@@ -49,7 +50,6 @@ func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision strin
 			tmpB.WriteString(string(tag.Key))
 			tmpB.WriteByte('`')
 			name := tmpB.String()
-			pool.BytesPoolPut(tmpB)
 			tagNames[i] = name
 			tagValues[i] = string(tag.Value)
 			b.WriteByte(',')
