@@ -24,7 +24,7 @@ func TestInit(t *testing.T) {
 			Init()
 			assert.Equal(t, &Config{
 				Cors: CorsConfig{
-					AllowAllOrigins:  false,
+					AllowAllOrigins:  true,
 					AllowOrigins:     []string{},
 					AllowHeaders:     []string{},
 					ExposeHeaders:    []string{},
@@ -52,8 +52,8 @@ func TestInit(t *testing.T) {
 			assert.Equal(
 				t,
 				cors.Config{
-					AllowAllOrigins:        false,
-					AllowOrigins:           []string{"http://127.0.0.1"},
+					AllowAllOrigins:        true,
+					AllowOrigins:           nil,
 					AllowOriginFunc:        (func(string) bool)(nil),
 					AllowMethods:           []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
 					AllowHeaders:           []string{"Origin", "Content-Length", "Content-Type"},
