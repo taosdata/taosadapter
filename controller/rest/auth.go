@@ -98,10 +98,10 @@ const (
 	PasswordKey = "password"
 )
 
-func checkAuth(c *gin.Context) {
+func CheckAuth(c *gin.Context) {
 	auth := c.GetHeader("Authorization")
 	if len(auth) == 0 {
-		errorResponse(c, httperror.HTTP_NO_AUTH_INFO)
+		ErrorResponse(c, httperror.HTTP_NO_AUTH_INFO)
 		return
 	}
 	auth = strings.TrimSpace(auth)
@@ -115,11 +115,11 @@ func checkAuth(c *gin.Context) {
 	if strings.HasPrefix(auth, "Basic") {
 		user, password, err := tools.DecodeBasic(auth[6:])
 		if err != nil {
-			errorResponse(c, httperror.HTTP_INVALID_BASIC_AUTH)
+			ErrorResponse(c, httperror.HTTP_INVALID_BASIC_AUTH)
 			return
 		}
 		if len(user) == 0 || len(password) == 0 {
-			errorResponse(c, httperror.HTTP_INVALID_BASIC_AUTH)
+			ErrorResponse(c, httperror.HTTP_INVALID_BASIC_AUTH)
 			return
 		}
 		authCache.SetDefault(auth, &authInfo{
@@ -131,11 +131,11 @@ func checkAuth(c *gin.Context) {
 	} else if strings.HasPrefix(auth, "Taosd") {
 		user, password, err := DecodeDes(auth[6:])
 		if err != nil {
-			errorResponse(c, httperror.HTTP_INVALID_BASIC_AUTH)
+			ErrorResponse(c, httperror.HTTP_INVALID_BASIC_AUTH)
 			return
 		}
 		if len(user) == 0 || len(password) == 0 {
-			errorResponse(c, httperror.HTTP_INVALID_BASIC_AUTH)
+			ErrorResponse(c, httperror.HTTP_INVALID_BASIC_AUTH)
 			return
 		}
 		authCache.SetDefault(auth, &authInfo{
@@ -145,7 +145,7 @@ func checkAuth(c *gin.Context) {
 		c.Set(UserKey, user)
 		c.Set(PasswordKey, password)
 	} else {
-		errorResponse(c, httperror.HTTP_INVALID_AUTH_TYPE)
+		ErrorResponse(c, httperror.HTTP_INVALID_AUTH_TYPE)
 		return
 	}
 }
@@ -156,7 +156,7 @@ type Message struct {
 	Desc   string `json:"desc"`
 }
 
-func errorResponse(c *gin.Context, code int) {
+func ErrorResponse(c *gin.Context, code int) {
 	errStr := httperror.ErrorMsgMap[code]
 	if len(errStr) == 0 {
 		errStr = "unknown error"
@@ -168,7 +168,7 @@ func errorResponse(c *gin.Context, code int) {
 	})
 }
 
-func errorResponseWithMsg(c *gin.Context, code int, msg string) {
+func ErrorResponseWithMsg(c *gin.Context, code int, msg string) {
 	c.AbortWithStatusJSON(http.StatusOK, &Message{
 		Status: "error",
 		Code:   code & 0xffff,

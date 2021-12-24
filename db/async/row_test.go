@@ -75,7 +75,7 @@ func TestAsync_TaosExec(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &Async{
-				handlerPool: tt.fields.handlerPool,
+				HandlerPool: tt.fields.handlerPool,
 			}
 			got, err := a.TaosExec(tt.args.taosConnect, tt.args.sql, tt.args.timeFormat)
 			if (err != nil) != tt.wantErr {
@@ -143,7 +143,7 @@ func TestAsync_TaosExecWithoutResult(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &Async{
-				handlerPool: tt.fields.handlerPool,
+				HandlerPool: tt.fields.handlerPool,
 			}
 			if err := a.TaosExecWithoutResult(tt.args.taosConnect, tt.args.sql); (err != nil) != tt.wantErr {
 				t.Errorf("TaosExecWithoutResult() error = %v, wantErr %v", err, tt.wantErr)

@@ -97,13 +97,14 @@ func InsertOpentsdbJson(taosConnect unsafe.Pointer, data []byte, db string) erro
 		}
 		b.Reset()
 		b.WriteString(stableName)
+		tmpB := pool.BytesPoolGet()
 		for i, tag := range tagNames {
-			tmpB := pool.BytesPoolGet()
+			tmpB.Reset()
+
 			tmpB.WriteByte('`')
 			tmpB.WriteString(tag)
 			tmpB.WriteByte('`')
 			name := tmpB.String()
-			pool.BytesPoolPut(tmpB)
 			tagNames[i] = name
 			tagValues[i] = point.Tags[tag]
 			b.WriteByte(',')
@@ -111,6 +112,7 @@ func InsertOpentsdbJson(taosConnect unsafe.Pointer, data []byte, db string) erro
 			b.WriteByte('=')
 			b.WriteString(point.Tags[tag])
 		}
+		pool.BytesPoolPut(tmpB)
 		tableName := fmt.Sprintf("t_%x", md5.Sum(b.Bytes()))
 
 		sql, err := executor.InsertTDengine(&schemaless.InsertLine{

@@ -55,7 +55,7 @@ func Auth(errHandler func(c *gin.Context, code int, err error)) func(c *gin.Cont
 				user = sl[0]
 				password = sl[1]
 			} else if len(sl) == 3 {
-				if sl[2] == "aes" {
+				if sl[2] == "a" {
 					encodeData, err := base64.StdEncoding.DecodeString(sl[0])
 					if err != nil {
 						errHandler(c, http.StatusUnauthorized, err)
@@ -143,7 +143,7 @@ func RegisterGenerateAuth(r gin.IRouter) {
 		buf.WriteByte(':')
 		buf.Write(l2)
 		buf.WriteByte(':')
-		buf.WriteString("aes")
+		buf.WriteString("a")
 		c.String(http.StatusOK, buf.String())
 		pool.BytesPoolPut(buf)
 	})

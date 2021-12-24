@@ -40,9 +40,9 @@ func (conf *CorsConfig) GetConfig() cors.Config {
 }
 
 func initCors() {
-	viper.SetDefault("cors.allowAllOrigins", false)
+	viper.SetDefault("cors.allowAllOrigins", true)
 	_ = viper.BindEnv("cors.allowAllOrigins", "TAOS_ADAPTER_CORS_ALLOW_ALL_ORIGINS")
-	pflag.Bool("cors.allowAllOrigins", false, `cors allow all origins. Env "TAOS_ADAPTER_CORS_ALLOW_ALL_ORIGINS"`)
+	pflag.Bool("cors.allowAllOrigins", true, `cors allow all origins. Env "TAOS_ADAPTER_CORS_ALLOW_ALL_ORIGINS"`)
 
 	viper.SetDefault("cors.allowOrigins", nil)
 	_ = viper.BindEnv("cors.allowOrigins", "TAOS_ADAPTER_ALLOW_ORIGINS")

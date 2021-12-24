@@ -9,8 +9,8 @@ import (
 )
 
 type Result struct {
-	res unsafe.Pointer
-	n   int
+	Res unsafe.Pointer
+	N   int
 }
 type Caller struct {
 	QueryResult chan *Result
@@ -26,15 +26,15 @@ func NewCaller() *Caller {
 
 func (c *Caller) QueryCall(res unsafe.Pointer, code int) {
 	c.QueryResult <- &Result{
-		res: res,
-		n:   code,
+		Res: res,
+		N:   code,
 	}
 }
 
 func (c *Caller) FetchCall(res unsafe.Pointer, numOfRows int) {
 	c.FetchResult <- &Result{
-		res: res,
-		n:   numOfRows,
+		Res: res,
+		N:   numOfRows,
 	}
 }
 

@@ -31,13 +31,14 @@ func InsertOpentsdbTelnet(taosConnect unsafe.Pointer, data, db string) error {
 	stableName := b.String()
 	b.Reset()
 	b.WriteString(stableName)
+	tmpB := pool.BytesPoolGet()
 	for i, tag := range point.Tags {
-		tmpB := pool.BytesPoolGet()
+		tmpB.Reset()
+
 		tmpB.WriteByte('`')
 		tmpB.WriteString(tag.Key)
 		tmpB.WriteByte('`')
 		name := tmpB.String()
-		pool.BytesPoolPut(tmpB)
 		tagNames[i] = name
 		tagValues[i] = tag.Value
 		b.WriteByte(',')
@@ -45,8 +46,8 @@ func InsertOpentsdbTelnet(taosConnect unsafe.Pointer, data, db string) error {
 		b.WriteByte('=')
 		b.WriteString(tag.Value)
 	}
+	pool.BytesPoolPut(tmpB)
 	tableName := fmt.Sprintf("t_%x", md5.Sum(b.Bytes()))
-	//t_98df8453856519710bfc2f1b5f8202cf
 	sql, err := executor.InsertTDengine(&schemaless.InsertLine{
 		DB:         db,
 		Ts:         point.Ts,
