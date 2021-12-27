@@ -1,4 +1,5 @@
 debug = false
+taosConfigDir =
 port = 6041
 logLevel = "info"
 
