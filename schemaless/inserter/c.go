@@ -1,6 +1,3 @@
-//go:build !goInserter
-// +build !goInserter
-
 package inserter
 
 import (

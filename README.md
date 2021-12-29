@@ -10,6 +10,7 @@ taosAdapter provides the following functions.
     - Seamless connect to Telegraf
     - Seamless connect to collectD
     - Seamless connect to StatsD
+    - Support Prometheus remote_read and remote_write
 
 ## taosAdapter architecture
 ![taosAdapter-architecture](taosAdapter-architecture-for-public.png)
@@ -19,6 +20,7 @@ taosAdapter is part of the TDengine server from TDengine v2.3.0.0. You don't nee
 You can download TDengine (taosAdapter be included in v2.3.0.0 and above version) from the (official website)[https://taosdata.com/en/all-downloads/].
 
 ## Build taosAdapter
+
 We strongly recommend to deploy taosAdapter with TDengine server and install taosAdapter with official TDengine installation package. If you want to debug or contribute to taosAdapter, you can build it seperately too.
 
 ### Setup golang environment
@@ -69,7 +71,8 @@ Then you should find taosAdapter binary executable file in the working directory
 * Compatible with InfluxDB v1 write interface.  
   [https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/](https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/)
 * Compatible with opentsdb JSON and telnet format writing.  
-  [http://opentsdb.net/docs/build/html/api_http/put.html](http://opentsdb.net/docs/build/html/api_http/put.html)
+  [http://opentsdb.net/docs/build/html/api_http/put.html](http://opentsdb.net/docs/build/html/api_http/put.html)  
+  [http://opentsdb.net/docs/build/html/api_telnet/put.html](http://opentsdb.net/docs/build/html/api_telnet/put.html)
 * Seamless connection with collectd.
     collecd is a system statistics collection daemon. Pleae visit [https://collectd.org/](https://collectd.org/)for detail.
 * Seamless connection with StatsD. 
@@ -80,7 +83,8 @@ Then you should find taosAdapter binary executable file in the working directory
     TCollector is a client-side process that gathers data from local collectors and pushes the data to OpenTSDB. Please visit [http://opentsdb.net/docs/build/html/user_guide/utilities/tcollector.html](http://opentsdb.net/docs/build/html/user_guide/utilities/tcollector.html) for detail.
 * Seamless connection with node_exporter.
     NodeExporter is an exporter software for machine metrics. Please visit [https://github.com/prometheus/node_exporter](https://github.com/prometheus/node_exporter) for detail.
-
+* Support Prometheus remote_read and remote_write
+  remote_read and remote_write are Prometheus data read-write separation cluster solutions. Please visit [https://prometheus.io/blog/2019/10/10/remote-read-meets-streaming/#remote-apis](https://prometheus.io/blog/2019/10/10/remote-read-meets-streaming/#remote-apis) for detail.
 ## Interface
 
 ### TDengine RESTful interface
@@ -103,6 +107,7 @@ Support following InfluxDB query parameters:
 * `u` user non-essential parameters
 * `p` password Optional parameter
 
+Note: There is currently not supported token authentication in InfluxDB only supports Basic authentication and query parameter authentication.
 ### OpenTSDB
 You can use any http client to access the RESTful interface address "http://<fqdn>:6041/<APIEndPoint>" to insert OpenTSDB compatible protocol data to TDengine. The end point is:
 ```
@@ -188,6 +193,34 @@ Prometheus exporter for hardware and OS metrics exposed by *NIX kernels
 * Set the relevant configuration of node_exporter
 * Restart taosAdapter
 
+### prometheus
+Remote_read and remote_write are cluster schemes for Prometheus data read-write separation.
+Just use the REMOTE_READ and REMOTE_WRITE URL to point to the URL corresponding to Taosadapter to use Basic authentication.
+Remote_read url: http://host_to_taosadapter:port (default 6041) /prometheus/v1/remote_read/:db
+Remote_write url: http://host_to_taosadapter:port (default 6041) /Prometheus/v1/remote_write/:db
+
+Basic verification:
+Username: TDengine connection username
+Password: TDengine connection password
+
+Example Prometheus.yml is as follows:
+```yaml
+remote_write:
+  - url: "http://localhost:6041/prometheus/v1/remote_write/prometheus_data"
+    basic_auth:
+      username: root
+      password: taosdata
+ 
+remote_read:
+  - url: "http://localhost:6041/prometheus/v1/remote_read/prometheus_data"
+    basic_auth:
+      username: root
+      password: taosdata
+    remote_timeout: 10s
+    read_recent: true
+```
+
+
 ## Configuration
 
 Support command line parameters, environment variables, and configuration files  
@@ -203,7 +236,7 @@ Usage of taosAdapter:
       --collectd.user string                         collectd user. Env "TAOS_ADAPTER_COLLECTD_USER" (default "root")
       --collectd.worker int                          collectd write worker. Env "TAOS_ADAPTER_COLLECTD_WORKER" (default 10)
   -c, --config string                                config path default /etc/taos/taosadapter.toml
-      --cors.allowAllOrigins                         cors allow all origins. Env "TAOS_ADAPTER_CORS_ALLOW_ALL_ORIGINS"
+      --cors.allowAllOrigins                         cors allow all origins. Env "TAOS_ADAPTER_CORS_ALLOW_ALL_ORIGINS" (default true)
       --cors.allowCredentials                        cors allow credentials. Env "TAOS_ADAPTER_CORS_ALLOW_Credentials"
       --cors.allowHeaders stringArray                cors allow HEADERS. Env "TAOS_ADAPTER_ALLOW_HEADERS"
       --cors.allowOrigins stringArray                cors allow origins. Env "TAOS_ADAPTER_ALLOW_ORIGINS"
@@ -211,7 +244,7 @@ Usage of taosAdapter:
       --cors.exposeHeaders stringArray               cors expose headers. Env "TAOS_ADAPTER_Expose_Headers"
       --debug                                        enable debug mode. Env "TAOS_ADAPTER_DEBUG"
       --help                                         Print this help message and exit
-      --influxdb.enable                              enable InfluxDB. Env "TAOS_ADAPTER_INFLUXDB_ENABLE" (default true)
+      --influxdb.enable                              enable influxdb. Env "TAOS_ADAPTER_INFLUXDB_ENABLE" (default true)
       --log.path string                              log path. Env "TAOS_ADAPTER_LOG_PATH" (default "/var/log/taos")
       --log.rotationCount uint                       log rotation count. Env "TAOS_ADAPTER_LOG_ROTATION_COUNT" (default 30)
       --log.rotationSize string                      log rotation size(KB MB GB), must be a positive integer. Env "TAOS_ADAPTER_LOG_ROTATION_SIZE" (default "1GB")
@@ -243,6 +276,7 @@ Usage of taosAdapter:
       --pool.maxConnect int                          max connections to taosd. Env "TAOS_ADAPTER_POOL_MAX_CONNECT" (default 4000)
       --pool.maxIdle int                             max idle connections to taosd. Env "TAOS_ADAPTER_POOL_MAX_IDLE" (default 4000)
   -P, --port int                                     http port. Env "TAOS_ADAPTER_PORT" (default 6041)
+      --prometheus.enable                            enable prometheus. Env "TAOS_ADAPTER_PROMETHEUS_ENABLE" (default true)
       --ssl.certFile string                          ssl cert file path. Env "TAOS_ADAPTER_SSL_CERT_FILE"
       --ssl.enable                                   enable ssl. Env "TAOS_ADAPTER_SSL_ENABLE"
       --ssl.keyFile string                           ssl key file path. Env "TAOS_ADAPTER_SSL_KEY_FILE"

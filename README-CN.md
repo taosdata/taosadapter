@@ -10,7 +10,7 @@ taosAdapter提供以下功能：
     - 无缝连接到 Telegraf
     - 无缝连接到 collectd
     - 无缝连接到 StatsD
-
+    - 支持 Prometheus remote_read 和 remote_write
 
 ## taosAdapter 架构图
 ![taosAdapter-architecture](taosAdapter-architecture-for-public.png)
@@ -34,7 +34,6 @@ go env -w GOPROXY=https://goproxy.cn,direct
 ```
 
 ## 作为 TDengine 的一个组件构建 taosAdapter
-
 taosAdapter 的源代码是作为一个独立的代码库托管的，也通过子模块的方式存在于 TDengine 中。你可以下载 TDengine 的源代码并同时构建它们。步骤如下：
 ```
 git clone https://github.com/taosdata/TDengine
@@ -72,7 +71,8 @@ go build
 * 兼容 InfluxDB v1 写接口
   [https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/](https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/)
 * 兼容 OpenTSDB JSON 和 telnet 格式写入
-  [http://opentsdb.net/docs/build/html/api_http/put.html](http://opentsdb.net/docs/build/html/api_http/put.html)
+  [http://opentsdb.net/docs/build/html/api_http/put.html](http://opentsdb.net/docs/build/html/api_http/put.html)  
+  [http://opentsdb.net/docs/build/html/api_telnet/put.html](http://opentsdb.net/docs/build/html/api_telnet/put.html)
 * 与collectd无缝连接
     collectd 是一个系统统计收集守护程序，请访问 [https://collectd.org/](https://collectd.org/) 了解更多信息。
 * Seamless connection with StatsD
@@ -83,7 +83,8 @@ go build
   TCollector是一个客户端进程，从本地收集器收集数据，并将数据推送到OpenTSDB。请访问 [http://opentsdb.net/docs/build/html/user_guide/utilities/tcollector.html](http://opentsdb.net/docs/build/html/user_guide/utilities/tcollector.html) 了解更多信息。
 * 无缝连接 node_exporter
   node_export 是一个机器指标的导出器。请访问 [https://github.com/prometheus/node_exporter](https://github.com/prometheus/node_exporter) 了解更多信息。
-
+* 支持 Prometheus remote_read 和 remote_write
+  remote_read 和 remote_write 是 Prometheus 数据读写分离的集群方案。请访问[https://prometheus.io/blog/2019/10/10/remote-read-meets-streaming/#remote-apis](https://prometheus.io/blog/2019/10/10/remote-read-meets-streaming/#remote-apis) 了解更多信息。
 ## 接口
 
 ### TDengine RESTful 接口
@@ -101,12 +102,12 @@ go build
 ```
 
 支持 InfluxDB 查询参数如下：
-
 * `db` 指定 TDengine 使用的数据库名
 * `precision` TDengine 使用的时间精度
 * `u` TDengine 用户名
 * `p` TDengine 密码
 
+注意：目前不支持 InfluxDB 的 token 验证方式只支持 Basic 验证和查询参数验证。
 ### OpenTSDB
 您可以使用任何支持 http 协议的客户端访问 Restful 接口地址 “https://<fqdn>:6041/<APIEndPoint>” 来写入 OpenTSDB 兼容格式的数据到 TDengine。EndPoint 如下：
 ```
@@ -192,13 +193,41 @@ Prometheus 使用的由*NIX内核暴露的硬件和操作系统指标的输出�
 * 设置 node_exporter 的相关配置
 * 重新启动 taosAdapter
 
+### prometheus
+
+remote_read 和 remote_write 是 Prometheus 数据读写分离的集群方案。  
+只需要将 remote_read 和 remote_write url 指向 taosAdapter 对应的 url 同时设置 Basic 验证即可使用。  
+remote_read url :  http://host_to_taosAdapter:port(default 6041)/prometheus/v1/remote_read/:db  
+remote_write url :  http://host_to_taosAdapter:port(default 6041)/prometheus/v1/remote_write/:db
+
+Basic验证：
+username： TDengine 连接用户名  
+password： TDengine 连接密码  
+
+示例 prometheus.yml  如下：
+```yaml
+remote_write:
+  - url: "http://localhost:6041/prometheus/v1/remote_write/prometheus_data"
+    basic_auth:
+      username: root
+      password: taosdata
+ 
+remote_read:
+  - url: "http://localhost:6041/prometheus/v1/remote_read/prometheus_data"
+    basic_auth:
+      username: root
+      password: taosdata
+    remote_timeout: 10s
+    read_recent: true
+```
+
 ## 配置方法
 
 taosAdapter 支持通过命令行参数、环境变量和配置文件来进行配置。
 
 命令行参数优先于环境变量优先于配置文件，命令行用法是arg=val，如 taosadapter -p=30000 --debug=true，详细列表如下：
 
-```shell
+`````shell
 Usage of taosAdapter:
       --collectd.db string                           collectd db name. Env "TAOS_ADAPTER_COLLECTD_DB" (default "collectd")
       --collectd.enable                              enable collectd. Env "TAOS_ADAPTER_COLLECTD_ENABLE" (default true)
@@ -207,7 +236,7 @@ Usage of taosAdapter:
       --collectd.user string                         collectd user. Env "TAOS_ADAPTER_COLLECTD_USER" (default "root")
       --collectd.worker int                          collectd write worker. Env "TAOS_ADAPTER_COLLECTD_WORKER" (default 10)
   -c, --config string                                config path default /etc/taos/taosadapter.toml
-      --cors.allowAllOrigins                         cors allow all origins. Env "TAOS_ADAPTER_CORS_ALLOW_ALL_ORIGINS"
+      --cors.allowAllOrigins                         cors allow all origins. Env "TAOS_ADAPTER_CORS_ALLOW_ALL_ORIGINS" (default true)
       --cors.allowCredentials                        cors allow credentials. Env "TAOS_ADAPTER_CORS_ALLOW_Credentials"
       --cors.allowHeaders stringArray                cors allow HEADERS. Env "TAOS_ADAPTER_ALLOW_HEADERS"
       --cors.allowOrigins stringArray                cors allow origins. Env "TAOS_ADAPTER_ALLOW_ORIGINS"
@@ -215,7 +244,7 @@ Usage of taosAdapter:
       --cors.exposeHeaders stringArray               cors expose headers. Env "TAOS_ADAPTER_Expose_Headers"
       --debug                                        enable debug mode. Env "TAOS_ADAPTER_DEBUG"
       --help                                         Print this help message and exit
-      --influxdb.enable                              enable InfluxDB. Env "TAOS_ADAPTER_INFLUXDB_ENABLE" (default true)
+      --influxdb.enable                              enable influxdb. Env "TAOS_ADAPTER_INFLUXDB_ENABLE" (default true)
       --log.path string                              log path. Env "TAOS_ADAPTER_LOG_PATH" (default "/var/log/taos")
       --log.rotationCount uint                       log rotation count. Env "TAOS_ADAPTER_LOG_ROTATION_COUNT" (default 30)
       --log.rotationSize string                      log rotation size(KB MB GB), must be a positive integer. Env "TAOS_ADAPTER_LOG_ROTATION_SIZE" (default "1GB")
@@ -247,6 +276,7 @@ Usage of taosAdapter:
       --pool.maxConnect int                          max connections to taosd. Env "TAOS_ADAPTER_POOL_MAX_CONNECT" (default 4000)
       --pool.maxIdle int                             max idle connections to taosd. Env "TAOS_ADAPTER_POOL_MAX_IDLE" (default 4000)
   -P, --port int                                     http port. Env "TAOS_ADAPTER_PORT" (default 6041)
+      --prometheus.enable                            enable prometheus. Env "TAOS_ADAPTER_PROMETHEUS_ENABLE" (default true)
       --ssl.certFile string                          ssl cert file path. Env "TAOS_ADAPTER_SSL_CERT_FILE"
       --ssl.enable                                   enable ssl. Env "TAOS_ADAPTER_SSL_ENABLE"
       --ssl.keyFile string                           ssl key file path. Env "TAOS_ADAPTER_SSL_KEY_FILE"
@@ -267,7 +297,7 @@ Usage of taosAdapter:
       --statsd.worker int                            statsd write worker. Env "TAOS_ADAPTER_STATSD_WORKER" (default 10)
       --taosConfigDir string                         load taos client config path. Env "TAOS_ADAPTER_TAOS_CONFIG_FILE"
       --version                                      Print the version and exit
-```
+`````
 
 备注：
 使用浏览器进行接口调用请根据实际情况设置如下跨源资源共享（CORS）参数：

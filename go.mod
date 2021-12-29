@@ -12,11 +12,14 @@ require (
 	github.com/gin-contrib/gzip v0.0.3
 	github.com/gin-contrib/pprof v1.3.0
 	github.com/gin-gonic/gin v1.7.4
+	github.com/gogo/protobuf v1.3.2
+	github.com/golang/snappy v0.0.3
 	github.com/influxdata/influxdb/v2 v2.0.9
 	github.com/influxdata/telegraf v1.20.0
 	github.com/lestrrat-go/file-rotatelogs v2.4.0+incompatible
 	github.com/lestrrat-go/strftime v1.0.5 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible
+	github.com/prometheus/prometheus v1.8.2-0.20200911110723-e83ef207b6c2
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/silenceper/pool v1.0.0
 	github.com/sirupsen/logrus v1.8.1

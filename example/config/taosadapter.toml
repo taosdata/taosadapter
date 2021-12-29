@@ -78,3 +78,6 @@ certFile = ""
 keyFile = ""
 insecureSkipVerify = true
 gatherDuration = "5s"
+
+[prometheus]
+enable = true
