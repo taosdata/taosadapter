@@ -107,7 +107,8 @@ go build
 * `u` TDengine 用户名
 * `p` TDengine 密码
 
-注意：目前不支持 InfluxDB 的 token 验证方式只支持 Basic 验证和查询参数验证。
+注意： 目前不支持 InfluxDB 的 token 验证方式只支持 Basic 验证和查询参数验证。
+
 ### OpenTSDB
 您可以使用任何支持 http 协议的客户端访问 Restful 接口地址 “https://<fqdn>:6041/<APIEndPoint>” 来写入 OpenTSDB 兼容格式的数据到 TDengine。EndPoint 如下：
 ```
@@ -197,14 +198,15 @@ Prometheus 使用的由*NIX内核暴露的硬件和操作系统指标的输出�
 
 remote_read 和 remote_write 是 Prometheus 数据读写分离的集群方案。  
 只需要将 remote_read 和 remote_write url 指向 taosAdapter 对应的 url 同时设置 Basic 验证即可使用。  
-remote_read url :  http://host_to_taosAdapter:port(default 6041)/prometheus/v1/remote_read/:db  
-remote_write url :  http://host_to_taosAdapter:port(default 6041)/prometheus/v1/remote_write/:db
+* remote_read url :  http://host_to_taosAdapter:port(default 6041)/prometheus/v1/remote_read/:db  
+* remote_write url :  http://host_to_taosAdapter:port(default 6041)/prometheus/v1/remote_write/:db
 
 Basic验证：
-username： TDengine 连接用户名  
-password： TDengine 连接密码  
+* username： TDengine 连接用户名  
+* password： TDengine 连接密码  
 
 示例 prometheus.yml  如下：
+
 ```yaml
 remote_write:
   - url: "http://localhost:6041/prometheus/v1/remote_write/prometheus_data"
@@ -227,7 +229,7 @@ taosAdapter 支持通过命令行参数、环境变量和配置文件来进行�
 
 命令行参数优先于环境变量优先于配置文件，命令行用法是arg=val，如 taosadapter -p=30000 --debug=true，详细列表如下：
 
-`````shell
+```shell
 Usage of taosAdapter:
       --collectd.db string                           collectd db name. Env "TAOS_ADAPTER_COLLECTD_DB" (default "collectd")
       --collectd.enable                              enable collectd. Env "TAOS_ADAPTER_COLLECTD_ENABLE" (default true)
@@ -297,7 +299,7 @@ Usage of taosAdapter:
       --statsd.worker int                            statsd write worker. Env "TAOS_ADAPTER_STATSD_WORKER" (default 10)
       --taosConfigDir string                         load taos client config path. Env "TAOS_ADAPTER_TAOS_CONFIG_FILE"
       --version                                      Print the version and exit
-`````
+```
 
 备注：
 使用浏览器进行接口调用请根据实际情况设置如下跨源资源共享（CORS）参数：

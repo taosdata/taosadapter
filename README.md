@@ -108,6 +108,7 @@ Support following InfluxDB query parameters:
 * `p` password Optional parameter
 
 Note: There is currently not supported token authentication in InfluxDB only supports Basic authentication and query parameter authentication.
+
 ### OpenTSDB
 You can use any http client to access the RESTful interface address "http://<fqdn>:6041/<APIEndPoint>" to insert OpenTSDB compatible protocol data to TDengine. The end point is:
 ```
@@ -194,16 +195,19 @@ Prometheus exporter for hardware and OS metrics exposed by *NIX kernels
 * Restart taosAdapter
 
 ### prometheus
+
 Remote_read and remote_write are cluster schemes for Prometheus data read-write separation.
 Just use the REMOTE_READ and REMOTE_WRITE URL to point to the URL corresponding to Taosadapter to use Basic authentication.
-Remote_read url: http://host_to_taosadapter:port (default 6041) /prometheus/v1/remote_read/:db
-Remote_write url: http://host_to_taosadapter:port (default 6041) /Prometheus/v1/remote_write/:db
+* Remote_read url: http://host_to_taosadapter:port (default 6041) /prometheus/v1/remote_read/:db
+* Remote_write url: http://host_to_taosadapter:port (default 6041) /Prometheus/v1/remote_write/:db
 
 Basic verification:
-Username: TDengine connection username
-Password: TDengine connection password
+
+* Username: TDengine connection username
+* Password: TDengine connection password
 
 Example Prometheus.yml is as follows:
+
 ```yaml
 remote_write:
   - url: "http://localhost:6041/prometheus/v1/remote_write/prometheus_data"
