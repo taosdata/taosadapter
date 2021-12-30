@@ -71,8 +71,8 @@ Then you should find taosAdapter binary executable file in the working directory
 * Compatible with InfluxDB v1 write interface.  
   [https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/](https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/)
 * Compatible with opentsdb JSON and telnet format writing.  
-  <http://opentsdb.net/docs/build/html/api_http/put.html>
-  <http://opentsdb.net/docs/build/html/api_telnet/put.html>
+  * <http://opentsdb.net/docs/build/html/api_http/put.html>
+  * <http://opentsdb.net/docs/build/html/api_telnet/put.html>
 * Seamless connection with collectd.
     collecd is a system statistics collection daemon. Pleae visit [https://collectd.org/](https://collectd.org/)for detail.
 * Seamless connection with StatsD. 
