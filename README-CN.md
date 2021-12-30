@@ -71,10 +71,10 @@ go build
 * 兼容 InfluxDB v1 写接口
   [https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/](https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/)
 * 兼容 OpenTSDB JSON 和 telnet 格式写入
-  [http://opentsdb.net/docs/build/html/api_http/put.html](http://opentsdb.net/docs/build/html/api_http/put.html)  
-  [http://opentsdb.net/docs/build/html/api_telnet/put.html](http://opentsdb.net/docs/build/html/api_telnet/put.html)
+  <http://opentsdb.net/docs/build/html/api_http/put.html>
+  <http://opentsdb.net/docs/build/html/api_telnet/put.html>
 * 与collectd无缝连接
-    collectd 是一个系统统计收集守护程序，请访问 [https://collectd.org/](https://collectd.org/) 了解更多信息。
+  collectd 是一个系统统计收集守护程序，请访问 [https://collectd.org/](https://collectd.org/) 了解更多信息。
 * Seamless connection with StatsD
   StatsD 是一个简单而强大的统计信息汇总的守护程序。请访问 [https://github.com/statsd/statsd](https://github.com/statsd/statsd) 了解更多信息。
 * 与 icinga2 的无缝连接
