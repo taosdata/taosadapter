@@ -4,8 +4,10 @@ import (
 	"database/sql/driver"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -18,6 +20,8 @@ import (
 	"github.com/taosdata/taosadapter/httperror"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/thread"
+	"github.com/taosdata/taosadapter/tools/ctools"
+	"github.com/taosdata/taosadapter/tools/jsonbuilder"
 	"github.com/taosdata/taosadapter/tools/web"
 )
 
@@ -64,16 +68,17 @@ type TDEngineRestfulRespDoc struct {
 // @Router /rest/sql [post]
 func (ctl *Restful) sql(c *gin.Context) {
 	db := c.Param("db")
-	DoQuery(c, db, func(ts int64, precision int) driver.Value {
+	DoQuery(c, db, func(builder *jsonbuilder.Stream, ts int64, precision int) {
 		switch precision {
 		case common.PrecisionMilliSecond:
-			return common.TimestampConvertToTime(ts, precision).Local().Format(LayoutMillSecond)
+			builder.WriteString(common.TimestampConvertToTime(ts, precision).Local().Format(LayoutMillSecond))
 		case common.PrecisionMicroSecond:
-			return common.TimestampConvertToTime(ts, precision).Local().Format(LayoutMicroSecond)
+			builder.WriteString(common.TimestampConvertToTime(ts, precision).Local().Format(LayoutMicroSecond))
 		case common.PrecisionNanoSecond:
-			return common.TimestampConvertToTime(ts, precision).Local().Format(LayoutNanoSecond)
+			builder.WriteString(common.TimestampConvertToTime(ts, precision).Local().Format(LayoutNanoSecond))
+		default:
+			builder.WriteNil()
 		}
-		panic("unsupported precision")
 	})
 }
 
@@ -90,8 +95,8 @@ func (ctl *Restful) sql(c *gin.Context) {
 // @Router /rest/sqlt [post]
 func (ctl *Restful) sqlt(c *gin.Context) {
 	db := c.Param("db")
-	DoQuery(c, db, func(ts int64, precision int) driver.Value {
-		return ts
+	DoQuery(c, db, func(builder *jsonbuilder.Stream, ts int64, precision int) {
+		builder.WriteInt64(ts)
 	})
 }
 
@@ -108,8 +113,8 @@ func (ctl *Restful) sqlt(c *gin.Context) {
 // @Router /rest/sqlutc [post]
 func (ctl *Restful) sqlutc(c *gin.Context) {
 	db := c.Param("db")
-	DoQuery(c, db, func(ts int64, precision int) driver.Value {
-		return common.TimestampConvertToTime(ts, precision).Format(time.RFC3339Nano)
+	DoQuery(c, db, func(builder *jsonbuilder.Stream, ts int64, precision int) {
+		builder.WriteString(common.TimestampConvertToTime(ts, precision).Format(time.RFC3339Nano))
 	})
 }
 
@@ -121,7 +126,7 @@ type TDEngineRestfulResp struct {
 	Rows       int              `json:"rows"`
 }
 
-func DoQuery(c *gin.Context, db string, timeFunc wrapper.FormatTimeFunc) {
+func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
 	var s time.Time
 	isDebug := logger.Logger.IsLevelEnabled(logrus.DebugLevel)
 	id := web.GetRequestID(c)
@@ -149,8 +154,9 @@ func DoQuery(c *gin.Context, db string, timeFunc wrapper.FormatTimeFunc) {
 		s = time.Now()
 	}
 	taosConnect, err := commonpool.GetConnection(user, password)
-
-	logger.Debugln("taos connect cost:", time.Now().Sub(s))
+	if isDebug {
+		logger.Debugln("taos connect cost:", time.Now().Sub(s))
+	}
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
 		var tError *tErrors.TaosError
@@ -170,7 +176,9 @@ func DoQuery(c *gin.Context, db string, timeFunc wrapper.FormatTimeFunc) {
 		if err != nil {
 			panic(err)
 		}
-		logger.Debugln("taos put connect cost:", time.Now().Sub(s))
+		if isDebug {
+			logger.Debugln("taos put connect cost:", time.Now().Sub(s))
+		}
 	}()
 
 	if len(db) > 0 {
@@ -184,12 +192,74 @@ func DoQuery(c *gin.Context, db string, timeFunc wrapper.FormatTimeFunc) {
 		thread.Unlock()
 		logger.Debugln("taos select db cost:", time.Now().Sub(s))
 	}
+	execute(c, logger, taosConnect.TaosConnection, sql, timeFunc)
+}
 
-	startExec := time.Now()
+var (
+	ExecHeader = []byte(`{"status":"succ","head":["affected_rows"],"column_meta":[["affected_rows",4,4]],"rows":1,"data":[[`)
+	ExecEnd    = []byte(`]]}`)
+	Query1     = []byte(`{"status":"succ","head":[`)
+	Query2     = []byte(`],"column_meta":[`)
+	Query3     = []byte(`],"data":[`)
+	Query4     = []byte(`],"rows":`)
+)
 
-	logger.Debugln(startExec, "start execute sql:", sql)
-	result, err := async.GlobalAsync.TaosExec(taosConnect.TaosConnection, sql, timeFunc)
-	logger.Debugln("execute sql cost:", time.Now().Sub(startExec))
+func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, sql string, timeFormat ctools.FormatTimeFunc) {
+	isDebug := logger.Logger.IsLevelEnabled(logrus.DebugLevel)
+	handler := async.GlobalAsync.HandlerPool.Get()
+	defer async.GlobalAsync.HandlerPool.Put(handler)
+	var s time.Time
+	if isDebug {
+		s = time.Now()
+	}
+	result, _ := async.GlobalAsync.TaosQuery(taosConnect, sql, handler)
+	if isDebug {
+		logger.Debugln("taos query cost:", time.Now().Sub(s))
+	}
+	defer func() {
+		if result != nil && result.Res != nil {
+			if isDebug {
+				s = time.Now()
+			}
+			thread.Lock()
+			wrapper.TaosFreeResult(result.Res)
+			thread.Unlock()
+			if isDebug {
+				logger.Debugln("taos free result cost:", time.Now().Sub(s))
+			}
+		}
+	}()
+	res := result.Res
+	code := wrapper.TaosError(res)
+	if code != httperror.SUCCESS {
+		errStr := wrapper.TaosErrorStr(res)
+		ErrorResponseWithMsg(c, code, errStr)
+		return
+	}
+	isUpdate := wrapper.TaosIsUpdateQuery(res)
+	w := c.Writer
+	c.Header("Content-Type", "application/json; charset=utf-8")
+	c.Header("Transfer-Encoding", "chunked")
+	w.WriteHeader(http.StatusOK)
+	if isUpdate {
+		affectRows := wrapper.TaosAffectedRows(res)
+		_, err := w.Write(ExecHeader)
+		if err != nil {
+			return
+		}
+		_, err = w.Write([]byte(strconv.Itoa(affectRows)))
+		if err != nil {
+			return
+		}
+		_, err = w.Write(ExecEnd)
+		if err != nil {
+			return
+		}
+		w.Flush()
+		return
+	}
+	fieldsCount := wrapper.TaosNumFields(res)
+	rowsHeader, err := wrapper.ReadColumn(res, fieldsCount)
 	if err != nil {
 		tError, ok := err.(*tErrors.TaosError)
 		if ok {
@@ -199,42 +269,119 @@ func DoQuery(c *gin.Context, db string, timeFunc wrapper.FormatTimeFunc) {
 		}
 		return
 	}
-	if isDebug {
-		s = time.Now()
+	_, err = w.Write(Query1)
+	if err != nil {
+		return
 	}
-	if result.FieldCount == 0 {
-		logger.Debugln("execute sql success affected rows:", result.AffectedRows)
-		c.JSON(http.StatusOK, &TDEngineRestfulResp{
-			Status:     "succ",
-			Head:       []string{"affected_rows"},
-			Data:       [][]driver.Value{{result.AffectedRows}},
-			ColumnMeta: [][]interface{}{{"affected_rows", 4, 4}},
-			Rows:       1,
-		})
-	} else {
+	builder := jsonbuilder.BorrowStream(w)
+	defer jsonbuilder.ReturnStream(builder)
+	for i := 0; i < fieldsCount; i++ {
+		builder.WriteString(rowsHeader.ColNames[i])
+		if i != fieldsCount-1 {
+			builder.WriteMore()
+		}
+	}
+	err = builder.Flush()
+	if err != nil {
+		return
+	}
+	w.Flush()
+	_, err = w.Write(Query2)
+	if err != nil {
+		return
+	}
+	w.Flush()
+	for i := 0; i < fieldsCount; i++ {
+		builder.WriteArrayStart()
+		builder.WriteString(rowsHeader.ColNames[i])
+		builder.WriteMore()
+		builder.WriteUint8(rowsHeader.ColTypes[i])
+		builder.WriteMore()
+		builder.WriteUint16(rowsHeader.ColLength[i])
+		builder.WriteArrayEnd()
+		if i != fieldsCount-1 {
+			builder.WriteMore()
+		}
+	}
+	err = builder.Flush()
+	if err != nil {
+		return
+	}
+	w.Flush()
+	total := 0
+	_, err = w.Write(Query3)
+	if err != nil {
+		return
+	}
+	w.Flush()
+	precision := wrapper.TaosResultPrecision(res)
+	for {
 		if isDebug {
 			s = time.Now()
 		}
+		result, _ = async.GlobalAsync.TaosFetchRowsA(res, handler)
 		if isDebug {
-			s = time.Now()
+			logger.Debugln("taos fetch_rows_a cost:", time.Now().Sub(s))
 		}
-		logger.Debugln("execute sql success return data rows:", len(result.Data), ",cost:", time.Now().Sub(s))
-		var columnMeta [][]interface{}
-		for i := 0; i < len(result.Header.ColNames); i++ {
-			columnMeta = append(columnMeta, []interface{}{
-				result.Header.ColNames[i],
-				result.Header.ColTypes[i],
-				result.Header.ColLength[i],
-			})
+		if result.N == 0 {
+			break
+		} else {
+			if result.N < 0 {
+				break
+			}
+			total += result.N
+			res = result.Res
+			for i := 0; i < result.N; i++ {
+				var row unsafe.Pointer
+				thread.Lock()
+				row = wrapper.TaosFetchRow(res)
+				thread.Unlock()
+				lengths := wrapper.FetchLengths(res, fieldsCount)
+				builder.WriteArrayStart()
+				err = builder.Flush()
+				if err != nil {
+					return
+				}
+				w.Flush()
+				for j := 0; j < fieldsCount; j++ {
+					ctools.JsonWriteRowValue(builder, row, j, rowsHeader.ColTypes[j], lengths[j], precision, timeFormat)
+					if j != fieldsCount-1 {
+						builder.WriteMore()
+						err = builder.Flush()
+						if err != nil {
+							return
+						}
+						w.Flush()
+					}
+				}
+				builder.WriteArrayEnd()
+				err = builder.Flush()
+				if err != nil {
+					return
+				}
+				w.Flush()
+				if i != result.N-1 {
+					builder.WriteMore()
+					err = builder.Flush()
+					if err != nil {
+						return
+					}
+					w.Flush()
+				}
+			}
 		}
-		c.JSON(http.StatusOK, &TDEngineRestfulResp{
-			Status:     "succ",
-			Head:       result.Header.ColNames,
-			Data:       result.Data,
-			ColumnMeta: columnMeta,
-			Rows:       len(result.Data),
-		})
 	}
+	_, err = w.Write(Query4)
+	if err != nil {
+		return
+	}
+	builder.WriteInt(total)
+	builder.WriteObjectEnd()
+	err = builder.Flush()
+	if err != nil {
+		return
+	}
+	w.Flush()
 }
 
 // @Tags rest
