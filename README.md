@@ -10,7 +10,7 @@ taosAdapter provides the following functions.
     - Seamless connect to Telegraf
     - Seamless connect to collectD
     - Seamless connect to StatsD
-    - Support Prometheus remote_read and remote_write
+    - Support Prometheus remote_read and remote_write (Working In Progress)
 
 ## taosAdapter architecture
 ![taosAdapter-architecture](taosAdapter-architecture-for-public.png)
