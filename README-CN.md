@@ -10,7 +10,7 @@ taosAdapter提供以下功能：
     - 无缝连接到 Telegraf
     - 无缝连接到 collectd
     - 无缝连接到 StatsD
-    - 支持 Prometheus remote_read 和 remote_write
+    - 支持 Prometheus remote_read 和 remote_write （开发进行中）
 
 ## taosAdapter 架构图
 ![taosAdapter-architecture](taosAdapter-architecture-for-public.png)
