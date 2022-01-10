@@ -1,10 +1,13 @@
 package rest
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
@@ -112,4 +115,54 @@ func TestNoSql(t *testing.T) {
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
+}
+
+// @author: xftan
+// @date: 2022/1/10 15:15
+// @description: test restful all type query
+func TestAllType(t *testing.T) {
+	now := time.Now().Local().UnixNano() / 1e6
+	w := httptest.NewRecorder()
+	body := strings.NewReader("create database if not exists test_alltype")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	w = httptest.NewRecorder()
+	body = strings.NewReader("create table if not exists alltype(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20)) tags (info json)")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	w = httptest.NewRecorder()
+	body = strings.NewReader(fmt.Sprintf(`insert into t1 using alltype tags('{"table":"t1"}') values (%d,true,2,3,4,5,6,7,8,9,10,11,'中文"binary','中文nchar')`, now))
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	w = httptest.NewRecorder()
+	body = strings.NewReader(fmt.Sprintf(`select *,info->'table' from alltype where ts = %d`, now))
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	var result TDEngineRestfulRespDoc
+	err := json.Unmarshal(w.Body.Bytes(), &result)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, result.Code)
+	assert.Equal(t, true, result.Data[0][1])
+	assert.Equal(t, float64(2), result.Data[0][2])
+	assert.Equal(t, float64(3), result.Data[0][3])
+	assert.Equal(t, float64(4), result.Data[0][4])
+	assert.Equal(t, float64(5), result.Data[0][5])
+	assert.Equal(t, float64(6), result.Data[0][6])
+	assert.Equal(t, float64(7), result.Data[0][7])
+	assert.Equal(t, float64(8), result.Data[0][8])
+	assert.Equal(t, float64(9), result.Data[0][9])
+	assert.Equal(t, float64(10), result.Data[0][10])
+	assert.Equal(t, float64(11), result.Data[0][11])
+	assert.Equal(t, "中文\"binary", result.Data[0][12])
+	assert.Equal(t, "中文nchar", result.Data[0][13])
+	assert.Equal(t, map[string]interface{}{"table": "t1"}, result.Data[0][14])
+	assert.Equal(t, "t1", result.Data[0][15])
 }
