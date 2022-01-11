@@ -85,6 +85,8 @@ Then you should find taosAdapter binary executable file in the working directory
     NodeExporter is an exporter software for machine metrics. Please visit [https://github.com/prometheus/node_exporter](https://github.com/prometheus/node_exporter) for detail.
 * Support Prometheus remote_read and remote_write
   remote_read and remote_write are Prometheus data read-write separation cluster solutions. Please visit [https://prometheus.io/blog/2019/10/10/remote-read-meets-streaming/#remote-apis](https://prometheus.io/blog/2019/10/10/remote-read-meets-streaming/#remote-apis) for detail.
+
+
 ## Interface
 
 ### TDengine RESTful interface
