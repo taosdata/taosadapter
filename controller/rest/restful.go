@@ -285,12 +285,10 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	if err != nil {
 		return
 	}
-	w.Flush()
 	_, err = w.Write(Query2)
 	if err != nil {
 		return
 	}
-	w.Flush()
 	for i := 0; i < fieldsCount; i++ {
 		builder.WriteArrayStart()
 		builder.WriteString(rowsHeader.ColNames[i])
@@ -307,13 +305,11 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	if err != nil {
 		return
 	}
-	w.Flush()
 	total := 0
 	_, err = w.Write(Query3)
 	if err != nil {
 		return
 	}
-	w.Flush()
 	precision := wrapper.TaosResultPrecision(res)
 	for {
 		if isDebug {
@@ -342,7 +338,6 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 				if err != nil {
 					return
 				}
-				w.Flush()
 				for j := 0; j < fieldsCount; j++ {
 					ctools.JsonWriteRowValue(builder, row, j, rowsHeader.ColTypes[j], lengths[j], precision, timeFormat)
 					if j != fieldsCount-1 {
@@ -351,21 +346,17 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 						if err != nil {
 							return
 						}
-						w.Flush()
 					}
 				}
 				builder.WriteArrayEnd()
+				if i != result.N-1 {
+					builder.WriteMore()
+				}
 				err = builder.Flush()
 				if err != nil {
 					return
 				}
-				w.Flush()
-				if i != result.N-1 {
-					builder.WriteMore()
-					err = builder.Flush()
-					if err != nil {
-						return
-					}
+				if w.Size() > 16352 {
 					w.Flush()
 				}
 			}
