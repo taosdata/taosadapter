@@ -85,6 +85,8 @@ go build
   node_export 是一个机器指标的导出器。请访问 [https://github.com/prometheus/node_exporter](https://github.com/prometheus/node_exporter) 了解更多信息。
 * 支持 Prometheus remote_read 和 remote_write
   remote_read 和 remote_write 是 Prometheus 数据读写分离的集群方案。请访问[https://prometheus.io/blog/2019/10/10/remote-read-meets-streaming/#remote-apis](https://prometheus.io/blog/2019/10/10/remote-read-meets-streaming/#remote-apis) 了解更多信息。
+ 
+
 ## 接口
 
 ### TDengine RESTful 接口
