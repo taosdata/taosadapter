@@ -311,6 +311,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 		return
 	}
 	precision := wrapper.TaosResultPrecision(res)
+	fetched := false
 	for {
 		if isDebug {
 			s = time.Now()
@@ -327,6 +328,11 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 			}
 			total += result.N
 			res = result.Res
+			if fetched {
+				builder.WriteMore()
+			} else {
+				fetched = true
+			}
 			for i := 0; i < result.N; i++ {
 				var row unsafe.Pointer
 				thread.Lock()
