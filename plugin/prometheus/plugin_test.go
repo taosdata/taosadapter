@@ -18,15 +18,18 @@ import (
 	"github.com/taosdata/taosadapter/db"
 )
 
-// @author: xftan
-// @date: 2021/12/20 14:47
-// @description: test prometheus remote_write and remote_read
-func TestPrometheus(t *testing.T) {
+func TestMain(m *testing.M) {
 	rand.Seed(time.Now().UnixNano())
 	config.Init()
 	viper.Set("prometheus.enable", true)
 	db.PrepareConnection()
+	m.Run()
+}
 
+// @author: xftan
+// @date: 2021/12/20 14:47
+// @description: test prometheus remote_write and remote_read
+func TestPrometheus(t *testing.T) {
 	p := Plugin{}
 	router := gin.Default()
 	router.Use(func(c *gin.Context) {
@@ -110,11 +113,6 @@ func TestPrometheus(t *testing.T) {
 }
 
 func TestPrometheusEscapeString(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
-	config.Init()
-	viper.Set("prometheus.enable", true)
-	db.PrepareConnection()
-
 	p := Plugin{}
 	router := gin.Default()
 	router.Use(func(c *gin.Context) {
