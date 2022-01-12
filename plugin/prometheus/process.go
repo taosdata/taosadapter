@@ -1,6 +1,7 @@
 package prometheus
 
 import (
+	"bytes"
 	"crypto/md5"
 	"database/sql/driver"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -53,8 +55,8 @@ func processWrite(taosConn unsafe.Pointer, req *prompb.WriteRequest, db string) 
 }
 
 func generateWriteSql(timeseries []prompb.TimeSeries) (string, error) {
-	sql := pool.BytesPoolGet()
-	defer pool.BytesPoolPut(sql)
+	sql := pool.StringBuilderPoolGet()
+	defer pool.StringBuilderPoolPut(sql)
 	sql.WriteString("insert into ")
 	tmp := pool.BytesPoolGet()
 	defer pool.BytesPoolPut(tmp)
@@ -83,13 +85,15 @@ func generateWriteSql(timeseries []prompb.TimeSeries) (string, error) {
 		tableName := fmt.Sprintf("t_%x", md5.Sum(tmp.Bytes()))
 		sql.WriteString(tableName)
 		sql.WriteString(" using metrics tags('")
-		sql.Write(labelsJson)
+		sql.Write(escapeBytes(labelsJson))
 		sql.WriteString("') values")
 		for _, sample := range timeSeriesData.Samples {
 			sql.WriteString("('")
 			sql.WriteString(time.Unix(0, sample.GetTimestamp()*1e6).UTC().Format(time.RFC3339Nano))
 			sql.WriteString("',")
 			if math.IsNaN(sample.GetValue()) {
+				sql.WriteString("null")
+			} else if math.IsInf(sample.GetValue(), 0) {
 				sql.WriteString("null")
 			} else {
 				fmt.Fprintf(sql, "%v", sample.GetValue())
@@ -179,8 +183,8 @@ func processRead(taosConn unsafe.Pointer, req *prompb.ReadRequest, db string) (r
 }
 
 func generateReadSql(query *prompb.Query) (string, error) {
-	sql := pool.BytesPoolGet()
-	defer pool.BytesPoolPut(sql)
+	sql := pool.StringBuilderPoolGet()
+	defer pool.StringBuilderPoolPut(sql)
 	sql.WriteString("select *,tbname from metrics where ts >= '")
 	sql.WriteString(ms2Time(query.GetStartTimestampMs()))
 	sql.WriteString("' and ts <= '")
@@ -188,8 +192,8 @@ func generateReadSql(query *prompb.Query) (string, error) {
 	sql.WriteByte('\'')
 	for _, matcher := range query.GetMatchers() {
 		sql.WriteString(" and ")
-		k := matcher.GetName()
-		v := matcher.GetValue()
+		k := escapeString(matcher.GetName())
+		v := escapeString(matcher.GetValue())
 		sql.WriteString("labels->'")
 		sql.WriteString(k)
 		switch matcher.Type {
@@ -213,4 +217,15 @@ func generateReadSql(query *prompb.Query) (string, error) {
 
 func ms2Time(ts int64) string {
 	return time.Unix(0, ts*1e6).UTC().Format(time.RFC3339Nano)
+}
+
+func escapeString(s string) string {
+	return strings.ReplaceAll(s, `'`, `\'`)
+}
+
+var escapeSingleQuoteOld = []byte{'\''}
+var escapeSingleQuoteNew = []byte{'\\', '\''}
+
+func escapeBytes(s []byte) []byte {
+	return bytes.ReplaceAll(s, escapeSingleQuoteOld, escapeSingleQuoteNew)
 }

@@ -48,6 +48,35 @@ func Test_generateWriteSql(t *testing.T) {
 			},
 			want:    `insert into t_38afbaaeb3ee3f52623389a3af60f647 using metrics tags('{"k1":"v1","k2":"v2"}') values('2021-12-20T05:58:22Z',123.456) ('2021-12-20T05:58:23Z',456.789) `,
 			wantErr: false,
+		}, {
+			name: "escape",
+			args: args{
+				timeseries: []prompb.TimeSeries{
+					{
+						Labels: []prompb.Label{
+							{
+								Name:  "k'2",
+								Value: "v'2",
+							},
+							{
+								Name:  "k'1",
+								Value: "v'1",
+							},
+						},
+						Samples: []prompb.Sample{
+							{
+								Value:     123.456,
+								Timestamp: 1639979902000,
+							}, {
+								Value:     456.789,
+								Timestamp: 1639979903000,
+							},
+						},
+					},
+				},
+			},
+			want:    `insert into t_98e95338dc63e470540a87386c1fea3f using metrics tags('{"k\'1":"v\'1","k\'2":"v\'2"}') values('2021-12-20T05:58:22Z',123.456) ('2021-12-20T05:58:23Z',456.789) `,
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
