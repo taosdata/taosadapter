@@ -123,13 +123,15 @@ func WriteBinary(buffer *jsonbuilder.Stream, p unsafe.Pointer) {
 			buffer.WriteNil()
 		} else {
 			buffer.WriteByte('"')
-			buffer.WriteByte(value)
+			buffer.WriteStringByte(value)
 			buffer.WriteByte('"')
 		}
 	} else {
+		buffer.WriteByte('"')
 		for index := int16(0); index < clen; index++ {
 			buffer.WriteStringByte(*((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index)))))
 		}
+		buffer.WriteByte('"')
 	}
 }
 

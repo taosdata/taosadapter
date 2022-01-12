@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/gin-gonic/gin"
+	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v2/common"
 	tErrors "github.com/taosdata/driver-go/v2/errors"
@@ -34,9 +35,11 @@ const LayoutNanoSecond = "2006-01-02 15:04:05.000000000"
 var logger = log.GetLogger("restful")
 
 type Restful struct {
+	m *melody.Melody
 }
 
 func (ctl *Restful) Init(r gin.IRouter) {
+	ctl.InitWS()
 	api := r.Group("rest")
 	api.Use(func(c *gin.Context) {
 		if monitor.AllPaused() {
@@ -51,6 +54,7 @@ func (ctl *Restful) Init(r gin.IRouter) {
 	api.POST("sqlt/:db", CheckAuth, ctl.sqlt)
 	api.POST("sqlutc/:db", CheckAuth, ctl.sqlutc)
 	api.GET("login/:user/:password", ctl.des)
+	api.GET("ws", ctl.ws)
 }
 
 type TDEngineRestfulRespDoc struct {
