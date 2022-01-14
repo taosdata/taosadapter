@@ -137,7 +137,7 @@ func TestStream_Common(t *testing.T) {
 	stream.WriteUint16(math.MaxUint16)
 	stream.WriteUint32(math.MaxUint32)
 	stream.WriteUint64(math.MaxUint64)
-	stream.WriteUint(math.MaxUint)
+	stream.WriteUint(math.MaxUint64)
 	stream.WriteStringByte('"')
 	stream.WriteStringByte('/')
 	stream.WriteStringByte('a')
