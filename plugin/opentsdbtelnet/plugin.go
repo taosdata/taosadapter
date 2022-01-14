@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
+	"github.com/taosdata/taosadapter/monitor"
 	"github.com/taosdata/taosadapter/plugin"
 	"github.com/taosdata/taosadapter/schemaless/inserter"
 )
@@ -121,6 +122,9 @@ func (l *TCPListener) handler(conn *net.TCPConn, id uint64) {
 						logger.WithError(err).Error("conn read")
 					}
 					return
+				}
+				if monitor.AllPaused() {
+					continue
 				}
 				if len(s) == 0 {
 					continue

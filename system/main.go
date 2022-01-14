@@ -17,6 +17,7 @@ import (
 	"github.com/taosdata/taosadapter/controller"
 	"github.com/taosdata/taosadapter/db"
 	"github.com/taosdata/taosadapter/log"
+	"github.com/taosdata/taosadapter/monitor"
 	"github.com/taosdata/taosadapter/plugin"
 )
 
@@ -53,6 +54,20 @@ func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin
 		pprof.Register(router)
 	}
 	router.GET("-/ping", func(c *gin.Context) {
+		action := c.Query("action")
+		if action == "query" {
+			if monitor.QueryPaused() {
+				c.Status(http.StatusServiceUnavailable)
+				return
+			} else {
+				c.Status(http.StatusOK)
+				return
+			}
+		}
+		if monitor.AllPaused() {
+			c.Status(http.StatusServiceUnavailable)
+			return
+		}
 		c.Status(http.StatusOK)
 	})
 	if enableGzip {
@@ -63,6 +78,7 @@ func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin
 }
 
 func Start(router *gin.Engine) {
+	monitor.StartMonitor()
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(config.Conf.Port),
 		Handler: router,

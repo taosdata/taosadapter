@@ -19,6 +19,7 @@ import (
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/httperror"
 	"github.com/taosdata/taosadapter/log"
+	"github.com/taosdata/taosadapter/monitor"
 	"github.com/taosdata/taosadapter/thread"
 	"github.com/taosdata/taosadapter/tools/ctools"
 	"github.com/taosdata/taosadapter/tools/jsonbuilder"
@@ -36,6 +37,12 @@ type Restful struct {
 
 func (ctl *Restful) Init(r gin.IRouter) {
 	api := r.Group("rest")
+	api.Use(func(c *gin.Context) {
+		if monitor.AllPaused() {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, "memory exceeds threshold")
+			return
+		}
+	})
 	api.POST("sql", CheckAuth, ctl.sql)
 	api.POST("sqlt", CheckAuth, ctl.sqlt)
 	api.POST("sqlutc", CheckAuth, ctl.sqlutc)
@@ -257,6 +264,11 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 		}
 		w.Flush()
 		return
+	} else {
+		if monitor.QueryPaused() {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, "query memory exceeds threshold")
+			return
+		}
 	}
 	fieldsCount := wrapper.TaosNumFields(res)
 	rowsHeader, err := wrapper.ReadColumn(res, fieldsCount)

@@ -182,6 +182,45 @@ remote_read:
     read_recent: true
 ```
 
+## Memory Limit
+taosAdapter Monitor memory usage during runtime Set two thresholds
+* PauseQueryMemoryPercent
+* PauseAllMemoryPercent
+
+When the PauseQueryMemoryPercent threshold is exceeded, the query will not be fetched. 
+
+http return
+
+```
+code 503
+body "query memory exceeds threshold"
+```
+
+All write and query requests will be rejected when the PauseAllMemoryPercent threshold is exceeded. 
+
+http return
+
+```
+code 503
+body "memory exceeds threshold"
+```
+
+Resume the corresponding function when the memory falls back below the threshold
+
+Status check interface `/-/ping`
+
+* Normal return ``code 200``
+* No parameter Returns `code 503` if memory exceeds PauseAllMemoryPercent
+* request parameter `action=query` returns `code 503` if memory exceeds PauseQueryMemoryPercent or PauseAllMemoryPercent
+
+for the corresponding configuration parameter
+
+```
+    monitor.collectDuration duration             Set monitor duration. Env "TAOS_MONITOR_COLLECT_DURATION" (default 3s)
+    monitor.incgroup                             Whether running in cgroup. Env "TAOS_MONITOR_INCGROUP"
+    monitor.pauseAllMemoryPercent float          Memory percentage threshold for pause query and insert. Env "TAOS_MONITOR_PAUSE_ALL_MEMORY_PERCENT" (default 80)
+    monitor.pauseQueryMemoryPercent float        Memory percentage threshold for pause query. Env "TAOS_MONITOR_PAUSE_QUERY_MEMORY_PERCENT" (default 70)
+```
 
 ## Configuration
 
@@ -212,6 +251,10 @@ Usage of taosAdapter:
       --log.rotationSize string                      log rotation size(KB MB GB), must be a positive integer. Env "TAOS_ADAPTER_LOG_ROTATION_SIZE" (default "1GB")
       --log.rotationTime duration                    log rotation time. Env "TAOS_ADAPTER_LOG_ROTATION_TIME" (default 24h0m0s)
       --logLevel string                              log level (panic fatal error warn warning info debug trace). Env "TAOS_ADAPTER_LOG_LEVEL" (default "info")
+      --monitor.collectDuration duration             Set monitor duration. Env "TAOS_MONITOR_COLLECT_DURATION" (default 3s)
+      --monitor.incgroup                             Whether running in cgroup. Env "TAOS_MONITOR_INCGROUP"
+      --monitor.pauseAllMemoryPercent float          Memory percentage threshold for pause all. Env "TAOS_MONITOR_PAUSE_ALL_MEMORY_PERCENT" (default 80)
+      --monitor.pauseQueryMemoryPercent float        Memory percentage threshold for pause query. Env "TAOS_MONITOR_PAUSE_QUERY_MEMORY_PERCENT" (default 70)
       --node_exporter.caCertFile string              node_exporter ca cert file path. Env "TAOS_ADAPTER_NODE_EXPORTER_CA_CERT_FILE"
       --node_exporter.certFile string                node_exporter cert file path. Env "TAOS_ADAPTER_NODE_EXPORTER_CERT_FILE"
       --node_exporter.db string                      node_exporter db name. Env "TAOS_ADAPTER_NODE_EXPORTER_DB" (default "node_exporter")

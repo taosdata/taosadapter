@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
+	"github.com/taosdata/taosadapter/monitor"
 	"github.com/taosdata/taosadapter/plugin"
 )
 
@@ -28,8 +29,20 @@ func (p *Plugin) Init(r gin.IRouter) error {
 		c.AbortWithError(code, err)
 		return
 	}))
-	r.POST("remote_read/:db", p.Read)
-	r.POST("remote_write/:db", p.Write)
+	r.POST("remote_read/:db", func(c *gin.Context) {
+		if monitor.QueryPaused() {
+			c.Header("Retry-After", "120")
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, "read memory exceeds threshold")
+			return
+		}
+	}, p.Read)
+	r.POST("remote_write/:db", func(c *gin.Context) {
+		if monitor.AllPaused() {
+			c.Header("Retry-After", "120")
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, "pause memory exceeds threshold")
+			return
+		}
+	}, p.Write)
 	return nil
 }
 
