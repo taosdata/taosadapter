@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
+	"github.com/taosdata/taosadapter/monitor"
 	"github.com/taosdata/taosadapter/plugin"
 	"github.com/taosdata/taosadapter/schemaless/inserter"
 )
@@ -134,6 +135,9 @@ func (p *Plugin) listen() {
 	buf := make([]byte, 64*1024) // 64kb - maximum size of IP packet
 	for {
 		n, _, err := p.conn.ReadFrom(buf)
+		if monitor.AllPaused() {
+			continue
+		}
 		if err != nil {
 			if !strings.HasSuffix(err.Error(), ": use of closed network connection") {
 				logger.Error(err.Error())

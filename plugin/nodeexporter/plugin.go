@@ -21,6 +21,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
+	"github.com/taosdata/taosadapter/monitor"
 	"github.com/taosdata/taosadapter/plugin"
 	"github.com/taosdata/taosadapter/schemaless/inserter"
 )
@@ -61,6 +62,9 @@ func (p *NodeExporter) Start() error {
 		for {
 			select {
 			case <-ticker.C:
+				if monitor.AllPaused() {
+					continue
+				}
 				p.Gather()
 			case <-p.exitChan:
 				ticker.Stop()
