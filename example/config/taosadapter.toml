@@ -22,6 +22,12 @@ rotationCount = 30
 rotationTime = "24h"
 rotationSize = "1GB"
 
+[monitor]
+collectDuration = "3s"
+incgroup = false
+pauseQueryMemoryPercent = 70
+pauseAllMemoryPercent = 80
+
 [opentsdb]
 enable = true
 
