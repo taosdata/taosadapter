@@ -2,8 +2,8 @@
 Description=TDengine taosAdapter service
 After=network-online.target
 Wants=network-online.target
-Before=taosd.service
-PartOf=taosd.service
+#Before=taosd.service
+#PartOf=taosd.service
 
 [Service]
 Type=simple
