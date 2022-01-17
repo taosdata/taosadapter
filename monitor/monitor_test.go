@@ -60,8 +60,8 @@ func TestMonitor(t *testing.T) {
 	size := int(float64(total) * 0.2)
 	//20% + 20% = 40%
 	size2 := int(float64(total) * 0.2)
-	config.Conf.Monitor.PauseQueryMemoryPercent = currentPercent + 20
-	config.Conf.Monitor.PauseAllMemoryPercent = currentPercent + 40
+	config.Conf.Monitor.PauseQueryMemoryThreshold = currentPercent + 20
+	config.Conf.Monitor.PauseAllMemoryThreshold = currentPercent + 40
 	monitor.StartMonitor()
 	{
 		assert.False(t, monitor.QueryPaused())

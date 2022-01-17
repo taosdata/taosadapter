@@ -183,10 +183,10 @@ remote_read:
 
 ## 内存限制
 taosAdapter 监测运行过程中内存使用率 设置两个阈值
-* PauseQueryMemoryPercent
-* PauseAllMemoryPercent
+* pauseQueryMemoryThreshold
+* pauseAllMemoryThreshold
 
-当超过 PauseQueryMemoryPercent 阈值时不会去获取查询结果 
+当超过 pauseQueryMemoryThreshold 阈值时不会去获取查询结果 
 
 http 返回
 
@@ -195,7 +195,7 @@ code 503
 body "query memory exceeds threshold"
 ```
 
-当超过 PauseAllMemoryPercent 阈值时将拒绝所有写入和查询请求 
+当超过 pauseAllMemoryThreshold 阈值时将拒绝所有写入和查询请求 
 
 http 返回
 
@@ -209,16 +209,16 @@ body "memory exceeds threshold"
 状态检查接口 `/-/ping`
 
 * 正常返回 `code 200`  
-* 无参数  如果内存超过 PauseAllMemoryPercent 将返回 `code 503`
-* 请求参数 `action=query` 如果内存超过 PauseQueryMemoryPercent 或 PauseAllMemoryPercent 将返回 `code 503`
+* 无参数  如果内存超过 pauseAllMemoryThreshold 将返回 `code 503`
+* 请求参数 `action=query` 如果内存超过 pauseQueryMemoryThreshold 或 pauseAllMemoryThreshold 将返回 `code 503`
 
 对应配置参数
 
 ```
   monitor.collectDuration              监测间隔                                    环境变量 "TAOS_MONITOR_COLLECT_DURATION" (默认值 3s)
   monitor.incgroup                     是否是cgroup中运行(容器中运行设置为 true)      环境变量 "TAOS_MONITOR_INCGROUP"
-  monitor.pauseAllMemoryPercent        不再进行插入和查询的内存阈值                   环境变量 "TAOS_MONITOR_PAUSE_ALL_MEMORY_PERCENT" (默认值 80)
-  monitor.pauseQueryMemoryPercent      不再进行查询的内存阈值                        环境变量 "TAOS_MONITOR_PAUSE_QUERY_MEMORY_PERCENT" (默认值 70)
+  monitor.pauseAllMemoryThreshold      不再进行插入和查询的内存阈值                   环境变量 "TAOS_MONITOR_PAUSE_ALL_MEMORY_THRESHOLD" (默认值 80)
+  monitor.pauseQueryMemoryThreshold    不再进行查询的内存阈值                        环境变量 "TAOS_MONITOR_PAUSE_QUERY_MEMORY_THRESHOLD" (默认值 70)
 ```
 
 ## 配置方法
@@ -252,8 +252,8 @@ Usage of taosAdapter:
       --logLevel string                              log level (panic fatal error warn warning info debug trace). Env "TAOS_ADAPTER_LOG_LEVEL" (default "info")
       --monitor.collectDuration duration             Set monitor duration. Env "TAOS_MONITOR_COLLECT_DURATION" (default 3s)
       --monitor.incgroup                             Whether running in cgroup. Env "TAOS_MONITOR_INCGROUP"
-      --monitor.pauseAllMemoryPercent float          Memory percentage threshold for pause all. Env "TAOS_MONITOR_PAUSE_ALL_MEMORY_PERCENT" (default 80)
-      --monitor.pauseQueryMemoryPercent float        Memory percentage threshold for pause query. Env "TAOS_MONITOR_PAUSE_QUERY_MEMORY_PERCENT" (default 70)
+      --monitor.pauseAllMemoryThreshold float        Memory percentage threshold for pause all. Env "TAOS_MONITOR_PAUSE_ALL_MEMORY_THRESHOLD" (default 80)
+      --monitor.pauseQueryMemoryThreshold float      Memory percentage threshold for pause query. Env "TAOS_MONITOR_PAUSE_QUERY_MEMORY_THRESHOLD" (default 70)
       --node_exporter.caCertFile string              node_exporter ca cert file path. Env "TAOS_ADAPTER_NODE_EXPORTER_CA_CERT_FILE"
       --node_exporter.certFile string                node_exporter cert file path. Env "TAOS_ADAPTER_NODE_EXPORTER_CERT_FILE"
       --node_exporter.db string                      node_exporter db name. Env "TAOS_ADAPTER_NODE_EXPORTER_DB" (default "node_exporter")
