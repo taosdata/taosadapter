@@ -187,7 +187,7 @@ taosAdapter Monitor memory usage during runtime Set two thresholds
 * pauseQueryMemoryThreshold
 * pauseAllMemoryThreshold
 
-When the pauseQueryMemoryThreshold is exceeded, the query will not be fetched. 
+Query requests will be rejected when the pauseAllMemoryThreshold is exceeded.
 
 http return
 
@@ -203,7 +203,7 @@ http return
 
 Resume the corresponding function when the memory falls back below the threshold.
 
-Status check interface `/-/ping`
+Status check interface `http://<fqdn>:6041/-/ping`
 
 * Normal return ``code 200``
 * No parameter Returns `code 503` if memory exceeds pauseAllMemoryThreshold
@@ -217,6 +217,8 @@ for the corresponding configuration parameter
     monitor.pauseAllMemoryThreshold float        Memory percentage threshold for pause query and insert. Env "TAOS_MONITOR_PAUSE_ALL_MEMORY_THRESHOLD" (default 80)
     monitor.pauseQueryMemoryThreshold float      Memory percentage threshold for pause query. Env "TAOS_MONITOR_PAUSE_QUERY_MEMORY_THRESHOLD" (default 70)
 ```
+
+You can adjust accordingly according to specific project application scenarios and operation strategies, and it is recommended to use operation monitoring software to monitor system memory status in a timely manner.
 
 ## Configuration
 
