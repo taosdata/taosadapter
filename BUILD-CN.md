@@ -28,7 +28,7 @@ make
 sudo make install
 ```
 
-一旦 `make install` 完成，taosAdapter 和它的 systemd 服务文件就会被安装到有 TDengine 服务端软件的系统中。您可以使用 `sudo systemctl start taosd` 和 `sudo systemclt stop taosd` 来启动它们。
+一旦 `make install` 完成，taosAdapter 和它的 systemd 服务文件就会被安装到有 TDengine 服务端软件的系统中。您可以使用 `sudo systemctl start taosd` 和 `sudo systemctl stop taosd` 来启动它们。
 
 ## 单独构建 taosAdapter
 
