@@ -1,4 +1,3 @@
-
 # 构建 taosAdapter
 
 我们强烈建议将 taosAdapter 和 TDengine 服务端共同部署在同一个系统上，并使用官方 TDengine 安装包安装 taosAdapter。如果您想对 taosAdapter 进行调试或贡献代码，您也可以单独构建它。
