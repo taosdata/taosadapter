@@ -1,7 +1,7 @@
 
 # Build taosAdapter
 
-We strongly recommend to deploy taosAdapter with TDengine server and install taosAdapter with official TDengine installation package. If you want to debug or contribute to taosAdapter, you can build it seperately too.
+We strongly recommend to deploy taosAdapter with TDengine server and install taosAdapter with official TDengine installation package. If you want to debug or contribute to taosAdapter, you can build it separately too.
 
 ## Setup golang environment
 
@@ -29,7 +29,7 @@ make
 sudo make install
 ```
 
-Once make install is done, taosAdapter and its systemd service file be installed to the system with the TDengine server. You can use `sudo systemctl start taosd` and `sudo systemclt stop taosd` to launch both of them.
+Once make install is done, taosAdapter and its systemd service file be installed to the system with the TDengine server. You can use `sudo systemctl start taosd` and `sudo systemctl stop taosd` to launch both of them.
 
 ## Build stand-alone taosAdapter
 
