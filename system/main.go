@@ -53,23 +53,6 @@ func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin
 		//router.GET("/swagger/*any", swagger.WrapHandler(files.Handler))
 		pprof.Register(router)
 	}
-	router.GET("-/ping", func(c *gin.Context) {
-		action := c.Query("action")
-		if action == "query" {
-			if monitor.QueryPaused() {
-				c.Status(http.StatusServiceUnavailable)
-				return
-			} else {
-				c.Status(http.StatusOK)
-				return
-			}
-		}
-		if monitor.AllPaused() {
-			c.Status(http.StatusServiceUnavailable)
-			return
-		}
-		c.Status(http.StatusOK)
-	})
 	if enableGzip {
 		router.Use(gzip.Gzip(gzip.DefaultCompression))
 	}
