@@ -10,6 +10,7 @@ import (
 	"github.com/taosdata/driver-go/v2/af"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
+	"github.com/taosdata/taosadapter/monitor"
 	"github.com/taosdata/taosadapter/plugin"
 	"github.com/taosdata/taosadapter/schemaless/inserter"
 	"github.com/taosdata/taosadapter/tools"
@@ -37,6 +38,13 @@ func (p *Influxdb) Init(r gin.IRouter) error {
 		logger.Info("influxdb disabled")
 		return nil
 	}
+	r.Use(func(c *gin.Context) {
+		if monitor.AllPaused() {
+			c.Header("Retry-After", "120")
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, "memory exceeds threshold")
+			return
+		}
+	})
 	r.POST("write", getAuth, p.write)
 	return nil
 }

@@ -191,7 +191,7 @@ func WriteJson(buffer *jsonbuilder.Stream, p unsafe.Pointer) {
 type FormatTimeFunc func(builder *jsonbuilder.Stream, ts int64, precision int)
 
 func JsonWriteRowValue(builder *jsonbuilder.Stream, row unsafe.Pointer, offset int, colType uint8, length int, precision int, timeFormat FormatTimeFunc) {
-	p := (unsafe.Pointer)(uintptr(*((*int)(unsafe.Pointer(uintptr(row) + uintptr(offset)*wrapper.Step)))))
+	p := unsafe.Pointer(*(*uintptr)(unsafe.Pointer(uintptr(row) + uintptr(offset)*wrapper.Step)))
 	if p == nil {
 		builder.WriteNil()
 		return

@@ -26,6 +26,7 @@ require (
 	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/prometheus v1.8.2-0.20200911110723-e83ef207b6c2
+	github.com/shirou/gopsutil v3.21.8+incompatible
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/silenceper/pool v1.0.0
 	github.com/sirupsen/logrus v1.8.1
@@ -34,6 +35,6 @@ require (
 	github.com/spf13/viper v1.9.0
 	github.com/stretchr/testify v1.7.0
 	github.com/swaggo/swag v1.7.6
-	github.com/taosdata/driver-go/v2 v2.0.1-0.20211215031937-7da3cc9e4ad1
+	github.com/taosdata/driver-go/v2 v2.0.1-0.20220113110107-e2b7f0b8b6df
 	gonum.org/v1/gonum v0.8.2 // indirect
 )

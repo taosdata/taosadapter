@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
+	"github.com/taosdata/taosadapter/monitor"
 	"github.com/taosdata/taosadapter/plugin"
 	"github.com/taosdata/taosadapter/schemaless/inserter"
 )
@@ -76,6 +77,9 @@ func (p *Plugin) Start() error {
 		for {
 			select {
 			case <-ticker.C:
+				if monitor.AllPaused() {
+					return
+				}
 				err := p.input.Gather(p.ac)
 				if err != nil {
 					logger.WithError(err).Error("gather error")

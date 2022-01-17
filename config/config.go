@@ -18,6 +18,7 @@ type Config struct {
 	SSl           SSl
 	Log           Log
 	Pool          Pool
+	Monitor       Monitor
 }
 
 var (
@@ -67,6 +68,7 @@ func Init() {
 	Conf.Cors.setValue()
 	Conf.SSl.setValue()
 	Conf.Pool.setValue()
+	Conf.Monitor.setValue()
 }
 
 //arg > file > env
@@ -91,7 +93,7 @@ func init() {
 	initSSL()
 	initCors()
 	initPool()
-
+	initMonitor()
 	err := viper.BindPFlags(pflag.CommandLine)
 	if err != nil {
 		panic(err)

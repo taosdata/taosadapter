@@ -17,6 +17,7 @@ import (
 	"github.com/taosdata/taosadapter/controller"
 	"github.com/taosdata/taosadapter/db"
 	"github.com/taosdata/taosadapter/log"
+	"github.com/taosdata/taosadapter/monitor"
 	"github.com/taosdata/taosadapter/plugin"
 )
 
@@ -52,9 +53,6 @@ func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin
 		//router.GET("/swagger/*any", swagger.WrapHandler(files.Handler))
 		pprof.Register(router)
 	}
-	router.GET("-/ping", func(c *gin.Context) {
-		c.Status(http.StatusOK)
-	})
 	if enableGzip {
 		router.Use(gzip.Gzip(gzip.DefaultCompression))
 	}
@@ -63,6 +61,7 @@ func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin
 }
 
 func Start(router *gin.Engine) {
+	monitor.StartMonitor()
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(config.Conf.Port),
 		Handler: router,

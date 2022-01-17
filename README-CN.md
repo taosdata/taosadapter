@@ -46,7 +46,7 @@ taosAdapter 从 TDengine v2.3.0.0 版本开始成为 TDengine 服务端软件 �
 ## 接口
 
 ### TDengine RESTful 接口
-您可以使用任何支持 http 协议的客户端通过访问 RESTful 接口地址 “https://<fqdn>:6041/<APIEndPoint>” 来写入数据到 TDengine 或从 TDengine 中查询数据。细节请参考[官方文档](https://www.taosdata.com/cn/documentation/connector#restful)。支持如下 EndPoint ：
+您可以使用任何支持 http 协议的客户端通过访问 RESTful 接口地址 “http://<fqdn>:6041/<APIEndPoint>” 来写入数据到 TDengine 或从 TDengine 中查询数据。细节请参考[官方文档](https://www.taosdata.com/cn/documentation/connector#restful)。支持如下 EndPoint ：
 ```
 /rest/sql
 /rest/sqlt
@@ -54,7 +54,7 @@ taosAdapter 从 TDengine v2.3.0.0 版本开始成为 TDengine 服务端软件 �
 ```
 
 ### InfluxDB
-您可以使用任何支持 http 协议的客户端访问 Restful 接口地址 “https://<fqdn>:6041/<APIEndPoint>” 来写入 InfluxDB 兼容格式的数据到 TDengine。EndPoint 如下：
+您可以使用任何支持 http 协议的客户端访问 Restful 接口地址 “http://<fqdn>:6041/<APIEndPoint>” 来写入 InfluxDB 兼容格式的数据到 TDengine。EndPoint 如下：
 ```
 /influxdb/v1/write
 ```
@@ -68,7 +68,7 @@ taosAdapter 从 TDengine v2.3.0.0 版本开始成为 TDengine 服务端软件 �
 注意： 目前不支持 InfluxDB 的 token 验证方式只支持 Basic 验证和查询参数验证。
 
 ### OpenTSDB
-您可以使用任何支持 http 协议的客户端访问 Restful 接口地址 “https://<fqdn>:6041/<APIEndPoint>” 来写入 OpenTSDB 兼容格式的数据到 TDengine。EndPoint 如下：
+您可以使用任何支持 http 协议的客户端访问 Restful 接口地址 “http://<fqdn>:6041/<APIEndPoint>” 来写入 OpenTSDB 兼容格式的数据到 TDengine。EndPoint 如下：
 ```
 /opentsdb/v1/put/json/:db
 /opentsdb/v1/put/telnet/:db
@@ -181,6 +181,44 @@ remote_read:
     read_recent: true
 ```
 
+## 内存限制
+taosAdapter 监测运行过程中内存使用率 设置两个阈值
+* pauseQueryMemoryThreshold
+* pauseAllMemoryThreshold
+
+当超过 pauseQueryMemoryThreshold 阈值时时停止处理查询请求。
+
+http 返回
+
+* code 503
+* body "query memory exceeds threshold"
+
+当超过 pauseAllMemoryThreshold 阈值时停止处理所有写入和查询请求。
+
+http 返回
+
+* code 503
+* body "memory exceeds threshold"
+
+当内存回落到阈值之下时恢复对应功能。
+
+状态检查接口 `http://<fqdn>:6041/-/ping`
+
+* 正常返回 `code 200`  
+* 无参数  如果内存超过 pauseAllMemoryThreshold 将返回 `code 503`
+* 请求参数 `action=query` 如果内存超过 pauseQueryMemoryThreshold 或 pauseAllMemoryThreshold 将返回 `code 503`
+
+对应配置参数
+
+```
+  monitor.collectDuration              监测间隔                                    环境变量 "TAOS_MONITOR_COLLECT_DURATION" (默认值 3s)
+  monitor.incgroup                     是否是cgroup中运行(容器中运行设置为 true)      环境变量 "TAOS_MONITOR_INCGROUP"
+  monitor.pauseAllMemoryThreshold      不再进行插入和查询的内存阈值                   环境变量 "TAOS_MONITOR_PAUSE_ALL_MEMORY_THRESHOLD" (默认值 80)
+  monitor.pauseQueryMemoryThreshold    不再进行查询的内存阈值                        环境变量 "TAOS_MONITOR_PAUSE_QUERY_MEMORY_THRESHOLD" (默认值 70)
+```
+
+您可以根据具体项目应用场景和运营策略进行相应调整，并建议使用运营监控软件及时进行系统内存状态监控。
+
 ## 配置方法
 
 taosAdapter 支持通过命令行参数、环境变量和配置文件来进行配置。
@@ -210,6 +248,10 @@ Usage of taosAdapter:
       --log.rotationSize string                      log rotation size(KB MB GB), must be a positive integer. Env "TAOS_ADAPTER_LOG_ROTATION_SIZE" (default "1GB")
       --log.rotationTime duration                    log rotation time. Env "TAOS_ADAPTER_LOG_ROTATION_TIME" (default 24h0m0s)
       --logLevel string                              log level (panic fatal error warn warning info debug trace). Env "TAOS_ADAPTER_LOG_LEVEL" (default "info")
+      --monitor.collectDuration duration             Set monitor duration. Env "TAOS_MONITOR_COLLECT_DURATION" (default 3s)
+      --monitor.incgroup                             Whether running in cgroup. Env "TAOS_MONITOR_INCGROUP"
+      --monitor.pauseAllMemoryThreshold float        Memory percentage threshold for pause all. Env "TAOS_MONITOR_PAUSE_ALL_MEMORY_THRESHOLD" (default 80)
+      --monitor.pauseQueryMemoryThreshold float      Memory percentage threshold for pause query. Env "TAOS_MONITOR_PAUSE_QUERY_MEMORY_THRESHOLD" (default 70)
       --node_exporter.caCertFile string              node_exporter ca cert file path. Env "TAOS_ADAPTER_NODE_EXPORTER_CA_CERT_FILE"
       --node_exporter.certFile string                node_exporter cert file path. Env "TAOS_ADAPTER_NODE_EXPORTER_CERT_FILE"
       --node_exporter.db string                      node_exporter db name. Env "TAOS_ADAPTER_NODE_EXPORTER_DB" (default "node_exporter")

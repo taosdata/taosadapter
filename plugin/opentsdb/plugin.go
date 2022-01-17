@@ -13,6 +13,7 @@ import (
 	"github.com/taosdata/driver-go/v2/af"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
+	"github.com/taosdata/taosadapter/monitor"
 	"github.com/taosdata/taosadapter/plugin"
 	"github.com/taosdata/taosadapter/schemaless/inserter"
 	"github.com/taosdata/taosadapter/tools/pool"
@@ -40,6 +41,13 @@ func (p *Plugin) Init(r gin.IRouter) error {
 		logger.Info("opentsdb disabled")
 		return nil
 	}
+	r.Use(func(c *gin.Context) {
+		if monitor.AllPaused() {
+			c.Header("Retry-After", "120")
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, "memory exceeds threshold")
+			return
+		}
+	})
 	r.POST("put/json/:db", plugin.Auth(p.errorResponse), p.insertJson)
 	r.POST("put/telnet/:db", plugin.Auth(p.errorResponse), p.insertTelnet)
 	return nil
