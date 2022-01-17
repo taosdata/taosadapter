@@ -14,8 +14,9 @@ go env -w GOPROXY=https://goproxy.cn,direct
 ```
 
 ## Build taosAdapter as a component of TDengine
+
 taosAdapter source code is hosted as a stand-alone repository and also is part of TDengine as a submodule. You can download TDengine source code and build both of them. Following are steps:
-```
+``` shell
 git clone https://github.com/taosdata/TDengine
 cd TDengine
 git submodule update --init --recursive
@@ -35,11 +36,11 @@ taosAdapter can be built as a stand-alone application too if you already deploye
 Please download the TDengine server or client installation package from the [official website](https://www.taosdata.com/en/all-downloads/).
 
 ### Build taosAdapter
-```
+``` shell
 git clone https://github.com/taosdata/taosadapter
 cd taosadapter
 go build
 ```
 
-Then you should find taosAdapter binary executable file in the working directory. You need to copy the systemd file `taosadapter.service` to /etc/systemd/system and copy executable taosAdapter binary file to a place the Linux $PATH environment variable defined.
+Then you should find taosAdapter binary executable file in the working directory. You need to copy the systemd file `taosadapter.service` to `/etc/systemd/system` and copy executable taosAdapter binary file to a place the Linux $PATH environment variable defined.
 

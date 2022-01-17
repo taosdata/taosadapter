@@ -14,8 +14,9 @@ go env -w GOPROXY=https://goproxy.cn,direct
 ```
 
 ## 作为 TDengine 的一个组件构建 taosAdapter
+
 taosAdapter 的源代码是作为一个独立的代码库托管的，也通过子模块的方式存在于 TDengine 中。您可以下载 TDengine 的源代码并同时构建它们。步骤如下：
-```
+``` shell
 git clone https://github.com/taosdata/TDengine
 cd TDengine
 git submodule update --init --recursive
@@ -35,11 +36,11 @@ sudo make install
 请从官方网站下载 TDengine 服务器或客户端安装包。
 
 ### 构建 taosAdapter
-```
+``` shell
 git clone https://github.com/taosdata/taosadapter
 cd taosadapter
 go build
 ```
 
-然后您应该在工作目录中找到 taosAdapter 的二进制可执行文件。您需要将 systemd 服务配置文件 taosadapter.service 复制到 /etc/systemd/system 目录，并将可执行的 taosAdapter 二进制文件复制到 Linux 的 $PATH 环境变量可以找到的路径下。
+然后您应该在工作目录中找到 taosAdapter 的二进制可执行文件。您需要将 systemd 服务配置文件 taosadapter.service 复制到 `/etc/systemd/system` 目录，并将可执行的 taosAdapter 二进制文件复制到 Linux 的 $PATH 环境变量可以找到的路径下。
 
