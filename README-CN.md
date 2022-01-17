@@ -17,7 +17,7 @@ taosAdapter提供以下功能：
 
 taosAdapter 从 TDengine v2.3.0.0 版本开始成为 TDengine 服务端软件 的一部分，您不需要任何额外的步骤来设置 taosAdapter。taosAdapter 将由 TDengine 服务端软件通过 systemd 管理，它将在启动 taosd 服务命令 systemctl start taosd 自动启动，通过退出 taosd 服务命令 systemctl stop taosd 停止。它也可以通过 systemctl start taosadapter 和 systemctl stop taosadapter 单独启动服务或停止服务。启动或停止 taosAdapter 并不会影响 taosd 自身的服务。
 
-您可以从[涛思数据官方网站](https://taosdata.com/cn/all-downloads/)下载TDengine（taosAdapter包含在v2.3.0.0及以上版本）。如果您需要使用源代码编译生成 taosAdapter，您可以参考[构建 taosAdapter](https://github.com/taosdata/taosadapter/BUILD-CN.md)文档。
+您可以从[涛思数据官方网站](https://taosdata.com/cn/all-downloads/)下载TDengine（taosAdapter包含在v2.3.0.0及以上版本）。如果您需要使用源代码编译生成 taosAdapter，您可以参考[构建 taosAdapter](https://github.com/taosdata/taosadapter/blob/develop/BUILD-CN.md)文档。
 
 
 ## 功能列表
