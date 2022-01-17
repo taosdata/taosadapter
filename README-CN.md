@@ -17,51 +17,7 @@ taosAdapter提供以下功能：
 
 taosAdapter 从 TDengine v2.3.0.0 版本开始成为 TDengine 服务端软件 的一部分，您不需要任何额外的步骤来设置 taosAdapter。taosAdapter 将由 TDengine 服务端软件通过 systemd 管理，它将在启动 taosd 服务命令 systemctl start taosd 自动启动，通过退出 taosd 服务命令 systemctl stop taosd 停止。它也可以通过 systemctl start taosadapter 和 systemctl stop taosadapter 单独启动服务或停止服务。启动或停止 taosAdapter 并不会影响 taosd 自身的服务。
 
-你可以从[涛思数据官方网站](https://taosdata.com/cn/all-downloads/)下载TDengine（taosAdapter包含在v2.3.0.0及以上版本）。
-
-## 构建 taosAdapter
-
-我们强烈建议将 taosAdapter 和 TDengine 服务端共同部署在同一个系统上，并使用官方 TDengine 安装包安装 taosAdapter。如果你想对 taosAdapter 进行调试或贡献代码，你也可以单独构建它。
-
-### 设置 golang 开发环境
-
-taosAdapter 是由 Go 语言开发的。关于 golang 开发环境的设置，请参考 golang 的[官方文档](https://go.dev/learn/)。
-
-请使用1.14以上版本的 golang。对于中国的用户，我们建议使用代理服务来加速软件包的下载。
-```
-go env -w GO111MODULE=on
-go env -w GOPROXY=https://goproxy.cn,direct
-```
-
-## 作为 TDengine 的一个组件构建 taosAdapter
-taosAdapter 的源代码是作为一个独立的代码库托管的，也通过子模块的方式存在于 TDengine 中。你可以下载 TDengine 的源代码并同时构建它们。步骤如下：
-```
-git clone https://github.com/taosdata/TDengine
-cd TDengine
-git submodule update --init --recursive
-mkdir debug
-cd debug
-cmake ..
-make
-sudo make install
-```
-
-一旦 make install 完成，taosAdapter 和它的 systemd 服务文件就会被安装到有 TDengine 服务端软件的系统中。您可以使用 sudo systemctl start taosd 和 sudo systemclt stop taosd 来启动它们。
-
-##  单独构建 taosAdapter
-如果你已经部署了 TDengine 服务器 v2.3.0.0 或以上的版本，taosAdapter 也可以作为一个独立的应用程序被构建。
-
-### 安装 TDengine 服务器或客户端安装包
-请从官方网站下载 TDengine 服务器或客户端安装包。
-
-### 构建 taosAdapter
-```
-git clone https://github.com/taosdata/taosadapter
-cd taosadapter
-go build
-```
-
-然后您应该在工作目录中找到 taosAdapter 的二进制可执行文件。您需要将 systemd 服务配置文件 taosadapter.service 复制到 /etc/systemd/system 目录，并将可执行的 taosAdapter 二进制文件复制到 Linux 的 $PATH 环境变量可以找到的路径下。
+您可以从[涛思数据官方网站](https://taosdata.com/cn/all-downloads/)下载TDengine（taosAdapter包含在v2.3.0.0及以上版本）。如果您需要使用源代码编译生成 taosAdapter，您可以参考[构建 taosAdapter](https://github.com/taosdata/taosadapter/BUILD-CN.md)文档。
 
 
 ## 功能列表
@@ -183,7 +139,7 @@ object OpenTsdbWriter "opentsdb" {
 
 ### TCollector
 
-Tcollector 是一个客户端进程，它从本地收集器中收集数据并将数据推送到 OpenTSDB。你在你的所有主机上运行它，它完成将每个主机的数据发送到 TSD （OpenTSDB 后台服务进程）的工作。
+Tcollector 是一个客户端进程，它从本地收集器中收集数据并将数据推送到 OpenTSDB。您在您的所有主机上运行它，它完成将每个主机的数据发送到 TSD （OpenTSDB 后台服务进程）的工作。
 
 * 启用 taosAdapter 配置 opentsdb_telnet.enable
 * 修改 TCollector 配置文件，将 OpenTSDB 主机修改为部署 taosAdapter 的主机，并修改端口为6049

@@ -17,51 +17,7 @@ taosAdapter provides the following functions.
 
 taosAdapter is part of the TDengine server from TDengine v2.3.0.0. You don't need any additional steps to set taosAdapter up. taosAdapter will be managed by the TDengine server via systemd, which means it will be automatically launched by starting taosd service command `systemctl start taosd` and be stopped by exiting taosd service command `systemctl stop taosd`. You can also start taosAdapter by `systemctl start taosadapter` and stop taosAdapter by `systemctl stop taosadapter` too. Start/stop taosAdapter will not affect taosd service.
 
-You can download TDengine (taosAdapter be included in v2.3.0.0 and above version) from the (official website)[https://taosdata.com/en/all-downloads/].
-
-## Build taosAdapter
-
-We strongly recommend to deploy taosAdapter with TDengine server and install taosAdapter with official TDengine installation package. If you want to debug or contribute to taosAdapter, you can build it seperately too.
-
-### Setup golang environment
-
-taosAdapter is developed by Go language. Please refer to golang [official documentation](https://go.dev/learn/) for golang environment setup.
-
-Please use golang version 1.14+. For the user in China, we recommend using a proxy to accelerate package downloading.
-```
-go env -w GO111MODULE=on
-go env -w GOPROXY=https://goproxy.cn,direct
-```
-
-## Build taosAdapter as a component of TDengine
-taosAdapter source code is hosted as a stand-alone repository and also is part of TDengine as a submodule. You can download TDengine source code and build both of them. Following are steps:
-```
-git clone https://github.com/taosdata/TDengine
-cd TDengine
-git submodule update --init --recursive
-mkdir debug
-cd debug
-cmake .. -DBUILD_HTTP=false
-make
-sudo make install
-```
-
-Once make install is done, taosAdapter and its systemd service file be installed to the system with the TDengine server. You can use `sudo systemctl start taosd` and `sudo systemclt stop taosd` to launch both of them.
-
-##  Build stand-alone taosAdapter
-taosAdapter can be built as a stand-alone application too if you already deployed TDengine server v2.3.0.0 or an above version.
-
-### Install TDengine server or client installation package
-Please download the TDengine server or client installation package from the [official website](https://www.taosdata.com/en/all-downloads/).
-
-### Build taosAdapter
-```
-git clone https://github.com/taosdata/taosadapter
-cd taosadapter
-go build
-```
-
-Then you should find taosAdapter binary executable file in the working directory. You need to copy the systemd file `taosadapter.service` to /etc/systemd/system and copy executable taosAdapter binary file to a place the Linux $PATH environment variable defined.
+You can download TDengine (taosAdapter be included in v2.3.0.0 and above version) from the (official website)[https://taosdata.com/en/all-downloads/]. If you want to build taosAdapter from source code, you can refer to the [Buil taosAdapter](https://github.com/taosdata/taosadapter/BUILD.md) instruction.
 
 
 ## Function
