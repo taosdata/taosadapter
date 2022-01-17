@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +17,7 @@ import (
 	"github.com/taosdata/taosadapter/controller/rest"
 	"github.com/taosdata/taosadapter/db"
 	"github.com/taosdata/taosadapter/monitor"
+	"github.com/taosdata/taosadapter/tools/ctest"
 )
 
 var router *gin.Engine
@@ -78,10 +78,7 @@ func TestMonitor(t *testing.T) {
 		assert.Equal(t, 200, w.Code)
 	}
 
-	var a = make([]byte, size)
-	for i := 0; i < size; i++ {
-		a[i] = 1
-	}
+	b1 := ctest.Malloc(size)
 	time.Sleep(config.Conf.Monitor.CollectDuration)
 	{
 		assert.True(t, monitor.QueryPaused())
@@ -100,11 +97,7 @@ func TestMonitor(t *testing.T) {
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 	}
-
-	b := make([]byte, size2)
-	for i := 0; i < size2; i++ {
-		b[i] = 1
-	}
+	b2 := ctest.Malloc(size2)
 	time.Sleep(config.Conf.Monitor.CollectDuration)
 	{
 		assert.True(t, monitor.QueryPaused())
@@ -125,10 +118,9 @@ func TestMonitor(t *testing.T) {
 	}
 	assert.True(t, monitor.QueryPaused())
 	assert.True(t, monitor.AllPaused())
-	a = nil
-	b = nil
-	runtime.GC()
-	time.Sleep(config.Conf.Monitor.CollectDuration * 2)
+	ctest.Free(b1)
+	ctest.Free(b2)
+	time.Sleep(config.Conf.Monitor.CollectDuration)
 	{
 		assert.False(t, monitor.QueryPaused())
 		assert.False(t, monitor.AllPaused())
