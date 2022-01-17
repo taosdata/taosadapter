@@ -27,7 +27,7 @@ func StartMonitor() {
 			select {
 			case status := <-systemStatus:
 				if status.MemError == nil {
-					if status.MemPercent >= config.Conf.Monitor.PauseAllMemoryPercent {
+					if status.MemPercent >= config.Conf.Monitor.PauseAllMemoryThreshold {
 						if atomic.CompareAndSwapUint32(&pauseStatus, NormalStatus, PauseStatus) {
 							logger.Warn("pause all")
 						}
@@ -36,7 +36,7 @@ func StartMonitor() {
 							logger.Warn("resume all")
 						}
 					}
-					if status.MemPercent >= config.Conf.Monitor.PauseQueryMemoryPercent {
+					if status.MemPercent >= config.Conf.Monitor.PauseQueryMemoryThreshold {
 						if atomic.CompareAndSwapUint32(&queryStatus, NormalStatus, PauseStatus) {
 							logger.Warn("pause query")
 						}

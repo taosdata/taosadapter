@@ -48,10 +48,10 @@ func TestInit(t *testing.T) {
 					IdleTimeout: time.Hour,
 				},
 				Monitor: Monitor{
-					CollectDuration:         3 * time.Second,
-					InCGroup:                false,
-					PauseQueryMemoryPercent: 70,
-					PauseAllMemoryPercent:   80,
+					CollectDuration:           3 * time.Second,
+					InCGroup:                  false,
+					PauseQueryMemoryThreshold: 70,
+					PauseAllMemoryThreshold:   80,
 				},
 			}, Conf)
 			corsC := Conf.Cors.GetConfig()
