@@ -32,14 +32,14 @@ func (p *Plugin) Init(r gin.IRouter) error {
 	r.POST("remote_read/:db", func(c *gin.Context) {
 		if monitor.QueryPaused() {
 			c.Header("Retry-After", "120")
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, "read memory exceeds threshold")
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, "query memory exceeds threshold")
 			return
 		}
 	}, p.Read)
 	r.POST("remote_write/:db", func(c *gin.Context) {
 		if monitor.AllPaused() {
 			c.Header("Retry-After", "120")
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, "pause memory exceeds threshold")
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, "memory exceeds threshold")
 			return
 		}
 	}, p.Write)
