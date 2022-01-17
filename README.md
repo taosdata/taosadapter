@@ -235,21 +235,17 @@ When the pauseQueryMemoryThreshold is exceeded, the query will not be fetched.
 
 http return
 
-```
-code 503
-body "query memory exceeds threshold"
-```
+* code 503
+* body "query memory exceeds threshold"
 
 All write and query requests will be rejected when the pauseAllMemoryThreshold is exceeded. 
 
 http return
 
-```
-code 503
-body "memory exceeds threshold"
-```
+* code 503
+* body "memory exceeds threshold"
 
-Resume the corresponding function when the memory falls back below the threshold
+Resume the corresponding function when the memory falls back below the threshold.
 
 Status check interface `/-/ping`
 

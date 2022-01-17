@@ -230,25 +230,21 @@ taosAdapter 监测运行过程中内存使用率 设置两个阈值
 * pauseQueryMemoryThreshold
 * pauseAllMemoryThreshold
 
-当超过 pauseQueryMemoryThreshold 阈值时不会去获取查询结果 
+当超过 pauseQueryMemoryThreshold 阈值时不会去获取查询结果。
 
 http 返回
 
-```
-code 503
-body "query memory exceeds threshold"
-```
+* code 503
+* body "query memory exceeds threshold"
 
-当超过 pauseAllMemoryThreshold 阈值时将拒绝所有写入和查询请求 
+当超过 pauseAllMemoryThreshold 阈值时将拒绝所有写入和查询请求。
 
 http 返回
 
-```
-code 503
-body "memory exceeds threshold"
-```
+* code 503
+* body "memory exceeds threshold"
 
-当内存回落到阈值之下时恢复对应功能
+当内存回落到阈值之下时恢复对应功能。
 
 状态检查接口 `/-/ping`
 
