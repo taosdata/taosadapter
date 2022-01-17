@@ -53,12 +53,12 @@ func TestMonitor(t *testing.T) {
 	}
 	used := processMemory.RSS
 	currentPercent := 100 * (float64(used) / float64(total))
-	//+6%
-	size := int(float64(total) * 0.06)
-	//6% + 5% = 11%
-	size2 := int(float64(total) * 0.05)
-	config.Conf.Monitor.PauseQueryMemoryPercent = currentPercent + 5
-	config.Conf.Monitor.PauseAllMemoryPercent = currentPercent + 10
+	//+20%
+	size := int(float64(total) * 0.2)
+	//20% + 20% = 40%
+	size2 := int(float64(total) * 0.2)
+	config.Conf.Monitor.PauseQueryMemoryPercent = currentPercent + 20
+	config.Conf.Monitor.PauseAllMemoryPercent = currentPercent + 40
 	monitor.StartMonitor()
 	{
 		assert.False(t, monitor.QueryPaused())
