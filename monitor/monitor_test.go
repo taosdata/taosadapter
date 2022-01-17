@@ -14,6 +14,7 @@ import (
 	"github.com/shirou/gopsutil/process"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/config"
+	"github.com/taosdata/taosadapter/controller/ping"
 	"github.com/taosdata/taosadapter/controller/rest"
 	"github.com/taosdata/taosadapter/db"
 	"github.com/taosdata/taosadapter/monitor"
@@ -32,6 +33,8 @@ func TestMain(m *testing.M) {
 	})
 	var ctl rest.Restful
 	ctl.Init(router)
+	var pingCtl ping.Controller
+	pingCtl.Init(router)
 	m.Run()
 }
 
@@ -76,6 +79,16 @@ func TestMonitor(t *testing.T) {
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
+
+		w = httptest.NewRecorder()
+		req, _ = http.NewRequest(http.MethodGet, "/-/ping?action=query", body)
+		router.ServeHTTP(w, req)
+		assert.Equal(t, 200, w.Code)
+
+		w = httptest.NewRecorder()
+		req, _ = http.NewRequest(http.MethodGet, "/-/ping", body)
+		router.ServeHTTP(w, req)
+		assert.Equal(t, 200, w.Code)
 	}
 
 	b1 := ctest.Malloc(size)
@@ -96,6 +109,16 @@ func TestMonitor(t *testing.T) {
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
+
+		w = httptest.NewRecorder()
+		req, _ = http.NewRequest(http.MethodGet, "/-/ping?action=query", body)
+		router.ServeHTTP(w, req)
+		assert.Equal(t, 503, w.Code)
+
+		w = httptest.NewRecorder()
+		req, _ = http.NewRequest(http.MethodGet, "/-/ping", body)
+		router.ServeHTTP(w, req)
+		assert.Equal(t, 200, w.Code)
 	}
 	b2 := ctest.Malloc(size2)
 	time.Sleep(config.Conf.Monitor.CollectDuration)
@@ -113,6 +136,16 @@ func TestMonitor(t *testing.T) {
 		body = strings.NewReader("create database if not exists t1")
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+		router.ServeHTTP(w, req)
+		assert.Equal(t, 503, w.Code)
+
+		w = httptest.NewRecorder()
+		req, _ = http.NewRequest(http.MethodGet, "/-/ping?action=query", body)
+		router.ServeHTTP(w, req)
+		assert.Equal(t, 503, w.Code)
+
+		w = httptest.NewRecorder()
+		req, _ = http.NewRequest(http.MethodGet, "/-/ping", body)
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 503, w.Code)
 	}
@@ -135,6 +168,16 @@ func TestMonitor(t *testing.T) {
 		body = strings.NewReader("create database if not exists t1")
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+		router.ServeHTTP(w, req)
+		assert.Equal(t, 200, w.Code)
+
+		w = httptest.NewRecorder()
+		req, _ = http.NewRequest(http.MethodGet, "/-/ping?action=query", body)
+		router.ServeHTTP(w, req)
+		assert.Equal(t, 200, w.Code)
+
+		w = httptest.NewRecorder()
+		req, _ = http.NewRequest(http.MethodGet, "/-/ping", body)
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 	}
