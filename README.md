@@ -183,6 +183,7 @@ remote_read:
 ```
 
 ## Memory Limit
+
 taosAdapter Monitor memory usage during runtime Set two thresholds
 * pauseQueryMemoryThreshold
 * pauseAllMemoryThreshold
@@ -219,6 +220,16 @@ for the corresponding configuration parameter
 ```
 
 You can adjust accordingly according to specific project application scenarios and operation strategies, and it is recommended to use operation monitoring software to monitor system memory status in a timely manner.
+
+## Limit on the rows of returned result
+
+taosAdapter controls the rows of result returned by the parameter `restfulRowLimit`, -1 means no limit, default is no limit.
+
+This parameter controls the following interface returns
+* `http://<fqdn>:6041/rest/sql`
+* `http://<fqdn>:6041/rest/sqlt`
+* `http://<fqdn>:6041/rest/sqlutc`
+* `http://<fqdn>:6041/prometheus/v1/remote_read/:db`
 
 ## Configuration
 
