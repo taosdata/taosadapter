@@ -347,4 +347,12 @@ http 返回内容：
 
 ## 如何从旧版本 TDengine 迁移到 taosAdapter
 
-在 TDengine server 2.2.x.x 或更早期版本中，taosd 进程包含一个内嵌的 http 服务。如前面所述，taosAdapter 是一个使用 systemd 管理的独立软件，拥有自己的进程。
+在 TDengine server 2.2.x.x 或更早期版本中，taosd 进程包含一个内嵌的 http 服务。如前面所述，taosAdapter 是一个使用 systemd 管理的独立软件，拥有自己的进程。并且两者有一些配置参数和行为是不同的，请见下表：
+
+| **#** | **embedded httpd** | **taosAdapter** | **comment** |
+| ----- | ------------------ | --------------- | ----------- |
+| 1     | httpEnableRecordSql | --logLevel=debug | |
+| 2     | httpMaxThreads | n/a | taosAdapter 自动管理线程池，无需此参数 |
+| 3     | telegrafUseFieldNum | 请参考 taosAdapter telegraf 配置方法 | 
+| 4     | restfulRowLimit | restfulRowLimit | 内嵌 httpd 默认输出 10240 行数据，最大允许值为 102400。taosAdapter 也提供 restfulRowLimit 但是默认不做限制。您可以根据实际场景需求进行配置 |
+| 5     | httpDebugFlag | 不适用 | httpdDebugFlag 对 taosAdapter 不起作用 |

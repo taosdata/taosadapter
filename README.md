@@ -347,4 +347,12 @@ Or you can set `--logLevel` or the environment variable "TAOS_ADAPTER_LOG_LEVEL"
 
 ## How to migrate to taosAdapter from old version of TDengine server
 
-In the early version (2.2.x.x or earlier version), TDengine server provided an embedded http service by default. It will compulsorily running with the `taosd` process. As mentioned early, taosAdapter need be manually run by 'systemctl start taosadapter' and has its own process.
+In the early version (2.2.x.x or earlier version), TDengine server provided an embedded http service by default. It will compulsorily running with the `taosd` process. As mentioned early, taosAdapter need be manually run by 'systemctl start taosadapter' and has its own process. Some parameters and behaviors are different between the embedded httpd and taosAdapter. Please see below:
+
+| **#** | **embedded httpd** | **taosAdapter** | **comment** |
+| ----- | ------------------ | --------------- | ----------- |
+| 1     | httpEnableRecordSql | --logLevel=debug | |
+| 2     | httpMaxThreads | n/a | taosAdapter no need this paramter |
+| 3     | telegrafUseFieldNum | please refer to taosAdapter telegraf configuration | 
+| 4     | restfulRowLimit | restfulRowLimit | default value is 10240 in the embedded httpd. taosAdapter provides restfulRowLimit too but the default value is unlimited. User can set it according to the specific scenario |
+| 5     | httpDebugFlag | not used | taosAdapter is immune to `httpdDebugFlag` |
