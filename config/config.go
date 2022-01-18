@@ -10,15 +10,16 @@ import (
 )
 
 type Config struct {
-	Cors          CorsConfig
-	TaosConfigDir string
-	Debug         bool
-	Port          int
-	LogLevel      string
-	SSl           SSl
-	Log           Log
-	Pool          Pool
-	Monitor       Monitor
+	Cors            CorsConfig
+	TaosConfigDir   string
+	Debug           bool
+	Port            int
+	LogLevel        string
+	RestfulRowLimit int
+	SSl             SSl
+	Log             Log
+	Pool            Pool
+	Monitor         Monitor
 }
 
 var (
@@ -59,10 +60,11 @@ func Init() {
 		}
 	}
 	Conf = &Config{
-		Debug:         viper.GetBool("debug"),
-		Port:          viper.GetInt("port"),
-		LogLevel:      viper.GetString("logLevel"),
-		TaosConfigDir: viper.GetString("taosConfigDir"),
+		Debug:           viper.GetBool("debug"),
+		Port:            viper.GetInt("port"),
+		LogLevel:        viper.GetString("logLevel"),
+		TaosConfigDir:   viper.GetString("taosConfigDir"),
+		RestfulRowLimit: viper.GetInt("restfulRowLimit"),
 	}
 	Conf.Log.setValue()
 	Conf.Cors.setValue()
@@ -88,6 +90,10 @@ func init() {
 	viper.SetDefault("taosConfigDir", "")
 	_ = viper.BindEnv("taosConfigDir", "TAOS_ADAPTER_TAOS_CONFIG_FILE")
 	pflag.String("taosConfigDir", "", `load taos client config path. Env "TAOS_ADAPTER_TAOS_CONFIG_FILE"`)
+
+	viper.SetDefault("restfulRowLimit", -1)
+	_ = viper.BindEnv("restfulRowLimit", "TAOS_ADAPTER_RESTFUL_ROW_LIMIT")
+	pflag.Int("restfulRowLimit", -1, `restful returns the maximum number of rows (-1 means no limit). Env "TAOS_ADAPTER_RESTFUL_ROW_LIMIT"`)
 
 	initLog()
 	initSSL()
