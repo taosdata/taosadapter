@@ -6,6 +6,7 @@ taosAdapter 是一个 TDengine 的配套工具，是 TDengine 集群和应用程
 
 taosAdapter提供以下功能：
 
+```
     - RESTful 接口
     - 兼容 InfluxDB v1写接口
     - 兼容 OpenTSDB JSON 和 telnet 格式写入
@@ -13,8 +14,10 @@ taosAdapter提供以下功能：
     - 无缝连接到 collectd
     - 无缝连接到 StatsD
     - 支持 Prometheus remote_read 和 remote_write
+```
 
 ## taosAdapter 架构图
+
 ![taosAdapter-architecture](taosAdapter-architecture-for-public.png)
 
 ## taosAdapter 部署方法
@@ -35,7 +38,6 @@ taosAdapter 从 TDengine v2.3.0.0 版本开始成为 TDengine 服务端软件 �
 
 taosAdapter 和 TDengine server 需要使用相同版本。请通过升级 TDengine server 来升级 taosAdapter。
 与taosd分离部署的taosAdapter必须通过升级其所在服务器的TDengine server才能得到升级。
-
 
 ## taosAdapter 参数列表
 
@@ -123,19 +125,20 @@ Usage of taosAdapter:
 备注：
 使用浏览器进行接口调用请根据实际情况设置如下跨源资源共享（CORS）参数：
 
+```
     AllowAllOrigins
     AllowOrigins
     AllowHeaders
     ExposeHeaders
     AllowCredentials
     AllowWebSockets
+```
 
 如果不通过浏览器进行接口调用无需关心这几项配置。
 
 关于 CORS 协议细节请参考：[https://www.w3.org/wiki/CORS_Enabled](https://www.w3.org/wiki/CORS_Enabled) 或 [https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CORS](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CORS)。
 
 示例配置文件参见 [example/config/taosadapter.toml](https://github.com/taosdata/taosadapter/blob/develop/example/config/taosadapter.toml)。
-
 
 ## 功能列表
 
@@ -159,11 +162,12 @@ Usage of taosAdapter:
 * 支持 Prometheus remote_read 和 remote_write
   remote_read 和 remote_write 是 Prometheus 数据读写分离的集群方案。请访问[https://prometheus.io/blog/2019/10/10/remote-read-meets-streaming/#remote-apis](https://prometheus.io/blog/2019/10/10/remote-read-meets-streaming/#remote-apis) 了解更多信息。
 
-
 ## 接口
 
 ### TDengine RESTful 接口
-您可以使用任何支持 http 协议的客户端通过访问 RESTful 接口地址 “http://<fqdn>:6041/<APIEndPoint>” 来写入数据到 TDengine 或从 TDengine 中查询数据。细节请参考[官方文档](https://www.taosdata.com/cn/documentation/connector#restful)。支持如下 EndPoint ：
+
+您可以使用任何支持 http 协议的客户端通过访问 RESTful 接口地址 `http://<fqdn>:6041/<APIEndPoint>` 来写入数据到 TDengine 或从 TDengine 中查询数据。细节请参考[官方文档](https://www.taosdata.com/cn/documentation/connector#restful)。支持如下 EndPoint ：
+
 ```
 /rest/sql
 /rest/sqlt
@@ -171,21 +175,28 @@ Usage of taosAdapter:
 ```
 
 ### InfluxDB
-您可以使用任何支持 http 协议的客户端访问 Restful 接口地址 “http://<fqdn>:6041/<APIEndPoint>” 来写入 InfluxDB 兼容格式的数据到 TDengine。EndPoint 如下：
+
+您可以使用任何支持 http 协议的客户端访问 Restful 接口地址 `http://<fqdn>:6041/<APIEndPoint>` 来写入 InfluxDB 兼容格式的数据到 TDengine。EndPoint 如下：
+
 ```
 /influxdb/v1/write
 ```
 
 支持 InfluxDB 查询参数如下：
+
+```
 * `db` 指定 TDengine 使用的数据库名
 * `precision` TDengine 使用的时间精度
 * `u` TDengine 用户名
 * `p` TDengine 密码
+```
 
 注意： 目前不支持 InfluxDB 的 token 验证方式只支持 Basic 验证和查询参数验证。
 
 ### OpenTSDB
-您可以使用任何支持 http 协议的客户端访问 Restful 接口地址 “http://<fqdn>:6041/<APIEndPoint>” 来写入 OpenTSDB 兼容格式的数据到 TDengine。EndPoint 如下：
+
+您可以使用任何支持 http 协议的客户端访问 Restful 接口地址 `http://<fqdn>:6041/<APIEndPoint>` 来写入 OpenTSDB 兼容格式的数据到 TDengine。EndPoint 如下：
+
 ```
 /opentsdb/v1/put/json/:db
 /opentsdb/v1/put/telnet/:db
@@ -273,10 +284,12 @@ Prometheus 使用的由*NIX内核暴露的硬件和操作系统指标的输出�
 
 remote_read 和 remote_write 是 Prometheus 数据读写分离的集群方案。
 只需要将 remote_read 和 remote_write url 指向 taosAdapter 对应的 url 同时设置 Basic 验证即可使用。
-* remote_read url :  http://host_to_taosAdapter:port(default 6041)/prometheus/v1/remote_read/:db
-* remote_write url :  http://host_to_taosAdapter:port(default 6041)/prometheus/v1/remote_write/:db
+
+* remote_read url :  `http://host_to_taosAdapter:port(default 6041)/prometheus/v1/remote_read/:db`
+* remote_write url :  `http://host_to_taosAdapter:port(default 6041)/prometheus/v1/remote_write/:db`
 
 Basic验证：
+
 * username： TDengine 连接用户名
 * password： TDengine 连接密码
 
@@ -297,7 +310,6 @@ remote_read:
     remote_timeout: 10s
     read_recent: true
 ```
-
 
 ## 内存使用优化方法
 
@@ -344,10 +356,11 @@ http 返回内容：
 taosAdapter 通过参数 `restfulRowLimit` 来控制结果的返回条数，-1 代表无限制，默认无限制。
 
 该参数控制以下接口返回
-* `http://<fqdn>:6041/rest/sql` 
-* `http://<fqdn>:6041/rest/sqlt` 
+
+* `http://<fqdn>:6041/rest/sql`
+* `http://<fqdn>:6041/rest/sqlt`
 * `http://<fqdn>:6041/rest/sqlutc`
-* `http://<fqdn>:6041/prometheus/v1/remote_read/:db` 
+* `http://<fqdn>:6041/prometheus/v1/remote_read/:db`
 
 ## 配置方法
 
@@ -356,7 +369,6 @@ taosAdapter 通过参数 `restfulRowLimit` 来控制结果的返回条数，-1 �
 您可以通过命令 systemctl status taosadapter 来检查 taosAdapter 运行状态。
 
 您也可以通过设置 --loglevel 参数或者环境变量 TAOS_ADAPTER_LOG_LEVEL 来调节 taosAdapter 日志输出详细程度。有效值包括： panic、fatal、error、warn、warning、info、debug以及trace。
-
 
 ## 如何从旧版本 TDengine 迁移到 taosAdapter
 

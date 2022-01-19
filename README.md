@@ -6,6 +6,7 @@ taosAdapter is a TDengine’s companion tool and is a bridge/adapter between TDe
 
 taosAdapter provides the following functions.
 
+```
     - RESTful interface
     - Compatible with InfluxDB v1 write interface
     - Compatible with OpenTSDB JSON and telnet format write
@@ -13,15 +14,17 @@ taosAdapter provides the following functions.
     - Seamless connect to collectD
     - Seamless connect to StatsD
     - Support Prometheus remote_read and remote_write (Working In Progress)
+```
 
 ## taosAdapter architecture
+
 ![taosAdapter-architecture](taosAdapter-architecture-for-public.png)
 
 ## taosAdapter deloyment
 
 ### Install taosAdapter
 
-taosAdapter is part of the TDengine server from TDengine v2.3.0.0. You don't need any additional steps to install taosAdapter if you already installed TDengine server. You can download TDengine server package (taosAdapter be included in v2.3.0.0 and above version) from the (official website)[https://taosdata.com/en/all-downloads/]. If you want to deploy taosAdapter on another server, you need to install official TDengine server installation package. If you want to build taosAdapter from source code, you can refer to the [Buil taosAdapter](https://github.com/taosdata/taosadapter/blob/develop/BUILD.md) instruction.
+taosAdapter is part of the TDengine server from TDengine v2.3.0.0. You don't need any additional steps to install taosAdapter if you already installed TDengine server. You can download TDengine server package (taosAdapter be included in v2.3.0.0 and above version) from the [official website](https://taosdata.com/en/all-downloads/). If you want to deploy taosAdapter on another server, you need to install official TDengine server installation package. If you want to build taosAdapter from source code, you can refer to the [How to build taosAdapter](https://github.com/taosdata/taosadapter/blob/develop/BUILD.md) instruction.
 
 ### Start/Stop taosAdapter
 
@@ -36,7 +39,6 @@ The command `rmtaos` will remove the TDengine server software including taosAdap
 taosAdapter only properly run with the same version of TDengine server.
 You need to upgrade TDengine server to upgrade taosAdapter.
 A separate deployed taosAdapter need to upgrade the corresponding version of TDengine server package too.
-
 
 ## taosAdapter's parameters
 
@@ -127,19 +129,20 @@ Usage of taosAdapter:
 Note:
 If you support users using the web browser to access the interfaces, please configure the following CORS parameters according to your practical network setting:
 
+```
     AllowAllOrigins
     AllowOrigins
     AllowHeaders
     ExposeHeaders
     AllowCredentials
     AllowWebSockets
+```
 
 If not, you don't need to configure them.
 
 Please visit the webpage [https://www.w3.org/wiki/CORS_Enabled](https://www.w3.org/wiki/CORS_Enabled) or [https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CORS](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CORS) for the detailed CORS protocol.
 
 For the default configuration file, see [example/config/taosadapter.toml](https://github.com/taosdata/taosadapter/blob/develop/example/config/taosadapter.toml)
-
 
 ## Functions
 
@@ -163,11 +166,12 @@ For the default configuration file, see [example/config/taosadapter.toml](https:
 * Support Prometheus remote_read and remote_write
   remote_read and remote_write are Prometheus data read-write separation cluster solutions. Please visit [https://prometheus.io/blog/2019/10/10/remote-read-meets-streaming/#remote-apis](https://prometheus.io/blog/2019/10/10/remote-read-meets-streaming/#remote-apis) for detail.
 
-
 ## Interface
 
 ### TDengine RESTful interface
-You can use any http client to access the RESTful interface address "http://<fqdn>:6041/<APIEndPoint>" to insert to or query from TDengine. Please refer to the [official documentation](https://www.taosdata.com/cn/documentation/connector#restful) for detail. The end point could be following:
+
+You can use any http client to access the RESTful interface address `http://<fqdn>:6041/<APIEndPoint>` to insert to or query from TDengine. Please refer to the [official documentation](https://www.taosdata.com/cn/documentation/connector#restful) for detail. The end point could be following:
+
 ```
 /rest/sql
 /rest/sqlt
@@ -175,12 +179,15 @@ You can use any http client to access the RESTful interface address "http://<fqd
 ```
 
 ### InfluxDB
-You can use any http client to access the RESTful interface address "http://<fqdn>:6041/<APIEndPoint>" to insert InfluxDB compatible protocol data to TDengine. The end point is:
+
+You can use any http client to access the RESTful interface address `http://<fqdn>:6041/<APIEndPoint>` to insert InfluxDB compatible protocol data to TDengine. The end point is:
+
 ```
 /influxdb/v1/write
 ```
 
 Support following InfluxDB query parameters:
+
 * `db` Specify the necessary parameters for the database
 * `precision` time precision non-essential parameter
 * `u` user non-essential parameters
@@ -189,7 +196,9 @@ Support following InfluxDB query parameters:
 Note: There is currently not supported token authentication in InfluxDB only supports Basic authentication and query parameter authentication.
 
 ### OpenTSDB
-You can use any http client to access the RESTful interface address "http://<fqdn>:6041/<APIEndPoint>" to insert OpenTSDB compatible protocol data to TDengine. The end point is:
+
+You can use any http client to access the RESTful interface address `http://<fqdn>:6041/<APIEndPoint>` to insert OpenTSDB compatible protocol data to TDengine. The end point is:
+
 ```
 /opentsdb/v1/put/json/:db
 /opentsdb/v1/put/telnet/:db
@@ -277,8 +286,9 @@ Prometheus exporter for hardware and OS metrics exposed by *NIX kernels
 
 Remote_read and remote_write are cluster schemes for Prometheus data read-write separation.
 Just use the REMOTE_READ and REMOTE_WRITE URL to point to the URL corresponding to Taosadapter to use Basic authentication.
-* Remote_read url: http://host_to_taosadapter:port (default 6041) /prometheus/v1/remote_read/:db
-* Remote_write url: http://host_to_taosadapter:port (default 6041) /Prometheus/v1/remote_write/:db
+
+* Remote_read url: `http://host_to_taosadapter:port (default 6041) /prometheus/v1/remote_read/:db`
+* Remote_write url: `http://host_to_taosadapter:port (default 6041) /Prometheus/v1/remote_write/:db`
 
 Basic verification:
 
@@ -302,7 +312,6 @@ remote_read:
     remote_timeout: 10s
     read_recent: true
 ```
-
 
 ## Memory usage optimization
 
@@ -345,17 +354,16 @@ for the corresponding configuration parameter
 
 You can adjust them according to the specific project scenarios and operation strategies, and it is recommended to use operation monitoring software to monitor system memory status in a timely manner too. You can configure the load balancer to check the interface for checking taosAdapter's running status too.
 
-
 ## Limit on the rows of returned result
 
 taosAdapter controls the rows of result returned by the parameter `restfulRowLimit`, -1 means no limit, default is no limit.
 
 This parameter controls the following interface returns
+
 * `http://<fqdn>:6041/rest/sql`
 * `http://<fqdn>:6041/rest/sqlt`
 * `http://<fqdn>:6041/rest/sqlutc`
 * `http://<fqdn>:6041/prometheus/v1/remote_read/:db`
-
 
 ## Troubleshooting
 
