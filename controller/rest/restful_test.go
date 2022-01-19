@@ -201,6 +201,7 @@ func TestRowLimit(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &result)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, result.Code)
+	assert.Equal(t, 1, len(result.Data))
 	assert.Equal(t, true, result.Data[0][1])
 	assert.Equal(t, float64(2), result.Data[0][2])
 	assert.Equal(t, float64(3), result.Data[0][3])
