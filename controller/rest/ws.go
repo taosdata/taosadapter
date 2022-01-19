@@ -14,7 +14,8 @@ import (
 	"unsafe"
 
 	"github.com/gin-gonic/gin"
-	"github.com/huskar-t/melody"
+	"github.com/gorilla/websocket"
+	"github.com/olahol/melody"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v2/common"
 	tErrors "github.com/taosdata/driver-go/v2/errors"
@@ -25,10 +26,18 @@ import (
 	"github.com/taosdata/taosadapter/thread"
 	"github.com/taosdata/taosadapter/tools/ctools"
 	"github.com/taosdata/taosadapter/tools/jsonbuilder"
+	"github.com/taosdata/taosadapter/tools/pool"
 	"github.com/taosdata/taosadapter/tools/web"
 )
 
 const TaosSessionKey = "taos"
+const (
+	WSConnect    = "conn"
+	WSQuery      = "query"
+	WSFetch      = "fetch"
+	WSFetchBlock = "fetch_block"
+	WSFetchJson  = "fetch_json"
+)
 
 type Taos struct {
 	Session      *melody.Session
@@ -110,28 +119,61 @@ func (t *Taos) removeResult(item *list.Element) {
 	t.resultLocker.Unlock()
 }
 
-type ConnectResp struct {
-	WSError
+type WSConnectReq struct {
+	ReqID    uint64 `json:"req_id"`
+	User     string `json:"user"`
+	Password string `json:"password"`
+	DB       string `json:"db"`
 }
 
-func (t *Taos) connect(session *melody.Session, user string, password string) {
+type WSConnectResp struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Action  string `json:"action"`
+	ReqID   uint64 `json:"req_id"`
+}
+
+func (t *Taos) connect(session *melody.Session, req *WSConnectReq) {
 	t.Lock()
 	defer t.Unlock()
 	if t.Conn != nil {
-		wsErrorMsg(session, 0xffff, "taos duplicate connections")
+		wsErrorMsg(session, 0xffff, "taos duplicate connections", WSConnect, req.ReqID)
 		return
 	}
-	conn, err := commonpool.GetConnection(user, password)
+	conn, err := commonpool.GetConnection(req.User, req.Password)
 	if err != nil {
-		wsError(session, err)
+		wsError(session, err, WSConnect, req.ReqID)
 		return
+	}
+	if len(req.DB) != 0 {
+		b := pool.StringBuilderPoolGet()
+		defer pool.StringBuilderPoolPut(b)
+		b.WriteString("use ")
+		b.WriteString(req.DB)
+		err := async.GlobalAsync.TaosExecWithoutResult(conn.TaosConnection, b.String())
+		if err != nil {
+			conn.Put()
+			wsError(session, err, WSConnect, req.ReqID)
+			return
+		}
 	}
 	t.Conn = conn
-	wsWriteJson(session, &ConnectResp{})
+	wsWriteJson(session, &WSConnectResp{
+		Action: WSConnect,
+		ReqID:  req.ReqID,
+	})
+}
+
+type WSQueryReq struct {
+	ReqID uint64 `json:"req_id"`
+	SQL   string `json:"sql"`
 }
 
 type WSQueryResult struct {
-	WSError
+	Code          int      `json:"code"`
+	Message       string   `json:"message"`
+	Action        string   `json:"action"`
+	ReqID         uint64   `json:"req_id"`
 	ID            uint64   `json:"id"`
 	IsUpdate      bool     `json:"is_update"`
 	AffectedRows  int      `json:"affected_rows"`
@@ -142,25 +184,25 @@ type WSQueryResult struct {
 	Precision     int      `json:"precision"`
 }
 
-func (t *Taos) query(session *melody.Session, sql string) {
+func (t *Taos) query(session *melody.Session, req *WSQueryReq) {
 	if t.Conn == nil {
-		wsErrorMsg(session, 0xffff, "taos not connected")
+		wsErrorMsg(session, 0xffff, "taos not connected", WSQuery, req.ReqID)
 		return
 	}
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
-	result, _ := async.GlobalAsync.TaosQuery(t.Conn.TaosConnection, sql, handler)
+	result, _ := async.GlobalAsync.TaosQuery(t.Conn.TaosConnection, req.SQL, handler)
 	code := wrapper.TaosError(result.Res)
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosErrorStr(result.Res)
-		wsErrorMsg(session, code, errStr)
 		thread.Lock()
 		wrapper.TaosFreeResult(result.Res)
 		thread.Unlock()
+		wsErrorMsg(session, code, errStr, WSQuery, req.ReqID)
 		return
 	}
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
-	queryResult := &WSQueryResult{}
+	queryResult := &WSQueryResult{Action: WSQuery, ReqID: req.ReqID}
 	if isUpdate {
 		var affectRows int
 		affectRows = wrapper.TaosAffectedRows(result.Res)
@@ -197,21 +239,30 @@ func (t *Taos) query(session *melody.Session, sql string) {
 	}
 }
 
-type WSFetchResp struct {
-	WSError
-	Completed bool  `json:"completed"`
-	Lengths   []int `json:"lengths"`
-	Rows      int   `json:"rows"`
+type WSFetchReq struct {
+	ReqID uint64 `json:"req_id"`
+	ID    uint64 `json:"id"`
 }
 
-func (t *Taos) fetch(session *melody.Session, id uint64) {
+type WSFetchResp struct {
+	Code      int    `json:"code"`
+	Message   string `json:"message"`
+	Action    string `json:"action"`
+	ReqID     uint64 `json:"req_id"`
+	ID        uint64 `json:"id"`
+	Completed bool   `json:"completed"`
+	Lengths   []int  `json:"lengths"`
+	Rows      int    `json:"rows"`
+}
+
+func (t *Taos) fetch(session *melody.Session, req *WSFetchReq) {
 	if t.Conn == nil {
-		wsErrorMsg(session, 0xffff, "taos not connected")
+		wsErrorMsg(session, 0xffff, "taos not connected", WSFetch, req.ReqID)
 		return
 	}
-	resultItem := t.GetResult(id)
+	resultItem := t.GetResult(req.ID)
 	if resultItem == nil {
-		wsErrorMsg(session, 0xffff, "result is nil")
+		wsErrorMsg(session, 0xffff, "result is nil", WSFetch, req.ReqID)
 		return
 	}
 	resultS := resultItem.Value.(*Result)
@@ -221,6 +272,9 @@ func (t *Taos) fetch(session *melody.Session, id uint64) {
 	if result.N == 0 {
 		t.FreeResult(resultItem)
 		wsWriteJson(session, &WSFetchResp{
+			Action:    WSFetch,
+			ReqID:     req.ReqID,
+			ID:        req.ID,
 			Completed: true,
 		})
 		return
@@ -228,12 +282,7 @@ func (t *Taos) fetch(session *melody.Session, id uint64) {
 	if result.N < 0 {
 		errStr := wrapper.TaosErrorStr(result.Res)
 		t.FreeResult(resultItem)
-		wsWriteJson(session, &WSFetchResp{
-			WSError: WSError{
-				Code:    result.N & 0xffff,
-				Message: errStr,
-			},
-		})
+		wsErrorMsg(session, result.N&0xffff, errStr, WSFetch, req.ReqID)
 		return
 	}
 	resultS.Lengths = wrapper.FetchLengths(resultS.TaosResult, resultS.FieldsCount)
@@ -242,24 +291,32 @@ func (t *Taos) fetch(session *melody.Session, id uint64) {
 	resultS.Size = result.N
 
 	wsWriteJson(session, &WSFetchResp{
+		Action:  WSFetch,
+		ReqID:   req.ReqID,
+		ID:      req.ID,
 		Lengths: resultS.Lengths,
 		Rows:    result.N,
 	})
 }
 
-func (t *Taos) fetchBlock(session *melody.Session, id uint64) {
+type WSFetchBlockReq struct {
+	ReqID uint64 `json:"req_id"`
+	ID    uint64 `json:"id"`
+}
+
+func (t *Taos) fetchBlock(session *melody.Session, req *WSFetchBlockReq) {
 	if t.Conn == nil {
-		wsErrorMsg(session, 0xffff, "taos not connected")
+		wsErrorMsg(session, 0xffff, "taos not connected", WSFetchBlock, req.ReqID)
 		return
 	}
-	resultItem := t.GetResult(id)
+	resultItem := t.GetResult(req.ID)
 	if resultItem == nil {
-		wsErrorMsg(session, 0xffff, "result is nil")
+		wsErrorMsg(session, 0xffff, "result is nil", WSFetchBlock, req.ReqID)
 		return
 	}
 	resultS := resultItem.Value.(*Result)
 	if resultS.Block == nil {
-		wsErrorMsg(session, 0xffff, "block is nil")
+		wsErrorMsg(session, 0xffff, "block is nil", WSFetchBlock, req.ReqID)
 		return
 	}
 	resultS.Lock()
@@ -274,7 +331,7 @@ func (t *Taos) fetchBlock(session *melody.Session, id uint64) {
 		resultS.buffer.Reset()
 	}
 	resultS.buffer.Grow(totalDataLength + 8)
-	writeUint64(resultS.buffer, id)
+	writeUint64(resultS.buffer, req.ID)
 	for column := 0; column < resultS.FieldsCount; column++ {
 		length := resultS.Lengths[column] * resultS.Size
 		colPointer := *(*uintptr)(unsafe.Pointer(uintptr(unsafe.Pointer(*(*C.TAOS_ROW)(resultS.Block))) + uintptr(column)*wrapper.PointerSize))
@@ -283,27 +340,56 @@ func (t *Taos) fetchBlock(session *melody.Session, id uint64) {
 		}
 	}
 	b := resultS.buffer.Bytes()
-	resultS.Unlock()
 	session.WriteBinary(b)
+	resultS.Unlock()
 }
 
-func (t *Taos) fetchJson(session *melody.Session, id uint64) {
+type WSFetchJsonReq struct {
+	ReqID uint64 `json:"req_id"`
+	ID    uint64 `json:"id"`
+}
+
+type WSFetchJsonResp struct {
+	Action string          `json:"action"`
+	ReqId  uint64          `json:"req_id"`
+	Id     uint64          `json:"id"`
+	Data   [][]interface{} `json:"data"`
+}
+
+func (t *Taos) fetchJson(session *melody.Session, req *WSFetchJsonReq) {
 	if t.Conn == nil {
-		wsErrorMsg(session, 0xffff, "taos not connected")
+		wsErrorMsg(session, 0xffff, "taos not connected", WSFetchJson, req.ReqID)
 		return
 	}
-	resultItem := t.GetResult(id)
+	resultItem := t.GetResult(req.ID)
 	if resultItem == nil {
-		wsErrorMsg(session, 0xffff, "result is nil")
+		wsErrorMsg(session, 0xffff, "result is nil", WSFetchJson, req.ReqID)
 		return
 	}
 	resultS := resultItem.Value.(*Result)
 	if resultS.Block == nil {
-		wsErrorMsg(session, 0xffff, "block is nil")
+		wsErrorMsg(session, 0xffff, "block is nil", WSFetchJson, req.ReqID)
 		return
 	}
-	//dest := make([][]driver.Value, t.Result.Size)
+
+	//{
+	//	"action": "fetch_json",
+	//	"req_id": 1,
+	//	"id": 1,
+	//	"data": [[]]
+	//}
 	builder := jsonbuilder.BorrowStream(&Writer{session: session})
+	builder.WriteObjectStart()
+	builder.WriteObjectField("action")
+	builder.WriteString(WSFetchJson)
+	builder.WriteMore()
+	builder.WriteObjectField("req_id")
+	builder.WriteUint64(req.ReqID)
+	builder.WriteMore()
+	builder.WriteObjectField("id")
+	builder.WriteUint64(req.ID)
+	builder.WriteMore()
+	builder.WriteObjectField("data")
 	builder.WriteArrayStart()
 	for rowID := 0; rowID < resultS.Size; rowID++ {
 		builder.WriteArrayStart()
@@ -330,6 +416,7 @@ func (t *Taos) fetchJson(session *melody.Session, id uint64) {
 		}
 	}
 	builder.WriteArrayEnd()
+	builder.WriteObjectEnd()
 	builder.Flush()
 }
 
@@ -385,9 +472,10 @@ type WSAction struct {
 	Args   json.RawMessage `json:"args"`
 }
 
-type WSError struct {
+type WSCommonResp struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+	Action  string `json:"action"`
 }
 
 func (ctl *Restful) InitWS() {
@@ -403,78 +491,60 @@ func (ctl *Restful) InitWS() {
 		if ctl.m.IsClosed() {
 			return
 		}
+		logger := session.MustGet("logger").(*logrus.Entry)
+		logger.Debugln("get ws message data:", string(data))
 		var action WSAction
 		err := json.Unmarshal(data, &action)
 		if err != nil {
-			b, _ := json.Marshal(&WSError{
-				Code:    0xffff,
-				Message: "json unmarshal:" + err.Error(),
-			})
-			session.Write(b)
+			logger.WithError(err).Errorln("unmarshal ws request")
 			return
 		}
 		switch action.Action {
-		case "conn":
-			var wsConnect WSConnect
+		case WSConnect:
+			var wsConnect WSConnectReq
 			err = json.Unmarshal(action.Args, &wsConnect)
 			if err != nil {
-				wsErrorMsg(session, 0xffff, "json unmarshal:"+err.Error())
+				logger.WithError(err).Errorln("unmarshal connect request args")
 				return
 			}
 			t := session.MustGet(TaosSessionKey)
-			t.(*Taos).connect(session, wsConnect.User, wsConnect.Password)
-		case "query":
-			t := session.MustGet(TaosSessionKey)
-			if t == nil {
-				wsErrorMsg(session, 0xffff, "taos is nil")
-				return
-			}
-			var wsQuery WSQuery
+			t.(*Taos).connect(session, &wsConnect)
+		case WSQuery:
+			var wsQuery WSQueryReq
 			err = json.Unmarshal(action.Args, &wsQuery)
 			if err != nil {
-				wsErrorMsg(session, 0xffff, "json unmarshal:"+err.Error())
+				logger.WithError(err).Errorln("unmarshal query args")
 				return
 			}
-			t.(*Taos).query(session, wsQuery.SQL)
-		case "fetch":
 			t := session.MustGet(TaosSessionKey)
-			if t == nil {
-				wsErrorMsg(session, 0xffff, "taos is nil")
-				return
-			}
-			var wsFetch WSFetch
+			t.(*Taos).query(session, &wsQuery)
+		case WSFetch:
+			var wsFetch WSFetchReq
 			err = json.Unmarshal(action.Args, &wsFetch)
 			if err != nil {
-				wsErrorMsg(session, 0xffff, "json unmarshal:"+err.Error())
+				logger.WithError(err).Errorln("unmarshal fetch args")
 				return
 			}
-			t.(*Taos).fetch(session, wsFetch.ID)
-		case "fetch_block":
 			t := session.MustGet(TaosSessionKey)
-			if t == nil {
-				wsErrorMsg(session, 0xffff, "taos is nil")
-				return
-			}
-			var fetchBlock WSFetchBlock
+			t.(*Taos).fetch(session, &wsFetch)
+		case WSFetchBlock:
+			var fetchBlock WSFetchBlockReq
 			err = json.Unmarshal(action.Args, &fetchBlock)
 			if err != nil {
-				wsErrorMsg(session, 0xffff, "json unmarshal:"+err.Error())
+				logger.WithError(err).Errorln("unmarshal fetch fetch_block")
 				return
 			}
-			t.(*Taos).fetchBlock(session, fetchBlock.ID)
-		case "fetch_json":
 			t := session.MustGet(TaosSessionKey)
-			if t == nil {
-				wsErrorMsg(session, 0xffff, "taos is nil")
-				return
-			}
-			var fetchJson WSFetchJson
+			t.(*Taos).fetchBlock(session, &fetchBlock)
+		case WSFetchJson:
+			var fetchJson WSFetchJsonReq
 			err = json.Unmarshal(action.Args, &fetchJson)
 			if err != nil {
-				wsErrorMsg(session, 0xffff, "json unmarshal:"+err.Error())
+				logger.WithError(err).Errorln("unmarshal fetch fetch_json")
 				return
 			}
-			t.(*Taos).fetchJson(session, fetchJson.ID)
+			t := session.MustGet(TaosSessionKey)
+			t.(*Taos).fetchJson(session, &fetchJson)
 		}
 	})
 
@@ -490,7 +560,12 @@ func (ctl *Restful) InitWS() {
 
 	ctl.m.HandleError(func(session *melody.Session, err error) {
 		logger := session.MustGet("logger").(*logrus.Entry)
-		logger.WithError(err).Errorln("ws error")
+		_, is := err.(*websocket.CloseError)
+		if is {
+			logger.WithError(err).Debugln("ws close in error")
+		} else {
+			logger.WithError(err).Errorln("ws error")
+		}
 		t, exist := session.Get(TaosSessionKey)
 		if exist && t != nil {
 			t.(*Taos).Close()
@@ -513,40 +588,30 @@ func (ctl *Restful) ws(c *gin.Context) {
 	_ = ctl.m.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": loggerWithID})
 }
 
-type WSConnect struct {
-	User     string `json:"user"`
-	Password string `json:"password"`
-}
-type WSQuery struct {
-	SQL string `json:"sql"`
-}
-type WSFetch struct {
-	ID uint64 `json:"id"`
-}
-type WSFetchBlock struct {
-	ID uint64 `json:"id"`
-}
-type WSFetchJson struct {
-	ID uint64 `json:"id"`
+type WSErrorResp struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Action  string `json:"action"`
+	ReqID   uint64 `json:"req_id"`
 }
 
-func wsErrorMsg(session *melody.Session, code int, message string) {
-	b, _ := json.Marshal(&WSError{
+func wsErrorMsg(session *melody.Session, code int, message string, action string, reqID uint64) {
+	b, _ := json.Marshal(&WSErrorResp{
 		Code:    code,
 		Message: message,
+		Action:  action,
+		ReqID:   reqID,
 	})
 	session.Write(b)
 }
-
-func wsError(session *melody.Session, err error) {
+func wsError(session *melody.Session, err error, action string, reqID uint64) {
 	e, is := err.(*tErrors.TaosError)
 	if is {
-		wsErrorMsg(session, int(e.Code), e.ErrStr)
+		wsErrorMsg(session, int(e.Code), e.ErrStr, action, reqID)
 	} else {
-		wsErrorMsg(session, 0xffff, err.Error())
+		wsErrorMsg(session, 0xffff, err.Error(), action, reqID)
 	}
 }
-
 func wsWriteJson(session *melody.Session, data interface{}) {
 	b, _ := json.Marshal(data)
 	session.Write(b)

@@ -10,7 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/gin-gonic/gin"
-	"github.com/huskar-t/melody"
+	"github.com/olahol/melody"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v2/common"
 	tErrors "github.com/taosdata/driver-go/v2/errors"

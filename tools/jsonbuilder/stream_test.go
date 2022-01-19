@@ -2,6 +2,7 @@ package jsonbuilder
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -145,4 +146,22 @@ func TestStream_Common(t *testing.T) {
 	stream.WriteStringByte('\r')
 	stream.WriteStringByte('\t')
 	stream.WriteString("\r\n\t/")
+}
+
+func TestStr(t *testing.T) {
+	b := &strings.Builder{}
+	stream := BorrowStream(b)
+	stream.WriteString("a\nb")
+	stream.Flush()
+	assert.Equal(t, "\"a\\nb\"", b.String())
+}
+
+func TestStrByte(t *testing.T) {
+	b := &strings.Builder{}
+	stream := BorrowStream(b)
+	stream.WriteStringByte('a')
+	stream.WriteStringByte('\n')
+	stream.WriteStringByte('b')
+	stream.Flush()
+	assert.Equal(t, "a\\nb", b.String())
 }
