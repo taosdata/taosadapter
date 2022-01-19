@@ -34,11 +34,12 @@ taosAdapter 从 TDengine v2.3.0.0 版本开始成为 TDengine 服务端软件 �
 ### 升级 taosAdapter
 
 taosAdapter 和 TDengine server 需要使用相同版本。请通过升级 TDengine server 来升级 taosAdapter。
+与taosd分离部署的taosAdapter必须通过升级其所在服务器的TDengine server才能得到升级。
 
 
 ## taosAdapter 参数列表
 
-taosAdapter 支持通过命令行参数、环境变量和配置文件来进行配置。
+taosAdapter 支持通过命令行参数、环境变量和配置文件来进行配置。默认配置文件是 /etc/taos/taosadapter.toml。
 
 命令行参数优先于环境变量优先于配置文件，命令行用法是arg=val，如 taosadapter -p=30000 --debug=true，详细列表如下：
 
@@ -300,7 +301,7 @@ remote_read:
 
 ## 内存使用优化方法
 
-taosAdapter 将监测运行过程中内存使用率并通过两个阈值进行调节。
+taosAdapter 将监测自身运行过程中内存使用率并通过两个阈值进行调节。有效值范围为 -1 到 100 的整数，单位为系统物理内存的百分比。
 
 * pauseQueryMemoryThreshold
 * pauseAllMemoryThreshold

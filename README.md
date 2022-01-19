@@ -33,13 +33,18 @@ The command `rmtaos` will remove the TDengine server software including taosAdap
 
 ### Upgrade taosAdapter
 
-taosAdapter only properly run with the same version of TDengine server. You need to upgrade TDengine server to upgrade taosAdapter.
+taosAdapter only properly run with the same version of TDengine server.
+You need to upgrade TDengine server to upgrade taosAdapter.
+A separate deployed taosAdapter need to upgrade the corresponding version of TDengine server package too.
 
 
 ## taosAdapter's parameters
 
 taosAdapter supports command line parameters, environment variables, and configuration files.
+The default configuration file is `/etc/taos/taosadapter.toml`.
+
 `Command-line parameters take precedence over environment variables take precedence over configuration files`
+
 The command line usage is arg=val such as `taosadapter -p=30000 --debug=true`
 
 ```shell
@@ -301,7 +306,8 @@ remote_read:
 
 ## Memory usage optimization
 
-taosAdapter will monitor memory usage during its running. You can adjust its thresholds via two parameters.
+taosAdapter will monitor itself memory usage during its running. You can adjust its thresholds via two parameters.
+The valid value is from -1 to 100. The unit is the percentage of physical memory on the system.
 
 * pauseQueryMemoryThreshold
 * pauseAllMemoryThreshold
