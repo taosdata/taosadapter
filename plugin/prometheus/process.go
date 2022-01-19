@@ -17,6 +17,7 @@ import (
 	"github.com/taosdata/driver-go/v2/common"
 	tErrors "github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/taosadapter/config"
 	"github.com/taosdata/taosadapter/db/async"
 	"github.com/taosdata/taosadapter/db/tool"
 	"github.com/taosdata/taosadapter/thread"
@@ -211,7 +212,11 @@ func generateReadSql(query *prompb.Query) (string, error) {
 		sql.WriteString(v)
 		sql.WriteByte('\'')
 	}
-	sql.WriteString(" order by ts desc")
+	if config.Conf.RestfulRowLimit > -1 {
+		sql.WriteString(" limit ")
+		fmt.Fprintf(sql, "%d", config.Conf.RestfulRowLimit)
+	}
+
 	return sql.String(), nil
 }
 

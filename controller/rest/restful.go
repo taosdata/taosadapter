@@ -14,6 +14,7 @@ import (
 	"github.com/taosdata/driver-go/v2/common"
 	tErrors "github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/taosadapter/config"
 	"github.com/taosdata/taosadapter/controller"
 	"github.com/taosdata/taosadapter/db/async"
 	"github.com/taosdata/taosadapter/db/commonpool"
@@ -325,6 +326,13 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	precision := wrapper.TaosResultPrecision(res)
 	fetched := false
 	for {
+		if config.Conf.RestfulRowLimit > -1 && total == config.Conf.RestfulRowLimit {
+			err = builder.Flush()
+			if err != nil {
+				return
+			}
+			break
+		}
 		if isDebug {
 			s = time.Now()
 		}
@@ -338,7 +346,6 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 			if result.N < 0 {
 				break
 			}
-			total += result.N
 			res = result.Res
 			if fetched {
 				builder.WriteMore()
@@ -367,15 +374,23 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 					}
 				}
 				builder.WriteArrayEnd()
-				if i != result.N-1 {
-					builder.WriteMore()
-				}
 				err = builder.Flush()
 				if err != nil {
 					return
 				}
 				if w.Size() > 16352 {
 					w.Flush()
+				}
+				total += 1
+				if config.Conf.RestfulRowLimit > -1 && total == config.Conf.RestfulRowLimit {
+					break
+				}
+				if i != result.N-1 {
+					builder.WriteMore()
+				}
+				err = builder.Flush()
+				if err != nil {
+					return
 				}
 			}
 		}
