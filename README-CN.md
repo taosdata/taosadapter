@@ -12,7 +12,7 @@ taosAdapter提供以下功能：
     - 无缝连接到 Telegraf
     - 无缝连接到 collectd
     - 无缝连接到 StatsD
-    - 支持 Prometheus remote_read 和 remote_write （开发进行中）
+    - 支持 Prometheus remote_read 和 remote_write
 
 ## taosAdapter 架构图
 ![taosAdapter-architecture](taosAdapter-architecture-for-public.png)
@@ -156,7 +156,7 @@ Usage of taosAdapter:
   node_export 是一个机器指标的导出器。请访问 [https://github.com/prometheus/node_exporter](https://github.com/prometheus/node_exporter) 了解更多信息。
 * 支持 Prometheus remote_read 和 remote_write
   remote_read 和 remote_write 是 Prometheus 数据读写分离的集群方案。请访问[https://prometheus.io/blog/2019/10/10/remote-read-meets-streaming/#remote-apis](https://prometheus.io/blog/2019/10/10/remote-read-meets-streaming/#remote-apis) 了解更多信息。
- 
+
 
 ## 接口
 
@@ -269,14 +269,14 @@ Prometheus 使用的由*NIX内核暴露的硬件和操作系统指标的输出�
 
 ### prometheus
 
-remote_read 和 remote_write 是 Prometheus 数据读写分离的集群方案。  
-只需要将 remote_read 和 remote_write url 指向 taosAdapter 对应的 url 同时设置 Basic 验证即可使用。  
-* remote_read url :  http://host_to_taosAdapter:port(default 6041)/prometheus/v1/remote_read/:db  
+remote_read 和 remote_write 是 Prometheus 数据读写分离的集群方案。
+只需要将 remote_read 和 remote_write url 指向 taosAdapter 对应的 url 同时设置 Basic 验证即可使用。
+* remote_read url :  http://host_to_taosAdapter:port(default 6041)/prometheus/v1/remote_read/:db
 * remote_write url :  http://host_to_taosAdapter:port(default 6041)/prometheus/v1/remote_write/:db
 
 Basic验证：
-* username： TDengine 连接用户名  
-* password： TDengine 连接密码  
+* username： TDengine 连接用户名
+* password： TDengine 连接密码
 
 示例 prometheus.yml  如下：
 
@@ -286,7 +286,7 @@ remote_write:
     basic_auth:
       username: root
       password: taosdata
- 
+
 remote_read:
   - url: "http://localhost:6041/prometheus/v1/remote_read/prometheus_data"
     basic_auth:
@@ -322,7 +322,7 @@ http 返回内容：
 
 状态检查接口 `http://<fqdn>:6041/-/ping`
 
-* 正常返回 `code 200`  
+* 正常返回 `code 200`
 * 无参数  如果内存超过 pauseAllMemoryThreshold 将返回 `code 503`
 * 请求参数 `action=query` 如果内存超过 pauseQueryMemoryThreshold 或 pauseAllMemoryThreshold 将返回 `code 503`
 
@@ -335,7 +335,7 @@ http 返回内容：
   monitor.pauseQueryMemoryThreshold    不再进行查询的内存阈值                        环境变量 "TAOS_MONITOR_PAUSE_QUERY_MEMORY_THRESHOLD" (默认值 70)
 ```
 
-您可以根据具体项目应用场景和运营策略进行相应调整，并建议使用运营监控软件及时进行系统内存状态监控。
+您可以根据具体项目应用场景和运营策略进行相应调整，并建议使用运营监控软件及时进行系统内存状态监控。负载均衡器也可以通过这个接口检查 taosAdapter 运行状态。
 
 
 ## 故障解决
@@ -353,6 +353,7 @@ http 返回内容：
 | ----- | ------------------ | --------------- | ----------- |
 | 1     | httpEnableRecordSql | --logLevel=debug | |
 | 2     | httpMaxThreads | n/a | taosAdapter 自动管理线程池，无需此参数 |
-| 3     | telegrafUseFieldNum | 请参考 taosAdapter telegraf 配置方法 | 
+| 3     | telegrafUseFieldNum | 请参考 taosAdapter telegraf 配置方法 |
 | 4     | restfulRowLimit | restfulRowLimit | 内嵌 httpd 默认输出 10240 行数据，最大允许值为 102400。taosAdapter 也提供 restfulRowLimit 但是默认不做限制。您可以根据实际场景需求进行配置 |
 | 5     | httpDebugFlag | 不适用 | httpdDebugFlag 对 taosAdapter 不起作用 |
+| 6     | httpDBNameMandatory | 不适用 | taosAdapter 要求 URL 中必须指定数据库名 |

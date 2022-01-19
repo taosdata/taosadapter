@@ -137,16 +137,16 @@ For the default configuration file, see [example/config/taosadapter.toml](https:
 
 ## Functions
 
-* Compatible with RESTful interface.  
+* Compatible with RESTful interface.
   [https://www.taosdata.com/cn/documentation/connector#restful](https://www.taosdata.com/cn/documentation/connector#restful)
-* Compatible with InfluxDB v1 write interface.  
+* Compatible with InfluxDB v1 write interface.
   [https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/](https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/)
-* Compatible with opentsdb JSON and telnet format writing.  
+* Compatible with opentsdb JSON and telnet format writing.
   * <http://opentsdb.net/docs/build/html/api_http/put.html>
   * <http://opentsdb.net/docs/build/html/api_telnet/put.html>
 * Seamless connection with collectd.
     collecd is a system statistics collection daemon. Pleae visit [https://collectd.org/](https://collectd.org/)for detail.
-* Seamless connection with StatsD. 
+* Seamless connection with StatsD.
     StatsD is a daemon for easy but powerful stats aggregation. Please visit [https://github.com/statsd/statsd](https://github.com/statsd/statsd) for detail.
 * Seamless connection with icinga2.
     icinga2 is an agent to collect check result metrics and performance data. Please visit [https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer](https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer) for detail.
@@ -287,7 +287,7 @@ remote_write:
     basic_auth:
       username: root
       password: taosdata
- 
+
 remote_read:
   - url: "http://localhost:6041/prometheus/v1/remote_read/prometheus_data"
     basic_auth:
@@ -312,7 +312,7 @@ http return
 * code 503
 * body "query memory exceeds threshold"
 
-All write and query requests will be rejected when the pauseAllMemoryThreshold is exceeded. 
+All write and query requests will be rejected when the pauseAllMemoryThreshold is exceeded.
 
 http return
 
@@ -336,7 +336,7 @@ for the corresponding configuration parameter
     monitor.pauseQueryMemoryThreshold float      Memory percentage threshold for pause query. Env "TAOS_MONITOR_PAUSE_QUERY_MEMORY_THRESHOLD" (default 70)
 ```
 
-You can adjust them according to the specific project scenarios and operation strategies, and it is recommended to use operation monitoring software to monitor system memory status in a timely manner too.
+You can adjust them according to the specific project scenarios and operation strategies, and it is recommended to use operation monitoring software to monitor system memory status in a timely manner too. You can configure the load balancer to check the interface for checking taosAdapter's running status too.
 
 
 ## Troubleshooting
@@ -353,6 +353,7 @@ In the early version (2.2.x.x or earlier version), TDengine server provided an e
 | ----- | ------------------ | --------------- | ----------- |
 | 1     | httpEnableRecordSql | --logLevel=debug | |
 | 2     | httpMaxThreads | n/a | taosAdapter no need this paramter |
-| 3     | telegrafUseFieldNum | please refer to taosAdapter telegraf configuration | 
+| 3     | telegrafUseFieldNum | please refer to taosAdapter telegraf configuration |
 | 4     | restfulRowLimit | restfulRowLimit | default value is 10240 in the embedded httpd. taosAdapter provides restfulRowLimit too but the default value is unlimited. User can set it according to the specific scenario |
 | 5     | httpDebugFlag | not used | taosAdapter is immune to `httpdDebugFlag` |
+| 6     | httpDBNameMandatory | not used | taosAdapter requests the database name be specified in URL |
