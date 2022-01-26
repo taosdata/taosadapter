@@ -80,6 +80,32 @@ func Test_generateWriteSql(t *testing.T) {
 			want:    `insert into t_98e95338dc63e470540a87386c1fea3f using metrics tags('{"k\'1":"v\'1","k\'2":"v\'2"}') values('2021-12-20T05:58:22Z',123.456) ('2021-12-20T05:58:23Z',456.789) `,
 			wantErr: false,
 		},
+		{
+			name: "escapeBackslash",
+			args: args{
+				timeseries: []prompb.TimeSeries{
+					{
+						Labels: []prompb.Label{
+							{
+								Name:  `key`,
+								Value: `k\'v`,
+							},
+						},
+						Samples: []prompb.Sample{
+							{
+								Value:     123.456,
+								Timestamp: 1639979902000,
+							}, {
+								Value:     456.789,
+								Timestamp: 1639979903000,
+							},
+						},
+					},
+				},
+			},
+			want:    `insert into t_376843ecdb3abb76454247aaf9bbe7b8 using metrics tags('{"key":"k\\\\\'v"}') values('2021-12-20T05:58:22Z',123.456) ('2021-12-20T05:58:23Z',456.789) `,
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -135,6 +161,11 @@ func Test_generateReadSql(t *testing.T) {
 							Type:  prompb.LabelMatcher_NRE,
 							Name:  "group",
 							Value: "group1.*",
+						},
+						{
+							Type:  prompb.LabelMatcher_EQ,
+							Name:  "key",
+							Value: `k\'v`,
 						},
 					},
 				},
