@@ -597,7 +597,7 @@ type WSErrorResp struct {
 
 func wsErrorMsg(session *melody.Session, code int, message string, action string, reqID uint64) {
 	b, _ := json.Marshal(&WSErrorResp{
-		Code:    code,
+		Code:    code & 0xffff,
 		Message: message,
 		Action:  action,
 		ReqID:   reqID,
@@ -607,7 +607,7 @@ func wsErrorMsg(session *melody.Session, code int, message string, action string
 func wsError(session *melody.Session, err error, action string, reqID uint64) {
 	e, is := err.(*tErrors.TaosError)
 	if is {
-		wsErrorMsg(session, int(e.Code), e.ErrStr, action, reqID)
+		wsErrorMsg(session, int(e.Code)&0xffff, e.ErrStr, action, reqID)
 	} else {
 		wsErrorMsg(session, 0xffff, err.Error(), action, reqID)
 	}
