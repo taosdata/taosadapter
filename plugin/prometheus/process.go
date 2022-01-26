@@ -44,11 +44,17 @@ func processWrite(taosConn unsafe.Pointer, req *prompb.WriteRequest, db string) 
 				}
 				// retry
 				err = async.GlobalAsync.TaosExecWithoutResult(taosConn, sql)
-				return err
+				if err != nil {
+					logger.WithError(err).Error(sql)
+					return err
+				}
+				return nil
 			} else {
+				logger.WithError(err).Error(sql)
 				return err
 			}
 		} else {
+			logger.WithError(err).Error(sql)
 			return err
 		}
 	}
@@ -129,6 +135,7 @@ func processRead(taosConn unsafe.Pointer, req *prompb.ReadRequest, db string) (r
 			}
 		})
 		if err != nil {
+			logger.WithError(err).Error(sql)
 			return nil, err
 		}
 		//ts value labels time.Time float64 []byte
@@ -225,12 +232,14 @@ func ms2Time(ts int64) string {
 }
 
 func escapeString(s string) string {
-	return strings.ReplaceAll(s, `'`, `\'`)
+	return strings.ReplaceAll(strings.ReplaceAll(s, `\`, `\\`), `'`, `\'`)
 }
 
 var escapeSingleQuoteOld = []byte{'\''}
 var escapeSingleQuoteNew = []byte{'\\', '\''}
+var escapeBackslashOld = []byte{'\\'}
+var escapeBackslashNew = []byte{'\\', '\\'}
 
 func escapeBytes(s []byte) []byte {
-	return bytes.ReplaceAll(s, escapeSingleQuoteOld, escapeSingleQuoteNew)
+	return bytes.ReplaceAll(bytes.ReplaceAll(s, escapeBackslashOld, escapeBackslashNew), escapeSingleQuoteOld, escapeSingleQuoteNew)
 }
