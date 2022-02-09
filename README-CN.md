@@ -32,7 +32,7 @@ taosAdapter 从 TDengine v2.3.0.0 版本开始成为 TDengine 服务端软件 �
 
 ### 移除 taosAdapter
 
-使用命令 rmtaos 可以移除包括 taosAddapter 在内的 TDengine server 软件。
+使用命令 rmtaos 可以移除包括 taosAdapter 在内的 TDengine server 软件。
 
 ### 升级 taosAdapter
 
