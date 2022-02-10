@@ -45,6 +45,7 @@ type Taos struct {
 	resultLocker sync.RWMutex
 	Results      *list.List
 	resultIndex  uint64
+	closed       bool
 	sync.Mutex
 }
 
@@ -461,9 +462,14 @@ func (t *Taos) freeAllResult() {
 func (t *Taos) Close() {
 	t.Lock()
 	defer t.Unlock()
+	if t.closed {
+		return
+	}
+	t.closed = true
 	t.freeAllResult()
 	if t.Conn != nil {
 		t.Conn.Put()
+		t.Conn = nil
 	}
 }
 
