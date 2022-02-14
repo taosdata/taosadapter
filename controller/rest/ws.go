@@ -37,6 +37,7 @@ const (
 	WSFetch      = "fetch"
 	WSFetchBlock = "fetch_block"
 	WSFetchJson  = "fetch_json"
+	WSFreeResult = "free_result"
 )
 
 type Taos struct {
@@ -421,6 +422,26 @@ func (t *Taos) fetchJson(session *melody.Session, req *WSFetchJsonReq) {
 	builder.Flush()
 }
 
+type WSFreeResultReq struct {
+	ReqID uint64 `json:"req_id"`
+	ID    uint64 `json:"id"`
+}
+
+func (t *Taos) freeResult(session *melody.Session, req *WSFreeResultReq) {
+	if t.Conn == nil {
+		return
+	}
+	resultItem := t.GetResult(req.ID)
+	if resultItem == nil {
+		return
+	}
+	resultS, ok := resultItem.Value.(*Result)
+	if ok && resultS != nil {
+		t.removeResult(resultItem)
+		resultS.FreeResult()
+	}
+}
+
 type Writer struct {
 	session *melody.Session
 }
@@ -551,6 +572,15 @@ func (ctl *Restful) InitWS() {
 			}
 			t := session.MustGet(TaosSessionKey)
 			t.(*Taos).fetchJson(session, &fetchJson)
+		case WSFreeResult:
+			var fetchJson WSFreeResultReq
+			err = json.Unmarshal(action.Args, &fetchJson)
+			if err != nil {
+				logger.WithError(err).Errorln("unmarshal fetch fetch_json")
+				return
+			}
+			t := session.MustGet(TaosSessionKey)
+			t.(*Taos).freeResult(session, &fetchJson)
 		}
 	})
 
