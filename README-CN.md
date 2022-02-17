@@ -6,7 +6,7 @@ taosAdapter 是一个 TDengine 的配套工具，是 TDengine 集群和应用程
 
 taosAdapter提供以下功能：
 
-```
+```text
     - RESTful 接口
     - 兼容 InfluxDB v1写接口
     - 兼容 OpenTSDB JSON 和 telnet 格式写入
@@ -69,9 +69,14 @@ Usage of taosAdapter:
       --log.rotationTime duration                    log rotation time. Env "TAOS_ADAPTER_LOG_ROTATION_TIME" (default 24h0m0s)
       --logLevel string                              log level (panic fatal error warn warning info debug trace). Env "TAOS_ADAPTER_LOG_LEVEL" (default "info")
       --monitor.collectDuration duration             Set monitor duration. Env "TAOS_MONITOR_COLLECT_DURATION" (default 3s)
+      --monitor.identity string                      The identity of the current instance, or 'hostname:port' if it is empty. Env "TAOS_MONITOR_IDENTITY"
       --monitor.incgroup                             Whether running in cgroup. Env "TAOS_MONITOR_INCGROUP"
+      --monitor.password string                      TDengine password. Env "TAOS_MONITOR_PASSWORD" (default "taosdata")      
       --monitor.pauseAllMemoryThreshold float        Memory percentage threshold for pause all. Env "TAOS_MONITOR_PAUSE_ALL_MEMORY_THRESHOLD" (default 80)
       --monitor.pauseQueryMemoryThreshold float      Memory percentage threshold for pause query. Env "TAOS_MONITOR_PAUSE_QUERY_MEMORY_THRESHOLD" (default 70)
+      --monitor.user string                          TDengine user. Env "TAOS_MONITOR_USER" (default "root")
+      --monitor.writeInterval duration               Set write to TDengine interval. Env "TAOS_MONITOR_WRITE_INTERVAL" (default 30s)
+      --monitor.writeToTD                            Whether write metrics to TDengine. Env "TAOS_MONITOR_WRITE_TO_TD" (default true)
       --node_exporter.caCertFile string              node_exporter ca cert file path. Env "TAOS_ADAPTER_NODE_EXPORTER_CA_CERT_FILE"
       --node_exporter.certFile string                node_exporter cert file path. Env "TAOS_ADAPTER_NODE_EXPORTER_CERT_FILE"
       --node_exporter.db string                      node_exporter db name. Env "TAOS_ADAPTER_NODE_EXPORTER_DB" (default "node_exporter")
@@ -125,7 +130,7 @@ Usage of taosAdapter:
 备注：
 使用浏览器进行接口调用请根据实际情况设置如下跨源资源共享（CORS）参数：
 
-```
+```text
     AllowAllOrigins
     AllowOrigins
     AllowHeaders
@@ -168,7 +173,7 @@ Usage of taosAdapter:
 
 您可以使用任何支持 http 协议的客户端通过访问 RESTful 接口地址 `http://<fqdn>:6041/<APIEndPoint>` 来写入数据到 TDengine 或从 TDengine 中查询数据。细节请参考[官方文档](https://www.taosdata.com/cn/documentation/connector#restful)。支持如下 EndPoint ：
 
-```
+```text
 /rest/sql
 /rest/sqlt
 /rest/sqlutc
@@ -178,13 +183,13 @@ Usage of taosAdapter:
 
 您可以使用任何支持 http 协议的客户端访问 Restful 接口地址 `http://<fqdn>:6041/<APIEndPoint>` 来写入 InfluxDB 兼容格式的数据到 TDengine。EndPoint 如下：
 
-```
+```text
 /influxdb/v1/write
 ```
 
 支持 InfluxDB 查询参数如下：
 
-```
+```text
 * `db` 指定 TDengine 使用的数据库名
 * `precision` TDengine 使用的时间精度
 * `u` TDengine 用户名
@@ -197,7 +202,7 @@ Usage of taosAdapter:
 
 您可以使用任何支持 http 协议的客户端访问 Restful 接口地址 `http://<fqdn>:6041/<APIEndPoint>` 来写入 OpenTSDB 兼容格式的数据到 TDengine。EndPoint 如下：
 
-```
+```text
 /opentsdb/v1/put/json/:db
 /opentsdb/v1/put/telnet/:db
 ```
@@ -208,7 +213,7 @@ Usage of taosAdapter:
 
 修改 collectd 配置文件 `/etc/collectd/collectd.conf`，taosAdapter 默认使用端口 6045 来接收 collectd 直接采集方式的数据。
 
-```
+```text
 LoadPlugin network
 <Plugin network>
          Server "127.0.0.1" "6045"
@@ -219,7 +224,7 @@ LoadPlugin network
 
 修改 collectd 配置文件 `/etc/collectd/collectd.conf`，taosAdapter 默认使用端口 6047 来接收 collectd tsdb 写入方式的数据。
 
-```
+```text
 LoadPlugin write_tsdb
 <Plugin write_tsdb>
         <Node>
@@ -241,7 +246,7 @@ LoadPlugin write_tsdb
 
 配置文件示例
 
-```
+```text
 {
 port: 8125
 , backends: ["./backends/repeater"]
@@ -258,7 +263,7 @@ port: 8125
 * 使能 taosAdapter `opentsdb_telnet.enable` 来支持写入
 * 修改配置文件 `/etc/icinga2/features-enabled/opentsdb.conf`， taosAdapter 默认使用 6048 端口接收 icinga2 的数据。
 
-```
+```text
 object OpenTsdbWriter "opentsdb" {
   host = "host to taosAdapter"
   port = 6048
@@ -342,7 +347,7 @@ http 返回内容：
 
 对应配置参数
 
-```
+```text
   monitor.collectDuration              监测间隔                                    环境变量 "TAOS_MONITOR_COLLECT_DURATION" (默认值 3s)
   monitor.incgroup                     是否是cgroup中运行(容器中运行设置为 true)      环境变量 "TAOS_MONITOR_INCGROUP"
   monitor.pauseAllMemoryThreshold      不再进行插入和查询的内存阈值                   环境变量 "TAOS_MONITOR_PAUSE_ALL_MEMORY_THRESHOLD" (默认值 80)
@@ -350,6 +355,34 @@ http 返回内容：
 ```
 
 您可以根据具体项目应用场景和运营策略进行相应调整，并建议使用运营监控软件及时进行系统内存状态监控。负载均衡器也可以通过这个接口检查 taosAdapter 运行状态。
+
+## taosAdapter 监控指标
+
+taosAdapter 采集 http 相关指标、cpu 百分比和内存百分比
+
+### http 接口
+
+提供符合 [OpenMetrics](https://github.com/OpenObservability/OpenMetrics/blob/main/specification/OpenMetrics.md) 接口：
+
+```text
+http://<fqdn>:6041/metrics
+```
+
+### 写入 TDengine
+
+taosAdapter 支持将 http 监控、cpu百分比和内存百分比写入 TDengine。
+
+有关配置参数
+
+| **配置项**                 | **描述**                                     | **默认值**  |
+|-------------------------|--------------------------------------------|----------|
+| monitor.collectDuration | cpu 和内存采集间隔                                | 3s       |
+| monitor.identity        | 当前taosadapter 的标识符如果不设置将使用 'hostname:port' |          |
+| monitor.incgroup        | 是否是 cgroup 中运行(容器中运行设置为 true)              | false    |
+| monitor.writeToTD       | 是否写入到 TDengine                             | true     |
+| monitor.user            | TDengine 连接用户名                             | root     |
+| monitor.password        | TDengine 连接密码                              | taosdata |
+| monitor.writeInterval   | 写入TDengine 间隔                              | 30s      |
 
 ## 结果返回条数限制
 
@@ -374,11 +407,11 @@ taosAdapter 通过参数 `restfulRowLimit` 来控制结果的返回条数，-1 �
 
 在 TDengine server 2.2.x.x 或更早期版本中，taosd 进程包含一个内嵌的 http 服务。如前面所述，taosAdapter 是一个使用 systemd 管理的独立软件，拥有自己的进程。并且两者有一些配置参数和行为是不同的，请见下表：
 
-| **#** | **embedded httpd** | **taosAdapter** | **comment** |
-| ----- | ------------------ | --------------- | ----------- |
-| 1     | httpEnableRecordSql | --logLevel=debug | |
-| 2     | httpMaxThreads | n/a | taosAdapter 自动管理线程池，无需此参数 |
+| **#** | **embedded httpd**  | **taosAdapter**               | **comment**                                                                                    |
+|-------|---------------------|-------------------------------|------------------------------------------------------------------------------------------------|
+| 1     | httpEnableRecordSql | --logLevel=debug              |                                                                                                |
+| 2     | httpMaxThreads      | n/a                           | taosAdapter 自动管理线程池，无需此参数                                                                      |
 | 3     | telegrafUseFieldNum | 请参考 taosAdapter telegraf 配置方法 |
-| 4     | restfulRowLimit | restfulRowLimit | 内嵌 httpd 默认输出 10240 行数据，最大允许值为 102400。taosAdapter 也提供 restfulRowLimit 但是默认不做限制。您可以根据实际场景需求进行配置 |
-| 5     | httpDebugFlag | 不适用 | httpdDebugFlag 对 taosAdapter 不起作用 |
-| 6     | httpDBNameMandatory | 不适用 | taosAdapter 要求 URL 中必须指定数据库名 |
+| 4     | restfulRowLimit     | restfulRowLimit               | 内嵌 httpd 默认输出 10240 行数据，最大允许值为 102400。taosAdapter 也提供 restfulRowLimit 但是默认不做限制。您可以根据实际场景需求进行配置 |
+| 5     | httpDebugFlag       | 不适用                           | httpdDebugFlag 对 taosAdapter 不起作用                                                              |
+| 6     | httpDBNameMandatory | 不适用                           | taosAdapter 要求 URL 中必须指定数据库名                                                                   |

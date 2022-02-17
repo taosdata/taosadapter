@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v2/af"
+	tErrors "github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/monitor"
@@ -117,6 +118,10 @@ func (p *Plugin) insertJson(c *gin.Context) {
 	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db)
 	logger.Debug("insert json payload cost:", time.Now().Sub(start))
 	if err != nil {
+		taosError, is := err.(*tErrors.TaosError)
+		if is {
+			web.SetTaosErrorCode(c, int(taosError.Code))
+		}
 		logger.WithError(err).Error("insert json payload error", string(data))
 		p.errorResponse(c, http.StatusInternalServerError, err)
 		return
@@ -193,6 +198,10 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 	for _, line := range lines {
 		err := inserter.InsertOpentsdbTelnet(taosConn.TaosConnection, line, db)
 		if err != nil {
+			taosError, is := err.(*tErrors.TaosError)
+			if is {
+				web.SetTaosErrorCode(c, int(taosError.Code))
+			}
 			errorList = append(errorList, err.Error())
 		}
 	}

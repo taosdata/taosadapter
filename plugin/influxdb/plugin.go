@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v2/af"
+	tErrors "github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/monitor"
@@ -139,6 +140,10 @@ func (p *Influxdb) write(c *gin.Context) {
 	result, err := inserter.InsertInfluxdb(conn, data, db, precision)
 	logger.Debugln("finish insert influxdb cost:", time.Now().Sub(start))
 	if err != nil {
+		taosError, is := err.(*tErrors.TaosError)
+		if is {
+			web.SetTaosErrorCode(c, int(taosError.Code))
+		}
 		logger.WithField("result", result).WithError(err).Errorln("insert line error")
 		p.commonResponse(c, http.StatusInternalServerError, &message{Code: "internal error", Message: err.Error()})
 		return
