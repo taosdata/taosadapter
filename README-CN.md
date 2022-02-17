@@ -358,7 +358,7 @@ http 返回内容：
 
 ## taosAdapter 监控指标
 
-taosAdapter 采集 http 相关指标、cpu 百分比和内存百分比
+taosAdapter 采集 http 相关指标、cpu 百分比和内存百分比。
 
 ### http 接口
 
