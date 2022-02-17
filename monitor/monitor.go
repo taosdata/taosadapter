@@ -188,65 +188,72 @@ func writeToTDLog() error {
 		case "taosadapter_restful_http_request_total":
 			metric := data[i].GetMetric()
 			for _, m := range metric {
-				labels := m.GetLabel()
-				subName := calculateTableName(labels)
-				var (
-					statusCode    int
-					clientIP      string
-					requestMethod string
-					requestUri    string
-				)
-
-				for j := 0; j < len(labels); j++ {
-					switch labels[j].GetName() {
-					case "status_code":
-						statusCode, _ = strconv.Atoi(labels[j].GetValue())
-					case "client_ip":
-						clientIP = labels[j].GetValue()
-					case "request_method":
-						requestMethod = labels[j].GetValue()
-					case "request_uri":
-						requestUri = labels[j].GetValue()
-					}
-
-				}
 				value := m.GetCounter().GetValue()
-				inserts = append(inserts, fmt.Sprintf(" taosa_request_total_%s using taosadapter_restful_http_total tags('%s',%d,'%s','%s','%s') values('%s',%d)", subName, identity, statusCode, clientIP, requestMethod, requestUri, now, int(value)))
+				if !math.IsNaN(value) {
+					labels := m.GetLabel()
+					subName := calculateTableName(labels)
+					var (
+						statusCode    int
+						clientIP      string
+						requestMethod string
+						requestUri    string
+					)
+
+					for j := 0; j < len(labels); j++ {
+						switch labels[j].GetName() {
+						case "status_code":
+							statusCode, _ = strconv.Atoi(labels[j].GetValue())
+						case "client_ip":
+							clientIP = labels[j].GetValue()
+						case "request_method":
+							requestMethod = labels[j].GetValue()
+						case "request_uri":
+							requestUri = labels[j].GetValue()
+						}
+
+					}
+					inserts = append(inserts, fmt.Sprintf(" taosa_request_total_%s using taosadapter_restful_http_total tags('%s',%d,'%s','%s','%s') values('%s',%d)", subName, identity, statusCode, clientIP, requestMethod, requestUri, now, int(value)))
+				}
 			}
 		case "taosadapter_restful_http_request_fail":
 			metric := data[i].GetMetric()
 			for _, m := range metric {
-				labels := m.GetLabel()
-				subName := calculateTableName(labels)
-				var (
-					statusCode    int
-					clientIP      string
-					requestMethod string
-					requestUri    string
-				)
+				value := m.GetCounter().GetValue()
+				if !math.IsNaN(value) {
+					labels := m.GetLabel()
+					subName := calculateTableName(labels)
+					var (
+						statusCode    int
+						clientIP      string
+						requestMethod string
+						requestUri    string
+					)
 
-				for j := 0; j < len(labels); j++ {
-					switch labels[j].GetName() {
-					case "status_code":
-						statusCode, _ = strconv.Atoi(labels[j].GetValue())
-					case "client_ip":
-						clientIP = labels[j].GetValue()
-					case "request_method":
-						requestMethod = labels[j].GetValue()
-					case "request_uri":
-						requestUri = labels[j].GetValue()
+					for j := 0; j < len(labels); j++ {
+						switch labels[j].GetName() {
+						case "status_code":
+							statusCode, _ = strconv.Atoi(labels[j].GetValue())
+						case "client_ip":
+							clientIP = labels[j].GetValue()
+						case "request_method":
+							requestMethod = labels[j].GetValue()
+						case "request_uri":
+							requestUri = labels[j].GetValue()
+						}
+
 					}
 
+					inserts = append(inserts, fmt.Sprintf(" taosa_request_fail_%s using taosadapter_restful_http_fail tags('%s',%d,'%s','%s','%s') values('%s',%d)", subName, identity, statusCode, clientIP, requestMethod, requestUri, now, int(value)))
 				}
-				value := m.GetCounter().GetValue()
-				inserts = append(inserts, fmt.Sprintf(" taosa_request_fail_%s using taosadapter_restful_http_fail tags('%s',%d,'%s','%s','%s') values('%s',%d)", subName, identity, statusCode, clientIP, requestMethod, requestUri, now, int(value)))
 			}
 		case "taosadapter_restful_http_request_in_flight":
 			metric := data[i].GetMetric()
 			for _, m := range metric {
-				subName := calculateTableName(nil)
 				value := m.GetGauge().GetValue()
-				inserts = append(inserts, fmt.Sprintf(" taosa_request_in_flight_%s using taosadapter_restful_http_request_in_flight tags('%s') values('%s',%d)", subName, identity, now, int(value)))
+				if !math.IsNaN(value) {
+					subName := calculateTableName(nil)
+					inserts = append(inserts, fmt.Sprintf(" taosa_request_in_flight_%s using taosadapter_restful_http_request_in_flight tags('%s') values('%s',%d)", subName, identity, now, int(value)))
+				}
 			}
 		case "taosadapter_restful_http_request_summary_milliseconds":
 			metric := data[i].GetMetric()
