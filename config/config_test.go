@@ -53,6 +53,11 @@ func TestInit(t *testing.T) {
 					InCGroup:                  false,
 					PauseQueryMemoryThreshold: 70,
 					PauseAllMemoryThreshold:   80,
+					Identity:                  "",
+					WriteToTD:                 true,
+					User:                      "root",
+					Password:                  "taosdata",
+					WriteInterval:             30 * time.Second,
 				},
 			}, Conf)
 			corsC := Conf.Cors.GetConfig()

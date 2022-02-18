@@ -13,6 +13,7 @@ import (
 	"github.com/taosdata/taosadapter/httperror"
 	"github.com/taosdata/taosadapter/tools"
 	"github.com/taosdata/taosadapter/tools/pool"
+	"github.com/taosdata/taosadapter/tools/web"
 )
 
 var authCache = cache.New(30*time.Minute, time.Hour)
@@ -166,6 +167,7 @@ func ErrorResponse(c *gin.Context, code int) {
 		Code:   code,
 		Desc:   errStr,
 	})
+	web.SetTaosErrorCode(c, code)
 }
 
 func ErrorResponseWithMsg(c *gin.Context, code int, msg string) {
@@ -174,4 +176,5 @@ func ErrorResponseWithMsg(c *gin.Context, code int, msg string) {
 		Code:   code & 0xffff,
 		Desc:   msg,
 	})
+	web.SetTaosErrorCode(c, code&0xffff)
 }

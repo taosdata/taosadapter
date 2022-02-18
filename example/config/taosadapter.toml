@@ -27,6 +27,11 @@ collectDuration = "3s"
 incgroup = false
 pauseQueryMemoryThreshold = 70
 pauseAllMemoryThreshold = 80
+identity = ""
+writeToTD = true
+user = "root"
+password = "taosdata"
+writeInterval = "30s"
 
 [opentsdb]
 enable = true

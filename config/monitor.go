@@ -12,6 +12,11 @@ type Monitor struct {
 	InCGroup                  bool
 	PauseQueryMemoryThreshold float64
 	PauseAllMemoryThreshold   float64
+	Identity                  string
+	WriteToTD                 bool
+	User                      string
+	Password                  string
+	WriteInterval             time.Duration
 }
 
 func initMonitor() {
@@ -30,6 +35,26 @@ func initMonitor() {
 	viper.SetDefault("monitor.pauseAllMemoryThreshold", 80)
 	_ = viper.BindEnv("monitor.pauseAllMemoryThreshold", "TAOS_MONITOR_PAUSE_ALL_MEMORY_THRESHOLD")
 	pflag.Float64("monitor.pauseAllMemoryThreshold", 80, `Memory percentage threshold for pause all. Env "TAOS_MONITOR_PAUSE_ALL_MEMORY_THRESHOLD"`)
+
+	viper.SetDefault("monitor.identity", "")
+	_ = viper.BindEnv("monitor.identity", "TAOS_MONITOR_IDENTITY")
+	pflag.String("monitor.identity", "", `The identity of the current instance, or 'hostname:port' if it is empty. Env "TAOS_MONITOR_IDENTITY"`)
+
+	viper.SetDefault("monitor.writeToTD", true)
+	_ = viper.BindEnv("monitor.writeToTD", "TAOS_MONITOR_WRITE_TO_TD")
+	pflag.Bool("monitor.writeToTD", true, `Whether write metrics to TDengine. Env "TAOS_MONITOR_WRITE_TO_TD"`)
+
+	viper.SetDefault("monitor.user", "root")
+	_ = viper.BindEnv("monitor.user", "TAOS_MONITOR_USER")
+	pflag.String("monitor.user", "root", `TDengine user. Env "TAOS_MONITOR_USER"`)
+
+	viper.SetDefault("monitor.password", "taosdata")
+	_ = viper.BindEnv("monitor.password", "TAOS_MONITOR_PASSWORD")
+	pflag.String("monitor.password", "taosdata", `TDengine password. Env "TAOS_MONITOR_PASSWORD"`)
+
+	viper.SetDefault("monitor.writeInterval", time.Second*30)
+	_ = viper.BindEnv("monitor.writeInterval", "TAOS_MONITOR_WRITE_INTERVAL")
+	pflag.Duration("monitor.writeInterval", time.Second*30, `Set write to TDengine interval. Env "TAOS_MONITOR_WRITE_INTERVAL"`)
 }
 
 func (p *Monitor) setValue() {
@@ -37,4 +62,9 @@ func (p *Monitor) setValue() {
 	p.InCGroup = viper.GetBool("monitor.incgroup")
 	p.PauseQueryMemoryThreshold = viper.GetFloat64("monitor.pauseQueryMemoryThreshold")
 	p.PauseAllMemoryThreshold = viper.GetFloat64("monitor.pauseAllMemoryThreshold")
+	p.Identity = viper.GetString("monitor.identity")
+	p.WriteToTD = viper.GetBool("monitor.writeToTD")
+	p.User = viper.GetString("monitor.user")
+	p.Password = viper.GetString("monitor.password")
+	p.WriteInterval = viper.GetDuration("monitor.writeInterval")
 }

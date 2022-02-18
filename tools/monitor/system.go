@@ -11,9 +11,9 @@ import (
 var logger = log.GetLogger("monitor")
 
 type SysStatus struct {
-	CollectTime time.Time
-	//CpuPercent      float64
-	//CpuError        error
+	CollectTime     time.Time
+	CpuPercent      float64
+	CpuError        error
 	MemPercent      float64
 	MemError        error
 	GoroutineCounts int
@@ -31,7 +31,7 @@ type sysMonitor struct {
 
 func (s *sysMonitor) collect() {
 	s.status.CollectTime = time.Now()
-	//s.status.CpuPercent, s.status.CpuError = s.collector.CpuPercent()
+	s.status.CpuPercent, s.status.CpuError = s.collector.CpuPercent()
 	s.status.MemPercent, s.status.MemError = s.collector.MemPercent()
 	s.status.GoroutineCounts = runtime.NumGoroutine()
 	s.status.ThreadCounts, _ = runtime.ThreadCreateProfile(nil)

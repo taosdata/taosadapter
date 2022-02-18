@@ -7,10 +7,12 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/prometheus/prometheus/prompb"
+	tErrors "github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/monitor"
 	"github.com/taosdata/taosadapter/plugin"
+	"github.com/taosdata/taosadapter/tools/web"
 )
 
 var logger = log.GetLogger("prometheus")
@@ -99,6 +101,10 @@ func (p *Plugin) Read(c *gin.Context) {
 	}()
 	resp, err := processRead(taosConn.TaosConnection, &req, db)
 	if err != nil {
+		taosError, is := err.(*tErrors.TaosError)
+		if is {
+			web.SetTaosErrorCode(c, int(taosError.Code))
+		}
 		_ = c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
@@ -153,6 +159,10 @@ func (p *Plugin) Write(c *gin.Context) {
 	}()
 	err = processWrite(taosConn.TaosConnection, &req, db)
 	if err != nil {
+		taosError, is := err.(*tErrors.TaosError)
+		if is {
+			web.SetTaosErrorCode(c, int(taosError.Code))
+		}
 		logger.WithError(err).Error("connect taosd error")
 		_ = c.AbortWithError(http.StatusInternalServerError, err)
 		return
