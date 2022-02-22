@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/tools/parseblock"
-	"gotest.tools/assert"
 )
 
 // @author: xftan
