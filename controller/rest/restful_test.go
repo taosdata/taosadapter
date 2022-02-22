@@ -258,10 +258,10 @@ func TestWebsocket(t *testing.T) {
 	}
 	defer ws.Close()
 	const (
-		AfterConnect    = 1
-		AfterQuery      = 2
-		AfterFetch      = 3
-		AfterFetchJson  = 4
+		AfterConnect = 1
+		AfterQuery   = 2
+		AfterFetch   = 3
+		//AfterFetchJson  = 4
 		AfterFetchBlock = 5
 	)
 
@@ -269,9 +269,9 @@ func TestWebsocket(t *testing.T) {
 	var lengths []int
 	var queryResult *WSQueryResult
 	var rows int
-	total := 0
+	//total := 0
 	finish := make(chan struct{})
-	var jsonResult [][]interface{}
+	//var jsonResult [][]interface{}
 	var resultID uint64
 	var blockResult [][]driver.Value
 	testMessageHandler := func(messageType int, message []byte) error {
@@ -345,14 +345,15 @@ func TestWebsocket(t *testing.T) {
 				finish <- struct{}{}
 				return nil
 			}
-			//fetch_json
-			status = AfterFetchJson
+
+			//status = AfterFetchJson
+			status = AfterFetchBlock
 			b, _ := json.Marshal(&WSFetchBlockReq{
 				ReqID: 4,
 				ID:    queryResult.ID,
 			})
 			action, _ := json.Marshal(&WSAction{
-				Action: WSFetchJson,
+				Action: WSFetchBlock,
 				Args:   b,
 			})
 			err = ws.WriteMessage(
@@ -362,30 +363,30 @@ func TestWebsocket(t *testing.T) {
 			if err != nil {
 				return err
 			}
-		case AfterFetchJson:
-			var data WSFetchJsonResp
-			err = json.Unmarshal(message, &data)
-			if err != nil {
-				return err
-			}
-			jsonResult = data.Data
-			total += len(data.Data)
-			status = AfterFetchBlock
-			arg, _ := json.Marshal(&WSFetchReq{
-				ReqID: 5,
-				ID:    queryResult.ID,
-			})
-			action, _ := json.Marshal(&WSAction{
-				Action: WSFetchBlock,
-				Args:   arg,
-			})
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
+		//case AfterFetchJson:
+		//	var data WSFetchJsonResp
+		//	err = json.Unmarshal(message, &data)
+		//	if err != nil {
+		//		return err
+		//	}
+		//	jsonResult = data.Data
+		//	total += len(data.Data)
+		//	status = AfterFetchBlock
+		//	arg, _ := json.Marshal(&WSFetchReq{
+		//		ReqID: 5,
+		//		ID:    queryResult.ID,
+		//	})
+		//	action, _ := json.Marshal(&WSAction{
+		//		Action: WSFetchBlock,
+		//		Args:   arg,
+		//	})
+		//	err = ws.WriteMessage(
+		//		websocket.TextMessage,
+		//		action,
+		//	)
+		//	if err != nil {
+		//		return err
+		//	}
 		case AfterFetchBlock:
 			//block
 			resultID, blockResult = parseblock.ParseBlock(message, queryResult.FieldsTypes, lengths, rows, queryResult.Precision)
@@ -456,50 +457,50 @@ func TestWebsocket(t *testing.T) {
 		return
 	}
 	<-finish
-	assert.Equal(t, 3, total)
-	assert.Equal(t, 3, len(jsonResult))
-	assert.Equal(t, true, jsonResult[0][1])
-	assert.Equal(t, float64(2), jsonResult[0][2])
-	assert.Equal(t, float64(3), jsonResult[0][3])
-	assert.Equal(t, float64(4), jsonResult[0][4])
-	assert.Equal(t, float64(5), jsonResult[0][5])
-	assert.Equal(t, float64(6), jsonResult[0][6])
-	assert.Equal(t, float64(7), jsonResult[0][7])
-	assert.Equal(t, float64(8), jsonResult[0][8])
-	assert.Equal(t, float64(9), jsonResult[0][9])
-	assert.Equal(t, float64(10), jsonResult[0][10])
-	assert.Equal(t, float64(11), jsonResult[0][11])
-	assert.Equal(t, "中文\"binary", jsonResult[0][12])
-	assert.Equal(t, "中文nchar", jsonResult[0][13])
-	assert.Equal(t, map[string]interface{}{"table": "t1"}, jsonResult[0][14])
-	assert.Equal(t, false, jsonResult[1][1])
-	assert.Equal(t, float64(12), jsonResult[1][2])
-	assert.Equal(t, float64(13), jsonResult[1][3])
-	assert.Equal(t, float64(14), jsonResult[1][4])
-	assert.Equal(t, float64(15), jsonResult[1][5])
-	assert.Equal(t, float64(16), jsonResult[1][6])
-	assert.Equal(t, float64(17), jsonResult[1][7])
-	assert.Equal(t, float64(18), jsonResult[1][8])
-	assert.Equal(t, float64(19), jsonResult[1][9])
-	assert.Equal(t, float64(110), jsonResult[1][10])
-	assert.Equal(t, float64(111), jsonResult[1][11])
-	assert.Equal(t, "中文\"binary", jsonResult[1][12])
-	assert.Equal(t, "中文nchar", jsonResult[1][13])
-	assert.Equal(t, map[string]interface{}{"table": "t1"}, jsonResult[1][14])
-	assert.Equal(t, nil, jsonResult[2][1])
-	assert.Equal(t, nil, jsonResult[2][2])
-	assert.Equal(t, nil, jsonResult[2][3])
-	assert.Equal(t, nil, jsonResult[2][4])
-	assert.Equal(t, nil, jsonResult[2][5])
-	assert.Equal(t, nil, jsonResult[2][6])
-	assert.Equal(t, nil, jsonResult[2][7])
-	assert.Equal(t, nil, jsonResult[2][8])
-	assert.Equal(t, nil, jsonResult[2][9])
-	assert.Equal(t, nil, jsonResult[2][10])
-	assert.Equal(t, nil, jsonResult[2][11])
-	assert.Equal(t, nil, jsonResult[2][12])
-	assert.Equal(t, nil, jsonResult[2][13])
-	assert.Equal(t, map[string]interface{}{"table": "t1"}, jsonResult[2][14])
+	//assert.Equal(t, 3, total)
+	//assert.Equal(t, 3, len(jsonResult))
+	//assert.Equal(t, true, jsonResult[0][1])
+	//assert.Equal(t, float64(2), jsonResult[0][2])
+	//assert.Equal(t, float64(3), jsonResult[0][3])
+	//assert.Equal(t, float64(4), jsonResult[0][4])
+	//assert.Equal(t, float64(5), jsonResult[0][5])
+	//assert.Equal(t, float64(6), jsonResult[0][6])
+	//assert.Equal(t, float64(7), jsonResult[0][7])
+	//assert.Equal(t, float64(8), jsonResult[0][8])
+	//assert.Equal(t, float64(9), jsonResult[0][9])
+	//assert.Equal(t, float64(10), jsonResult[0][10])
+	//assert.Equal(t, float64(11), jsonResult[0][11])
+	//assert.Equal(t, "中文\"binary", jsonResult[0][12])
+	//assert.Equal(t, "中文nchar", jsonResult[0][13])
+	//assert.Equal(t, map[string]interface{}{"table": "t1"}, jsonResult[0][14])
+	//assert.Equal(t, false, jsonResult[1][1])
+	//assert.Equal(t, float64(12), jsonResult[1][2])
+	//assert.Equal(t, float64(13), jsonResult[1][3])
+	//assert.Equal(t, float64(14), jsonResult[1][4])
+	//assert.Equal(t, float64(15), jsonResult[1][5])
+	//assert.Equal(t, float64(16), jsonResult[1][6])
+	//assert.Equal(t, float64(17), jsonResult[1][7])
+	//assert.Equal(t, float64(18), jsonResult[1][8])
+	//assert.Equal(t, float64(19), jsonResult[1][9])
+	//assert.Equal(t, float64(110), jsonResult[1][10])
+	//assert.Equal(t, float64(111), jsonResult[1][11])
+	//assert.Equal(t, "中文\"binary", jsonResult[1][12])
+	//assert.Equal(t, "中文nchar", jsonResult[1][13])
+	//assert.Equal(t, map[string]interface{}{"table": "t1"}, jsonResult[1][14])
+	//assert.Equal(t, nil, jsonResult[2][1])
+	//assert.Equal(t, nil, jsonResult[2][2])
+	//assert.Equal(t, nil, jsonResult[2][3])
+	//assert.Equal(t, nil, jsonResult[2][4])
+	//assert.Equal(t, nil, jsonResult[2][5])
+	//assert.Equal(t, nil, jsonResult[2][6])
+	//assert.Equal(t, nil, jsonResult[2][7])
+	//assert.Equal(t, nil, jsonResult[2][8])
+	//assert.Equal(t, nil, jsonResult[2][9])
+	//assert.Equal(t, nil, jsonResult[2][10])
+	//assert.Equal(t, nil, jsonResult[2][11])
+	//assert.Equal(t, nil, jsonResult[2][12])
+	//assert.Equal(t, nil, jsonResult[2][13])
+	//assert.Equal(t, map[string]interface{}{"table": "t1"}, jsonResult[2][14])
 
 	assert.Equal(t, uint64(1), resultID)
 	assert.Equal(t, 3, len(blockResult))

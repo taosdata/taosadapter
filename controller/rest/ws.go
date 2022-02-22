@@ -17,15 +17,12 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/olahol/melody"
 	"github.com/sirupsen/logrus"
-	"github.com/taosdata/driver-go/v2/common"
 	tErrors "github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/driver-go/v2/wrapper"
 	"github.com/taosdata/taosadapter/db/async"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/httperror"
 	"github.com/taosdata/taosadapter/thread"
-	"github.com/taosdata/taosadapter/tools/ctools"
-	"github.com/taosdata/taosadapter/tools/jsonbuilder"
 	"github.com/taosdata/taosadapter/tools/pool"
 	"github.com/taosdata/taosadapter/tools/web"
 )
@@ -346,81 +343,82 @@ func (t *Taos) fetchBlock(session *melody.Session, req *WSFetchBlockReq) {
 	resultS.Unlock()
 }
 
-type WSFetchJsonReq struct {
-	ReqID uint64 `json:"req_id"`
-	ID    uint64 `json:"id"`
-}
-
-type WSFetchJsonResp struct {
-	Action string          `json:"action"`
-	ReqId  uint64          `json:"req_id"`
-	Id     uint64          `json:"id"`
-	Data   [][]interface{} `json:"data"`
-}
-
-func (t *Taos) fetchJson(session *melody.Session, req *WSFetchJsonReq) {
-	if t.Conn == nil {
-		wsErrorMsg(session, 0xffff, "taos not connected", WSFetchJson, req.ReqID)
-		return
-	}
-	resultItem := t.GetResult(req.ID)
-	if resultItem == nil {
-		wsErrorMsg(session, 0xffff, "result is nil", WSFetchJson, req.ReqID)
-		return
-	}
-	resultS := resultItem.Value.(*Result)
-	if resultS.Block == nil {
-		wsErrorMsg(session, 0xffff, "block is nil", WSFetchJson, req.ReqID)
-		return
-	}
-
-	//{
-	//	"action": "fetch_json",
-	//	"req_id": 1,
-	//	"id": 1,
-	//	"data": [[]]
-	//}
-	builder := jsonbuilder.BorrowStream(&Writer{session: session})
-	builder.WriteObjectStart()
-	builder.WriteObjectField("action")
-	builder.WriteString(WSFetchJson)
-	builder.WriteMore()
-	builder.WriteObjectField("req_id")
-	builder.WriteUint64(req.ReqID)
-	builder.WriteMore()
-	builder.WriteObjectField("id")
-	builder.WriteUint64(req.ID)
-	builder.WriteMore()
-	builder.WriteObjectField("data")
-	builder.WriteArrayStart()
-	for rowID := 0; rowID < resultS.Size; rowID++ {
-		builder.WriteArrayStart()
-		for columnID := 0; columnID < resultS.FieldsCount; columnID++ {
-			ctools.JsonWriteBlockValue(builder, resultS.Block, resultS.Header.ColTypes[columnID], columnID, rowID, resultS.Lengths[columnID], resultS.precision, func(builder *jsonbuilder.Stream, ts int64, precision int) {
-				switch precision {
-				case common.PrecisionNanoSecond:
-					builder.WriteInt64(ts)
-				case common.PrecisionMicroSecond:
-					builder.WriteInt64(ts * 1e3)
-				case common.PrecisionMilliSecond:
-					builder.WriteInt64(ts * 1e6)
-				default:
-					builder.WriteNil()
-				}
-			})
-			if columnID != resultS.FieldsCount-1 {
-				builder.WriteMore()
-			}
-		}
-		builder.WriteArrayEnd()
-		if rowID != resultS.Size-1 {
-			builder.WriteMore()
-		}
-	}
-	builder.WriteArrayEnd()
-	builder.WriteObjectEnd()
-	builder.Flush()
-}
+//
+//type WSFetchJsonReq struct {
+//	ReqID uint64 `json:"req_id"`
+//	ID    uint64 `json:"id"`
+//}
+//
+//type WSFetchJsonResp struct {
+//	Action string          `json:"action"`
+//	ReqId  uint64          `json:"req_id"`
+//	Id     uint64          `json:"id"`
+//	Data   [][]interface{} `json:"data"`
+//}
+//
+//func (t *Taos) fetchJson(session *melody.Session, req *WSFetchJsonReq) {
+//	if t.Conn == nil {
+//		wsErrorMsg(session, 0xffff, "taos not connected", WSFetchJson, req.ReqID)
+//		return
+//	}
+//	resultItem := t.GetResult(req.ID)
+//	if resultItem == nil {
+//		wsErrorMsg(session, 0xffff, "result is nil", WSFetchJson, req.ReqID)
+//		return
+//	}
+//	resultS := resultItem.Value.(*Result)
+//	if resultS.Block == nil {
+//		wsErrorMsg(session, 0xffff, "block is nil", WSFetchJson, req.ReqID)
+//		return
+//	}
+//
+//	//{
+//	//	"action": "fetch_json",
+//	//	"req_id": 1,
+//	//	"id": 1,
+//	//	"data": [[]]
+//	//}
+//	builder := jsonbuilder.BorrowStream(&Writer{session: session})
+//	builder.WriteObjectStart()
+//	builder.WriteObjectField("action")
+//	builder.WriteString(WSFetchJson)
+//	builder.WriteMore()
+//	builder.WriteObjectField("req_id")
+//	builder.WriteUint64(req.ReqID)
+//	builder.WriteMore()
+//	builder.WriteObjectField("id")
+//	builder.WriteUint64(req.ID)
+//	builder.WriteMore()
+//	builder.WriteObjectField("data")
+//	builder.WriteArrayStart()
+//	for rowID := 0; rowID < resultS.Size; rowID++ {
+//		builder.WriteArrayStart()
+//		for columnID := 0; columnID < resultS.FieldsCount; columnID++ {
+//			ctools.JsonWriteBlockValue(builder, resultS.Block, resultS.Header.ColTypes[columnID], columnID, rowID, resultS.Lengths[columnID], resultS.precision, func(builder *jsonbuilder.Stream, ts int64, precision int) {
+//				switch precision {
+//				case common.PrecisionNanoSecond:
+//					builder.WriteInt64(ts)
+//				case common.PrecisionMicroSecond:
+//					builder.WriteInt64(ts * 1e3)
+//				case common.PrecisionMilliSecond:
+//					builder.WriteInt64(ts * 1e6)
+//				default:
+//					builder.WriteNil()
+//				}
+//			})
+//			if columnID != resultS.FieldsCount-1 {
+//				builder.WriteMore()
+//			}
+//		}
+//		builder.WriteArrayEnd()
+//		if rowID != resultS.Size-1 {
+//			builder.WriteMore()
+//		}
+//	}
+//	builder.WriteArrayEnd()
+//	builder.WriteObjectEnd()
+//	builder.Flush()
+//}
 
 type WSFreeResultReq struct {
 	ReqID uint64 `json:"req_id"`
@@ -563,15 +561,15 @@ func (ctl *Restful) InitWS() {
 			}
 			t := session.MustGet(TaosSessionKey)
 			t.(*Taos).fetchBlock(session, &fetchBlock)
-		case WSFetchJson:
-			var fetchJson WSFetchJsonReq
-			err = json.Unmarshal(action.Args, &fetchJson)
-			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch fetch_json")
-				return
-			}
-			t := session.MustGet(TaosSessionKey)
-			t.(*Taos).fetchJson(session, &fetchJson)
+		//case WSFetchJson:
+		//	var fetchJson WSFetchJsonReq
+		//	err = json.Unmarshal(action.Args, &fetchJson)
+		//	if err != nil {
+		//		logger.WithError(err).Errorln("unmarshal fetch fetch_json")
+		//		return
+		//	}
+		//	t := session.MustGet(TaosSessionKey)
+		//	t.(*Taos).fetchJson(session, &fetchJson)
 		case WSFreeResult:
 			var fetchJson WSFreeResultReq
 			err = json.Unmarshal(action.Args, &fetchJson)
