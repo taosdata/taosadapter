@@ -33,7 +33,7 @@ const (
 	WSQuery      = "query"
 	WSFetch      = "fetch"
 	WSFetchBlock = "fetch_block"
-	WSFetchJson  = "fetch_json"
+	// WSFreeResult WSFetchJson  = "fetch_json"
 	WSFreeResult = "free_result"
 )
 
