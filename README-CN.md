@@ -6,15 +6,13 @@ taosAdapter 是一个 TDengine 的配套工具，是 TDengine 集群和应用程
 
 taosAdapter提供以下功能：
 
-```text
-    - RESTful 接口
-    - 兼容 InfluxDB v1写接口
-    - 兼容 OpenTSDB JSON 和 telnet 格式写入
-    - 无缝连接到 Telegraf
-    - 无缝连接到 collectd
-    - 无缝连接到 StatsD
-    - 支持 Prometheus remote_read 和 remote_write
-```
+- RESTful 接口
+- 兼容 InfluxDB v1写接口
+- 兼容 OpenTSDB JSON 和 telnet 格式写入
+- 无缝连接到 Telegraf
+- 无缝连接到 collectd
+- 无缝连接到 StatsD
+- 支持 Prometheus remote_read 和 remote_write
 
 ## taosAdapter 架构图
 
@@ -131,12 +129,12 @@ Usage of taosAdapter:
 使用浏览器进行接口调用请根据实际情况设置如下跨源资源共享（CORS）参数：
 
 ```text
-    AllowAllOrigins
-    AllowOrigins
-    AllowHeaders
-    ExposeHeaders
-    AllowCredentials
-    AllowWebSockets
+AllowAllOrigins
+AllowOrigins
+AllowHeaders
+ExposeHeaders
+AllowCredentials
+AllowWebSockets
 ```
 
 如果不通过浏览器进行接口调用无需关心这几项配置。
@@ -189,12 +187,10 @@ Usage of taosAdapter:
 
 支持 InfluxDB 查询参数如下：
 
-```text
 * `db` 指定 TDengine 使用的数据库名
 * `precision` TDengine 使用的时间精度
 * `u` TDengine 用户名
 * `p` TDengine 密码
-```
 
 注意： 目前不支持 InfluxDB 的 token 验证方式只支持 Basic 验证和查询参数验证。
 
@@ -241,16 +237,16 @@ LoadPlugin write_tsdb
 
 修改 StatsD 配置文件 `config.js`，taosAdapter 默认使用 6044 端口接收 StatsD 的写入数据。
 
-* > `backends` add `"./backends/repeater"`
-* > `repeater` add `{ host:'host to taosAdapter', port: 6044}`
+*  `backends` add `"./backends/repeater"`
+*  `repeater` add `{ host:'host to taosAdapter', port: 6044}`
 
 配置文件示例
 
-```text
+```js
 {
-port: 8125
-, backends: ["./backends/repeater"]
-, repeater: [{ host: '127.0.0.1', port: 6044}]
+  port: 8125,
+  backends: ["./backends/repeater"],
+  repeater: [{ host: '127.0.0.1', port: 6044}]
 }
 ```
 
@@ -374,15 +370,15 @@ taosAdapter 支持将 http 监控、cpu百分比和内存百分比写入 TDengin
 
 有关配置参数
 
-| **配置项**                 | **描述**                                     | **默认值**  |
-|-------------------------|--------------------------------------------|----------|
-| monitor.collectDuration | cpu 和内存采集间隔                                | 3s       |
-| monitor.identity        | 当前taosadapter 的标识符如果不设置将使用 'hostname:port' |          |
-| monitor.incgroup        | 是否是 cgroup 中运行(容器中运行设置为 true)              | false    |
-| monitor.writeToTD       | 是否写入到 TDengine                             | true     |
-| monitor.user            | TDengine 连接用户名                             | root     |
-| monitor.password        | TDengine 连接密码                              | taosdata |
-| monitor.writeInterval   | 写入TDengine 间隔                              | 30s      |
+| **配置项**              | **描述**                                                 | **默认值** |
+| ----------------------- | -------------------------------------------------------- | ---------- |
+| monitor.collectDuration | cpu 和内存采集间隔                                       | 3s         |
+| monitor.identity        | 当前taosadapter 的标识符如果不设置将使用 'hostname:port' |            |
+| monitor.incgroup        | 是否是 cgroup 中运行(容器中运行设置为 true)              | false      |
+| monitor.writeToTD       | 是否写入到 TDengine                                      | true       |
+| monitor.user            | TDengine 连接用户名                                      | root       |
+| monitor.password        | TDengine 连接密码                                        | taosdata   |
+| monitor.writeInterval   | 写入TDengine 间隔                                        | 30s        |
 
 ## 结果返回条数限制
 
@@ -407,11 +403,11 @@ taosAdapter 通过参数 `restfulRowLimit` 来控制结果的返回条数，-1 �
 
 在 TDengine server 2.2.x.x 或更早期版本中，taosd 进程包含一个内嵌的 http 服务。如前面所述，taosAdapter 是一个使用 systemd 管理的独立软件，拥有自己的进程。并且两者有一些配置参数和行为是不同的，请见下表：
 
-| **#** | **embedded httpd**  | **taosAdapter**               | **comment**                                                                                    |
-|-------|---------------------|-------------------------------|------------------------------------------------------------------------------------------------|
-| 1     | httpEnableRecordSql | --logLevel=debug              |                                                                                                |
-| 2     | httpMaxThreads      | n/a                           | taosAdapter 自动管理线程池，无需此参数                                                                      |
+| **#** | **embedded httpd**  | **taosAdapter**                      | **comment**                                                                                                                                |
+| ----- | ------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1     | httpEnableRecordSql | --logLevel=debug                     |                                                                                                                                            |
+| 2     | httpMaxThreads      | n/a                                  | taosAdapter 自动管理线程池，无需此参数                                                                                                     |
 | 3     | telegrafUseFieldNum | 请参考 taosAdapter telegraf 配置方法 |
-| 4     | restfulRowLimit     | restfulRowLimit               | 内嵌 httpd 默认输出 10240 行数据，最大允许值为 102400。taosAdapter 也提供 restfulRowLimit 但是默认不做限制。您可以根据实际场景需求进行配置 |
-| 5     | httpDebugFlag       | 不适用                           | httpdDebugFlag 对 taosAdapter 不起作用                                                              |
-| 6     | httpDBNameMandatory | 不适用                           | taosAdapter 要求 URL 中必须指定数据库名                                                                   |
+| 4     | restfulRowLimit     | restfulRowLimit                      | 内嵌 httpd 默认输出 10240 行数据，最大允许值为 102400。taosAdapter 也提供 restfulRowLimit 但是默认不做限制。您可以根据实际场景需求进行配置 |
+| 5     | httpDebugFlag       | 不适用                               | httpdDebugFlag 对 taosAdapter 不起作用                                                                                                     |
+| 6     | httpDBNameMandatory | 不适用                               | taosAdapter 要求 URL 中必须指定数据库名                                                                                                    |
