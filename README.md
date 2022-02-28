@@ -6,21 +6,19 @@ taosAdapter is a TDengine’s companion tool and is a bridge/adapter between TDe
 
 taosAdapter provides the following functions.
 
-```text
-    - RESTful interface
-    - Compatible with InfluxDB v1 write interface
-    - Compatible with OpenTSDB JSON and telnet format write
-    - Seamless connect to Telegraf
-    - Seamless connect to collectD
-    - Seamless connect to StatsD
-    - Support Prometheus remote_read and remote_write
-```
+- RESTful interface
+- Compatible with InfluxDB v1 write interface
+- Compatible with OpenTSDB JSON and telnet format write
+- Seamless connect to Telegraf
+- Seamless connect to collectD
+- Seamless connect to StatsD
+- Support Prometheus remote_read and remote_write
 
 ## taosAdapter architecture
 
 ![taosAdapter-architecture](taosAdapter-architecture-for-public.png)
 
-## taosAdapter deloyment
+## taosAdapter deployment
 
 ### Install taosAdapter
 
@@ -135,12 +133,12 @@ Note:
 If you support users using the web browser to access the interfaces, please configure the following CORS parameters according to your practical network setting:
 
 ```text
-    AllowAllOrigins
-    AllowOrigins
-    AllowHeaders
-    ExposeHeaders
-    AllowCredentials
-    AllowWebSockets
+AllowAllOrigins
+AllowOrigins
+AllowHeaders
+ExposeHeaders
+AllowCredentials
+AllowWebSockets
 ```
 
 If not, you don't need to configure them.
@@ -243,16 +241,16 @@ LoadPlugin write_tsdb
 
 modify the configuration file `path_to_statsd/config.js`
 
-* > `backends` add `"./backends/repeater"`
-* > `repeater` add `{ host:'host to taosAdapter', port: 6044}`
+*  `backends` add `"./backends/repeater"`
+*  `repeater` add `{ host:'host to taosAdapter', port: 6044}`
 
 An example configuration file as below:
 
-```text
+```js
 {
-port: 8125
-, backends: ["./backends/repeater"]
-, repeater: [{ host: '127.0.0.1', port: 6044}]
+  port: 8125,
+  backends: ["./backends/repeater"],
+  repeater: [{ host: '127.0.0.1', port: 6044}]
 }
 ```
 
@@ -351,10 +349,10 @@ Status check interface `http://<fqdn>:6041/-/ping`
 for the corresponding configuration parameter
 
 ```text
-    monitor.collectDuration duration             Set monitor duration. Env "TAOS_MONITOR_COLLECT_DURATION" (default 3s)
-    monitor.incgroup                             Whether running in cgroup. Env "TAOS_MONITOR_INCGROUP"
-    monitor.pauseAllMemoryThreshold float        Memory percentage threshold for pause query and insert. Env "TAOS_MONITOR_PAUSE_ALL_MEMORY_THRESHOLD" (default 80)
-    monitor.pauseQueryMemoryThreshold float      Memory percentage threshold for pause query. Env "TAOS_MONITOR_PAUSE_QUERY_MEMORY_THRESHOLD" (default 70)
+monitor.collectDuration duration             Set monitor duration. Env "TAOS_MONITOR_COLLECT_DURATION" (default 3s)
+monitor.incgroup                             Whether running in cgroup. Env "TAOS_MONITOR_INCGROUP"
+monitor.pauseAllMemoryThreshold float        Memory percentage threshold for pause query and insert. Env "TAOS_MONITOR_PAUSE_ALL_MEMORY_THRESHOLD" (default 80)
+monitor.pauseQueryMemoryThreshold float      Memory percentage threshold for pause query. Env "TAOS_MONITOR_PAUSE_QUERY_MEMORY_THRESHOLD" (default 70)
 ```
 
 You can adjust them according to the specific project scenarios and operation strategies, and it is recommended to use operation monitoring software to monitor system memory status in a timely manner too. You can configure the load balancer to check the interface for checking taosAdapter's running status too.
@@ -378,7 +376,7 @@ taosAdapter supports writing metrics to TDengine.
 Related configuration parameters
 
 | **configuration**       | **description**                                                                      | **default values** |
-|-------------------------|--------------------------------------------------------------------------------------|--------------------|
+| ----------------------- | ------------------------------------------------------------------------------------ | ------------------ |
 | monitor.collectDuration | cpu and memory collection interval                                                   | 3s                 |
 | monitor.identity        | The identifier of the current taosadapter will be used if not set to 'hostname:port' |                    |
 | monitor.incgroup        | whether running in a cgroup (set to true when running in a container)                | false              |
@@ -409,10 +407,10 @@ Or you can set `--logLevel` or the environment variable "TAOS_ADAPTER_LOG_LEVEL"
 In the early version (2.2.x.x or earlier version), TDengine server provided an embedded http service by default. It will compulsorily running with the `taosd` process. As mentioned early, taosAdapter need be manually run by 'systemctl start taosadapter' and has its own process. Some parameters and behaviors are different between the embedded httpd and taosAdapter. Please see below:
 
 | **#** | **embedded httpd**  | **taosAdapter**                                    | **comment**                                                                                                                                                                   |
-|-------|---------------------|----------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ----- | ------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1     | httpEnableRecordSql | --logLevel=debug                                   |                                                                                                                                                                               |
 | 2     | httpMaxThreads      | n/a                                                | taosAdapter no need this paramter                                                                                                                                             |
-| 3     | telegrafUseFieldNum | please refer to taosAdapter telegraf configuration |
+| 3     | telegrafUseFieldNum | please refer to taosAdapter telegraf configuration |                                                                                                                                                                               |
 | 4     | restfulRowLimit     | restfulRowLimit                                    | default value is 10240 in the embedded httpd. taosAdapter provides restfulRowLimit too but the default value is unlimited. User can set it according to the specific scenario |
 | 5     | httpDebugFlag       | not used                                           | taosAdapter is immune to `httpdDebugFlag`                                                                                                                                     |
 | 6     | httpDBNameMandatory | not used                                           | taosAdapter requests the database name be specified in URL                                                                                                                    |
