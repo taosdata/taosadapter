@@ -2,11 +2,6 @@ module github.com/taosdata/taosadapter
 
 go 1.14
 
-replace (
-	github.com/lestrrat-go/file-rotatelogs => ./log/file-rotatelogs
-	github.com/olahol/melody => ./tools/melody
-)
-
 require (
 	cloud.google.com/go/kms v1.0.0 // indirect
 	cloud.google.com/go/monitoring v1.0.0 // indirect
@@ -22,12 +17,12 @@ require (
 	github.com/gopherjs/gopherjs v0.0.0-20190812055157-5d271430af9f // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/gorilla/websocket v1.4.2
+	github.com/huskar-t/file-rotatelogs/v2 v2.4.1
+	github.com/huskar-t/melody v0.0.0-20220301024158-14c90c8df229
 	github.com/influxdata/telegraf v1.20.0
-	github.com/lestrrat-go/file-rotatelogs v2.4.0+incompatible
 	github.com/lestrrat-go/strftime v1.0.5 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-isatty v0.0.13 // indirect
-	github.com/olahol/melody v0.0.0-20180227134253-7bd65910e5ab
 	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.11.0

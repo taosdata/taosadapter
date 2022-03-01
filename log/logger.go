@@ -8,7 +8,7 @@ import (
 	"path"
 	"sync"
 
-	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
+	rotatelogs "github.com/huskar-t/file-rotatelogs/v2"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/config"
 	"github.com/taosdata/taosadapter/tools/pool"
