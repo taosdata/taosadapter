@@ -46,6 +46,9 @@ func (p *Plugin) Init(_ gin.IRouter) error {
 }
 
 func (p *Plugin) Start() error {
+	if !p.conf.Enable {
+		return nil
+	}
 	if p.conn != nil {
 		err := p.conn.Close()
 		if err != nil {
