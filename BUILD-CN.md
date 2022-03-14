@@ -2,11 +2,11 @@
 
 我们强烈建议将 taosAdapter 和 TDengine 服务端共同部署在同一个系统上，并使用官方 TDengine 安装包安装 taosAdapter。如果您想对 taosAdapter 进行调试或贡献代码，您也可以单独构建它。
 
-## 设置 golang 开发环境
+## 设置 Golang 开发环境
 
-taosAdapter 是由 Go 语言开发的。关于 golang 开发环境的设置，请参考 golang 的[官方文档](https://go.dev/learn/)。
+taosAdapter 是由 Go 语言开发的。关于 Golang 开发环境的设置，请参考 Golang 的[官方文档](https://go.dev/learn/)。
 
-请使用1.14以上版本的 golang。对于中国的用户，我们建议使用代理服务来加速软件包的下载。
+请使用 1.14 以上版本的 Golang。对于中国的用户，我们建议使用代理服务来加速软件包的下载。
 
 ```shell
 go env -w GO111MODULE=on
