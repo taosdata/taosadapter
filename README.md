@@ -157,7 +157,7 @@ For the default configuration file, see [example/config/taosadapter.toml](https:
   * <http://opentsdb.net/docs/build/html/api_http/put.html>
   * <http://opentsdb.net/docs/build/html/api_telnet/put.html>
 * Seamless connection with collectd.
-    collecd is a system statistics collection daemon. Pleae visit [https://collectd.org/](https://collectd.org/)for detail.
+    collectd is a system statistics collection daemon. Please visit [https://collectd.org/](https://collectd.org/)for detail.
 * Seamless connection with StatsD.
     StatsD is a daemon for easy but powerful stats aggregation. Please visit [https://github.com/statsd/statsd](https://github.com/statsd/statsd) for detail.
 * Seamless connection with icinga2.
@@ -409,7 +409,7 @@ In the early version (2.2.x.x or earlier version), TDengine server provided an e
 | **#** | **embedded httpd**  | **taosAdapter**                                    | **comment**                                                                                                                                                                   |
 | ----- | ------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1     | httpEnableRecordSql | --logLevel=debug                                   |                                                                                                                                                                               |
-| 2     | httpMaxThreads      | n/a                                                | taosAdapter no need this paramter                                                                                                                                             |
+| 2     | httpMaxThreads      | n/a                                                | taosAdapter no need this parameter                                                                                                                                             |
 | 3     | telegrafUseFieldNum | please refer to taosAdapter telegraf configuration |                                                                                                                                                                               |
 | 4     | restfulRowLimit     | restfulRowLimit                                    | default value is 10240 in the embedded httpd. taosAdapter provides restfulRowLimit too but the default value is unlimited. User can set it according to the specific scenario |
 | 5     | httpDebugFlag       | not used                                           | taosAdapter is immune to `httpdDebugFlag`                                                                                                                                     |
