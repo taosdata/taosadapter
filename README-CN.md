@@ -26,7 +26,7 @@ taosAdapter 从 TDengine v2.3.0.0 版本开始成为 TDengine 服务端软件 �
 
 ### start/stop taosAdapter
 
-在 Linux 系统上 taosAdapter 服务默认由 systemd 管理。使用命令 systemctl start taosadapter 可以启动 taosAdapter 服务。使用命令 systemctl stop taosadapter 可以停止 taosAdapter 服务。
+在 Linux 系统上 taosAdapter 服务默认由 systemd 管理。使用命令 `systemctl start taosadapter` 可以启动 taosAdapter 服务。使用命令 `systemctl stop taosadapter` 可以停止 taosAdapter 服务。
 
 ### 移除 taosAdapter
 
@@ -366,7 +366,7 @@ http://<fqdn>:6041/metrics
 
 ### 写入 TDengine
 
-taosAdapter 支持将 http 监控、cpu百分比和内存百分比写入 TDengine。
+taosAdapter 支持将 http 监控、cpu 百分比和内存百分比写入 TDengine。
 
 有关配置参数
 
@@ -395,9 +395,9 @@ taosAdapter 通过参数 `restfulRowLimit` 来控制结果的返回条数，-1 �
 
 ## 故障解决
 
-您可以通过命令 systemctl status taosadapter 来检查 taosAdapter 运行状态。
+您可以通过命令 `systemctl status taosadapter` 来检查 taosAdapter 运行状态。
 
-您也可以通过设置 --loglevel 参数或者环境变量 TAOS_ADAPTER_LOG_LEVEL 来调节 taosAdapter 日志输出详细程度。有效值包括： panic、fatal、error、warn、warning、info、debug以及trace。
+您也可以通过设置 --logLevel 参数或者环境变量 TAOS_ADAPTER_LOG_LEVEL 来调节 taosAdapter 日志输出详细程度。有效值包括： panic、fatal、error、warn、warning、info、debug以及trace。
 
 ## 如何从旧版本 TDengine 迁移到 taosAdapter
 
