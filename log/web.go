@@ -81,6 +81,12 @@ func GinLog() gin.HandlerFunc {
 			failRequest.WithLabelValues(statusCodeStr, clientIP, reqMethod, reqUri, taosErrorCode).Inc()
 		}
 		requestInFlight.Dec()
+		if config.Conf.Log.EnableRecordHttpSql {
+			sql, exist := c.Get("sql")
+			if exist {
+				sqlLogger.Infof("%d '%s' '%s' '%s' %s", currentID, reqUri, reqMethod, clientIP, sql)
+			}
+		}
 	}
 }
 

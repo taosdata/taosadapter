@@ -67,6 +67,19 @@ func ConfigLog() {
 	}
 	hook := NewFileHook(globalLogFormatter, writer)
 	logger.AddHook(hook)
+	if config.Conf.Log.EnableRecordHttpSql {
+		sqlWriter, err := rotatelogs.New(
+			path.Join(config.Conf.Log.Path, "httpsql_%Y_%m_%d_%H_%M.log"),
+			rotatelogs.WithRotationCount(config.Conf.Log.SqlRotationCount),
+			rotatelogs.WithRotationTime(config.Conf.Log.SqlRotationTime),
+			rotatelogs.WithRotationSize(int64(config.Conf.Log.SqlRotationSize)),
+		)
+		if err != nil {
+			panic(err)
+		}
+		sqlLogger.SetFormatter(&TaosSqlLogFormatter{})
+		sqlLogger.SetOutput(sqlWriter)
+	}
 }
 
 func SetLevel(level string) error {
