@@ -391,8 +391,6 @@ taosAdapter 通过参数 `restfulRowLimit` 来控制结果的返回条数，-1 �
 * `http://<fqdn>:6041/rest/sqlutc`
 * `http://<fqdn>:6041/prometheus/v1/remote_read/:db`
 
-## 配置方法
-
 ## 故障解决
 
 您可以通过命令 `systemctl status taosadapter` 来检查 taosAdapter 运行状态。
