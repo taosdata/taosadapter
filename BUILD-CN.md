@@ -32,7 +32,7 @@ sudo make install
 
 ## 单独构建 taosAdapter
 
-如果您已经部署了 TDengine 服务器 v2.3.0.0 或以上的版本，taosAdapter 也可以作为一个独立的应用程序被构建。
+如果您已经部署了 TDengine 服务器 v2.4.0.0 或以上的版本，taosAdapter 也可以作为一个独立的应用程序被构建。
 
 ### 安装 TDengine 服务器或客户端安装包
 
