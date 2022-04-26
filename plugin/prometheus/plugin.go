@@ -2,6 +2,7 @@ package prometheus
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gogo/protobuf/proto"
@@ -76,23 +77,29 @@ func (p *Plugin) Read(c *gin.Context) {
 		_ = c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
+	start := time.Now()
 	buf, err := snappy.Decode(nil, data)
 	if err != nil {
 		_ = c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
+	logger.Debug("read snappy decode cost:", time.Now().Sub(start))
 	var req prompb.ReadRequest
+	start = time.Now()
 	err = proto.Unmarshal(buf, &req)
 	if err != nil {
 		_ = c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
+	logger.Debug("read protobuf unmarshal cost:", time.Now().Sub(start))
+	start = time.Now()
 	taosConn, err := commonpool.GetConnection(user, password)
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
 		_ = c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
+	logger.Debug("read commonpool.GetConnection cost:", time.Now().Sub(start))
 	defer func() {
 		putErr := taosConn.Put()
 		if putErr != nil {
@@ -108,12 +115,16 @@ func (p *Plugin) Read(c *gin.Context) {
 		_ = c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
+	start = time.Now()
 	respData, err := proto.Marshal(resp)
 	if err != nil {
 		_ = c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
+	logger.Debug("read protobuf marshal cost:", time.Now().Sub(start))
+	start = time.Now()
 	compressed := snappy.Encode(nil, respData)
+	logger.Debug("read snappy encode cost:", time.Now().Sub(start))
 	c.Header("Content-Encoding", "snappy")
 	c.Data(http.StatusAccepted, "application/x-protobuf", compressed)
 }
@@ -131,26 +142,32 @@ func (p *Plugin) Write(c *gin.Context) {
 		_ = c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
+	start := time.Now()
 	buf, err := snappy.Decode(nil, data)
 	if err != nil {
 		_ = c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
+	logger.Debug("snappy decode cost:", time.Now().Sub(start))
 	var req prompb.WriteRequest
+	start = time.Now()
 	err = proto.Unmarshal(buf, &req)
 	if err != nil {
 		_ = c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
+	logger.Debug("protobuf unmarshal cost:", time.Now().Sub(start))
 	if req.GetTimeseries() == nil {
 		return
 	}
+	start = time.Now()
 	taosConn, err := commonpool.GetConnection(user, password)
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
 		_ = c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
+	logger.Debug("commonpool.GetConnection cost:", time.Now().Sub(start))
 	defer func() {
 		putErr := taosConn.Put()
 		if putErr != nil {
