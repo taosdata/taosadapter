@@ -330,6 +330,9 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	}
 	precision := wrapper.TaosResultPrecision(res)
 	fetched := false
+	payloadOffset := uintptr(4 * fieldsCount)
+	pHeaderList := make([]uintptr, fieldsCount)
+	pStartList := make([]uintptr, fieldsCount)
 	for {
 		if config.Conf.RestfulRowLimit > -1 && total == config.Conf.RestfulRowLimit {
 			err = builder.Flush()
@@ -357,20 +360,36 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 			} else {
 				fetched = true
 			}
-			for i := 0; i < result.N; i++ {
-				var row unsafe.Pointer
-				thread.Lock()
-				row = wrapper.TaosFetchRow(res)
-				thread.Unlock()
-				lengths := wrapper.FetchLengths(res, fieldsCount)
+			thread.Lock()
+			block := wrapper.TaosResultBlock(res)
+			thread.Unlock()
+			blockSize := result.N
+			nullBitMapOffset := uintptr(ctools.BitmapLen(blockSize))
+			tmpPHeader := uintptr(block) + payloadOffset + 12 // length i32, group u64
+			tmpPStart := tmpPHeader
+			for column := 0; column < fieldsCount; column++ {
+				colLength := *((*int32)(unsafe.Pointer(uintptr(block) + 12 + uintptr(column)*4)))
+				if ctools.IsVarDataType(rowsHeader.ColTypes[column]) {
+					pHeaderList[column] = tmpPHeader
+					tmpPStart = tmpPHeader + uintptr(4*blockSize)
+					pStartList[column] = tmpPStart
+				} else {
+					pHeaderList[column] = tmpPHeader
+					tmpPStart = tmpPHeader + nullBitMapOffset
+					pStartList[column] = tmpPStart
+				}
+				tmpPHeader = tmpPStart + uintptr(colLength)
+			}
+
+			for row := 0; row < result.N; row++ {
 				builder.WriteArrayStart()
 				err = builder.Flush()
 				if err != nil {
 					return
 				}
-				for j := 0; j < fieldsCount; j++ {
-					ctools.JsonWriteRowValue(builder, row, j, rowsHeader.ColTypes[j], lengths[j], precision, timeFormat)
-					if j != fieldsCount-1 {
+				for column := 0; column < fieldsCount; column++ {
+					ctools.JsonWriteRawBlock(builder, rowsHeader.ColTypes[column], pHeaderList[column], pStartList[column], row, precision, timeFormat)
+					if column != fieldsCount-1 {
 						builder.WriteMore()
 						err = builder.Flush()
 						if err != nil {
@@ -390,7 +409,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 				if config.Conf.RestfulRowLimit > -1 && total == config.Conf.RestfulRowLimit {
 					break
 				}
-				if i != result.N-1 {
+				if row != result.N-1 {
 					builder.WriteMore()
 				}
 				err = builder.Flush()
