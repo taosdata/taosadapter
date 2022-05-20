@@ -319,24 +319,16 @@ func (t *Taos) fetchBlock(session *melody.Session, req *WSFetchBlockReq) {
 		return
 	}
 	resultS.Lock()
-	totalDataLength := 0
-	for _, length := range resultS.Lengths {
-		totalDataLength += length
-	}
-	totalDataLength *= resultS.Size
+	blockLength := int(*(*int32)(resultS.Block))
 	if resultS.buffer == nil {
 		resultS.buffer = new(bytes.Buffer)
 	} else {
 		resultS.buffer.Reset()
 	}
-	resultS.buffer.Grow(totalDataLength + 8)
+	resultS.buffer.Grow(blockLength + 8)
 	writeUint64(resultS.buffer, req.ID)
-	for column := 0; column < resultS.FieldsCount; column++ {
-		length := resultS.Lengths[column] * resultS.Size
-		colPointer := *(*uintptr)(unsafe.Pointer(uintptr(unsafe.Pointer(*(*C.TAOS_ROW)(resultS.Block))) + uintptr(column)*wrapper.PointerSize))
-		for offset := 0; offset < length; offset++ {
-			resultS.buffer.WriteByte(*((*byte)(unsafe.Pointer(colPointer + uintptr(offset)))))
-		}
+	for offset := 0; offset < blockLength; offset++ {
+		resultS.buffer.WriteByte(*((*byte)(unsafe.Pointer(uintptr(resultS.Block) + uintptr(offset)))))
 	}
 	b := resultS.buffer.Bytes()
 	session.WriteBinary(b)
