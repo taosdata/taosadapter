@@ -34,16 +34,15 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	if err != nil {
 		errStr := err.Error()
 		if strings.HasPrefix(errStr, "factory is not able to fill the pool: [0x") {
-			tdErrorStr := strings.TrimLeft(errStr, "factory is not able to fill the pool: ")
-			splitIndex := strings.IndexByte(tdErrorStr, ']')
+			splitIndex := strings.IndexByte(errStr, ']')
 			if splitIndex == -1 {
 				return nil, err
 			}
-			code, parseErr := strconv.ParseInt(tdErrorStr[1:splitIndex], 0, 32)
+			code, parseErr := strconv.ParseInt(errStr[39:splitIndex], 0, 32)
 			if parseErr != nil {
 				return nil, err
 			}
-			msg := tdErrorStr[splitIndex+2:]
+			msg := errStr[splitIndex+2:]
 			return nil, tErrors.NewError(int(code), msg)
 		}
 		return nil, err
