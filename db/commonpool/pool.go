@@ -1,10 +1,13 @@
 package commonpool
 
 import (
+	"strconv"
+	"strings"
 	"sync"
 	"unsafe"
 
 	"github.com/silenceper/pool"
+	tErrors "github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/driver-go/v2/wrapper"
 	"github.com/taosdata/taosadapter/config"
 	"github.com/taosdata/taosadapter/thread"
@@ -27,7 +30,22 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 		IdleTimeout: config.Conf.Pool.IdleTimeout,
 	}
 	p, err := pool.NewChannelPool(poolConfig)
+
 	if err != nil {
+		errStr := err.Error()
+		if strings.HasPrefix(errStr, "factory is not able to fill the pool: [0x") {
+			tdErrorStr := strings.TrimLeft(errStr, "factory is not able to fill the pool: ")
+			splitIndex := strings.IndexByte(tdErrorStr, ']')
+			if splitIndex == -1 {
+				return nil, err
+			}
+			code, parseErr := strconv.ParseInt(tdErrorStr[1:splitIndex], 0, 32)
+			if parseErr != nil {
+				return nil, err
+			}
+			msg := tdErrorStr[splitIndex+2:]
+			return nil, tErrors.NewError(int(code), msg)
+		}
 		return nil, err
 	}
 	a.pool = p
