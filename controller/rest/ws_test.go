@@ -59,6 +59,7 @@ func TestWebsocket(t *testing.T) {
 		AfterFetch   = 3
 		//AfterFetchJson  = 4
 		AfterFetchBlock = 5
+		AfterFreeResult = 6
 	)
 
 	status := 0
@@ -253,6 +254,22 @@ func TestWebsocket(t *testing.T) {
 		return
 	}
 	<-finish
+	b, _ = json.Marshal(&WSFreeResultReq{
+		ReqID: 5,
+		ID:    queryResult.ID,
+	})
+	action, _ = json.Marshal(&WSAction{
+		Action: WSFreeResult,
+		Args:   b,
+	})
+	err = ws.WriteMessage(
+		websocket.TextMessage,
+		action,
+	)
+	assert.NoError(t, err)
+
+	err = ws.Close()
+	assert.NoError(t, err)
 	//assert.Equal(t, 3, total)
 	//assert.Equal(t, 3, len(jsonResult))
 	//assert.Equal(t, true, jsonResult[0][1])

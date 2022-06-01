@@ -19,15 +19,18 @@ import (
 	"github.com/taosdata/taosadapter/db"
 )
 
-// @author: xftan
-// @date: 2021/12/14 15:08
-// @description: test opentsdb test
-func TestOpentsdb(t *testing.T) {
+func TestMain(m *testing.M) {
 	rand.Seed(time.Now().UnixNano())
 	config.Init()
 	viper.Set("opentsdb.enable", true)
 	db.PrepareConnection()
+	m.Run()
+}
 
+// @author: xftan
+// @date: 2021/12/14 15:08
+// @description: test opentsdb test
+func TestOpentsdb(t *testing.T) {
 	p := Plugin{}
 	router := gin.Default()
 	router.Use(func(c *gin.Context) {
@@ -93,4 +96,56 @@ func TestOpentsdb(t *testing.T) {
 	if int32(values[0].(float64)) != number {
 		t.Errorf("got %f expect %d", values[0], number)
 	}
+}
+
+func TestOpentsdbWrong(t *testing.T) {
+	p := Plugin{}
+	router := gin.Default()
+	router.Use(func(c *gin.Context) {
+		c.Set("currentID", uint32(1))
+	})
+	err := p.Init(router)
+	assert.NoError(t, err)
+	err = p.Start()
+	assert.NoError(t, err)
+	defer p.Stop()
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/put/telnet/wrong", nil)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 401, w.Code)
+
+	w = httptest.NewRecorder()
+	reader := strings.NewReader(fmt.Sprintf(`{
+	   "metric": "sys.cpu.nice",
+	   "timestamp": %d,
+	   "value": %d,
+	   "tags": {
+	      "host": "web01",
+	      "dc": "lga"
+	   }`, time.Now().Unix(), 123))
+	req, _ = http.NewRequest("POST", "/put/json/wrong", reader)
+	req.SetBasicAuth("root", "taosdata")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 500, w.Code)
+	assert.Equal(t, `{"code":500,"message":"[0x221] Invalid JSON format"}`, w.Body.String())
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", "/put/json/wrong", reader)
+	req.SetBasicAuth("root2", "taosdata")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 500, w.Code)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", "/put/telnet/wrong", reader)
+	req.SetBasicAuth("root2", "taosdata")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 500, w.Code)
+
+	w = httptest.NewRecorder()
+	reader = strings.NewReader(fmt.Sprintf("put metric %d", time.Now().Unix()))
+	req, _ = http.NewRequest("POST", "/put/telnet/wrong", reader)
+	req.SetBasicAuth("root", "taosdata")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 500, w.Code)
+	assert.Equal(t, `{"code":500,"message":"[0x21b] Syntax error in Line"}`, w.Body.String())
 }

@@ -19,14 +19,18 @@ import (
 	"github.com/taosdata/taosadapter/db"
 )
 
-// @author: xftan
-// @date: 2021/12/14 15:07
-// @description: test influxdb plugin
-func TestInfluxdb(t *testing.T) {
+func TestMain(m *testing.M) {
 	rand.Seed(time.Now().UnixNano())
 	config.Init()
 	viper.Set("influxdb.enable", true)
 	db.PrepareConnection()
+	m.Run()
+}
+
+// @author: xftan
+// @date: 2021/12/14 15:07
+// @description: test influxdb plugin
+func TestInfluxdb(t *testing.T) {
 	p := Influxdb{}
 	router := gin.Default()
 	router.Use(func(c *gin.Context) {
@@ -83,4 +87,48 @@ func TestInfluxdb(t *testing.T) {
 		t.Errorf("got %d expect %d", values[1].(int64), number)
 		return
 	}
+}
+
+func TestInfluxdbWrong(t *testing.T) {
+	p := Influxdb{}
+	router := gin.Default()
+	router.Use(func(c *gin.Context) {
+		c.Set("currentID", uint32(1))
+	})
+	err := p.Init(router)
+	assert.NoError(t, err)
+	err = p.Start()
+	assert.NoError(t, err)
+	number := rand.Int31()
+	defer p.Stop()
+	w := httptest.NewRecorder()
+	reader := strings.NewReader(fmt.Sprintf("measurement,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
+	req, _ := http.NewRequest("POST", "/write?u=root2&p=taosdata&db=test_plugin_influxdb", reader)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 500, w.Code)
+
+	w = httptest.NewRecorder()
+	reader = strings.NewReader(fmt.Sprintf("measurement,host=host1 "))
+	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata&db=wrong", reader)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 500, w.Code)
+
+	w = httptest.NewRecorder()
+	reader = strings.NewReader(fmt.Sprintf("measurement,host=host1 "))
+	req, _ = http.NewRequest("POST", "/write?db=wrong", reader)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 401, w.Code)
+
+	w = httptest.NewRecorder()
+	reader = strings.NewReader(fmt.Sprintf("measurement,host=host1 "))
+	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata", reader)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 400, w.Code)
+
+	w = httptest.NewRecorder()
+	reader = strings.NewReader(fmt.Sprintf("measurement,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
+	req, _ = http.NewRequest("POST", "/write?db=wrong", reader)
+	req.SetBasicAuth("root1", "taosdata")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 500, w.Code)
 }
