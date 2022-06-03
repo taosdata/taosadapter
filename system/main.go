@@ -54,7 +54,7 @@ func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin
 		pprof.Register(router)
 	}
 	if enableGzip {
-		router.Use(gzip.Gzip(gzip.DefaultCompression))
+		router.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithDecompressFn(gzip.DefaultDecompressHandle)))
 	}
 	router.Use(cors.New(corsConf.GetConfig()))
 	return router
