@@ -40,6 +40,8 @@ type Restful struct {
 
 func (ctl *Restful) Init(r gin.IRouter) {
 	ctl.InitWS()
+	ctl.InitStmt()
+	ctl.InitTMQ()
 	api := r.Group("rest")
 	api.Use(func(c *gin.Context) {
 		if monitor.AllPaused() {
@@ -55,6 +57,8 @@ func (ctl *Restful) Init(r gin.IRouter) {
 	api.POST("sqlutc/:db", CheckAuth, ctl.sqlutc)
 	api.GET("login/:user/:password", ctl.des)
 	api.GET("ws", ctl.ws)
+	api.GET("stmt", ctl.stmt)
+	api.GET("tmq", ctl.tmq)
 }
 
 type TDEngineRestfulRespDoc struct {
@@ -313,7 +317,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 		builder.WriteMore()
 		builder.WriteUint8(rowsHeader.ColTypes[i])
 		builder.WriteMore()
-		builder.WriteUint16(rowsHeader.ColLength[i])
+		builder.WriteInt64(rowsHeader.ColLength[i])
 		builder.WriteArrayEnd()
 		if i != fieldsCount-1 {
 			builder.WriteMore()
@@ -365,10 +369,10 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 			thread.Unlock()
 			blockSize := result.N
 			nullBitMapOffset := uintptr(ctools.BitmapLen(blockSize))
-			tmpPHeader := uintptr(block) + payloadOffset + 12 // length i32, group u64
+			tmpPHeader := uintptr(block) + payloadOffset + 12 + uintptr(6*fieldsCount) // length i32, group u64
 			tmpPStart := tmpPHeader
 			for column := 0; column < fieldsCount; column++ {
-				colLength := *((*int32)(unsafe.Pointer(uintptr(block) + 12 + uintptr(column)*4)))
+				colLength := *((*int32)(unsafe.Pointer(uintptr(block) + 12 + uintptr(6*fieldsCount) + uintptr(column)*4)))
 				if ctools.IsVarDataType(rowsHeader.ColTypes[column]) {
 					pHeaderList[column] = tmpPHeader
 					tmpPStart = tmpPHeader + uintptr(4*blockSize)

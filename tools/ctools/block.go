@@ -4,9 +4,10 @@ import (
 	"unsafe"
 
 	"github.com/taosdata/driver-go/v2/common"
-	"github.com/taosdata/driver-go/v2/wrapper"
 	"github.com/taosdata/taosadapter/tools/jsonbuilder"
 )
+
+type FormatTimeFunc func(builder *jsonbuilder.Stream, ts int64, precision int)
 
 func IsVarDataType(colType uint8) bool {
 	return colType == common.TSDB_DATA_TYPE_BINARY || colType == common.TSDB_DATA_TYPE_NCHAR
@@ -87,11 +88,7 @@ func WriteRawJsonDouble(builder *jsonbuilder.Stream, pStart uintptr, row int) {
 
 func WriteRawJsonTime(builder *jsonbuilder.Stream, pStart uintptr, row int, precision int, timeFormat FormatTimeFunc) {
 	value := *((*int64)(unsafe.Pointer(pStart + uintptr(row)*8)))
-	if value == wrapper.CTimestampNull {
-		builder.WriteNil()
-	} else {
-		timeFormat(builder, value, precision)
-	}
+	timeFormat(builder, value, precision)
 }
 
 func WriteRawJsonBinary(builder *jsonbuilder.Stream, pHeader, pStart uintptr, row int) {

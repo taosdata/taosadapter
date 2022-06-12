@@ -129,9 +129,9 @@ func AllPaused() bool {
 }
 
 const (
-	CreateRequestTotalSql = "create table if not exists taosadapter_restful_http_total(ts timestamp,count bigint) tags (endpoint binary(45),status_code int, client_ip binary(40), request_method binary(15), request_uri binary(128))"
-	CreateRequestFailSql  = "create table if not exists taosadapter_restful_http_fail(ts timestamp,count bigint) tags (endpoint binary(45),status_code int, client_ip binary(40), request_method binary(15), request_uri binary(128))"
-	CreateRequestInFlight = "create table if not exists taosadapter_restful_http_request_in_flight(ts timestamp,count bigint) tags (endpoint binary(45))"
+	CreateRequestTotalSql = "create table if not exists taosadapter_restful_http_total(ts timestamp,`count` bigint) tags (endpoint binary(45),status_code int, client_ip binary(40), request_method binary(15), request_uri binary(128))"
+	CreateRequestFailSql  = "create table if not exists taosadapter_restful_http_fail(ts timestamp,`count` bigint) tags (endpoint binary(45),status_code int, client_ip binary(40), request_method binary(15), request_uri binary(128))"
+	CreateRequestInFlight = "create table if not exists taosadapter_restful_http_request_in_flight(ts timestamp,`count` bigint) tags (endpoint binary(45))"
 	CreateRequestLatency  = "create table if not exists taosadapter_restful_http_request_latency(ts timestamp,quantile_1 double,quantile_2 double,quantile_5 double,quantile_9 double,quantile_99 double) tags (endpoint binary(45),request_method binary(15), request_uri binary(128))"
 	CreateSystemPercent   = "create table if not exists taosadapter_system(ts timestamp,cpu_percent double,mem_percent double) tags (endpoint binary(45))"
 	InsertStatement       = "insert into"

@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"sync"
 	"sync/atomic"
-	"time"
 	"unsafe"
 
 	"github.com/gin-gonic/gin"
@@ -23,6 +22,7 @@ import (
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/httperror"
 	"github.com/taosdata/taosadapter/thread"
+	"github.com/taosdata/taosadapter/tools/jsontype"
 	"github.com/taosdata/taosadapter/tools/pool"
 	"github.com/taosdata/taosadapter/tools/web"
 )
@@ -38,7 +38,6 @@ const (
 )
 
 type Taos struct {
-	Session      *melody.Session
 	Conn         *commonpool.Conn
 	resultLocker sync.RWMutex
 	Results      *list.List
@@ -60,7 +59,6 @@ type Result struct {
 	Size        int
 	Block       unsafe.Pointer
 	precision   int
-	createTime  time.Time
 	buffer      *bytes.Buffer
 	sync.Mutex
 }
@@ -81,7 +79,7 @@ func (r *Result) FreeResult() {
 	r.Unlock()
 }
 
-func (t *Taos) AddResult(result *Result) {
+func (t *Taos) addResult(result *Result) {
 	index := atomic.AddUint64(&t.resultIndex, 1)
 	result.index = index
 	t.resultLocker.Lock()
@@ -89,7 +87,7 @@ func (t *Taos) AddResult(result *Result) {
 	t.resultLocker.Unlock()
 }
 
-func (t *Taos) GetResult(index uint64) *list.Element {
+func (t *Taos) getResult(index uint64) *list.Element {
 	t.resultLocker.RLock()
 	defer t.resultLocker.RUnlock()
 	root := t.Results.Front()
@@ -169,18 +167,18 @@ type WSQueryReq struct {
 }
 
 type WSQueryResult struct {
-	Code          int      `json:"code"`
-	Message       string   `json:"message"`
-	Action        string   `json:"action"`
-	ReqID         uint64   `json:"req_id"`
-	ID            uint64   `json:"id"`
-	IsUpdate      bool     `json:"is_update"`
-	AffectedRows  int      `json:"affected_rows"`
-	FieldsCount   int      `json:"fields_count"`
-	FieldsNames   []string `json:"fields_names"`
-	FieldsTypes   []int    `json:"fields_types"`
-	FieldsLengths []int    `json:"fields_lengths"`
-	Precision     int      `json:"precision"`
+	Code          int                `json:"code"`
+	Message       string             `json:"message"`
+	Action        string             `json:"action"`
+	ReqID         uint64             `json:"req_id"`
+	ID            uint64             `json:"id"`
+	IsUpdate      bool               `json:"is_update"`
+	AffectedRows  int                `json:"affected_rows"`
+	FieldsCount   int                `json:"fields_count"`
+	FieldsNames   []string           `json:"fields_names"`
+	FieldsTypes   jsontype.JsonUint8 `json:"fields_types"`
+	FieldsLengths []int64            `json:"fields_lengths"`
+	Precision     int                `json:"precision"`
 }
 
 func (t *Taos) query(session *melody.Session, req *WSQueryReq) {
@@ -217,12 +215,8 @@ func (t *Taos) query(session *melody.Session, req *WSQueryReq) {
 		queryResult.FieldsCount = fieldsCount
 		rowsHeader, _ := wrapper.ReadColumn(result.Res, fieldsCount)
 		queryResult.FieldsNames = rowsHeader.ColNames
-		queryResult.FieldsLengths = make([]int, fieldsCount)
-		queryResult.FieldsTypes = make([]int, fieldsCount)
-		for i := 0; i < fieldsCount; i++ {
-			queryResult.FieldsLengths[i] = int(rowsHeader.ColLength[i])
-			queryResult.FieldsTypes[i] = int(rowsHeader.ColTypes[i])
-		}
+		queryResult.FieldsLengths = rowsHeader.ColLength
+		queryResult.FieldsTypes = rowsHeader.ColTypes
 		precision := wrapper.TaosResultPrecision(result.Res)
 		queryResult.Precision = precision
 		result := &Result{
@@ -230,9 +224,8 @@ func (t *Taos) query(session *melody.Session, req *WSQueryReq) {
 			FieldsCount: fieldsCount,
 			Header:      rowsHeader,
 			precision:   precision,
-			createTime:  time.Now(),
 		}
-		t.AddResult(result)
+		t.addResult(result)
 		queryResult.ID = result.index
 		wsWriteJson(session, queryResult)
 	}
@@ -259,7 +252,7 @@ func (t *Taos) fetch(session *melody.Session, req *WSFetchReq) {
 		wsErrorMsg(session, 0xffff, "taos not connected", WSFetch, req.ReqID)
 		return
 	}
-	resultItem := t.GetResult(req.ID)
+	resultItem := t.getResult(req.ID)
 	if resultItem == nil {
 		wsErrorMsg(session, 0xffff, "result is nil", WSFetch, req.ReqID)
 		return
@@ -308,7 +301,7 @@ func (t *Taos) fetchBlock(session *melody.Session, req *WSFetchBlockReq) {
 		wsErrorMsg(session, 0xffff, "taos not connected", WSFetchBlock, req.ReqID)
 		return
 	}
-	resultItem := t.GetResult(req.ID)
+	resultItem := t.getResult(req.ID)
 	if resultItem == nil {
 		wsErrorMsg(session, 0xffff, "result is nil", WSFetchBlock, req.ReqID)
 		return
@@ -331,86 +324,9 @@ func (t *Taos) fetchBlock(session *melody.Session, req *WSFetchBlockReq) {
 		resultS.buffer.WriteByte(*((*byte)(unsafe.Pointer(uintptr(resultS.Block) + uintptr(offset)))))
 	}
 	b := resultS.buffer.Bytes()
-	session.WriteBinary(b)
 	resultS.Unlock()
+	session.WriteBinary(b)
 }
-
-//
-//type WSFetchJsonReq struct {
-//	ReqID uint64 `json:"req_id"`
-//	ID    uint64 `json:"id"`
-//}
-//
-//type WSFetchJsonResp struct {
-//	Action string          `json:"action"`
-//	ReqId  uint64          `json:"req_id"`
-//	Id     uint64          `json:"id"`
-//	Data   [][]interface{} `json:"data"`
-//}
-//
-//func (t *Taos) fetchJson(session *melody.Session, req *WSFetchJsonReq) {
-//	if t.Conn == nil {
-//		wsErrorMsg(session, 0xffff, "taos not connected", WSFetchJson, req.ReqID)
-//		return
-//	}
-//	resultItem := t.GetResult(req.ID)
-//	if resultItem == nil {
-//		wsErrorMsg(session, 0xffff, "result is nil", WSFetchJson, req.ReqID)
-//		return
-//	}
-//	resultS := resultItem.Value.(*Result)
-//	if resultS.Block == nil {
-//		wsErrorMsg(session, 0xffff, "block is nil", WSFetchJson, req.ReqID)
-//		return
-//	}
-//
-//	//{
-//	//	"action": "fetch_json",
-//	//	"req_id": 1,
-//	//	"id": 1,
-//	//	"data": [[]]
-//	//}
-//	builder := jsonbuilder.BorrowStream(&Writer{session: session})
-//	builder.WriteObjectStart()
-//	builder.WriteObjectField("action")
-//	builder.WriteString(WSFetchJson)
-//	builder.WriteMore()
-//	builder.WriteObjectField("req_id")
-//	builder.WriteUint64(req.ReqID)
-//	builder.WriteMore()
-//	builder.WriteObjectField("id")
-//	builder.WriteUint64(req.ID)
-//	builder.WriteMore()
-//	builder.WriteObjectField("data")
-//	builder.WriteArrayStart()
-//	for rowID := 0; rowID < resultS.Size; rowID++ {
-//		builder.WriteArrayStart()
-//		for columnID := 0; columnID < resultS.FieldsCount; columnID++ {
-//			ctools.JsonWriteBlockValue(builder, resultS.Block, resultS.Header.ColTypes[columnID], columnID, rowID, resultS.Lengths[columnID], resultS.precision, func(builder *jsonbuilder.Stream, ts int64, precision int) {
-//				switch precision {
-//				case common.PrecisionNanoSecond:
-//					builder.WriteInt64(ts)
-//				case common.PrecisionMicroSecond:
-//					builder.WriteInt64(ts * 1e3)
-//				case common.PrecisionMilliSecond:
-//					builder.WriteInt64(ts * 1e6)
-//				default:
-//					builder.WriteNil()
-//				}
-//			})
-//			if columnID != resultS.FieldsCount-1 {
-//				builder.WriteMore()
-//			}
-//		}
-//		builder.WriteArrayEnd()
-//		if rowID != resultS.Size-1 {
-//			builder.WriteMore()
-//		}
-//	}
-//	builder.WriteArrayEnd()
-//	builder.WriteObjectEnd()
-//	builder.Flush()
-//}
 
 type WSFreeResultReq struct {
 	ReqID uint64 `json:"req_id"`
@@ -421,7 +337,7 @@ func (t *Taos) freeResult(session *melody.Session, req *WSFreeResultReq) {
 	if t.Conn == nil {
 		return
 	}
-	resultItem := t.GetResult(req.ID)
+	resultItem := t.getResult(req.ID)
 	if resultItem == nil {
 		return
 	}
