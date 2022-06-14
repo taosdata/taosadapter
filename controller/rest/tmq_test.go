@@ -97,7 +97,11 @@ func TestTMQ(t *testing.T) {
 	var tmpFetchResp *TMQFetchResp
 	pollCount := 0
 	testMessageHandler := func(messageType int, message []byte) error {
-		t.Log(messageType, string(message))
+		if messageType == websocket.BinaryMessage {
+			t.Log(messageType, message)
+		} else {
+			t.Log(messageType, string(message))
+		}
 		switch status {
 		case AfterTMQInit:
 			var d TMQInitResp
@@ -120,6 +124,7 @@ func TestTMQ(t *testing.T) {
 				Action: TMQSubscribe,
 				Args:   b,
 			})
+			t.Log(string(action))
 			err = ws.WriteMessage(
 				websocket.TextMessage,
 				action,
@@ -146,6 +151,7 @@ func TestTMQ(t *testing.T) {
 				Action: TMQPoll,
 				Args:   b,
 			})
+			t.Log(string(action))
 			err = ws.WriteMessage(
 				websocket.TextMessage,
 				action,
@@ -164,6 +170,7 @@ func TestTMQ(t *testing.T) {
 					Action: TMQUnSubscribe,
 					Args:   b,
 				})
+				t.Log(string(action))
 				err = ws.WriteMessage(
 					websocket.TextMessage,
 					action,
@@ -189,6 +196,7 @@ func TestTMQ(t *testing.T) {
 					Action: TMQFetch,
 					Args:   b,
 				})
+				t.Log(string(action))
 				err = ws.WriteMessage(
 					websocket.TextMessage,
 					action,
@@ -208,6 +216,7 @@ func TestTMQ(t *testing.T) {
 					Action: TMQPoll,
 					Args:   b,
 				})
+				t.Log(string(action))
 				err = ws.WriteMessage(
 					websocket.TextMessage,
 					action,
@@ -236,6 +245,7 @@ func TestTMQ(t *testing.T) {
 					Action: TMQCommit,
 					Args:   b,
 				})
+				t.Log(string(action))
 				err = ws.WriteMessage(
 					websocket.TextMessage,
 					action,
@@ -253,6 +263,7 @@ func TestTMQ(t *testing.T) {
 					Action: TMQFetchBlock,
 					Args:   b,
 				})
+				t.Log(string(action))
 				err = ws.WriteMessage(
 					websocket.TextMessage,
 					action,
@@ -290,6 +301,7 @@ func TestTMQ(t *testing.T) {
 				Action: TMQFetch,
 				Args:   b,
 			})
+			t.Log(string(action))
 			err = ws.WriteMessage(
 				websocket.TextMessage,
 				action,
@@ -316,6 +328,7 @@ func TestTMQ(t *testing.T) {
 				Action: TMQPoll,
 				Args:   b,
 			})
+			t.Log(string(action))
 			err = ws.WriteMessage(
 				websocket.TextMessage,
 				action,
@@ -337,9 +350,10 @@ func TestTMQ(t *testing.T) {
 				ConsumerID: consumerID,
 			})
 			action, _ := json.Marshal(&WSAction{
-				Action: TMQPoll,
+				Action: TMQClose,
 				Args:   b,
 			})
+			t.Log(string(action))
 			err = ws.WriteMessage(
 				websocket.TextMessage,
 				action,
@@ -358,6 +372,7 @@ func TestTMQ(t *testing.T) {
 			mt, message, err := ws.ReadMessage()
 			if err != nil {
 				if strings.Contains(err.Error(), "use of closed network connection") {
+					finish <- struct{}{}
 					return
 				}
 				t.Error(err)
@@ -366,6 +381,10 @@ func TestTMQ(t *testing.T) {
 			}
 			err = testMessageHandler(mt, message)
 			if err != nil {
+				if strings.Contains(err.Error(), "use of closed network connection") {
+					finish <- struct{}{}
+					return
+				}
 				if mt == websocket.BinaryMessage {
 					t.Error(err, message)
 				} else {
@@ -389,6 +408,7 @@ func TestTMQ(t *testing.T) {
 		Action: TMQInit,
 		Args:   b,
 	})
+	t.Log(string(action))
 	status = AfterTMQInit
 	err = ws.WriteMessage(
 		websocket.TextMessage,

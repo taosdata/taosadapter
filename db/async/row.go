@@ -107,6 +107,14 @@ func (a *Async) TaosFetchRowsA(res unsafe.Pointer, handler *Handler) (*Result, e
 	return r, nil
 }
 
+func (a *Async) TaosFetchRawBlockA(res unsafe.Pointer, handler *Handler) (*Result, error) {
+	thread.Lock()
+	wrapper.TaosFetchRawBlockA(res, handler.Handler)
+	thread.Unlock()
+	r := <-handler.Caller.FetchResult
+	return r, nil
+}
+
 type ExecResult struct {
 	AffectedRows int
 	FieldCount   int

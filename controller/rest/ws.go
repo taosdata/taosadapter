@@ -260,7 +260,7 @@ func (t *Taos) fetch(session *melody.Session, req *WSFetchReq) {
 	resultS := resultItem.Value.(*Result)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
-	result, _ := async.GlobalAsync.TaosFetchRowsA(resultS.TaosResult, handler)
+	result, _ := async.GlobalAsync.TaosFetchRawBlockA(resultS.TaosResult, handler)
 	if result.N == 0 {
 		t.FreeResult(resultItem)
 		wsWriteJson(session, &WSFetchResp{
@@ -278,7 +278,7 @@ func (t *Taos) fetch(session *melody.Session, req *WSFetchReq) {
 		return
 	}
 	resultS.Lengths = wrapper.FetchLengths(resultS.TaosResult, resultS.FieldsCount)
-	block := wrapper.TaosResultBlock(resultS.TaosResult)
+	block := wrapper.TaosGetRawBlock(resultS.TaosResult)
 	resultS.Block = block
 	resultS.Size = result.N
 
@@ -412,16 +412,16 @@ type WSCommonResp struct {
 }
 
 func (ctl *Restful) InitWS() {
-	ctl.m = melody.New()
+	ctl.wsM = melody.New()
 
-	ctl.m.HandleConnect(func(session *melody.Session) {
+	ctl.wsM.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws connect")
 		session.Set(TaosSessionKey, NewTaos())
 	})
 
-	ctl.m.HandleMessage(func(session *melody.Session, data []byte) {
-		if ctl.m.IsClosed() {
+	ctl.wsM.HandleMessage(func(session *melody.Session, data []byte) {
+		if ctl.wsM.IsClosed() {
 			return
 		}
 		logger := session.MustGet("logger").(*logrus.Entry)
@@ -490,7 +490,7 @@ func (ctl *Restful) InitWS() {
 		}
 	})
 
-	ctl.m.HandleClose(func(session *melody.Session, i int, s string) error {
+	ctl.wsM.HandleClose(func(session *melody.Session, i int, s string) error {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws close", i, s)
 		t, exist := session.Get(TaosSessionKey)
@@ -500,7 +500,7 @@ func (ctl *Restful) InitWS() {
 		return nil
 	})
 
-	ctl.m.HandleError(func(session *melody.Session, err error) {
+	ctl.wsM.HandleError(func(session *melody.Session, err error) {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		_, is := err.(*websocket.CloseError)
 		if is {
@@ -514,7 +514,7 @@ func (ctl *Restful) InitWS() {
 		}
 	})
 
-	ctl.m.HandleDisconnect(func(session *melody.Session) {
+	ctl.wsM.HandleDisconnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws disconnect")
 		t, exist := session.Get(TaosSessionKey)
@@ -527,7 +527,7 @@ func (ctl *Restful) InitWS() {
 func (ctl *Restful) ws(c *gin.Context) {
 	id := web.GetRequestID(c)
 	loggerWithID := logger.WithField("sessionID", id)
-	_ = ctl.m.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": loggerWithID})
+	_ = ctl.wsM.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": loggerWithID})
 }
 
 type WSErrorResp struct {

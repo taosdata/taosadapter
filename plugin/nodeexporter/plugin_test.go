@@ -54,7 +54,7 @@ func TestNodeExporter_Gather(t *testing.T) {
 	conn, err := af.Open("", "", "", "", 0)
 	assert.NoError(t, err)
 	defer conn.Close()
-	_, err = conn.Exec("create database if not exists node_exporter precision 'ns' update 2")
+	_, err = conn.Exec("create database if not exists node_exporter precision 'ns'")
 	assert.NoError(t, err)
 	err = conn.SelectDB("node_exporter")
 	assert.NoError(t, err)

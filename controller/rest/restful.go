@@ -35,7 +35,9 @@ const LayoutNanoSecond = "2006-01-02 15:04:05.000000000"
 var logger = log.GetLogger("restful")
 
 type Restful struct {
-	m *melody.Melody
+	wsM   *melody.Melody
+	stmtM *melody.Melody
+	tmqM  *melody.Melody
 }
 
 func (ctl *Restful) Init(r gin.IRouter) {
@@ -348,7 +350,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 		if isDebug {
 			s = time.Now()
 		}
-		result, _ = async.GlobalAsync.TaosFetchRowsA(res, handler)
+		result, _ = async.GlobalAsync.TaosFetchRawBlockA(res, handler)
 		if isDebug {
 			logger.Debugln("taos fetch_rows_a cost:", time.Now().Sub(s))
 		}
@@ -365,7 +367,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 				fetched = true
 			}
 			thread.Lock()
-			block := wrapper.TaosResultBlock(res)
+			block := wrapper.TaosGetRawBlock(res)
 			thread.Unlock()
 			blockSize := result.N
 			nullBitMapOffset := uintptr(ctools.BitmapLen(blockSize))

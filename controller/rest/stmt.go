@@ -633,16 +633,16 @@ func (t *TaosStmt) cleanUp() {
 }
 
 func (ctl *Restful) InitStmt() {
-	ctl.m = melody.New()
+	ctl.stmtM = melody.New()
 
-	ctl.m.HandleConnect(func(session *melody.Session) {
+	ctl.stmtM.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws connect")
 		session.Set(TaosStmtKey, NewTaosStmt())
 	})
 
-	ctl.m.HandleMessage(func(session *melody.Session, data []byte) {
-		if ctl.m.IsClosed() {
+	ctl.stmtM.HandleMessage(func(session *melody.Session, data []byte) {
+		if ctl.stmtM.IsClosed() {
 			return
 		}
 		logger := session.MustGet("logger").(*logrus.Entry)
@@ -742,7 +742,7 @@ func (ctl *Restful) InitStmt() {
 		BindAction    = 2
 	)
 
-	ctl.m.HandleMessageBinary(func(session *melody.Session, data []byte) {
+	ctl.stmtM.HandleMessageBinary(func(session *melody.Session, data []byte) {
 		//p0 uin64 代表 req_id
 		//p0+8 uint64 代表 stmt_id
 		//p0+16 uint64 代表 操作类型(1 (set tag) 2 (bind))
@@ -756,7 +756,7 @@ func (ctl *Restful) InitStmt() {
 		columns := *(*uint64)(unsafe.Pointer(p0 + uintptr(24)))
 		counts := *(*uint64)(unsafe.Pointer(p0 + uintptr(32)))
 		block := unsafe.Pointer(p0 + uintptr(40))
-		if ctl.m.IsClosed() {
+		if ctl.stmtM.IsClosed() {
 			return
 		}
 		logger := session.MustGet("logger").(*logrus.Entry)
@@ -771,7 +771,7 @@ func (ctl *Restful) InitStmt() {
 		}
 	})
 
-	ctl.m.HandleClose(func(session *melody.Session, i int, s string) error {
+	ctl.stmtM.HandleClose(func(session *melody.Session, i int, s string) error {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws close", i, s)
 		t, exist := session.Get(TaosStmtKey)
@@ -781,7 +781,7 @@ func (ctl *Restful) InitStmt() {
 		return nil
 	})
 
-	ctl.m.HandleError(func(session *melody.Session, err error) {
+	ctl.stmtM.HandleError(func(session *melody.Session, err error) {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		_, is := err.(*websocket.CloseError)
 		if is {
@@ -795,7 +795,7 @@ func (ctl *Restful) InitStmt() {
 		}
 	})
 
-	ctl.m.HandleDisconnect(func(session *melody.Session) {
+	ctl.stmtM.HandleDisconnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws disconnect")
 		t, exist := session.Get(TaosStmtKey)
@@ -808,5 +808,5 @@ func (ctl *Restful) InitStmt() {
 func (ctl *Restful) stmt(c *gin.Context) {
 	id := web.GetRequestID(c)
 	loggerWithID := logger.WithField("sessionID", id)
-	_ = ctl.m.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": loggerWithID})
+	_ = ctl.stmtM.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": loggerWithID})
 }

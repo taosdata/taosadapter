@@ -29,7 +29,7 @@ const (
 	TMQUnSubscribe = "unsubscribe"
 	TMQClose       = "close"
 )
-const TaosSTMQKey = "taos_tmq"
+const TaosTMQKey = "taos_tmq"
 
 type TMQ struct {
 	Session       *melody.Session
@@ -118,10 +118,10 @@ func (t *TMQ) removeConsumer(item *list.Element) {
 
 type TMQInitReq struct {
 	ReqID      uint64 `json:"req_id"`
-	GroupID    string `json:"group_id"`
 	User       string `json:"user"`
 	Password   string `json:"password"`
 	DB         string `json:"db"`
+	GroupID    string `json:"group_id"`
 	ClientID   string `json:"client_id"`
 	OffsetRest string `json:"offset_rest"`
 	// 如果允许输入 ip 和 port 会不会造成 SSRF ?
@@ -523,16 +523,16 @@ func (t *TMQ) Close() {
 }
 
 func (ctl *Restful) InitTMQ() {
-	ctl.m = melody.New()
+	ctl.tmqM = melody.New()
 
-	ctl.m.HandleConnect(func(session *melody.Session) {
+	ctl.tmqM.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws connect")
-		session.Set(TaosSTMQKey, NewTaosTMQ())
+		session.Set(TaosTMQKey, NewTaosTMQ())
 	})
 
-	ctl.m.HandleMessage(func(session *melody.Session, data []byte) {
-		if ctl.m.IsClosed() {
+	ctl.tmqM.HandleMessage(func(session *melody.Session, data []byte) {
+		if ctl.tmqM.IsClosed() {
 			return
 		}
 		logger := session.MustGet("logger").(*logrus.Entry)
@@ -551,7 +551,7 @@ func (ctl *Restful) InitTMQ() {
 				logger.WithError(err).Errorln("unmarshal connect request args")
 				return
 			}
-			t := session.MustGet(TaosSTMQKey)
+			t := session.MustGet(TaosTMQKey)
 			t.(*TMQ).init(session, &req)
 		case TMQSubscribe:
 			var req TMQSubscribeReq
@@ -560,7 +560,7 @@ func (ctl *Restful) InitTMQ() {
 				logger.WithError(err).Errorln("unmarshal query args")
 				return
 			}
-			t := session.MustGet(TaosSTMQKey)
+			t := session.MustGet(TaosTMQKey)
 			t.(*TMQ).subscribe(session, &req)
 		case TMQPoll:
 			var req TMQPollReq
@@ -569,7 +569,7 @@ func (ctl *Restful) InitTMQ() {
 				logger.WithError(err).Errorln("unmarshal fetch args")
 				return
 			}
-			t := session.MustGet(TaosSTMQKey)
+			t := session.MustGet(TaosTMQKey)
 			t.(*TMQ).poll(session, &req)
 		case TMQFetch:
 			var req TMQFetchReq
@@ -578,7 +578,7 @@ func (ctl *Restful) InitTMQ() {
 				logger.WithError(err).Errorln("unmarshal fetch args")
 				return
 			}
-			t := session.MustGet(TaosSTMQKey)
+			t := session.MustGet(TaosTMQKey)
 			t.(*TMQ).fetch(session, &req)
 		case TMQFetchBlock:
 			var req TMQFetchBlockReq
@@ -587,7 +587,7 @@ func (ctl *Restful) InitTMQ() {
 				logger.WithError(err).Errorln("unmarshal fetch args")
 				return
 			}
-			t := session.MustGet(TaosSTMQKey)
+			t := session.MustGet(TaosTMQKey)
 			t.(*TMQ).fetchBlock(session, &req)
 		case TMQCommit:
 			var req TMQCommitReq
@@ -596,7 +596,7 @@ func (ctl *Restful) InitTMQ() {
 				logger.WithError(err).Errorln("unmarshal fetch args")
 				return
 			}
-			t := session.MustGet(TaosSTMQKey)
+			t := session.MustGet(TaosTMQKey)
 			t.(*TMQ).commit(session, &req)
 		case TMQUnSubscribe:
 			var req TMQUnsubscribeReq
@@ -605,7 +605,7 @@ func (ctl *Restful) InitTMQ() {
 				logger.WithError(err).Errorln("unmarshal fetch args")
 				return
 			}
-			t := session.MustGet(TaosSTMQKey)
+			t := session.MustGet(TaosTMQKey)
 			t.(*TMQ).unsubscribe(session, &req)
 		case TMQClose:
 			var req TMQCloseReq
@@ -614,21 +614,21 @@ func (ctl *Restful) InitTMQ() {
 				logger.WithError(err).Errorln("unmarshal fetch args")
 				return
 			}
-			t := session.MustGet(TaosSTMQKey)
+			t := session.MustGet(TaosTMQKey)
 			t.(*TMQ).close(session, &req)
 		}
 	})
-	ctl.m.HandleClose(func(session *melody.Session, i int, s string) error {
+	ctl.tmqM.HandleClose(func(session *melody.Session, i int, s string) error {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws close", i, s)
-		t, exist := session.Get(TaosSTMQKey)
+		t, exist := session.Get(TaosTMQKey)
 		if exist && t != nil {
 			t.(*TMQ).Close()
 		}
 		return nil
 	})
 
-	ctl.m.HandleError(func(session *melody.Session, err error) {
+	ctl.tmqM.HandleError(func(session *melody.Session, err error) {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		_, is := err.(*websocket.CloseError)
 		if is {
@@ -636,16 +636,16 @@ func (ctl *Restful) InitTMQ() {
 		} else {
 			logger.WithError(err).Errorln("ws error")
 		}
-		t, exist := session.Get(TaosSTMQKey)
+		t, exist := session.Get(TaosTMQKey)
 		if exist && t != nil {
 			t.(*TMQ).Close()
 		}
 	})
 
-	ctl.m.HandleDisconnect(func(session *melody.Session) {
+	ctl.tmqM.HandleDisconnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws disconnect")
-		t, exist := session.Get(TaosSTMQKey)
+		t, exist := session.Get(TaosTMQKey)
 		if exist && t != nil {
 			t.(*TMQ).Close()
 		}
@@ -655,5 +655,5 @@ func (ctl *Restful) InitTMQ() {
 func (ctl *Restful) tmq(c *gin.Context) {
 	id := web.GetRequestID(c)
 	loggerWithID := logger.WithField("sessionID", id)
-	_ = ctl.m.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": loggerWithID})
+	_ = ctl.tmqM.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": loggerWithID})
 }
