@@ -44,7 +44,7 @@ func TestAsync_TaosExec(t *testing.T) {
 				},
 			},
 			want: &ExecResult{
-				FieldCount: 19,
+				FieldCount: 21,
 			},
 			wantErr: false,
 		}, {

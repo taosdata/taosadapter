@@ -59,7 +59,7 @@ func TestNodeExporter_Gather(t *testing.T) {
 	err = conn.SelectDB("node_exporter")
 	assert.NoError(t, err)
 	time.Sleep(time.Second * 2)
-	rows, err := conn.Query("select last(value) as value from node_exporter.test_metric;")
+	rows, err := conn.Query("select last(`value`) as `value` from node_exporter.test_metric;")
 	assert.NoError(t, err)
 	defer rows.Close()
 	t.Log(rows.Columns())

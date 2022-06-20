@@ -26,11 +26,11 @@ func TestWebsocket(t *testing.T) {
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
-	//w = httptest.NewRecorder()
-	//body = strings.NewReader("drop table if exists test_ws")
-	//req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws", body)
-	//req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	//router.ServeHTTP(w, req)
+	w = httptest.NewRecorder()
+	body = strings.NewReader("drop table if exists test_ws")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists test_ws(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20)) tags (info json)")
@@ -86,7 +86,7 @@ func TestWebsocket(t *testing.T) {
 			status = AfterQuery
 			b, _ := json.Marshal(&WSQueryReq{
 				ReqID: 2,
-				SQL:   "select *,info->'table' from test_ws",
+				SQL:   "select test_ws.*,info->'table' from test_ws",
 			})
 			action, _ := json.Marshal(&WSAction{
 				Action: "query",
@@ -244,7 +244,7 @@ func TestWebsocket(t *testing.T) {
 	assert.Equal(t, float64(11), blockResult[0][11])
 	assert.Equal(t, "中文\"binary", blockResult[0][12])
 	assert.Equal(t, "中文nchar", blockResult[0][13])
-	assert.Equal(t, json.RawMessage(`{"table":"t1"}`), blockResult[0][14])
+	assert.Equal(t, []byte(`{"table":"t1"}`), blockResult[0][14])
 	assert.Equal(t, false, blockResult[1][1])
 	assert.Equal(t, int8(12), blockResult[1][2])
 	assert.Equal(t, int16(13), blockResult[1][3])
@@ -258,7 +258,7 @@ func TestWebsocket(t *testing.T) {
 	assert.Equal(t, float64(111), blockResult[1][11])
 	assert.Equal(t, "中文\"binary", blockResult[1][12])
 	assert.Equal(t, "中文nchar", blockResult[1][13])
-	assert.Equal(t, json.RawMessage(`{"table":"t1"}`), blockResult[1][14])
+	assert.Equal(t, []byte(`{"table":"t1"}`), blockResult[1][14])
 	assert.Equal(t, nil, blockResult[2][1])
 	assert.Equal(t, nil, blockResult[2][2])
 	assert.Equal(t, nil, blockResult[2][3])
@@ -272,6 +272,6 @@ func TestWebsocket(t *testing.T) {
 	assert.Equal(t, nil, blockResult[2][11])
 	assert.Equal(t, nil, blockResult[2][12])
 	assert.Equal(t, nil, blockResult[2][13])
-	assert.Equal(t, json.RawMessage(`{"table":"t1"}`), blockResult[2][14])
+	assert.Equal(t, []byte(`{"table":"t1"}`), blockResult[2][14])
 
 }

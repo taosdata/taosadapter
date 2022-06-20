@@ -170,7 +170,7 @@ func Test_generateReadSql(t *testing.T) {
 					},
 				},
 			},
-			want:    "select *,tbname from metrics where ts >= '2021-12-20T05:58:22Z' and ts <= '2021-12-20T05:58:23Z' and labels->'__name__' = 'point1' and labels->'type' != 'info' and labels->'server' match 'server-1$' and labels->'group' nmatch 'group1.*' and labels->'key' = 'k\\\\\\'v'",
+			want:    "select metrics.*,tbname from metrics where ts >= '2021-12-20T05:58:22Z' and ts <= '2021-12-20T05:58:23Z' and labels->'__name__' = 'point1' and labels->'type' != 'info' and labels->'server' match 'server-1$' and labels->'group' nmatch 'group1.*' and labels->'key' = 'k\\\\\\'v'",
 			wantErr: false,
 		},
 	}
@@ -231,7 +231,7 @@ func Test_generateReadSqlWithLimit(t *testing.T) {
 					},
 				},
 			},
-			want:    "select *,tbname from metrics where ts >= '2021-12-20T05:58:22Z' and ts <= '2021-12-20T05:58:23Z' and labels->'__name__' = 'point1' and labels->'type' != 'info' and labels->'server' match 'server-1$' and labels->'group' nmatch 'group1.*' limit 2",
+			want:    "select metrics.*,tbname from metrics where ts >= '2021-12-20T05:58:22Z' and ts <= '2021-12-20T05:58:23Z' and labels->'__name__' = 'point1' and labels->'type' != 'info' and labels->'server' match 'server-1$' and labels->'group' nmatch 'group1.*' limit 2",
 			wantErr: false,
 		},
 	}

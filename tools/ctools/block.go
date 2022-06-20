@@ -10,7 +10,7 @@ import (
 type FormatTimeFunc func(builder *jsonbuilder.Stream, ts int64, precision int)
 
 func IsVarDataType(colType uint8) bool {
-	return colType == common.TSDB_DATA_TYPE_BINARY || colType == common.TSDB_DATA_TYPE_NCHAR
+	return colType == common.TSDB_DATA_TYPE_BINARY || colType == common.TSDB_DATA_TYPE_NCHAR || colType == common.TSDB_DATA_TYPE_JSON
 }
 
 func BitmapLen(n int) int {
@@ -117,13 +117,13 @@ func WriteRawJsonNchar(builder *jsonbuilder.Stream, pHeader, pStart uintptr, row
 	currentRow := unsafe.Pointer(pStart + uintptr(offset))
 	clen := *((*int16)(currentRow)) / 4
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
-
+	builder.WriteByte('"')
 	for index := int16(0); index < clen; index++ {
 		builder.WriteRuneString(*((*rune)(unsafe.Pointer(uintptr(currentRow) + uintptr(index*4)))))
 	}
+	builder.WriteByte('"')
 }
 
-// just like nchar
 func WriteRawJsonJson(builder *jsonbuilder.Stream, pHeader, pStart uintptr, row int) {
 	offset := *((*int32)(unsafe.Pointer(pHeader + uintptr(row*4))))
 	if offset == -1 {
@@ -131,11 +131,11 @@ func WriteRawJsonJson(builder *jsonbuilder.Stream, pHeader, pStart uintptr, row 
 		return
 	}
 	currentRow := unsafe.Pointer(pStart + uintptr(offset))
-	clen := *((*int16)(currentRow)) / 4
+	clen := *((*int16)(currentRow))
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 
 	for index := int16(0); index < clen; index++ {
-		builder.WriteRune(*((*rune)(unsafe.Pointer(uintptr(currentRow) + uintptr(index*4)))))
+		builder.WriteByte(*((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index)))))
 	}
 }
 

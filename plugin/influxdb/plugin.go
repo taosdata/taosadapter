@@ -7,7 +7,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/taosdata/driver-go/v2/af"
 	tErrors "github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
@@ -21,8 +20,7 @@ import (
 var logger = log.GetLogger("influxdb")
 
 type Influxdb struct {
-	conf        Config
-	reserveConn *af.Connector
+	conf Config
 }
 
 func (p *Influxdb) String() string {
@@ -58,9 +56,6 @@ func (p *Influxdb) Start() error {
 }
 
 func (p *Influxdb) Stop() error {
-	if p.reserveConn != nil {
-		return p.reserveConn.Close()
-	}
 	return nil
 }
 

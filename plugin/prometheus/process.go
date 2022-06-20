@@ -43,8 +43,10 @@ func processWrite(taosConn unsafe.Pointer, req *prompb.WriteRequest, db string) 
 	if err != nil {
 		if tErr, is := err.(*tErrors.TaosError); is {
 			start = time.Now()
-			if tErr.Code == tErrors.MND_INVALID_TABLE_NAME {
-				err := async.GlobalAsync.TaosExecWithoutResult(taosConn, "create stable if not exists metrics(ts timestamp,value double) tags (labels json)")
+			if tErr.ErrStr == "Table does not exist" {
+				//todo
+				//if tErr.Code == tErrors.MND_INVALID_TABLE_NAME {
+				err := async.GlobalAsync.TaosExecWithoutResult(taosConn, "create stable if not exists metrics(ts timestamp,v double) tags (labels json)")
 				if err != nil {
 					return err
 				}
@@ -207,7 +209,7 @@ func processRead(taosConn unsafe.Pointer, req *prompb.ReadRequest, db string) (r
 func generateReadSql(query *prompb.Query) (string, error) {
 	sql := pool.StringBuilderPoolGet()
 	defer pool.StringBuilderPoolPut(sql)
-	sql.WriteString("select *,tbname from metrics where ts >= '")
+	sql.WriteString("select metrics.*,tbname from metrics where ts >= '")
 	sql.WriteString(ms2Time(query.GetStartTimestampMs()))
 	sql.WriteString("' and ts <= '")
 	sql.WriteString(ms2Time(query.GetEndTimestampMs()))

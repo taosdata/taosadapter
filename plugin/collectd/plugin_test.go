@@ -76,7 +76,7 @@ func TestCollectd(t *testing.T) {
 	defer wrapper.TaosClose(conn)
 	afC, err := af.NewConnector(conn)
 	assert.NoError(t, err)
-	r, err := afC.Query("select last(value) from collectd.`cpu_value`")
+	r, err := afC.Query("select last(`value`) from collectd.`cpu_value`")
 	if err != nil {
 		t.Error(err)
 		return

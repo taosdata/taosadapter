@@ -49,7 +49,7 @@ func TestPlugin(t *testing.T) {
 	defer wrapper.TaosClose(conn)
 	afC, err := af.NewConnector(conn)
 	assert.NoError(t, err)
-	r, err := afC.Query("select last(value) from opentsdb_telnet.`sys.if.bytes.out`")
+	r, err := afC.Query("select last(_value) from opentsdb_telnet.`sys.if.bytes.out`")
 	if err != nil {
 		t.Error(err)
 		return

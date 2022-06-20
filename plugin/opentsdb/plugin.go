@@ -10,7 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/taosdata/driver-go/v2/af"
 	tErrors "github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
@@ -24,8 +23,7 @@ import (
 var logger = log.GetLogger("opentsdb")
 
 type Plugin struct {
-	conf        Config
-	reserveConn *af.Connector
+	conf Config
 }
 
 func (p *Plugin) String() string {
