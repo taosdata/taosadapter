@@ -29,6 +29,7 @@ var router *gin.Engine
 func TestMain(m *testing.M) {
 	viper.Set("monitor.writeInterval", time.Second*5)
 	config.Init()
+	log.ConfigLog()
 	db.PrepareConnection()
 	gin.SetMode(gin.ReleaseMode)
 	router = gin.New()
@@ -216,7 +217,6 @@ func TestWriteLog(t *testing.T) {
 	checkTables := []string{
 		"taosadapter_restful_http_total",
 		"taosadapter_restful_http_fail",
-		"taosadapter_restful_http_request_in_flight",
 		"taosadapter_restful_http_request_latency",
 		"taosadapter_system",
 	}

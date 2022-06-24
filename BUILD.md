@@ -33,7 +33,7 @@ Once make install is done, taosAdapter and its systemd service file be installed
 
 ## Build stand-alone taosAdapter
 
-taosAdapter can be built as a stand-alone application too if you already deployed TDengine server v2.3.0.0 or an above version.
+taosAdapter can be built as a stand-alone application too if you already deployed TDengine server v2.4.0.0 or an above version.
 
 ### Install TDengine server or client installation package
 

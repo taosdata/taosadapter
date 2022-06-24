@@ -22,7 +22,7 @@ taosAdapter提供以下功能：
 
 ### 安装 taosAdapter
 
-taosAdapter 从 TDengine v2.3.0.0 版本开始成为 TDengine 服务端软件 的一部分，如果您使用 TDengine server 您不需要任何额外的步骤来安装 taosAdapter。您可以从[涛思数据官方网站](https://taosdata.com/cn/all-downloads/)下载TDengine server（taosAdapter包含在v2.3.0.0及以上版本）安装包。如果需要将 taosAdapter 分离部署在 TDengine server 之外的服务器上，则应该在该服务器上安装完整的 TDengine 来安装 taosAdapter。如果您需要使用源代码编译生成 taosAdapter，您可以参考[构建 taosAdapter](https://github.com/taosdata/taosadapter/blob/develop/BUILD-CN.md)文档。
+taosAdapter 从 TDengine v2.4.0.0 版本开始成为 TDengine 服务端软件 的一部分，如果您使用 TDengine server 您不需要任何额外的步骤来安装 taosAdapter。您可以从[涛思数据官方网站](https://taosdata.com/cn/all-downloads/)下载TDengine server（taosAdapter 包含在 v2.4.0.0 及以上版本）安装包。如果需要将 taosAdapter 分离部署在 TDengine server 之外的服务器上，则应该在该服务器上安装完整的 TDengine 来安装 taosAdapter。如果您需要使用源代码编译生成 taosAdapter，您可以参考[构建 taosAdapter](https://github.com/taosdata/taosadapter/blob/develop/BUILD-CN.md)文档。
 
 ### start/stop taosAdapter
 
@@ -390,8 +390,6 @@ taosAdapter 通过参数 `restfulRowLimit` 来控制结果的返回条数，-1 �
 * `http://<fqdn>:6041/rest/sqlt`
 * `http://<fqdn>:6041/rest/sqlutc`
 * `http://<fqdn>:6041/prometheus/v1/remote_read/:db`
-
-## 配置方法
 
 ## 故障解决
 

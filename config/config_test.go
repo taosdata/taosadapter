@@ -38,10 +38,14 @@ func TestInit(t *testing.T) {
 				SSl:             SSl{Enable: false, CertFile: "", KeyFile: ""},
 				RestfulRowLimit: -1,
 				Log: Log{
-					Path:          "/var/log/taos",
-					RotationCount: 30,
-					RotationTime:  time.Hour * 24,
-					RotationSize:  1 * 1024 * 1024 * 1024, // 1G
+					Path:                "/var/log/taos",
+					RotationCount:       30,
+					RotationTime:        time.Hour * 24,
+					RotationSize:        1 * 1024 * 1024 * 1024, // 1G
+					EnableRecordHttpSql: false,
+					SqlRotationCount:    2,
+					SqlRotationTime:     time.Hour * 24,
+					SqlRotationSize:     1 * 1024 * 1024 * 1024,
 				},
 				Pool: Pool{
 					MaxConnect:  4000,

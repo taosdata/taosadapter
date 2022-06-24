@@ -21,6 +21,10 @@ path = "/var/log/taos"
 rotationCount = 30
 rotationTime = "24h"
 rotationSize = "1GB"
+enableRecordHttpSql = false
+sqlRotationCount = 2
+sqlRotationTime =  "24h"
+sqlRotationSize = "1GB"
 
 [monitor]
 collectDuration = "3s"

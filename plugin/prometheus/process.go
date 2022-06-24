@@ -25,18 +25,24 @@ import (
 )
 
 func processWrite(taosConn unsafe.Pointer, req *prompb.WriteRequest, db string) error {
+	start := time.Now()
 	err := tool.SelectDB(taosConn, db)
 	if err != nil {
 		return err
 	}
-
+	logger.Debug("processWrite SelectDB cost:", time.Now().Sub(start))
+	start = time.Now()
 	sql, err := generateWriteSql(req.GetTimeseries())
 	if err != nil {
 		return err
 	}
+	logger.Debug("generateWriteSql cost:", time.Now().Sub(start))
+	start = time.Now()
 	err = async.GlobalAsync.TaosExecWithoutResult(taosConn, sql)
+	logger.Debug("processWrite TaosExecWithoutResult cost:", time.Now().Sub(start))
 	if err != nil {
 		if tErr, is := err.(*tErrors.TaosError); is {
+			start = time.Now()
 			if tErr.Code == tErrors.MND_INVALID_TABLE_NAME {
 				err := async.GlobalAsync.TaosExecWithoutResult(taosConn, "create stable if not exists metrics(ts timestamp,value double) tags (labels json)")
 				if err != nil {
@@ -48,6 +54,7 @@ func processWrite(taosConn unsafe.Pointer, req *prompb.WriteRequest, db string) 
 					logger.WithError(err).Error(sql)
 					return err
 				}
+				logger.Debug("retry processWrite cost", time.Now().Sub(start))
 				return nil
 			} else {
 				logger.WithError(err).Error(sql)
@@ -112,16 +119,20 @@ func generateWriteSql(timeseries []prompb.TimeSeries) (string, error) {
 }
 
 func processRead(taosConn unsafe.Pointer, req *prompb.ReadRequest, db string) (resp *prompb.ReadResponse, err error) {
+	start := time.Now()
 	thread.Lock()
 	wrapper.TaosSelectDB(taosConn, db)
 	thread.Unlock()
+	logger.Debug("processRead SelectDB cost:", time.Now().Sub(start))
 	resp = &prompb.ReadResponse{}
 	for i, query := range req.Queries {
+		start = time.Now()
 		sql, err := generateReadSql(query)
+		logger.Debug("processRead generateReadSql cost:", time.Now().Sub(start))
 		if err != nil {
 			return nil, err
 		}
-
+		start = time.Now()
 		data, err := async.GlobalAsync.TaosExec(taosConn, sql, func(ts int64, precision int) driver.Value {
 			switch precision {
 			case common.PrecisionMilliSecond:
@@ -138,7 +149,9 @@ func processRead(taosConn unsafe.Pointer, req *prompb.ReadRequest, db string) (r
 			logger.WithError(err).Error(sql)
 			return nil, err
 		}
+		logger.Debug("processRead TaosExec cost:", time.Now().Sub(start))
 		//ts value labels time.Time float64 []byte
+		start = time.Now()
 		group := map[string]*prompb.TimeSeries{}
 		for _, d := range data.Data {
 			if len(d) != 4 {
@@ -186,6 +199,7 @@ func processRead(taosConn unsafe.Pointer, req *prompb.ReadRequest, db string) (r
 		for _, series := range group {
 			resp.Results[i].Timeseries = append(resp.Results[i].Timeseries, series)
 		}
+		logger.Debug("processRead process result cost:", time.Now().Sub(start))
 	}
 	return resp, err
 }

@@ -14,6 +14,7 @@ import (
 // @date: 2021/12/14 15:07
 // @description: test gin log middleware
 func TestGinLog(t *testing.T) {
+	log.ConfigLog()
 	router := gin.New()
 	router.Use(log.GinLog())
 	router.Use(log.GinRecoverLog())

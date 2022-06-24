@@ -160,6 +160,7 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
 		ErrorResponse(c, httperror.HTTP_NO_SQL_INPUT)
 		return
 	}
+	c.Set("sql", sql)
 	user := c.MustGet(UserKey).(string)
 	password := c.MustGet(PasswordKey).(string)
 	if isDebug {

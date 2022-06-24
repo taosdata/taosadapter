@@ -22,7 +22,7 @@ taosAdapter provides the following functions.
 
 ### Install taosAdapter
 
-taosAdapter is part of the TDengine server from TDengine v2.3.0.0. You don't need any additional steps to install taosAdapter if you already installed TDengine server. You can download TDengine server package (taosAdapter be included in v2.3.0.0 and above version) from the [official website](https://taosdata.com/en/all-downloads/). If you want to deploy taosAdapter on another server, you need to install official TDengine server installation package. If you want to build taosAdapter from source code, you can refer to the [How to build taosAdapter](https://github.com/taosdata/taosadapter/blob/develop/BUILD.md) instruction.
+taosAdapter is part of the TDengine server from TDengine v2.4.0.0. You don't need any additional steps to install taosAdapter if you already installed TDengine server. You can download TDengine server package (taosAdapter be included in v2.4.0.0 and above version) from the [official website](https://taosdata.com/en/all-downloads/). If you want to deploy taosAdapter on another server, you need to install official TDengine server installation package. If you want to build taosAdapter from source code, you can refer to the [How to build taosAdapter](https://github.com/taosdata/taosadapter/blob/develop/BUILD.md) instruction.
 
 ### Start/Stop taosAdapter
 

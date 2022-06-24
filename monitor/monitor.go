@@ -188,12 +188,14 @@ func writeToTDLog() error {
 		case "taosadapter_restful_http_request_total":
 			metric := data[i].GetMetric()
 			for _, m := range metric {
-				value := m.GetCounter().GetValue()
-				if !math.IsNaN(value) {
+				value := m.GetGauge().GetValue()
+				if value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) {
 					labels := m.GetLabel()
+
 					subName := calculateTableName(labels)
 					var (
 						statusCode    int
+						statusCodeStr string
 						clientIP      string
 						requestMethod string
 						requestUri    string
@@ -202,7 +204,8 @@ func writeToTDLog() error {
 					for j := 0; j < len(labels); j++ {
 						switch labels[j].GetName() {
 						case "status_code":
-							statusCode, _ = strconv.Atoi(labels[j].GetValue())
+							statusCodeStr = labels[j].GetValue()
+							statusCode, _ = strconv.Atoi(statusCodeStr)
 						case "client_ip":
 							clientIP = labels[j].GetValue()
 						case "request_method":
@@ -210,20 +213,21 @@ func writeToTDLog() error {
 						case "request_uri":
 							requestUri = labels[j].GetValue()
 						}
-
 					}
 					inserts = append(inserts, fmt.Sprintf(" taosa_request_total_%s using taosadapter_restful_http_total tags('%s',%d,'%s','%s','%s') values('%s',%d)", subName, identity, statusCode, clientIP, requestMethod, requestUri, now, int(value)))
+					log.TotalRequest.WithLabelValues(statusCodeStr, clientIP, requestMethod, requestUri).Sub(value)
 				}
 			}
 		case "taosadapter_restful_http_request_fail":
 			metric := data[i].GetMetric()
 			for _, m := range metric {
-				value := m.GetCounter().GetValue()
-				if !math.IsNaN(value) {
+				value := m.GetGauge().GetValue()
+				if value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) {
 					labels := m.GetLabel()
 					subName := calculateTableName(labels)
 					var (
 						statusCode    int
+						statusCodeStr string
 						clientIP      string
 						requestMethod string
 						requestUri    string
@@ -232,6 +236,7 @@ func writeToTDLog() error {
 					for j := 0; j < len(labels); j++ {
 						switch labels[j].GetName() {
 						case "status_code":
+							statusCodeStr = labels[j].GetValue()
 							statusCode, _ = strconv.Atoi(labels[j].GetValue())
 						case "client_ip":
 							clientIP = labels[j].GetValue()
@@ -244,13 +249,14 @@ func writeToTDLog() error {
 					}
 
 					inserts = append(inserts, fmt.Sprintf(" taosa_request_fail_%s using taosadapter_restful_http_fail tags('%s',%d,'%s','%s','%s') values('%s',%d)", subName, identity, statusCode, clientIP, requestMethod, requestUri, now, int(value)))
+					log.FailRequest.WithLabelValues(statusCodeStr, clientIP, requestMethod, requestUri).Sub(value)
 				}
 			}
 		case "taosadapter_restful_http_request_in_flight":
 			metric := data[i].GetMetric()
 			for _, m := range metric {
 				value := m.GetGauge().GetValue()
-				if !math.IsNaN(value) {
+				if value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) {
 					subName := calculateTableName(nil)
 					inserts = append(inserts, fmt.Sprintf(" taosa_request_in_flight_%s using taosadapter_restful_http_request_in_flight tags('%s') values('%s',%d)", subName, identity, now, int(value)))
 				}
