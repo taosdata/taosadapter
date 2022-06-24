@@ -23,7 +23,7 @@ cd TDengine
 git submodule update --init --recursive
 mkdir debug
 cd debug
-cmake ..
+cmake .. -DBUILD_HTTP=false
 make
 sudo make install
 ```
