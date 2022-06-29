@@ -21,8 +21,8 @@ func ParseBlock(data []byte, colTypes []uint8, rows int, precision int) (uint64,
 func ParseTmqBlock(data []byte, colTypes []uint8, rows int, precision int) (uint64, uint64, [][]driver.Value) {
 	p0 := *(*uintptr)(unsafe.Pointer(&data))
 	id := *(*uint64)(unsafe.Pointer(p0))
-	tmqID := *(*uint64)(unsafe.Pointer(p0 + 8))
+	messageID := *(*uint64)(unsafe.Pointer(p0 + 8))
 	columnPtr := *(*uintptr)(unsafe.Pointer(&data)) + uintptr(16)
 	result := wrapper.ReadBlock(unsafe.Pointer(columnPtr), rows, colTypes, precision)
-	return id, tmqID, result
+	return id, messageID, result
 }

@@ -18,8 +18,9 @@ func PrepareConnection() {
 	if len(config.Conf.TaosConfigDir) != 0 {
 		once.Do(func() {
 			code := wrapper.TaosOptions(common.TSDB_OPTION_CONFIGDIR, config.Conf.TaosConfigDir)
-			err := errors.GetError(code)
-			if err != nil {
+			if code != 0 {
+				errStr := wrapper.TaosErrorStr(nil)
+				err := errors.NewError(code, errStr)
 				logger.WithError(err).Panic("set taos config file ", config.Conf.TaosConfigDir)
 			}
 		})

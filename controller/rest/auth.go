@@ -102,7 +102,7 @@ const (
 func CheckAuth(c *gin.Context) {
 	auth := c.GetHeader("Authorization")
 	if len(auth) == 0 {
-		ErrorResponse(c, httperror.HTTP_NO_AUTH_INFO)
+		ErrorResponseWithStatus(c, http.StatusUnauthorized, httperror.HTTP_NO_AUTH_INFO)
 		return
 	}
 	auth = strings.TrimSpace(auth)
@@ -116,11 +116,11 @@ func CheckAuth(c *gin.Context) {
 	if strings.HasPrefix(auth, "Basic") {
 		user, password, err := tools.DecodeBasic(auth[6:])
 		if err != nil {
-			ErrorResponse(c, httperror.HTTP_INVALID_BASIC_AUTH)
+			ErrorResponseWithStatus(c, http.StatusUnauthorized, httperror.HTTP_INVALID_BASIC_AUTH)
 			return
 		}
 		if len(user) == 0 || len(password) == 0 {
-			ErrorResponse(c, httperror.HTTP_INVALID_BASIC_AUTH)
+			ErrorResponseWithStatus(c, http.StatusUnauthorized, httperror.HTTP_INVALID_BASIC_AUTH)
 			return
 		}
 		authCache.SetDefault(auth, &authInfo{
@@ -132,11 +132,11 @@ func CheckAuth(c *gin.Context) {
 	} else if strings.HasPrefix(auth, "Taosd") {
 		user, password, err := DecodeDes(auth[6:])
 		if err != nil {
-			ErrorResponse(c, httperror.HTTP_INVALID_BASIC_AUTH)
+			ErrorResponseWithStatus(c, http.StatusUnauthorized, httperror.HTTP_INVALID_TAOSD_AUTH)
 			return
 		}
 		if len(user) == 0 || len(password) == 0 {
-			ErrorResponse(c, httperror.HTTP_INVALID_BASIC_AUTH)
+			ErrorResponseWithStatus(c, http.StatusUnauthorized, httperror.HTTP_INVALID_TAOSD_AUTH)
 			return
 		}
 		authCache.SetDefault(auth, &authInfo{
@@ -146,15 +146,14 @@ func CheckAuth(c *gin.Context) {
 		c.Set(UserKey, user)
 		c.Set(PasswordKey, password)
 	} else {
-		ErrorResponse(c, httperror.HTTP_INVALID_AUTH_TYPE)
+		ErrorResponseWithStatus(c, http.StatusUnauthorized, httperror.HTTP_INVALID_AUTH_TYPE)
 		return
 	}
 }
 
 type Message struct {
-	Status string `json:"status"`
-	Code   int    `json:"code"`
-	Desc   string `json:"desc"`
+	Code int    `json:"code"`
+	Desc string `json:"desc"`
 }
 
 func ErrorResponse(c *gin.Context, code int) {
@@ -163,18 +162,28 @@ func ErrorResponse(c *gin.Context, code int) {
 		errStr = "unknown error"
 	}
 	c.AbortWithStatusJSON(http.StatusOK, &Message{
-		Status: "error",
-		Code:   code,
-		Desc:   errStr,
+		Code: code,
+		Desc: errStr,
+	})
+	web.SetTaosErrorCode(c, code)
+}
+
+func ErrorResponseWithStatus(c *gin.Context, status, code int) {
+	errStr := httperror.ErrorMsgMap[code]
+	if len(errStr) == 0 {
+		errStr = "unknown error"
+	}
+	c.AbortWithStatusJSON(status, &Message{
+		Code: code,
+		Desc: errStr,
 	})
 	web.SetTaosErrorCode(c, code)
 }
 
 func ErrorResponseWithMsg(c *gin.Context, code int, msg string) {
 	c.AbortWithStatusJSON(http.StatusOK, &Message{
-		Status: "error",
-		Code:   code & 0xffff,
-		Desc:   msg,
+		Code: code & 0xffff,
+		Desc: msg,
 	})
 	web.SetTaosErrorCode(c, code&0xffff)
 }

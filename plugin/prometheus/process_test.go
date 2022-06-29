@@ -50,7 +50,8 @@ func Test_generateWriteSql(t *testing.T) {
 			},
 			want:    `insert into t_38afbaaeb3ee3f52623389a3af60f647 using metrics tags('{"k1":"v1","k2":"v2"}') values('2021-12-20T05:58:22Z',123.456) ('2021-12-20T05:58:23Z',456.789) `,
 			wantErr: false,
-		}, {
+		},
+		{
 			name: "escape",
 			args: args{
 				timeseries: []prompb.TimeSeries{
@@ -78,6 +79,58 @@ func Test_generateWriteSql(t *testing.T) {
 				},
 			},
 			want:    `insert into t_98e95338dc63e470540a87386c1fea3f using metrics tags('{"k\'1":"v\'1","k\'2":"v\'2"}') values('2021-12-20T05:58:22Z',123.456) ('2021-12-20T05:58:23Z',456.789) `,
+			wantErr: false,
+		},
+		{
+			name: "prometheus",
+			args: args{
+				timeseries: []prompb.TimeSeries{
+					{
+						Labels: []prompb.Label{
+							{
+								Name:  "__name__",
+								Value: "prometheus_tsdb_compaction_duration_seconds_sum",
+							},
+							{
+								Name:  "instance",
+								Value: "localhost:9090",
+							},
+							{
+								Name:  "job",
+								Value: "prometheus",
+							},
+						},
+						Samples: []prompb.Sample{
+							{
+								Value:     0,
+								Timestamp: 1655859635940,
+							},
+						},
+					}, {
+						Labels: []prompb.Label{
+							{
+								Name:  "__name__",
+								Value: "prometheus_tsdb_compaction_duration_seconds_sum",
+							},
+							{
+								Name:  "instance",
+								Value: "localhost:9090",
+							},
+							{
+								Name:  "job",
+								Value: "prometheus",
+							},
+						},
+						Samples: []prompb.Sample{
+							{
+								Value:     0,
+								Timestamp: 1655859650940,
+							},
+						},
+					},
+				},
+			},
+			want:    `insert into t_3897c17b8513dad48cf4354bf8cb3e13 using metrics tags('{"__name__":"prometheus_tsdb_compaction_duration_seconds_sum","instance":"localhost:9090","job":"prometheus"}') values('2022-06-22T01:00:35.94Z',0) t_3897c17b8513dad48cf4354bf8cb3e13 using metrics tags('{"__name__":"prometheus_tsdb_compaction_duration_seconds_sum","instance":"localhost:9090","job":"prometheus"}') values('2022-06-22T01:00:50.94Z',0) `,
 			wantErr: false,
 		},
 		{

@@ -2,7 +2,6 @@ package rest
 
 import (
 	"database/sql/driver"
-	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -28,10 +27,6 @@ import (
 	"github.com/taosdata/taosadapter/tools/web"
 )
 
-const LayoutMillSecond = "2006-01-02 15:04:05.000"
-const LayoutMicroSecond = "2006-01-02 15:04:05.000000"
-const LayoutNanoSecond = "2006-01-02 15:04:05.000000000"
-
 var logger = log.GetLogger("restful")
 
 type Restful struct {
@@ -52,11 +47,7 @@ func (ctl *Restful) Init(r gin.IRouter) {
 		}
 	})
 	api.POST("sql", CheckAuth, ctl.sql)
-	api.POST("sqlt", CheckAuth, ctl.sqlt)
-	api.POST("sqlutc", CheckAuth, ctl.sqlutc)
 	api.POST("sql/:db", CheckAuth, ctl.sql)
-	api.POST("sqlt/:db", CheckAuth, ctl.sqlt)
-	api.POST("sqlutc/:db", CheckAuth, ctl.sqlutc)
 	api.GET("login/:user/:password", ctl.des)
 	api.GET("ws", ctl.ws)
 	api.GET("stmt", ctl.stmt)
@@ -74,8 +65,8 @@ type TDEngineRestfulRespDoc struct {
 }
 
 // @Tags rest
-// @Summary execute sql
-// @Description execute sql returns results in the time format "2006-01-02 15:04:05.000"
+// @Summary execute sqlutc
+// @Description execute sql to return results, time formatted as RFC3339Nano
 // @Accept plain
 // @Produce json
 // @Param Authorization header string true "authorization token"
@@ -86,53 +77,20 @@ type TDEngineRestfulRespDoc struct {
 // @Router /rest/sql [post]
 func (ctl *Restful) sql(c *gin.Context) {
 	db := c.Param("db")
+	timeBuffer := make([]byte, 0, 30)
 	DoQuery(c, db, func(builder *jsonbuilder.Stream, ts int64, precision int) {
+		timeBuffer = timeBuffer[:0]
 		switch precision {
-		case common.PrecisionMilliSecond:
-			builder.WriteString(common.TimestampConvertToTime(ts, precision).Local().Format(LayoutMillSecond))
-		case common.PrecisionMicroSecond:
-			builder.WriteString(common.TimestampConvertToTime(ts, precision).Local().Format(LayoutMicroSecond))
-		case common.PrecisionNanoSecond:
-			builder.WriteString(common.TimestampConvertToTime(ts, precision).Local().Format(LayoutNanoSecond))
+		case common.PrecisionMilliSecond: // milli-second
+			timeBuffer = time.Unix(0, ts*1e6).UTC().AppendFormat(timeBuffer, time.RFC3339Nano)
+		case common.PrecisionMicroSecond: // micro-second
+			timeBuffer = time.Unix(0, ts*1e3).UTC().AppendFormat(timeBuffer, time.RFC3339Nano)
+		case common.PrecisionNanoSecond: // nano-second
+			timeBuffer = time.Unix(0, ts).UTC().AppendFormat(timeBuffer, time.RFC3339Nano)
 		default:
-			builder.WriteNil()
+			panic("unknown precision")
 		}
-	})
-}
-
-// @Tags rest
-// @Summary execute sqlt
-// @Description execute sql to return results, time formatted as timestamp
-// @Accept plain
-// @Produce json
-// @Param Authorization header string true "authorization token"
-// @Success 200 {object} TDEngineRestfulRespDoc
-// @Failure 401 {string} string "unauthorized"
-// @Failure 500 {string} string "internal error"
-// @Router /rest/sqlt/:db [post]
-// @Router /rest/sqlt [post]
-func (ctl *Restful) sqlt(c *gin.Context) {
-	db := c.Param("db")
-	DoQuery(c, db, func(builder *jsonbuilder.Stream, ts int64, precision int) {
-		builder.WriteInt64(ts)
-	})
-}
-
-// @Tags rest
-// @Summary execute sqlutc
-// @Description execute sql to return results, time formatted as RFC3339Nano
-// @Accept plain
-// @Produce json
-// @Param Authorization header string true "authorization token"
-// @Success 200 {object} TDEngineRestfulRespDoc
-// @Failure 401 {string} string "unauthorized"
-// @Failure 500 {string} string "internal error"
-// @Router /rest/sqlutc/:db [post]
-// @Router /rest/sqlutc [post]
-func (ctl *Restful) sqlutc(c *gin.Context) {
-	db := c.Param("db")
-	DoQuery(c, db, func(builder *jsonbuilder.Stream, ts int64, precision int) {
-		builder.WriteString(common.TimestampConvertToTime(ts, precision).Format(time.RFC3339Nano))
+		builder.WriteString(string(timeBuffer))
 	})
 }
 
@@ -178,14 +136,18 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
 	}
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
-		var tError *tErrors.TaosError
-		if errors.As(err, &tError) {
-			ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
-			return
-		} else {
-			ErrorResponseWithMsg(c, 0xffff, err.Error())
-			return
+		if tError, is := err.(*tErrors.TaosError); is {
+			switch tError.Code {
+			case 0x0101, 0x0214, 0x0512:
+				c.AbortWithStatus(http.StatusUnauthorized)
+				return
+			default:
+				ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
+				return
+			}
 		}
+		ErrorResponseWithMsg(c, 0xffff, err.Error())
+		return
 	}
 	defer func() {
 		if isDebug {
@@ -215,10 +177,9 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
 }
 
 var (
-	ExecHeader = []byte(`{"status":"succ","head":["affected_rows"],"column_meta":[["affected_rows",4,4]],"rows":1,"data":[[`)
+	ExecHeader = []byte(`{"head":["affected_rows"],"column_meta":[["affected_rows","INT",4]],"rows":1,"data":[[`)
 	ExecEnd    = []byte(`]]}`)
-	Query1     = []byte(`{"status":"succ","head":[`)
-	Query2     = []byte(`],"column_meta":[`)
+	Query2     = []byte(`{"code":0,"column_meta":[`)
 	Query3     = []byte(`],"data":[`)
 	Query4     = []byte(`],"rows":`)
 )
@@ -293,22 +254,8 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 		}
 		return
 	}
-	_, err = w.Write(Query1)
-	if err != nil {
-		return
-	}
 	builder := jsonbuilder.BorrowStream(w)
 	defer jsonbuilder.ReturnStream(builder)
-	for i := 0; i < fieldsCount; i++ {
-		builder.WriteString(rowsHeader.ColNames[i])
-		if i != fieldsCount-1 {
-			builder.WriteMore()
-		}
-	}
-	err = builder.Flush()
-	if err != nil {
-		return
-	}
 	_, err = w.Write(Query2)
 	if err != nil {
 		return
@@ -317,7 +264,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 		builder.WriteArrayStart()
 		builder.WriteString(rowsHeader.ColNames[i])
 		builder.WriteMore()
-		builder.WriteUint8(rowsHeader.ColTypes[i])
+		builder.WriteString(rowsHeader.TypeDatabaseName(i))
 		builder.WriteMore()
 		builder.WriteInt64(rowsHeader.ColLength[i])
 		builder.WriteArrayEnd()
@@ -465,9 +412,8 @@ func (ctl *Restful) des(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, &Message{
-		Status: "succ",
-		Code:   0,
-		Desc:   token,
+		Code: 0,
+		Desc: token,
 	})
 }
 

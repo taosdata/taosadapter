@@ -57,30 +57,6 @@ func TestSql(t *testing.T) {
 }
 
 // @author: xftan
-// @date: 2021/12/14 15:10
-// @description: test restful sqlt
-func TestSqlt(t *testing.T) {
-	w := httptest.NewRecorder()
-	body := strings.NewReader("show databases")
-	req, _ := http.NewRequest(http.MethodPost, "/rest/sqlt/log", body)
-	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-}
-
-// @author: xftan
-// @date: 2021/12/14 15:11
-// @description: test restful sqlutc
-func TestSqlutc(t *testing.T) {
-	w := httptest.NewRecorder()
-	body := strings.NewReader("show databases")
-	req, _ := http.NewRequest(http.MethodPost, "/rest/sqlutc/log", body)
-	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-}
-
-// @author: xftan
 // @date: 2021/12/14 15:11
 // @description: test restful login
 func TestLogin(t *testing.T) {

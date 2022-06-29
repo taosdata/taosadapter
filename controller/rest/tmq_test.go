@@ -83,15 +83,13 @@ func TestTMQ(t *testing.T) {
 	}
 	defer ws.Close()
 	const (
-		AfterTMQInit = iota + 1
-		AfterTMQSubscribe
+		AfterTMQSubscribe = iota + 1
 		AfterTMQPoll
 		AfterTMQFetch
 		AfterTMQFetchBlock
 		AfterTMQCommit
-		AfterTMQUnSubscribe
 	)
-	consumerID := uint64(0)
+	messageID := uint64(0)
 	status := 0
 	finish := make(chan struct{})
 	var tmpFetchResp *TMQFetchResp
@@ -103,35 +101,6 @@ func TestTMQ(t *testing.T) {
 			t.Log(messageType, string(message))
 		}
 		switch status {
-		case AfterTMQInit:
-			var d TMQInitResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", TMQInit, d.Code, d.Message)
-			}
-			consumerID = d.ConsumerID
-			//query
-			status = AfterTMQSubscribe
-			b, _ := json.Marshal(&TMQSubscribeReq{
-				ReqID:      2,
-				ConsumerID: consumerID,
-				Topics:     []string{"test_tmq_ws_topic"},
-			})
-			action, _ := json.Marshal(&WSAction{
-				Action: TMQSubscribe,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
 		case AfterTMQSubscribe:
 			var d TMQSubscribeResp
 			err = json.Unmarshal(message, &d)
@@ -144,7 +113,6 @@ func TestTMQ(t *testing.T) {
 			status = AfterTMQPoll
 			b, _ := json.Marshal(&TMQPollReq{
 				ReqID:        3,
-				ConsumerID:   consumerID,
 				BlockingTime: 500,
 			})
 			action, _ := json.Marshal(&WSAction{
@@ -161,20 +129,7 @@ func TestTMQ(t *testing.T) {
 			}
 		case AfterTMQPoll:
 			if pollCount == 5 {
-				status = AfterTMQUnSubscribe
-				b, _ := json.Marshal(&TMQUnsubscribeReq{
-					ReqID:      4,
-					ConsumerID: consumerID,
-				})
-				action, _ := json.Marshal(&WSAction{
-					Action: TMQUnSubscribe,
-					Args:   b,
-				})
-				t.Log(string(action))
-				err = ws.WriteMessage(
-					websocket.TextMessage,
-					action,
-				)
+				finish <- struct{}{}
 				return err
 			}
 			pollCount += 1
@@ -187,10 +142,11 @@ func TestTMQ(t *testing.T) {
 				return fmt.Errorf("%s %d,%s", TMQPoll, d.Code, d.Message)
 			}
 			if d.HaveMessage {
+				messageID = d.MessageID
 				status = AfterTMQFetch
 				b, _ := json.Marshal(&TMQFetchReq{
-					ReqID:      4,
-					ConsumerID: consumerID,
+					ReqID:     4,
+					MessageID: messageID,
 				})
 				action, _ := json.Marshal(&WSAction{
 					Action: TMQFetch,
@@ -209,7 +165,6 @@ func TestTMQ(t *testing.T) {
 				//fetch
 				b, _ := json.Marshal(&TMQPollReq{
 					ReqID:        3,
-					ConsumerID:   consumerID,
 					BlockingTime: 500,
 				})
 				action, _ := json.Marshal(&WSAction{
@@ -238,8 +193,8 @@ func TestTMQ(t *testing.T) {
 			if d.Completed {
 				status = AfterTMQCommit
 				b, _ := json.Marshal(&TMQCommitReq{
-					ReqID:      3,
-					ConsumerID: consumerID,
+					ReqID:     3,
+					MessageID: messageID,
 				})
 				action, _ := json.Marshal(&WSAction{
 					Action: TMQCommit,
@@ -257,7 +212,8 @@ func TestTMQ(t *testing.T) {
 				tmpFetchResp = &d
 				status = AfterTMQFetchBlock
 				b, _ := json.Marshal(&TMQFetchBlockReq{
-					ConsumerID: consumerID,
+					ReqID:     0,
+					MessageID: messageID,
 				})
 				action, _ := json.Marshal(&WSAction{
 					Action: TMQFetchBlock,
@@ -294,8 +250,8 @@ func TestTMQ(t *testing.T) {
 			_ = value
 			status = AfterTMQFetch
 			b, _ := json.Marshal(&TMQFetchReq{
-				ReqID:      4,
-				ConsumerID: consumerID,
+				ReqID:     4,
+				MessageID: messageID,
 			})
 			action, _ := json.Marshal(&WSAction{
 				Action: TMQFetch,
@@ -321,7 +277,6 @@ func TestTMQ(t *testing.T) {
 			status = AfterTMQPoll
 			b, _ := json.Marshal(&TMQPollReq{
 				ReqID:        3,
-				ConsumerID:   consumerID,
 				BlockingTime: 500,
 			})
 			action, _ := json.Marshal(&WSAction{
@@ -336,34 +291,6 @@ func TestTMQ(t *testing.T) {
 			if err != nil {
 				return err
 			}
-		case AfterTMQUnSubscribe:
-			var d TMQUnsubscribeResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", TMQUnSubscribe, d.Code, d.Message)
-			}
-			b, _ := json.Marshal(&TMQCloseReq{
-				ReqID:      3,
-				ConsumerID: consumerID,
-			})
-			action, _ := json.Marshal(&WSAction{
-				Action: TMQClose,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-			time.Sleep(time.Second)
-			finish <- struct{}{}
-			return nil
 		}
 		return nil
 	}
@@ -396,20 +323,21 @@ func TestTMQ(t *testing.T) {
 		}
 	}()
 
-	init := &TMQInitReq{
+	init := &TMQSubscribeReq{
 		ReqID:    0,
 		User:     "root",
 		Password: "taosdata",
 		GroupID:  "test",
+		Topics:   []string{"test_tmq_ws_topic"},
 	}
 
 	b, _ := json.Marshal(init)
 	action, _ := json.Marshal(&WSAction{
-		Action: TMQInit,
+		Action: TMQSubscribe,
 		Args:   b,
 	})
 	t.Log(string(action))
-	status = AfterTMQInit
+	status = AfterTMQSubscribe
 	err = ws.WriteMessage(
 		websocket.TextMessage,
 		action,
@@ -419,4 +347,6 @@ func TestTMQ(t *testing.T) {
 		return
 	}
 	<-finish
+	ws.Close()
+	time.Sleep(time.Second * 3)
 }

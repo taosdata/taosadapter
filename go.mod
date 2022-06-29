@@ -8,9 +8,9 @@ require (
 	collectd.org v0.5.0
 	github.com/apache/arrow/go/arrow v0.0.0-20200923215132-ac86123a3f01 // indirect
 	github.com/gin-contrib/cors v1.3.1
-	github.com/gin-contrib/gzip v0.0.3
+	github.com/gin-contrib/gzip v0.0.5
 	github.com/gin-contrib/pprof v1.3.0
-	github.com/gin-gonic/gin v1.7.4
+	github.com/gin-gonic/gin v1.8.1
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/snappy v0.0.3
 	github.com/google/flatbuffers v2.0.0+incompatible // indirect
@@ -22,7 +22,6 @@ require (
 	github.com/influxdata/telegraf v1.20.0
 	github.com/lestrrat-go/strftime v1.0.5 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
-	github.com/mattn/go-isatty v0.0.13 // indirect
 	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.11.0
@@ -35,8 +34,8 @@ require (
 	github.com/smartystreets/assertions v1.0.1 // indirect
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.9.0
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 	github.com/swaggo/swag v1.7.6
-	github.com/taosdata/driver-go/v2 v2.0.1-0.20220618065050-fe3f6b0f9b0c
+	github.com/taosdata/driver-go/v2 v2.0.1-0.20220629055158-3e6f56b4d070
 	gonum.org/v1/gonum v0.8.2 // indirect
 )
