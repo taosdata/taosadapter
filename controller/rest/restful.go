@@ -177,7 +177,7 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
 }
 
 var (
-	ExecHeader = []byte(`{"head":["affected_rows"],"column_meta":[["affected_rows","INT",4]],"rows":1,"data":[[`)
+	ExecHeader = []byte(`{"code":0,"column_meta":[["affected_rows","INT",4]],"rows":1,"data":[[`)
 	ExecEnd    = []byte(`]]}`)
 	Query2     = []byte(`{"code":0,"column_meta":[`)
 	Query3     = []byte(`],"data":[`)
