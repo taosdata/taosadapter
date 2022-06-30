@@ -476,6 +476,8 @@ func (ctl *Restful) InitTMQ() {
 			return
 		}
 		switch action.Action {
+		case ClientVersion:
+			session.Write(ctl.wsVersionResp)
 		case TMQSubscribe:
 			var req TMQSubscribeReq
 			err = json.Unmarshal(action.Args, &req)

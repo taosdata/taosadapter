@@ -54,11 +54,11 @@ func TestWebsocket(t *testing.T) {
 	}
 	defer ws.Close()
 	const (
-		AfterConnect = 1
-		AfterQuery   = 2
-		AfterFetch   = 3
-		//AfterFetchJson  = 4
+		AfterConnect    = 1
+		AfterQuery      = 2
+		AfterFetch      = 3
 		AfterFetchBlock = 5
+		AfterVersion    = 6
 	)
 
 	status := 0
@@ -138,11 +138,18 @@ func TestWebsocket(t *testing.T) {
 			lengths = d.Lengths
 			rows = d.Rows
 			if d.Completed {
-				finish <- struct{}{}
+				status = AfterVersion
+				action, _ := json.Marshal(&WSAction{
+					Action: ClientVersion,
+					Args:   nil,
+				})
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
 				return nil
 			}
 
-			//status = AfterFetchJson
 			status = AfterFetchBlock
 			b, _ := json.Marshal(&WSFetchBlockReq{
 				ReqID: 4,
@@ -180,6 +187,19 @@ func TestWebsocket(t *testing.T) {
 			if err != nil {
 				return err
 			}
+		case AfterVersion:
+			var d WSVersionResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", WSFetch, d.Code, d.Message)
+			}
+			assert.NotEmpty(t, d.Version)
+			t.Log("client version", d.Version)
+			finish <- struct{}{}
+			return nil
 		}
 		return nil
 	}
