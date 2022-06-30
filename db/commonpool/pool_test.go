@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/driver-go/v2/wrapper"
 	"github.com/taosdata/taosadapter/config"
 )
 
@@ -63,8 +62,6 @@ func TestGetConnection(t *testing.T) {
 			if err != nil {
 				return
 			}
-			code := wrapper.TaosSelectDB(got.TaosConnection, "log")
-			assert.Equal(t, 0, code)
 			err = got.Put()
 			assert.NoError(t, err)
 		})
