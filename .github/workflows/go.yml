@@ -33,9 +33,6 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
 
-      - name: Test
-        run: cd ./taosadapter && nohup go test -v ./... &
-
       - name: shell
         run: |
           cat >start.sh<<EOF 
@@ -43,4 +40,8 @@ jobs:
           EOF
 
       - name: taosd
-        run: sudo sh ./start.sh
+        run: nohup sudo sh ./start.sh &
+
+
+      - name: Test
+        run: cd ./taosadapter && go test -v ./...
