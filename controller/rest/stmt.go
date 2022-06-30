@@ -654,6 +654,8 @@ func (ctl *Restful) InitStmt() {
 			return
 		}
 		switch action.Action {
+		case ClientVersion:
+			session.Write(ctl.wsVersionResp)
 		case STMTConnect:
 			var req StmtConnectReq
 			err = json.Unmarshal(action.Args, &req)

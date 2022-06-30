@@ -88,6 +88,7 @@ func TestTMQ(t *testing.T) {
 		AfterTMQFetch
 		AfterTMQFetchBlock
 		AfterTMQCommit
+		AfterVersion
 	)
 	messageID := uint64(0)
 	status := 0
@@ -129,8 +130,16 @@ func TestTMQ(t *testing.T) {
 			}
 		case AfterTMQPoll:
 			if pollCount == 5 {
-				finish <- struct{}{}
-				return err
+				status = AfterVersion
+				action, _ := json.Marshal(&WSAction{
+					Action: ClientVersion,
+					Args:   nil,
+				})
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				return nil
 			}
 			pollCount += 1
 			var d TMQPollResp
@@ -291,6 +300,19 @@ func TestTMQ(t *testing.T) {
 			if err != nil {
 				return err
 			}
+		case AfterVersion:
+			var d WSVersionResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", WSFetch, d.Code, d.Message)
+			}
+			assert.NotEmpty(t, d.Version)
+			t.Log("client version", d.Version)
+			finish <- struct{}{}
+			return nil
 		}
 		return nil
 	}

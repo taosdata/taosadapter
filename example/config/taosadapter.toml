@@ -61,7 +61,7 @@ deleteSets = true
 deleteTimings = true
 
 [collectd]
-enable = true
+enable = false
 port = 6045
 db = "collectd"
 user = "root"
