@@ -59,3 +59,31 @@ func InsertOpentsdbTelnet(taosConnect unsafe.Pointer, data, db string) error {
 	thread.Unlock()
 	return nil
 }
+
+func InsertOpentsdbTelnetBatch(taosConnect unsafe.Pointer, data []string, db string) error {
+	if len(data) == 0 {
+		return nil
+	}
+	err := tool.SelectDB(taosConnect, db)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(data); i++ {
+		data[i] = strings.TrimPrefix(strings.TrimSpace(data[i]), "put ")
+	}
+	thread.Lock()
+	result := wrapper.TaosSchemalessInsert(taosConnect, data, wrapper.OpenTSDBTelnetLineProtocol, "")
+	thread.Unlock()
+	code := wrapper.TaosError(result)
+	if code != 0 {
+		errStr := wrapper.TaosErrorStr(result)
+		thread.Lock()
+		wrapper.TaosFreeResult(result)
+		thread.Unlock()
+		return tErrors.NewError(code, errStr)
+	}
+	thread.Lock()
+	wrapper.TaosFreeResult(result)
+	thread.Unlock()
+	return nil
+}
