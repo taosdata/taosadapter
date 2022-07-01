@@ -2,6 +2,7 @@ package rest
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -26,6 +27,7 @@ import (
 	"github.com/taosdata/taosadapter/tools/ctools"
 	"github.com/taosdata/taosadapter/tools/jsonbuilder"
 	"github.com/taosdata/taosadapter/tools/web"
+	"github.com/taosdata/taosadapter/version"
 )
 
 const LayoutMillSecond = "2006-01-02 15:04:05.000"
@@ -35,10 +37,16 @@ const LayoutNanoSecond = "2006-01-02 15:04:05.000000000"
 var logger = log.GetLogger("restful")
 
 type Restful struct {
-	m *melody.Melody
+	m             *melody.Melody
+	wsVersionResp []byte
 }
 
 func (ctl *Restful) Init(r gin.IRouter) {
+	resp := WSVersionResp{
+		Action:  ClientVersion,
+		Version: version.TaosClientVersion,
+	}
+	ctl.wsVersionResp, _ = json.Marshal(resp)
 	ctl.InitWS()
 	api := r.Group("rest")
 	api.Use(func(c *gin.Context) {
