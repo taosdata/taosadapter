@@ -26,8 +26,8 @@ func (c *Config) setValue() {
 
 func init() {
 	_ = viper.BindEnv("collectd.enable", "TAOS_ADAPTER_COLLECTD_ENABLE")
-	pflag.Bool("collectd.enable", true, `enable collectd. Env "TAOS_ADAPTER_COLLECTD_ENABLE"`)
-	viper.SetDefault("collectd.enable", true)
+	pflag.Bool("collectd.enable", false, `enable collectd. Env "TAOS_ADAPTER_COLLECTD_ENABLE"`)
+	viper.SetDefault("collectd.enable", false)
 
 	_ = viper.BindEnv("collectd.port", "TAOS_ADAPTER_COLLECTD_PORT")
 	pflag.Int("collectd.port", 6045, `collectd server port. Env "TAOS_ADAPTER_COLLECTD_PORT"`)
