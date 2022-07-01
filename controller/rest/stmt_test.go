@@ -444,6 +444,7 @@ func TestBlock(t *testing.T) {
 		AfterBind
 		AfterAddBatch
 		AfterExec
+		AfterVersion
 	)
 	status := 0
 	finish := make(chan struct{})
@@ -625,6 +626,28 @@ func TestBlock(t *testing.T) {
 			if d.Code != 0 {
 				return fmt.Errorf("%s %d,%s", STMTExec, d.Code, d.Message)
 			}
+			status = AfterVersion
+			action, _ := json.Marshal(&WSAction{
+				Action: ClientVersion,
+				Args:   nil,
+			})
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			return nil
+		case AfterVersion:
+			var d WSVersionResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", ClientVersion, d.Code, d.Message)
+			}
+			assert.NotEmpty(t, d.Version)
+			t.Log("client version", d.Version)
+
 			b, _ := json.Marshal(&StmtClose{
 				ReqID:  8,
 				StmtID: stmtID,
@@ -643,6 +666,7 @@ func TestBlock(t *testing.T) {
 			}
 			time.Sleep(time.Second)
 			finish <- struct{}{}
+			return nil
 		}
 		return nil
 	}

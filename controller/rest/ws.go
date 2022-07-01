@@ -29,10 +29,11 @@ import (
 
 const TaosSessionKey = "taos"
 const (
-	WSConnect    = "conn"
-	WSQuery      = "query"
-	WSFetch      = "fetch"
-	WSFetchBlock = "fetch_block"
+	ClientVersion = "version"
+	WSConnect     = "conn"
+	WSQuery       = "query"
+	WSFetch       = "fetch"
+	WSFetchBlock  = "fetch_block"
 	// WSFreeResult WSFetchJson  = "fetch_json"
 	WSFreeResult = "free_result"
 )
@@ -405,10 +406,11 @@ type WSAction struct {
 	Args   json.RawMessage `json:"args"`
 }
 
-type WSCommonResp struct {
+type WSVersionResp struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	Action  string `json:"action"`
+	Version string `json:"version"`
 }
 
 func (ctl *Restful) InitWS() {
@@ -433,6 +435,8 @@ func (ctl *Restful) InitWS() {
 			return
 		}
 		switch action.Action {
+		case ClientVersion:
+			session.Write(ctl.wsVersionResp)
 		case WSConnect:
 			var wsConnect WSConnectReq
 			err = json.Unmarshal(action.Args, &wsConnect)

@@ -68,18 +68,19 @@ func TestInfluxdb(t *testing.T) {
 		return
 	}
 	defer r.Close()
-	values := make([]driver.Value, 4)
+	fieldCount := len(r.Columns())
+	values := make([]driver.Value, fieldCount)
 	err = r.Next(values)
 	assert.NoError(t, err)
 	keyMap := map[string]int{}
 	for i, s := range r.Columns() {
 		keyMap[s] = i
 	}
-	if values[keyMap["fieldKey"]].(string) != "Launch 🚀" {
+	if values[3].(string) != "Launch 🚀" {
 		t.Errorf("got %s expect %s", values[3], "Launch 🚀")
 		return
 	}
-	if int32(values[keyMap["field1"]].(int64)) != number {
+	if int32(values[1].(int64)) != number {
 		t.Errorf("got %d expect %d", values[1].(int64), number)
 		return
 	}
