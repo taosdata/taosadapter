@@ -27,7 +27,7 @@ func TestTaosSqlLogFormatter_Format(t1 *testing.T) {
 					Message: "select 1",
 				},
 			},
-			want: []byte(fmt.Sprintf("07/06 13:16:38.000000 %s select 1\n", ServerID)),
+			want: []byte(fmt.Sprintf("%s %s select 1\n", time.Unix(1657084598, 0).Format("01/02 15:04:05.000000"), ServerID)),
 			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
 				if err != nil {
 					t.Errorf("%s,%v", err.Error(), i)
