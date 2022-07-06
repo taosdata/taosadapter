@@ -26,6 +26,7 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 		return
 	}
 	defer wrapper.TaosClose(conn)
+	defer wrapper.TaosQuery(conn, "drop database if exists test_capi")
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        string
@@ -86,6 +87,7 @@ func BenchmarkTelnet(b *testing.B) {
 		return
 	}
 	defer wrapper.TaosClose(conn)
+	defer wrapper.TaosQuery(conn, "drop database if exists test")
 	for i := 0; i < b.N; i++ {
 		//`sys.if.bytes.out`,`host`=web01,`interface`=eth0
 		//t_98df8453856519710bfc2f1b5f8202cf
@@ -107,6 +109,7 @@ func TestInsertOpentsdbJson(t *testing.T) {
 		return
 	}
 	defer wrapper.TaosClose(conn)
+	defer wrapper.TaosQuery(conn, "drop database if exists test_capi")
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        []byte
@@ -182,6 +185,46 @@ func TestInsertOpentsdbJson(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := capi.InsertOpentsdbJson(tt.args.taosConnect, tt.args.data, tt.args.db); (err != nil) != tt.wantErr {
 				t.Errorf("InsertOpentsdbJson() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestInsertOpentsdbTelnetBatch(t *testing.T) {
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer wrapper.TaosClose(conn)
+	defer wrapper.TaosQuery(conn, "drop database if exists test_capi")
+	type args struct {
+		taosConnect unsafe.Pointer
+		data        []string
+		db          string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "test",
+			args: args{
+				taosConnect: conn,
+				data: []string{
+					"df.data.df_complex.used 1636539620 21393473536 fqdn=vm130  status=production",
+					"df.data.df_complex.used 1636539621 21393473536 fqdn=vm129  status=production",
+				},
+				db: "test_capi",
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := capi.InsertOpentsdbTelnetBatch(tt.args.taosConnect, tt.args.data, tt.args.db); (err != nil) != tt.wantErr {
+				t.Errorf("InsertOpentsdbTelnet() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
