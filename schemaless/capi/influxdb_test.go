@@ -20,6 +20,7 @@ func TestInsertInfluxdb(t *testing.T) {
 		return
 	}
 	defer wrapper.TaosClose(conn)
+	defer wrapper.TaosQuery(conn, "drop database if exists test_capi")
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        []byte

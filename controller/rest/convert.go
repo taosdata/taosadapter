@@ -40,7 +40,7 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 					if err != nil {
 						return err
 					}
-					src[column][row] = vv
+					src[column][row] = types.TaosBool(vv)
 				default:
 					return fmt.Errorf("stmtConvert:%v can not convert to bool", src[column][row])
 				}
@@ -245,7 +245,7 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 				t, is := src[column][row].(time.Time)
 				if is {
 					src[column][row] = types.TaosTimestamp{
-						T:         t,
+						T:         t.UTC(),
 						Precision: int(fields[column].Precision),
 					}
 					return nil
@@ -255,19 +255,19 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 				case reflect.Float32, reflect.Float64:
 					t := common.TimestampConvertToTime(int64(rv.Float()), int(fields[column].Precision))
 					src[column][row] = types.TaosTimestamp{
-						T:         t,
+						T:         t.UTC(),
 						Precision: int(fields[column].Precision),
 					}
 				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 					t := common.TimestampConvertToTime(rv.Int(), int(fields[column].Precision))
 					src[column][row] = types.TaosTimestamp{
-						T:         t,
+						T:         t.UTC(),
 						Precision: int(fields[column].Precision),
 					}
 				case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 					t := common.TimestampConvertToTime(int64(rv.Uint()), int(fields[column].Precision))
 					src[column][row] = types.TaosTimestamp{
-						T:         t,
+						T:         t.UTC(),
 						Precision: int(fields[column].Precision),
 					}
 				case reflect.String:
@@ -276,7 +276,7 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 						return err
 					}
 					src[column][row] = types.TaosTimestamp{
-						T:         t,
+						T:         t.UTC(),
 						Precision: int(fields[column].Precision),
 					}
 				default:

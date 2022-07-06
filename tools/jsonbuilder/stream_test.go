@@ -146,6 +146,18 @@ func TestStream_Common(t *testing.T) {
 	stream.WriteStringByte('\r')
 	stream.WriteStringByte('\t')
 	stream.WriteString("\r\n\t/")
+	stream.WriteRuneString('"')
+	stream.WriteRuneString('/')
+	stream.WriteRuneString('a')
+	stream.WriteRuneString('\n')
+	stream.WriteRuneString('\r')
+	stream.WriteRuneString('\t')
+	stream.WriteRune('"')
+	stream.WriteRune('/')
+	stream.WriteRune('a')
+	stream.WriteRune('\n')
+	stream.WriteRune('\r')
+	stream.WriteRune('\t')
 }
 
 func TestStr(t *testing.T) {
