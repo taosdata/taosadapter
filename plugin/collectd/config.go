@@ -3,7 +3,7 @@ package collectd
 import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"github.com/taosdata/driver-go/v2/common"
+	"github.com/taosdata/driver-go/v3/common"
 )
 
 type Config struct {

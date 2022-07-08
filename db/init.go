@@ -3,9 +3,9 @@ package db
 import (
 	"sync"
 
-	"github.com/taosdata/driver-go/v2/common"
-	"github.com/taosdata/driver-go/v2/errors"
-	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/driver-go/v3/common"
+	"github.com/taosdata/driver-go/v3/errors"
+	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/config"
 	"github.com/taosdata/taosadapter/db/async"
 	"github.com/taosdata/taosadapter/log"

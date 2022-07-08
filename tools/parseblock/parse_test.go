@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/taosdata/driver-go/v2/common"
+	"github.com/taosdata/driver-go/v3/common"
 )
 
 func TestParseBlock(t *testing.T) {

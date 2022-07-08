@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/config"
 	"github.com/taosdata/taosadapter/db"
 )
@@ -24,6 +25,13 @@ func TestMain(m *testing.M) {
 	viper.Set("prometheus.enable", true)
 	db.PrepareConnection()
 	m.Run()
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		panic(err)
+		return
+	}
+	r := wrapper.TaosQuery(conn, "drop database if exists test_plugin_prometheus")
+	wrapper.TaosFreeResult(r)
 }
 
 // @author: xftan
@@ -374,4 +382,5 @@ func TestPrometheusWithLimit(t *testing.T) {
 	assert.Equal(t, 1, len(samples))
 	assert.Equal(t, number, samples[0].GetValue())
 	assert.Equal(t, now, samples[0].GetTimestamp())
+	config.Conf.RestfulRowLimit = -1
 }

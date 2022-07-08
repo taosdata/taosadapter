@@ -1,12 +1,13 @@
 package tool
 
 import (
+	"fmt"
 	"testing"
 	"unsafe"
 
 	"github.com/stretchr/testify/assert"
-	tErrors "github.com/taosdata/driver-go/v2/errors"
-	"github.com/taosdata/driver-go/v2/wrapper"
+	tErrors "github.com/taosdata/driver-go/v3/errors"
+	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/config"
 	"github.com/taosdata/taosadapter/db"
 )
@@ -47,6 +48,13 @@ func TestCreateDBWithConnection(t *testing.T) {
 			}
 			code := wrapper.TaosSelectDB(tt.args.connection, tt.args.db)
 			assert.Equal(t, 0, code)
+			r := wrapper.TaosQuery(conn, "drop database if exists collectd")
+			code = wrapper.TaosError(r)
+			if code != 0 {
+				errStr := wrapper.TaosErrorStr(r)
+				t.Error(tErrors.NewError(code, errStr))
+			}
+			wrapper.TaosFreeResult(r)
 		})
 	}
 }
@@ -93,6 +101,13 @@ func Test_selectDB(t *testing.T) {
 			if err := SelectDB(tt.args.taosConnect, tt.args.db); (err != nil) != tt.wantErr {
 				t.Errorf("selectDB() error = %v, wantErr %v", err, tt.wantErr)
 			}
+			r := wrapper.TaosQuery(tt.args.taosConnect, fmt.Sprintf("drop database if exists %s", tt.args.db))
+			code = wrapper.TaosError(r)
+			if code != 0 {
+				errStr := wrapper.TaosErrorStr(r)
+				t.Error(tErrors.NewError(code, errStr))
+			}
+			wrapper.TaosFreeResult(r)
 		})
 	}
 }

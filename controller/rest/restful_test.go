@@ -141,6 +141,12 @@ func TestAllType(t *testing.T) {
 	assert.Equal(t, "中文nchar", result.Data[0][13])
 	assert.Equal(t, map[string]interface{}{"table": "t1"}, result.Data[0][14])
 	assert.Equal(t, "t1", result.Data[0][15])
+	w = httptest.NewRecorder()
+	body = strings.NewReader("drop database if exists test_alltype")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
 }
 
 // @author: xftan
@@ -193,4 +199,11 @@ func TestRowLimit(t *testing.T) {
 	assert.Equal(t, "中文nchar", result.Data[0][13])
 	assert.Equal(t, map[string]interface{}{"table": "t1"}, result.Data[0][14])
 	assert.Equal(t, "t1", result.Data[0][15])
+	config.Conf.RestfulRowLimit = -1
+	w = httptest.NewRecorder()
+	body = strings.NewReader(fmt.Sprintf(`drop database if exists test_rowlimit`))
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
 }

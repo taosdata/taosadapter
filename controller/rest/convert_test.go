@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/driver-go/v2/common"
-	"github.com/taosdata/driver-go/v2/types"
-	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/driver-go/v3/common"
+	"github.com/taosdata/driver-go/v3/types"
+	"github.com/taosdata/driver-go/v3/wrapper"
 )
 
 func Test_stmtConvert(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"unsafe"
 
-	tErrors "github.com/taosdata/driver-go/v2/errors"
-	"github.com/taosdata/driver-go/v2/wrapper"
+	tErrors "github.com/taosdata/driver-go/v3/errors"
+	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/db/tool"
 	"github.com/taosdata/taosadapter/schemaless/proto"
 	"github.com/taosdata/taosadapter/thread"

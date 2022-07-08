@@ -8,7 +8,7 @@ import (
 	"database/sql/driver"
 	"unsafe"
 
-	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/driver-go/v3/wrapper"
 )
 
 func ParseBlock(data []byte, colTypes []uint8, rows int, precision int) (uint64, [][]driver.Value) {
