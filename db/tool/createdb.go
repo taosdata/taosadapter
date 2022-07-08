@@ -4,7 +4,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/db/async"
 	"github.com/taosdata/taosadapter/thread"
 	"github.com/taosdata/taosadapter/tools/pool"

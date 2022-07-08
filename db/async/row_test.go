@@ -5,7 +5,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/driver-go/v3/wrapper"
 )
 
 // @author: xftan
@@ -47,7 +47,8 @@ func TestAsync_TaosExec(t *testing.T) {
 				FieldCount: 21,
 			},
 			wantErr: false,
-		}, {
+		},
+		{
 			name:   "create database",
 			fields: fields{NewHandlerPool(10000)},
 			args: args{
@@ -61,7 +62,23 @@ func TestAsync_TaosExec(t *testing.T) {
 				Data:         nil,
 			},
 			wantErr: false,
-		}, {
+		},
+		{
+			name:   "drop database",
+			fields: fields{NewHandlerPool(10000)},
+			args: args{
+				taosConnect: conn,
+				sql:         "drop database if exists test_async_exec",
+			},
+			want: &ExecResult{
+				AffectedRows: 0,
+				FieldCount:   0,
+				Header:       nil,
+				Data:         nil,
+			},
+			wantErr: false,
+		},
+		{
 			name:   "wrong",
 			fields: fields{NewHandlerPool(10000)},
 			args: args{
@@ -128,7 +145,17 @@ func TestAsync_TaosExecWithoutResult(t *testing.T) {
 				sql:         "create database if not exists test_async_exec_without_result",
 			},
 			wantErr: false,
-		}, {
+		},
+		{
+			name:   "drop database",
+			fields: fields{NewHandlerPool(10000)},
+			args: args{
+				taosConnect: conn,
+				sql:         "drop database if exists test_async_exec_without_result",
+			},
+			wantErr: false,
+		},
+		{
 			name: "wrong",
 			fields: fields{
 				handlerPool: NewHandlerPool(2),

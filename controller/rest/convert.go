@@ -8,9 +8,9 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/taosdata/driver-go/v2/common"
-	"github.com/taosdata/driver-go/v2/types"
-	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/driver-go/v3/common"
+	"github.com/taosdata/driver-go/v3/types"
+	"github.com/taosdata/driver-go/v3/wrapper"
 )
 
 func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes []*types.ColumnType) error {
@@ -414,6 +414,23 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 					src[column][row] = types.TaosUBigint(vv)
 				default:
 					return fmt.Errorf("stmtConvert:%v can not convert to bigint unsigned", src[column][row])
+				}
+			}
+		case common.TSDB_DATA_TYPE_JSON:
+			for row := 0; row < len(src[column]); row++ {
+				if src[column][row] == nil {
+					continue
+				}
+				switch src[column][row].(type) {
+				case string:
+					src[column][row] = types.TaosJson(src[column][row].(string))
+				case []byte:
+					src[column][row] = types.TaosJson(src[column][row].([]byte))
+				default:
+					return fmt.Errorf("stmtConvert:%v can not convert to json", src[column][row])
+				}
+				if fieldTypes != nil && len(src[column][row].(types.TaosJson)) > fieldTypes[column].MaxLen {
+					fieldTypes[column].MaxLen = len(src[column][row].(types.TaosJson))
 				}
 			}
 		}

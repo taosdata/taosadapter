@@ -1,6 +1,6 @@
 package version
 
-import "github.com/taosdata/driver-go/v2/wrapper"
+import "github.com/taosdata/driver-go/v3/wrapper"
 
 var Version = "0.1.0"
 

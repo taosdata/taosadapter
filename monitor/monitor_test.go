@@ -29,6 +29,7 @@ var router *gin.Engine
 func TestMain(m *testing.M) {
 	viper.Set("monitor.writeInterval", time.Second*5)
 	config.Init()
+	config.Conf.Monitor.WriteInterval = time.Second * 10
 	log.ConfigLog()
 	db.PrepareConnection()
 	gin.SetMode(gin.ReleaseMode)
@@ -66,7 +67,6 @@ func TestMonitor(t *testing.T) {
 	size2 := int(float64(total) * 0.2)
 	config.Conf.Monitor.PauseQueryMemoryThreshold = currentPercent + 20
 	config.Conf.Monitor.PauseAllMemoryThreshold = currentPercent + 40
-	monitor.StartMonitor()
 	{
 		assert.False(t, monitor.QueryPaused())
 		assert.False(t, monitor.AllPaused())
@@ -185,6 +185,15 @@ func TestMonitor(t *testing.T) {
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 	}
+	{
+		w := httptest.NewRecorder()
+		body := strings.NewReader("drop database if exists t1")
+		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+		router.ServeHTTP(w, req)
+		assert.Equal(t, 200, w.Code)
+	}
+
 }
 
 func TestWriteLog(t *testing.T) {
@@ -213,7 +222,7 @@ func TestWriteLog(t *testing.T) {
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 	}
-	time.Sleep(config.Conf.Monitor.WriteInterval)
+	time.Sleep(config.Conf.Monitor.WriteInterval * 2)
 	checkTables := []string{
 		"taosadapter_restful_http_total",
 		"taosadapter_restful_http_fail",

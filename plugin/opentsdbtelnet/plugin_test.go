@@ -10,8 +10,9 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/driver-go/v2/af"
-	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/driver-go/v3/af"
+	"github.com/taosdata/driver-go/v3/errors"
+	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/config"
 	"github.com/taosdata/taosadapter/db"
 	"github.com/taosdata/taosadapter/plugin/opentsdbtelnet"
@@ -47,6 +48,15 @@ func TestPlugin(t *testing.T) {
 		return
 	}
 	defer wrapper.TaosClose(conn)
+	defer func() {
+		r := wrapper.TaosQuery(conn, "drop database if exists opentsdb_telnet")
+		code := wrapper.TaosError(r)
+		if code != 0 {
+			errStr := wrapper.TaosErrorStr(r)
+			t.Error(errors.NewError(code, errStr))
+		}
+		wrapper.TaosFreeResult(r)
+	}()
 	afC, err := af.NewConnector(conn)
 	assert.NoError(t, err)
 	r, err := afC.Query("select last(_value) from opentsdb_telnet.`sys.if.bytes.out`")

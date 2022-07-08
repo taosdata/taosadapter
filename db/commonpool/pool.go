@@ -7,8 +7,8 @@ import (
 	"unsafe"
 
 	"github.com/silenceper/pool"
-	tErrors "github.com/taosdata/driver-go/v2/errors"
-	"github.com/taosdata/driver-go/v2/wrapper"
+	tErrors "github.com/taosdata/driver-go/v3/errors"
+	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/config"
 	"github.com/taosdata/taosadapter/thread"
 )

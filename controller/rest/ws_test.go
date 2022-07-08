@@ -293,5 +293,11 @@ func TestWebsocket(t *testing.T) {
 	assert.Equal(t, nil, blockResult[2][12])
 	assert.Equal(t, nil, blockResult[2][13])
 	assert.Equal(t, []byte(`{"table":"t1"}`), blockResult[2][14])
+	w = httptest.NewRecorder()
+	body = strings.NewReader("drop database if exists test_ws")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
 
 }

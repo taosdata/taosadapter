@@ -5,7 +5,8 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/driver-go/v3/errors"
+	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/schemaless/capi"
 	"github.com/taosdata/taosadapter/schemaless/proto"
 )
@@ -20,7 +21,15 @@ func TestInsertInfluxdb(t *testing.T) {
 		return
 	}
 	defer wrapper.TaosClose(conn)
-	defer wrapper.TaosQuery(conn, "drop database if exists test_capi")
+	defer func() {
+		r := wrapper.TaosQuery(conn, "drop database if exists test_capi")
+		code := wrapper.TaosError(r)
+		if code != 0 {
+			errStr := wrapper.TaosErrorStr(r)
+			t.Error(errors.NewError(code, errStr))
+		}
+		wrapper.TaosFreeResult(r)
+	}()
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        []byte

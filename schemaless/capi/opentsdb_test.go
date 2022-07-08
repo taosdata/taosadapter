@@ -4,7 +4,8 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/driver-go/v3/errors"
+	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/config"
 	"github.com/taosdata/taosadapter/db"
 	"github.com/taosdata/taosadapter/schemaless/capi"
@@ -26,7 +27,15 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 		return
 	}
 	defer wrapper.TaosClose(conn)
-	defer wrapper.TaosQuery(conn, "drop database if exists test_capi")
+	defer func() {
+		r := wrapper.TaosQuery(conn, "drop database if exists test_capi")
+		code := wrapper.TaosError(r)
+		if code != 0 {
+			errStr := wrapper.TaosErrorStr(r)
+			t.Error(errors.NewError(code, errStr))
+		}
+		wrapper.TaosFreeResult(r)
+	}()
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        string
@@ -87,7 +96,15 @@ func BenchmarkTelnet(b *testing.B) {
 		return
 	}
 	defer wrapper.TaosClose(conn)
-	defer wrapper.TaosQuery(conn, "drop database if exists test")
+	defer func() {
+		r := wrapper.TaosQuery(conn, "drop database if exists test")
+		code := wrapper.TaosError(r)
+		if code != 0 {
+			errStr := wrapper.TaosErrorStr(r)
+			b.Error(errors.NewError(code, errStr))
+		}
+		wrapper.TaosFreeResult(r)
+	}()
 	for i := 0; i < b.N; i++ {
 		//`sys.if.bytes.out`,`host`=web01,`interface`=eth0
 		//t_98df8453856519710bfc2f1b5f8202cf
@@ -109,7 +126,15 @@ func TestInsertOpentsdbJson(t *testing.T) {
 		return
 	}
 	defer wrapper.TaosClose(conn)
-	defer wrapper.TaosQuery(conn, "drop database if exists test_capi")
+	defer func() {
+		r := wrapper.TaosQuery(conn, "drop database if exists test_capi")
+		code := wrapper.TaosError(r)
+		if code != 0 {
+			errStr := wrapper.TaosErrorStr(r)
+			t.Error(errors.NewError(code, errStr))
+		}
+		wrapper.TaosFreeResult(r)
+	}()
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        []byte
@@ -197,7 +222,15 @@ func TestInsertOpentsdbTelnetBatch(t *testing.T) {
 		return
 	}
 	defer wrapper.TaosClose(conn)
-	defer wrapper.TaosQuery(conn, "drop database if exists test_capi")
+	defer func() {
+		r := wrapper.TaosQuery(conn, "drop database if exists test_capi")
+		code := wrapper.TaosError(r)
+		if code != 0 {
+			errStr := wrapper.TaosErrorStr(r)
+			t.Error(errors.NewError(code, errStr))
+		}
+		wrapper.TaosFreeResult(r)
+	}()
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        []string

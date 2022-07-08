@@ -371,4 +371,16 @@ func TestTMQ(t *testing.T) {
 	<-finish
 	ws.Close()
 	time.Sleep(time.Second * 3)
+	//w = httptest.NewRecorder()
+	//body = strings.NewReader("drop topic if exists test_tmq_ws_topic")
+	//req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	//req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	//router.ServeHTTP(w, req)
+	//assert.Equal(t, 200, w.Code)
+	//w = httptest.NewRecorder()
+	//body = strings.NewReader("drop database if exists test_ws_tmq")
+	//req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	//req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	//router.ServeHTTP(w, req)
+	//assert.Equal(t, 200, w.Code)
 }

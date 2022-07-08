@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/driver-go/v2/af"
+	"github.com/taosdata/driver-go/v3/af"
 	"github.com/taosdata/taosadapter/config"
 	"github.com/taosdata/taosadapter/db"
 )
@@ -70,5 +70,7 @@ func TestNodeExporter_Gather(t *testing.T) {
 	assert.Equal(t, float64(1), d[0])
 	t.Logf("%#v", d)
 	err = n.Stop()
+	assert.NoError(t, err)
+	_, err = conn.Exec("drop database if exists node_exporter")
 	assert.NoError(t, err)
 }

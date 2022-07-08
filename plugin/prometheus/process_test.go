@@ -300,5 +300,6 @@ func Test_generateReadSqlWithLimit(t *testing.T) {
 				t.Errorf("generateReadSql() got = %v, want %v", got, tt.want)
 			}
 		})
+		config.Conf.RestfulRowLimit = -1
 	}
 }

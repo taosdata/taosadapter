@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	tErrors "github.com/taosdata/driver-go/v2/errors"
+	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/monitor"
