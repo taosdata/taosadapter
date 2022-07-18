@@ -634,6 +634,7 @@ func (t *TaosStmt) cleanUp() {
 
 func (ctl *Restful) InitStmt() {
 	ctl.stmtM = melody.New()
+	ctl.stmtM.Config.MaxMessageSize = 4 * 1024 * 1024
 
 	ctl.stmtM.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
