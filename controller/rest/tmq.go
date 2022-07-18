@@ -12,8 +12,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
-	"github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/taosadapter/httperror"
 	"github.com/taosdata/taosadapter/thread"
 	"github.com/taosdata/taosadapter/tools/jsontype"
 	"github.com/taosdata/taosadapter/tools/web"
@@ -114,7 +114,7 @@ func (t *TMQ) subscribe(session *melody.Session, req *TMQSubscribeReq) {
 	t.Lock()
 	defer t.Unlock()
 	if t.consumer != nil {
-		wsErrorMsg(session, 0xffff, "tmq duplicate init", TMQSubscribe, req.ReqID)
+		wsTMQErrorMsg(session, 0xffff, "tmq duplicate init", TMQSubscribe, req.ReqID, nil)
 		return
 	}
 	config := wrapper.TMQConfNew()
@@ -123,67 +123,67 @@ func (t *TMQ) subscribe(session *melody.Session, req *TMQSubscribeReq) {
 	}()
 	if len(req.GroupID) != 0 {
 		errCode := wrapper.TMQConfSet(config, "group.id", req.GroupID)
-		if errCode != errors.SUCCESS {
+		if errCode != httperror.SUCCESS {
 			errStr := wrapper.TMQErr2Str(errCode)
-			wsErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID)
+			wsTMQErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
 			return
 		}
 	}
 	if len(req.ClientID) != 0 {
 		errCode := wrapper.TMQConfSet(config, "client.id", req.ClientID)
-		if errCode != errors.SUCCESS {
+		if errCode != httperror.SUCCESS {
 			errStr := wrapper.TMQErr2Str(errCode)
-			wsErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID)
+			wsTMQErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
 			return
 		}
 	}
 	if len(req.DB) != 0 {
 		errCode := wrapper.TMQConfSet(config, "td.connect.db", req.DB)
-		if errCode != errors.SUCCESS {
+		if errCode != httperror.SUCCESS {
 			errStr := wrapper.TMQErr2Str(errCode)
-			wsErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID)
+			wsTMQErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
 			return
 		}
 	}
 
 	if len(req.OffsetRest) != 0 {
 		errCode := wrapper.TMQConfSet(config, "auto.offset.reset", req.DB)
-		if errCode != errors.SUCCESS {
+		if errCode != httperror.SUCCESS {
 			errStr := wrapper.TMQErr2Str(errCode)
-			wsErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID)
+			wsTMQErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
 			return
 		}
 	}
 
 	errCode := wrapper.TMQConfSet(config, "td.connect.user", req.User)
-	if errCode != errors.SUCCESS {
+	if errCode != httperror.SUCCESS {
 		errStr := wrapper.TMQErr2Str(errCode)
-		wsErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID)
+		wsTMQErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
 		return
 	}
 	errCode = wrapper.TMQConfSet(config, "td.connect.pass", req.Password)
-	if errCode != errors.SUCCESS {
+	if errCode != httperror.SUCCESS {
 		errStr := wrapper.TMQErr2Str(errCode)
-		wsErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID)
+		wsTMQErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
 		return
 	}
 	errCode = wrapper.TMQConfSet(config, "msg.with.table.name", "true")
-	if errCode != errors.SUCCESS {
+	if errCode != httperror.SUCCESS {
 		errStr := wrapper.TMQErr2Str(errCode)
-		wsErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID)
+		wsTMQErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
 		return
 	}
 	errCode = wrapper.TMQConfSet(config, "enable.auto.commit", "false")
-	if errCode != errors.SUCCESS {
+	if errCode != httperror.SUCCESS {
 		errStr := wrapper.TMQErr2Str(errCode)
-		wsErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID)
+		wsTMQErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
 		return
 	}
 	thread.Lock()
 	cPointer, err := wrapper.TMQConsumerNew(config)
 	thread.Unlock()
 	if err != nil {
-		wsErrorMsg(session, 0xffff, err.Error(), TMQSubscribe, req.ReqID)
+		wsTMQErrorMsg(session, 0xffff, err.Error(), TMQSubscribe, req.ReqID, nil)
 		return
 	}
 
@@ -199,7 +199,7 @@ func (t *TMQ) subscribe(session *melody.Session, req *TMQSubscribeReq) {
 				_ = wrapper.TMQConsumerClose(cPointer)
 				thread.Unlock()
 				errStr := wrapper.TMQErr2Str(errCode)
-				wsErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID)
+				wsTMQErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
 				return
 			}
 		}
@@ -211,7 +211,7 @@ func (t *TMQ) subscribe(session *melody.Session, req *TMQSubscribeReq) {
 			_ = wrapper.TMQConsumerClose(cPointer)
 			thread.Unlock()
 			errStr := wrapper.TMQErr2Str(errCode)
-			wsErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID)
+			wsTMQErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
 			return
 		}
 	}
@@ -236,7 +236,7 @@ type TMQCommitResp struct {
 
 func (t *TMQ) commit(session *melody.Session, req *TMQCommitReq) {
 	if t.consumer == nil {
-		wsErrorMsg(session, 0xffff, "tmq not init", TMQCommit, req.ReqID)
+		wsTMQErrorMsg(session, 0xffff, "tmq not init", TMQCommit, req.ReqID, nil)
 		return
 	}
 	t.listLocker.Lock()
@@ -257,7 +257,7 @@ func (t *TMQ) commit(session *melody.Session, req *TMQCommitReq) {
 	thread.Unlock()
 	if errCode != 0 {
 		errStr := wrapper.TMQErr2Str(errCode)
-		wsErrorMsg(session, int(errCode), errStr, TMQCommit, req.ReqID)
+		wsTMQErrorMsg(session, int(errCode), errStr, TMQCommit, req.ReqID, nil)
 		return
 	}
 	item := t.messages.Front()
@@ -294,7 +294,7 @@ type TMQPollResp struct {
 
 func (t *TMQ) poll(session *melody.Session, req *TMQPollReq) {
 	if t.consumer == nil {
-		wsErrorMsg(session, 0xffff, "tmq not init", TMQPoll, req.ReqID)
+		wsTMQErrorMsg(session, 0xffff, "tmq not init", TMQPoll, req.ReqID, nil)
 		return
 	}
 	if req.BlockingTime > 1000 {
@@ -346,14 +346,14 @@ type TMQFetchResp struct {
 
 func (t *TMQ) fetch(session *melody.Session, req *TMQFetchReq) {
 	if t.consumer == nil {
-		wsErrorMsg(session, 0xffff, "tmq not init", TMQFetch, req.ReqID)
+		wsTMQErrorMsg(session, 0xffff, "tmq not init", TMQFetch, req.ReqID, &req.MessageID)
 		return
 	}
 	t.listLocker.RLock()
 	messageItem := t.getMessage(req.MessageID)
 	t.listLocker.RUnlock()
 	if messageItem == nil {
-		wsErrorMsg(session, 0xffff, "message is nil", TMQFetch, req.ReqID)
+		wsTMQErrorMsg(session, 0xffff, "message is nil", TMQFetch, req.ReqID, &req.MessageID)
 		return
 	}
 	message := messageItem.Value.(*TMQMessage)
@@ -364,7 +364,7 @@ func (t *TMQ) fetch(session *melody.Session, req *TMQFetchReq) {
 	if errCode != 0 {
 		errStr := wrapper.TMQErr2Str(int32(errCode))
 		message.Unlock()
-		wsErrorMsg(session, errCode, errStr, TMQFetch, req.ReqID)
+		wsTMQErrorMsg(session, errCode, errStr, TMQFetch, req.ReqID, &req.MessageID)
 		return
 	}
 	resp := &TMQFetchResp{
@@ -409,20 +409,20 @@ type TMQFetchBlockReq struct {
 
 func (t *TMQ) fetchBlock(session *melody.Session, req *TMQFetchBlockReq) {
 	if t.consumer == nil {
-		wsErrorMsg(session, 0xffff, "tmq not init", TMQFetchBlock, req.ReqID)
+		wsTMQErrorMsg(session, 0xffff, "tmq not init", TMQFetchBlock, req.ReqID, &req.MessageID)
 		return
 	}
 	t.listLocker.RLock()
 	messageItem := t.getMessage(req.MessageID)
 	t.listLocker.RUnlock()
 	if messageItem == nil {
-		wsErrorMsg(session, 0xffff, "message is nil", TMQFetchBlock, req.ReqID)
+		wsTMQErrorMsg(session, 0xffff, "message is nil", TMQFetchBlock, req.ReqID, &req.MessageID)
 		return
 	}
 	message := messageItem.Value.(*TMQMessage)
 	message.Lock()
 	if message.buffer == nil || message.buffer.Len() == 0 {
-		wsErrorMsg(session, 0xffff, "no fetch data", TMQFetchBlock, req.ReqID)
+		wsTMQErrorMsg(session, 0xffff, "no fetch data", TMQFetchBlock, req.ReqID, &req.MessageID)
 		return
 	}
 	b := message.buffer.Bytes()
@@ -564,4 +564,23 @@ func (ctl *Restful) tmq(c *gin.Context) {
 	id := web.GetRequestID(c)
 	loggerWithID := logger.WithField("sessionID", id)
 	_ = ctl.tmqM.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": loggerWithID})
+}
+
+type WSTMQErrorResp struct {
+	Code      int     `json:"code"`
+	Message   string  `json:"message"`
+	Action    string  `json:"action"`
+	ReqID     uint64  `json:"req_id"`
+	MessageID *uint64 `json:"message_id,omitempty"`
+}
+
+func wsTMQErrorMsg(session *melody.Session, code int, message string, action string, reqID uint64, messageID *uint64) {
+	b, _ := json.Marshal(&WSTMQErrorResp{
+		Code:      code & 0xffff,
+		Message:   message,
+		Action:    action,
+		ReqID:     reqID,
+		MessageID: messageID,
+	})
+	session.Write(b)
 }
