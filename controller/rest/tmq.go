@@ -456,6 +456,7 @@ func (t *TMQ) Close() {
 
 func (ctl *Restful) InitTMQ() {
 	ctl.tmqM = melody.New()
+	ctl.tmqM.Config.MaxMessageSize = 4 * 1024 * 1024
 
 	ctl.tmqM.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
