@@ -429,6 +429,7 @@ type WSVersionResp struct {
 
 func (ctl *Restful) InitWS() {
 	ctl.m = melody.New()
+	ctl.m.Config.MaxMessageSize = 1024 * 1024 * 4
 
 	ctl.m.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
