@@ -63,13 +63,11 @@ func (ctl *Restful) Init(r gin.IRouter) {
 }
 
 type TDEngineRestfulRespDoc struct {
-	Status     string          `json:"status,omitempty"`
-	Head       []string        `json:"head,omitempty"`
+	Code       int             `json:"code,omitempty"`
+	Desc       string          `json:"desc,omitempty"`
 	ColumnMeta [][]interface{} `json:"column_meta,omitempty"`
 	Data       [][]interface{} `json:"data,omitempty"`
 	Rows       int             `json:"rows,omitempty"`
-	Code       int             `json:"code,omitempty"`
-	Desc       string          `json:"desc,omitempty"`
 }
 
 // @Tags rest
@@ -103,11 +101,11 @@ func (ctl *Restful) sql(c *gin.Context) {
 }
 
 type TDEngineRestfulResp struct {
-	Status     string           `json:"status"`
-	Head       []string         `json:"head"`
-	ColumnMeta [][]interface{}  `json:"column_meta"`
-	Data       [][]driver.Value `json:"data"`
-	Rows       int              `json:"rows"`
+	Code       int              `json:"code,omitempty"`
+	Desc       string           `json:"desc,omitempty"`
+	ColumnMeta [][]interface{}  `json:"column_meta,omitempty"`
+	Data       [][]driver.Value `json:"data,omitempty"`
+	Rows       int              `json:"rows,omitempty"`
 }
 
 func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {

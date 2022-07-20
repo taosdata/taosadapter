@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"container/list"
 	"encoding/json"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -12,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
+	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/httperror"
 	"github.com/taosdata/taosadapter/thread"
@@ -20,11 +22,16 @@ import (
 )
 
 const (
-	TMQSubscribe  = "subscribe"
-	TMQPoll       = "poll"
-	TMQFetch      = "fetch"
-	TMQFetchBlock = "fetch_block"
-	TMQCommit     = "commit"
+	TMQSubscribe     = "subscribe"
+	TMQPoll          = "poll"
+	TMQFetch         = "fetch"
+	TMQFetchBlock    = "fetch_block"
+	TMQFetchRawMeta  = "fetch_raw_meta"
+	TMQFetchJsonMeta = "fetch_json_meta"
+	TMQCommit        = "commit"
+)
+const (
+	TMQRawMetaMessage = 3
 )
 const TaosTMQKey = "taos_tmq"
 
@@ -33,6 +40,7 @@ type TMQ struct {
 	listLocker sync.RWMutex
 	consumer   unsafe.Pointer
 	messages   *list.List
+	Conn       unsafe.Pointer
 	//consumers     *list.List
 	messageIndex uint64
 	closed       bool
@@ -44,9 +52,10 @@ func NewTaosTMQ() *TMQ {
 }
 
 type TMQMessage struct {
-	index    uint64
-	cPointer unsafe.Pointer
-	buffer   *bytes.Buffer
+	index       uint64
+	cPointer    unsafe.Pointer
+	buffer      *bytes.Buffer
+	messageType int32
 	sync.Mutex
 }
 
@@ -179,6 +188,12 @@ func (t *TMQ) subscribe(session *melody.Session, req *TMQSubscribeReq) {
 		wsTMQErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
 		return
 	}
+	errCode = wrapper.TMQConfSet(config, "enable.heartbeat.background", "true")
+	if errCode != httperror.SUCCESS {
+		errStr := wrapper.TMQErr2Str(errCode)
+		wsTMQErrorMsg(session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
+		return
+	}
 	thread.Lock()
 	cPointer, err := wrapper.TMQConsumerNew(config)
 	thread.Unlock()
@@ -289,6 +304,7 @@ type TMQPollResp struct {
 	Topic       string `json:"topic"`
 	Database    string `json:"database"`
 	VgroupID    int32  `json:"vgroup_id"`
+	MessageType int32  `json:"message_type"`
 	MessageID   uint64 `json:"message_id"`
 }
 
@@ -308,18 +324,25 @@ func (t *TMQ) poll(session *melody.Session, req *TMQPollReq) {
 		ReqID:  req.ReqID,
 	}
 	if message != nil {
-		m := &TMQMessage{
-			cPointer: message,
-			buffer:   new(bytes.Buffer),
+		messageType := wrapper.TMQGetResType(message)
+		if messageType == common.TMQ_RES_DATA || messageType == common.TMQ_RES_TABLE_META {
+
+			m := &TMQMessage{
+				cPointer:    message,
+				buffer:      new(bytes.Buffer),
+				messageType: messageType,
+			}
+			t.addMessage(m)
+			resp.HaveMessage = true
+			resp.Topic = wrapper.TMQGetTopicName(message)
+			resp.Database = wrapper.TMQGetDBName(message)
+			resp.VgroupID = wrapper.TMQGetVgroupID(message)
+			resp.MessageID = m.index
+			resp.MessageType = messageType
+		} else {
+			wsTMQErrorMsg(session, 0xffff, "unavailable tmq type:"+strconv.Itoa(int(messageType)), TMQPoll, req.ReqID, nil)
+			return
 		}
-		t.addMessage(m)
-		resp.HaveMessage = true
-		thread.Lock()
-		resp.Topic = wrapper.TMQGetTopicName(message)
-		resp.Database = wrapper.TMQGetDBName(message)
-		resp.VgroupID = wrapper.TMQGetVgroupID(message)
-		thread.Unlock()
-		resp.MessageID = m.index
 	}
 	wsWriteJson(session, resp)
 }
@@ -357,6 +380,10 @@ func (t *TMQ) fetch(session *melody.Session, req *TMQFetchReq) {
 		return
 	}
 	message := messageItem.Value.(*TMQMessage)
+	if message.messageType != common.TMQ_RES_DATA {
+		wsTMQErrorMsg(session, 0xffff, "message type is not data", TMQFetchBlock, req.ReqID, &req.MessageID)
+		return
+	}
 	message.Lock()
 	thread.Lock()
 	blockSize, errCode, block := wrapper.TaosFetchRawBlock(message.cPointer)
@@ -420,14 +447,129 @@ func (t *TMQ) fetchBlock(session *melody.Session, req *TMQFetchBlockReq) {
 		return
 	}
 	message := messageItem.Value.(*TMQMessage)
+	if message.messageType != common.TMQ_RES_DATA {
+		wsTMQErrorMsg(session, 0xffff, "message type is not data", TMQFetchBlock, req.ReqID, &req.MessageID)
+		return
+	}
 	message.Lock()
 	if message.buffer == nil || message.buffer.Len() == 0 {
+		message.Unlock()
 		wsTMQErrorMsg(session, 0xffff, "no fetch data", TMQFetchBlock, req.ReqID, &req.MessageID)
 		return
 	}
 	b := message.buffer.Bytes()
 	message.Unlock()
 	session.WriteBinary(b)
+}
+
+type TMQFetchRawMetaReq struct {
+	ReqID     uint64 `json:"req_id"`
+	MessageID uint64 `json:"message_id"`
+}
+
+func (t *TMQ) fetchRawMeta(session *melody.Session, req *TMQFetchRawMetaReq) {
+	if t.consumer == nil {
+		wsTMQErrorMsg(session, 0xffff, "tmq not init", TMQFetchRawMeta, req.ReqID, &req.MessageID)
+		return
+	}
+	t.listLocker.RLock()
+	messageItem := t.getMessage(req.MessageID)
+	t.listLocker.RUnlock()
+	if messageItem == nil {
+		wsTMQErrorMsg(session, 0xffff, "message is nil", TMQFetchRawMeta, req.ReqID, &req.MessageID)
+		return
+	}
+	message := messageItem.Value.(*TMQMessage)
+	if message.messageType != common.TMQ_RES_TABLE_META {
+		wsTMQErrorMsg(session, 0xffff, "message type is not meta", TMQFetchRawMeta, req.ReqID, &req.MessageID)
+		return
+	}
+	message.Lock()
+	errCode, rawMeta := wrapper.TMQGetRawMeta(message.cPointer)
+	if errCode != 0 {
+		errStr := wrapper.TMQErr2Str(errCode)
+		message.Unlock()
+		wsTMQErrorMsg(session, int(errCode), errStr, TMQFetchRawMeta, req.ReqID, &req.MessageID)
+		return
+	}
+	length, metaType, data := wrapper.ParseRawMeta(rawMeta)
+	if message.buffer == nil {
+		message.buffer = new(bytes.Buffer)
+	} else {
+		message.buffer.Reset()
+	}
+	message.buffer.Grow(int(length) + 30)
+	writeUint64(message.buffer, req.ReqID)
+	writeUint64(message.buffer, req.MessageID)
+	writeUint64(message.buffer, TMQRawMetaMessage)
+	writeUint32(message.buffer, length)
+	writeUint16(message.buffer, metaType)
+	for offset := 0; offset < int(length); offset++ {
+		message.buffer.WriteByte(*((*byte)(unsafe.Pointer(uintptr(data) + uintptr(offset)))))
+	}
+	message.Unlock()
+	session.WriteBinary(message.buffer.Bytes())
+}
+
+type TMQFetchJsonMetaReq struct {
+	ReqID     uint64 `json:"req_id"`
+	MessageID uint64 `json:"message_id"`
+}
+type TMQFetchJsonMetaResp struct {
+	Code      int             `json:"code"`
+	Message   string          `json:"message"`
+	Action    string          `json:"action"`
+	ReqID     uint64          `json:"req_id"`
+	MessageID uint64          `json:"message_id"`
+	Data      json.RawMessage `json:"data"`
+}
+
+func (t *TMQ) fetchJsonMeta(session *melody.Session, req *TMQFetchJsonMetaReq) {
+	if t.consumer == nil {
+		wsTMQErrorMsg(session, 0xffff, "tmq not init", TMQFetchJsonMeta, req.ReqID, &req.MessageID)
+		return
+	}
+	t.listLocker.RLock()
+	messageItem := t.getMessage(req.MessageID)
+	t.listLocker.RUnlock()
+	if messageItem == nil {
+		wsTMQErrorMsg(session, 0xffff, "message is nil", TMQFetchJsonMeta, req.ReqID, &req.MessageID)
+		return
+	}
+	message := messageItem.Value.(*TMQMessage)
+	if message.messageType != common.TMQ_RES_TABLE_META {
+		wsTMQErrorMsg(session, 0xffff, "message type is not meta", TMQFetchJsonMeta, req.ReqID, &req.MessageID)
+		return
+	}
+	message.Lock()
+	thread.Lock()
+	jsonMeta := wrapper.TMQGetJsonMeta(message.cPointer)
+	thread.Unlock()
+	resp := TMQFetchJsonMetaResp{
+		Action:    TMQFetchJsonMeta,
+		ReqID:     req.ReqID,
+		MessageID: req.MessageID,
+	}
+	if jsonMeta == nil {
+		resp.Data = nil
+	} else {
+		var binaryVal []byte
+		i := 0
+		c := byte(0)
+		for {
+			c = *((*byte)(unsafe.Pointer(uintptr(jsonMeta) + uintptr(i))))
+			if c != 0 {
+				binaryVal = append(binaryVal, c)
+				i += 1
+			} else {
+				break
+			}
+		}
+		resp.Data = binaryVal
+	}
+	wrapper.TMQFreeJsonMeta(jsonMeta)
+	message.Unlock()
+	wsWriteJson(session, resp)
 }
 
 func (t *TMQ) Close() {
@@ -483,7 +625,7 @@ func (ctl *Restful) InitTMQ() {
 			var req TMQSubscribeReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal query args")
+				logger.WithError(err).Errorln("unmarshal subscribe args")
 				return
 			}
 			t := session.MustGet(TaosTMQKey)
@@ -492,7 +634,7 @@ func (ctl *Restful) InitTMQ() {
 			var req TMQPollReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch args")
+				logger.WithError(err).Errorln("unmarshal pool args")
 				return
 			}
 			t := session.MustGet(TaosTMQKey)
@@ -510,7 +652,7 @@ func (ctl *Restful) InitTMQ() {
 			var req TMQFetchBlockReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch args")
+				logger.WithError(err).Errorln("unmarshal fetch block args")
 				return
 			}
 			t := session.MustGet(TaosTMQKey)
@@ -519,11 +661,32 @@ func (ctl *Restful) InitTMQ() {
 			var req TMQCommitReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch args")
+				logger.WithError(err).Errorln("unmarshal commit args")
 				return
 			}
 			t := session.MustGet(TaosTMQKey)
 			t.(*TMQ).commit(session, &req)
+		case TMQFetchJsonMeta:
+			var req TMQFetchJsonMetaReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithError(err).Errorln("unmarshal fetch json meta args")
+				return
+			}
+			t := session.MustGet(TaosTMQKey)
+			t.(*TMQ).fetchJsonMeta(session, &req)
+		case TMQFetchRawMeta:
+			var req TMQFetchRawMetaReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithError(err).Errorln("unmarshal fetch raw meta args")
+				return
+			}
+			t := session.MustGet(TaosTMQKey)
+			t.(*TMQ).fetchRawMeta(session, &req)
+		default:
+			logger.WithError(err).Errorln("unknown action: " + action.Action)
+			return
 		}
 	})
 	ctl.tmqM.HandleClose(func(session *melody.Session, i int, s string) error {

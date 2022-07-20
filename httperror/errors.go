@@ -98,6 +98,8 @@ const (
 	HTTP_OP_VALUE_NULL           = 0x11A5
 	HTTP_OP_VALUE_TYPE           = 0x11A6
 	HTTP_REQUEST_JSON_ERROR      = 0x1F00
+
+	TSDB_CODE_MND_DB_NOT_EXIST = 0x0381
 )
 
 var ErrorMsgMap = map[int]string{
