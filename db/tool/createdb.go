@@ -1,11 +1,12 @@
 package tool
 
 import (
-	"strings"
 	"unsafe"
 
+	"github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/db/async"
+	"github.com/taosdata/taosadapter/httperror"
 	"github.com/taosdata/taosadapter/thread"
 	"github.com/taosdata/taosadapter/tools/pool"
 )
@@ -26,7 +27,8 @@ func CreateDBWithConnection(connection unsafe.Pointer, db string) error {
 func SelectDB(taosConnect unsafe.Pointer, db string) error {
 	err := async.GlobalAsync.TaosExecWithoutResult(taosConnect, "use "+db)
 	if err != nil {
-		if strings.Contains(err.Error(), "Database not exist") {
+		e, is := err.(*errors.TaosError)
+		if is && e.Code == httperror.TSDB_CODE_MND_DB_NOT_EXIST {
 			err := CreateDBWithConnection(taosConnect, db)
 			if err != nil {
 				return err

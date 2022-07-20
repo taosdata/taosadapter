@@ -671,7 +671,7 @@ func (ctl *Restful) InitStmt() {
 			var req StmtInitReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal query args")
+				logger.WithError(err).Errorln("unmarshal init args")
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
@@ -680,7 +680,7 @@ func (ctl *Restful) InitStmt() {
 			var req StmtPrepareReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch args")
+				logger.WithError(err).Errorln("unmarshal prepare args")
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
@@ -689,7 +689,7 @@ func (ctl *Restful) InitStmt() {
 			var req StmtSetTableNameReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch args")
+				logger.WithError(err).Errorln("unmarshal set table name args")
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
@@ -698,7 +698,7 @@ func (ctl *Restful) InitStmt() {
 			var req StmtSetTagsReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch args")
+				logger.WithError(err).Errorln("unmarshal set tags args")
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
@@ -707,7 +707,7 @@ func (ctl *Restful) InitStmt() {
 			var req StmtBindReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch args")
+				logger.WithError(err).Errorln("unmarshal bind args")
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
@@ -716,7 +716,7 @@ func (ctl *Restful) InitStmt() {
 			var req StmtAddBatchReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch args")
+				logger.WithError(err).Errorln("unmarshal add batch args")
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
@@ -725,7 +725,7 @@ func (ctl *Restful) InitStmt() {
 			var req StmtExecReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch args")
+				logger.WithError(err).Errorln("unmarshal exec args")
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
@@ -734,16 +734,19 @@ func (ctl *Restful) InitStmt() {
 			var req StmtClose
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch args")
+				logger.WithError(err).Errorln("unmarshal close args")
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
 			t.(*TaosStmt).close(session, &req)
+		default:
+			logger.WithError(err).Errorln("unknown action: " + action.Action)
+			return
 		}
 	})
 	const (
-		SetTagsAction = 1
-		BindAction    = 2
+		SetTagsMessage = 1
+		BindMessage    = 2
 	)
 
 	ctl.stmtM.HandleMessageBinary(func(session *melody.Session, data []byte) {
@@ -766,10 +769,10 @@ func (ctl *Restful) InitStmt() {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("get ws stmt block message data:", data)
 		switch action {
-		case BindAction:
+		case BindMessage:
 			t := session.MustGet(TaosStmtKey)
 			t.(*TaosStmt).bindBlock(session, reqID, stmtID, counts, columns, block)
-		case SetTagsAction:
+		case SetTagsMessage:
 			t := session.MustGet(TaosStmtKey)
 			t.(*TaosStmt).setTagsBlock(session, reqID, stmtID, counts, columns, block)
 		}
