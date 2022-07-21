@@ -1,6 +1,8 @@
 package opentsdbtelnet
 
 import (
+	"time"
+
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/taosdata/driver-go/v3/common"
@@ -14,6 +16,8 @@ type Config struct {
 	DBList            []string
 	User              string
 	Password          string
+	BatchSize         int
+	FlushInterval     time.Duration
 }
 
 func (c *Config) setValue() {
@@ -24,7 +28,11 @@ func (c *Config) setValue() {
 	c.DBList = viper.GetStringSlice("opentsdb_telnet.dbs")
 	c.User = viper.GetString("opentsdb_telnet.user")
 	c.Password = viper.GetString("opentsdb_telnet.password")
-
+	c.BatchSize = viper.GetInt("opentsdb_telnet.batchSize")
+	c.FlushInterval = viper.GetDuration("opentsdb_telnet.flushInterval")
+	if c.BatchSize < 0 {
+		c.BatchSize = 1
+	}
 }
 func init() {
 	_ = viper.BindEnv("opentsdb_telnet.enable", "TAOS_ADAPTER_OPENTSDB_TELNET_ENABLE")
@@ -55,4 +63,11 @@ func init() {
 	pflag.String("opentsdb_telnet.password", common.DefaultPassword, `opentsdb_telnet password. Env "TAOS_ADAPTER_OPENTSDB_TELNET_PASSWORD"`)
 	viper.SetDefault("opentsdb_telnet.password", common.DefaultPassword)
 
+	_ = viper.BindEnv("opentsdb_telnet.batchSize", "TAOS_ADAPTER_OPENTSDB_TELNET_BATCH_SIZE")
+	pflag.Int("opentsdb_telnet.batchSize", 1, `opentsdb_telnet batch size. Env "TAOS_ADAPTER_OPENTSDB_TELNET_BATCH_SIZE"`)
+	viper.SetDefault("opentsdb_telnet.batchSize", 1)
+
+	_ = viper.BindEnv("opentsdb_telnet.flushInterval", "TAOS_ADAPTER_OPENTSDB_TELNET_FLUSH_INTERVAL")
+	pflag.Duration("opentsdb_telnet.flushInterval", time.Duration(0), `opentsdb_telnet flush interval (0s means not valid) . Env "TAOS_ADAPTER_OPENTSDB_TELNET_FLUSH_INTERVAL"`)
+	viper.SetDefault("opentsdb_telnet.flushInterval", time.Duration(0))
 }
