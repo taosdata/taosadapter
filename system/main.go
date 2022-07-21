@@ -60,26 +60,14 @@ func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin
 	return router
 }
 
-func Start(router *gin.Engine) {
+func Start(router *gin.Engine, startHttpServer func(server *http.Server)) {
 	monitor.StartMonitor()
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(config.Conf.Port),
 		Handler: router,
 	}
 	logger.Println("server on :", config.Conf.Port)
-	if config.Conf.SSl.Enable {
-		go func() {
-			if err := server.ListenAndServeTLS(config.Conf.SSl.CertFile, config.Conf.SSl.KeyFile); err != nil && err != http.ErrServerClosed {
-				logger.Fatalf("listen: %s\n", err)
-			}
-		}()
-	} else {
-		go func() {
-			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				logger.Fatalf("listen: %s\n", err)
-			}
-		}()
-	}
+	go startHttpServer(server)
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 	<-quit

@@ -16,7 +16,6 @@ type Config struct {
 	Port            int
 	LogLevel        string
 	RestfulRowLimit int
-	SSl             SSl
 	Log             Log
 	Pool            Pool
 	Monitor         Monitor
@@ -68,7 +67,6 @@ func Init() {
 	}
 	Conf.Log.setValue()
 	Conf.Cors.setValue()
-	Conf.SSl.setValue()
 	Conf.Pool.setValue()
 	Conf.Monitor.setValue()
 }
@@ -96,7 +94,6 @@ func init() {
 	pflag.Int("restfulRowLimit", -1, `restful returns the maximum number of rows (-1 means no limit). Env "TAOS_ADAPTER_RESTFUL_ROW_LIMIT"`)
 
 	initLog()
-	initSSL()
 	initCors()
 	initPool()
 	initMonitor()

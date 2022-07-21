@@ -8,13 +8,21 @@ package main
 // @query.collection.format multi
 
 import (
+	"net/http"
 	"runtime"
 
+	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/system"
 )
+
+var logger = log.GetLogger("main")
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	r := system.Init()
-	system.Start(r)
+	system.Start(r, func(server *http.Server) {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatalf("listen: %s\n", err)
+		}
+	})
 }
