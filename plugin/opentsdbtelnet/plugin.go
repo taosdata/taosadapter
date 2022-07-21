@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -115,12 +116,57 @@ func (l *TCPListener) handler(conn *net.TCPConn, id uint64) {
 			return
 		default:
 			b := bufio.NewReader(conn)
+			cache := make([]string, 0, l.plugin.conf.BatchSize)
+			dataChan := make(chan string, l.plugin.conf.BatchSize*2)
+			exitChan := make(chan struct{})
+			flushInterval := l.plugin.conf.FlushInterval
+			if flushInterval <= 0 {
+				flushInterval = math.MaxInt64
+			}
+			ticker := time.NewTicker(flushInterval)
+			go func() {
+				for {
+					select {
+					case <-exitChan:
+						ticker.Stop()
+						unConsumedLen := len(dataChan)
+						for i := 0; i < unConsumedLen; i++ {
+							data := <-dataChan
+							cache = append(cache, data)
+							if len(cache) >= l.plugin.conf.BatchSize {
+								l.plugin.handleData(l.index, cache)
+								cache = cache[:0]
+							}
+						}
+						if len(cache) > 0 {
+							l.plugin.handleData(l.index, cache)
+							cache = cache[:0]
+						}
+						return
+					case <-l.done:
+						ticker.Stop()
+						return
+					case <-ticker.C:
+						if len(cache) > 0 {
+							l.plugin.handleData(l.index, cache)
+							cache = cache[:0]
+						}
+					case data := <-dataChan:
+						cache = append(cache, data)
+						if len(cache) >= l.plugin.conf.BatchSize {
+							l.plugin.handleData(l.index, cache)
+							cache = cache[:0]
+						}
+					}
+				}
+			}()
 			for {
 				s, err := b.ReadString('\n')
 				if err != nil {
 					if err != io.EOF {
 						logger.WithError(err).Error("conn read")
 					}
+					close(exitChan)
 					return
 				}
 				if monitor.AllPaused() {
@@ -134,7 +180,7 @@ func (l *TCPListener) handler(conn *net.TCPConn, id uint64) {
 					conn.Write([]byte{'1'})
 					continue
 				} else {
-					l.plugin.handleData(l.index, s)
+					dataChan <- s
 				}
 			}
 		}
@@ -237,7 +283,7 @@ func (p *Plugin) tcp(port int, index int) error {
 	return nil
 }
 
-func (p *Plugin) handleData(index int, line string) {
+func (p *Plugin) handleData(index int, line []string) {
 	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password)
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
@@ -254,7 +300,7 @@ func (p *Plugin) handleData(index int, line string) {
 		start = time.Now()
 	}
 	logger.Debugln(start, " insert telnet payload ", line)
-	err = inserter.InsertOpentsdbTelnet(taosConn.TaosConnection, line, p.conf.DBList[index])
+	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, line, p.conf.DBList[index])
 	if err != nil {
 		logger.WithError(err).Errorln("insert telnet payload error :", line)
 	}
