@@ -35,7 +35,6 @@ func TestInit(t *testing.T) {
 				Debug:           false,
 				Port:            6041,
 				LogLevel:        "info",
-				SSl:             SSl{Enable: false, CertFile: "", KeyFile: ""},
 				RestfulRowLimit: -1,
 				Log: Log{
 					Path:                "/var/log/taos",
