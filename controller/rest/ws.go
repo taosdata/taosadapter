@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/gin-gonic/gin"
@@ -518,6 +519,8 @@ func (ctl *Restful) InitWS() {
 	})
 
 	ctl.wsM.HandleClose(func(session *melody.Session, i int, s string) error {
+		message := melody.FormatCloseMessage(i, "")
+		session.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws close", i, s)
 		t, exist := session.Get(TaosSessionKey)
@@ -553,7 +556,7 @@ func (ctl *Restful) InitWS() {
 
 func (ctl *Restful) ws(c *gin.Context) {
 	id := web.GetRequestID(c)
-	loggerWithID := logger.WithField("sessionID", id)
+	loggerWithID := logger.WithField("sessionID", id).WithField("wsType", "query")
 	_ = ctl.wsM.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": loggerWithID})
 }
 

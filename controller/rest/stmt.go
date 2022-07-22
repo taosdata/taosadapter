@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/gin-gonic/gin"
@@ -779,6 +780,8 @@ func (ctl *Restful) InitStmt() {
 	})
 
 	ctl.stmtM.HandleClose(func(session *melody.Session, i int, s string) error {
+		message := melody.FormatCloseMessage(i, "")
+		session.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws close", i, s)
 		t, exist := session.Get(TaosStmtKey)
@@ -814,7 +817,7 @@ func (ctl *Restful) InitStmt() {
 
 func (ctl *Restful) stmt(c *gin.Context) {
 	id := web.GetRequestID(c)
-	loggerWithID := logger.WithField("sessionID", id)
+	loggerWithID := logger.WithField("sessionID", id).WithField("wsType", "stmt")
 	_ = ctl.stmtM.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": loggerWithID})
 }
 
