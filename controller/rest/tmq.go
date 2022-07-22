@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/gin-gonic/gin"
@@ -580,12 +581,14 @@ func (t *TMQ) Close(logger logrus.FieldLogger) {
 	}
 	t.closed = true
 	defer func() {
-		thread.Lock()
-		errCode := wrapper.TMQConsumerClose(t.consumer)
-		thread.Unlock()
-		if errCode != 0 {
-			errMsg := wrapper.TMQErr2Str(errCode)
-			logger.WithError(errors.NewError(int(errCode), errMsg)).Error("tmq close consumer")
+		if t.consumer != nil {
+			thread.Lock()
+			errCode := wrapper.TMQConsumerClose(t.consumer)
+			thread.Unlock()
+			if errCode != 0 {
+				errMsg := wrapper.TMQErr2Str(errCode)
+				logger.WithError(errors.NewError(int(errCode), errMsg)).Error("tmq close consumer")
+			}
 		}
 	}()
 	t.listLocker.Lock()
@@ -699,6 +702,8 @@ func (ctl *Restful) InitTMQ() {
 		}
 	})
 	ctl.tmqM.HandleClose(func(session *melody.Session, i int, s string) error {
+		message := melody.FormatCloseMessage(i, "")
+		session.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws close", i, s)
 		t, exist := session.Get(TaosTMQKey)
@@ -734,7 +739,7 @@ func (ctl *Restful) InitTMQ() {
 
 func (ctl *Restful) tmq(c *gin.Context) {
 	id := web.GetRequestID(c)
-	loggerWithID := logger.WithField("sessionID", id)
+	loggerWithID := logger.WithField("sessionID", id).WithField("wsType", "tmq")
 	_ = ctl.tmqM.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": loggerWithID})
 }
 

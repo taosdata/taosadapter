@@ -372,7 +372,8 @@ func TestTMQ(t *testing.T) {
 		return
 	}
 	<-finish
-	ws.Close()
+	ws.WriteControl(websocket.CloseMessage, nil, time.Now().Add(time.Second))
+	//ws.Close()
 	time.Sleep(time.Second * 3)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop topic if exists test_tmq_ws_topic")

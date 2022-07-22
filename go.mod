@@ -18,8 +18,9 @@ require (
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/gorilla/websocket v1.4.2
 	github.com/huskar-t/file-rotatelogs/v2 v2.4.1
-	github.com/huskar-t/melody v0.0.0-20220301024158-14c90c8df229
+	github.com/huskar-t/melody v0.0.0-20220722113213-5f82fb933d2a
 	github.com/influxdata/telegraf v1.20.0
+	github.com/json-iterator/go v1.1.12
 	github.com/lestrrat-go/strftime v1.0.5 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/onsi/gomega v1.8.1 // indirect
