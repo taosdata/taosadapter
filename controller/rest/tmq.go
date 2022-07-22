@@ -14,6 +14,7 @@ import (
 	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/common"
+	"github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/httperror"
 	"github.com/taosdata/taosadapter/thread"
@@ -40,7 +41,6 @@ type TMQ struct {
 	listLocker sync.RWMutex
 	consumer   unsafe.Pointer
 	messages   *list.List
-	Conn       unsafe.Pointer
 	//consumers     *list.List
 	messageIndex uint64
 	closed       bool
@@ -572,13 +572,22 @@ func (t *TMQ) fetchJsonMeta(session *melody.Session, req *TMQFetchJsonMetaReq) {
 	wsWriteJson(session, resp)
 }
 
-func (t *TMQ) Close() {
+func (t *TMQ) Close(logger logrus.FieldLogger) {
 	t.Lock()
 	defer t.Unlock()
 	if t.closed {
 		return
 	}
 	t.closed = true
+	defer func() {
+		thread.Lock()
+		errCode := wrapper.TMQConsumerClose(t.consumer)
+		thread.Unlock()
+		if errCode != 0 {
+			errMsg := wrapper.TMQErr2Str(errCode)
+			logger.WithError(errors.NewError(int(errCode), errMsg)).Error("tmq close consumer")
+		}
+	}()
 	t.listLocker.Lock()
 	defer t.listLocker.Unlock()
 	item := t.messages.Front()
@@ -694,7 +703,7 @@ func (ctl *Restful) InitTMQ() {
 		logger.Debugln("ws close", i, s)
 		t, exist := session.Get(TaosTMQKey)
 		if exist && t != nil {
-			t.(*TMQ).Close()
+			t.(*TMQ).Close(logger)
 		}
 		return nil
 	})
@@ -709,7 +718,7 @@ func (ctl *Restful) InitTMQ() {
 		}
 		t, exist := session.Get(TaosTMQKey)
 		if exist && t != nil {
-			t.(*TMQ).Close()
+			t.(*TMQ).Close(logger)
 		}
 	})
 
@@ -718,7 +727,7 @@ func (ctl *Restful) InitTMQ() {
 		logger.Debugln("ws disconnect")
 		t, exist := session.Get(TaosTMQKey)
 		if exist && t != nil {
-			t.(*TMQ).Close()
+			t.(*TMQ).Close(logger)
 		}
 	})
 }
