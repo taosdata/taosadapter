@@ -20,6 +20,7 @@ import (
 	"github.com/taosdata/taosadapter/config"
 	"github.com/taosdata/taosadapter/db/async"
 	"github.com/taosdata/taosadapter/db/tool"
+	"github.com/taosdata/taosadapter/httperror"
 	"github.com/taosdata/taosadapter/thread"
 	"github.com/taosdata/taosadapter/tools/pool"
 )
@@ -43,9 +44,7 @@ func processWrite(taosConn unsafe.Pointer, req *prompb.WriteRequest, db string) 
 	if err != nil {
 		if tErr, is := err.(*tErrors.TaosError); is {
 			start = time.Now()
-			if tErr.ErrStr == "Table does not exist" {
-				//todo
-				//if tErr.Code == tErrors.MND_INVALID_TABLE_NAME {
+			if tErr.Code == httperror.PAR_TABLE_NOT_EXIST || tErr.Code == httperror.MND_INVALID_TABLE_NAME || tErr.Code == httperror.TSC_INVALID_TABLE_NAME {
 				err := async.GlobalAsync.TaosExecWithoutResult(taosConn, "create stable if not exists metrics(ts timestamp,v double) tags (labels json)")
 				if err != nil {
 					return err
