@@ -5,6 +5,8 @@
 *.dll
 *.so
 *.dylib
+taosadapter
+taosadapter-debug
 
 # Test binary, built with `go test -c`
 *.test
