@@ -35,8 +35,8 @@ jobs:
 
       - name: shell
         run: |
-          cat >start.sh<<EOF 
-          ulimit -n 65535 && taosd 
+          cat >start.sh<<EOF
+          ulimit -n 65535 && taosd
           EOF
 
       - name: taosd
