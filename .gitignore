@@ -5,6 +5,9 @@
 *.dll
 *.so
 *.dylib
+taosadapter
+taosadapter-debug
+jmeter.log
 
 # Test binary, built with `go test -c`
 *.test
