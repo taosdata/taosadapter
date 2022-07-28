@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/monitor"
@@ -296,7 +295,7 @@ func (p *Plugin) handleData(index int, line []string) {
 		}
 	}()
 	var start time.Time
-	if logger.Logger.IsLevelEnabled(logrus.DebugLevel) {
+	if log.IsDebug() {
 		start = time.Now()
 	}
 	logger.Debugln(start, " insert telnet payload ", line)

@@ -27,6 +27,7 @@ func TestPlugin(t *testing.T) {
 	config.Init()
 	db.PrepareConnection()
 	viper.Set("opentsdb_telnet.enable", true)
+	viper.Set("opentsdb_telnet.batchSize", 1)
 	err := p.Init(nil)
 	assert.NoError(t, err)
 	err = p.Start()

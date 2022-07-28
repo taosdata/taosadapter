@@ -2,6 +2,7 @@ package rest
 
 import (
 	"container/list"
+	"context"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
@@ -17,29 +18,14 @@ import (
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/types"
 	"github.com/taosdata/driver-go/v3/wrapper"
-	"github.com/taosdata/taosadapter/db/async"
-	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/httperror"
+	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/thread"
-	"github.com/taosdata/taosadapter/tools/pool"
 	"github.com/taosdata/taosadapter/tools/web"
 )
 
-const TaosStmtKey = "taos_stmt"
-const (
-	STMTConnect      = "conn"
-	STMTInit         = "init"
-	STMTPrepare      = "prepare"
-	STMTSetTableName = "set_table_name"
-	STMTSetTags      = "set_tags"
-	STMTBind         = "bind"
-	STMTAddBatch     = "add_batch"
-	STMTExec         = "exec"
-	STMTClose        = "close"
-)
-
 type TaosStmt struct {
-	Conn            *commonpool.Conn
+	conn            unsafe.Pointer
 	stmtIndexLocker sync.RWMutex
 	StmtList        *list.List
 	stmtIndex       uint64
@@ -116,36 +102,36 @@ type StmtConnectResp struct {
 	Message string `json:"message"`
 	Action  string `json:"action"`
 	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
 }
 
-func (t *TaosStmt) connect(session *melody.Session, req *StmtConnectReq) {
+func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *StmtConnectReq) {
+	logger := getLogger(session).WithField("action", STMTConnect)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
 	t.Lock()
+	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer t.Unlock()
-	if t.Conn != nil {
-		wsStmtErrorMsg(session, 0xffff, "taos duplicate connections", WSConnect, req.ReqID, nil)
+	if t.conn != nil {
+		wsStmtErrorMsg(ctx, session, 0xffff, "taos duplicate connections", STMTConnect, req.ReqID, nil)
 		return
 	}
-	conn, err := commonpool.GetConnection(req.User, req.Password)
+	s = log.GetLogNow(isDebug)
+	thread.Lock()
+	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	conn, err := wrapper.TaosConnect("", req.User, req.Password, req.DB, 0)
+	logger.Debugln("taos connect cost:", log.GetLogDuration(isDebug, s))
+	thread.Unlock()
 	if err != nil {
-		wsStmtError(session, err, STMTConnect, req.ReqID, nil)
+		wsStmtError(ctx, session, err, STMTConnect, req.ReqID, nil)
 		return
 	}
-	if len(req.DB) != 0 {
-		b := pool.StringBuilderPoolGet()
-		defer pool.StringBuilderPoolPut(b)
-		b.WriteString("use ")
-		b.WriteString(req.DB)
-		err := async.GlobalAsync.TaosExecWithoutResult(conn.TaosConnection, b.String())
-		if err != nil {
-			conn.Put()
-			wsStmtError(session, err, STMTConnect, req.ReqID, nil)
-			return
-		}
-	}
-	t.Conn = conn
+	t.conn = conn
 	wsWriteJson(session, &StmtConnectResp{
 		Action: STMTConnect,
 		ReqID:  req.ReqID,
+		Timing: getDuration(ctx),
 	})
 }
 
@@ -157,27 +143,34 @@ type StmtInitResp struct {
 	Message string `json:"message"`
 	Action  string `json:"action"`
 	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func (t *TaosStmt) init(session *melody.Session, req *StmtInitReq) {
-	if t.Conn == nil {
-		wsStmtErrorMsg(session, 0xffff, "taos not connected", STMTInit, req.ReqID, nil)
+func (t *TaosStmt) init(ctx context.Context, session *melody.Session, req *StmtInitReq) {
+	if t.conn == nil {
+		wsStmtErrorMsg(ctx, session, 0xffff, "taos not connected", STMTInit, req.ReqID, nil)
 		return
 	}
+	logger := getLogger(session).WithField("action", STMTInit)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
 	thread.Lock()
-	stmt := wrapper.TaosStmtInit(t.Conn.TaosConnection)
+	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	stmt := wrapper.TaosStmtInit(t.conn)
+	logger.Debugln("taos_stmt_init cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if stmt == nil {
 		errStr := wrapper.TaosStmtErrStr(stmt)
-		wsStmtErrorMsg(session, 0xffff, errStr, STMTInit, req.ReqID, nil)
+		wsStmtErrorMsg(ctx, session, 0xffff, errStr, STMTInit, req.ReqID, nil)
 		return
 	}
 	stmtItem := &StmtItem{
 		stmt: stmt,
 	}
 	t.addStmtItem(stmtItem)
-	resp := &StmtInitResp{Action: STMTInit, ReqID: req.ReqID, StmtID: stmtItem.index}
+	resp := &StmtInitResp{Action: STMTInit, ReqID: req.ReqID, StmtID: stmtItem.index, Timing: getDuration(ctx)}
 	wsWriteJson(session, resp)
 }
 
@@ -191,32 +184,41 @@ type StmtPrepareResp struct {
 	Message string `json:"message"`
 	Action  string `json:"action"`
 	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func (t *TaosStmt) prepare(session *melody.Session, req *StmtPrepareReq) {
-	if t.Conn == nil {
-		wsStmtErrorMsg(session, 0xffff, "taos not connected", STMTPrepare, req.ReqID, &req.StmtID)
+func (t *TaosStmt) prepare(ctx context.Context, session *melody.Session, req *StmtPrepareReq) {
+	if t.conn == nil {
+		wsStmtErrorMsg(ctx, session, 0xffff, "taos not connected", STMTPrepare, req.ReqID, &req.StmtID)
 		return
 	}
+
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
-		wsStmtErrorMsg(session, 0xffff, "stmt is nil", STMTPrepare, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", STMTPrepare, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
+	logger := getLogger(session).WithField("action", STMTPrepare)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
 	thread.Lock()
+	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	code := wrapper.TaosStmtPrepare(stmt.stmt, req.SQL)
+	logger.Debugln("taos_stmt_prepare cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
-		wsStmtErrorMsg(session, code, errStr, STMTPrepare, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, code, errStr, STMTPrepare, req.ReqID, &req.StmtID)
 		return
 	}
-	resp := &StmtSetTableNameResp{
+	resp := &StmtPrepareResp{
 		Action: STMTPrepare,
 		ReqID:  req.ReqID,
 		StmtID: req.StmtID,
+		Timing: getDuration(ctx),
 	}
 	wsWriteJson(session, resp)
 }
@@ -231,32 +233,40 @@ type StmtSetTableNameResp struct {
 	Message string `json:"message"`
 	Action  string `json:"action"`
 	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func (t *TaosStmt) setTableName(session *melody.Session, req *StmtSetTableNameReq) {
-	if t.Conn == nil {
-		wsStmtErrorMsg(session, 0xffff, "taos not connected", STMTSetTableName, req.ReqID, &req.StmtID)
+func (t *TaosStmt) setTableName(ctx context.Context, session *melody.Session, req *StmtSetTableNameReq) {
+	if t.conn == nil {
+		wsStmtErrorMsg(ctx, session, 0xffff, "taos not connected", STMTSetTableName, req.ReqID, &req.StmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
-		wsStmtErrorMsg(session, 0xffff, "stmt is nil", STMTSetTableName, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", STMTSetTableName, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
+	logger := getLogger(session).WithField("action", STMTSetTableName)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
 	thread.Lock()
+	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	code := wrapper.TaosStmtSetTBName(stmt.stmt, req.Name)
+	logger.Debugln("taos_stmt_set_tbname cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
-		wsStmtErrorMsg(session, code, errStr, STMTSetTableName, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, code, errStr, STMTSetTableName, req.ReqID, &req.StmtID)
 		return
 	}
 	resp := &StmtSetTableNameResp{
 		Action: STMTSetTableName,
 		ReqID:  req.ReqID,
 		StmtID: req.StmtID,
+		Timing: getDuration(ctx),
 	}
 	wsWriteJson(session, resp)
 }
@@ -272,29 +282,36 @@ type StmtSetTagsResp struct {
 	Message string `json:"message"`
 	Action  string `json:"action"`
 	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func (t *TaosStmt) setTags(session *melody.Session, req *StmtSetTagsReq) {
-	if t.Conn == nil {
-		wsStmtErrorMsg(session, 0xffff, "taos not connected", STMTSetTags, req.ReqID, &req.StmtID)
+func (t *TaosStmt) setTags(ctx context.Context, session *melody.Session, req *StmtSetTagsReq) {
+	if t.conn == nil {
+		wsStmtErrorMsg(ctx, session, 0xffff, "taos not connected", STMTSetTags, req.ReqID, &req.StmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
-		wsStmtErrorMsg(session, 0xffff, "stmt is nil", STMTSetTags, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", STMTSetTags, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
+	logger := getLogger(session).WithField("action", STMTSetTags)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
 	thread.Lock()
+	logger.Debugln("taos_stmt_get_tag_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	code, tagNums, tagFields := wrapper.TaosStmtGetTagFields(stmt.stmt)
+	logger.Debugln("taos_stmt_get_tag_fields cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
-		wsStmtErrorMsg(session, code, errStr, STMTSetTags, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, code, errStr, STMTSetTags, req.ReqID, &req.StmtID)
 		return
 	}
-	resp := &StmtSetTableNameResp{
+	resp := &StmtSetTagsResp{
 		Action: STMTSetTags,
 		ReqID:  req.ReqID,
 		StmtID: req.StmtID,
@@ -304,30 +321,39 @@ func (t *TaosStmt) setTags(session *melody.Session, req *StmtSetTagsReq) {
 		return
 	}
 	if len(req.Tags) != tagNums {
-		wsStmtErrorMsg(session, 0xffff, "stmt tags count not match", STMTSetTags, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, "stmt tags count not match", STMTSetTags, req.ReqID, &req.StmtID)
 		return
 	}
+	s = log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(tagNums, tagFields)
+	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
 	tags := make([][]driver.Value, tagNums)
 	for i := 0; i < tagNums; i++ {
 		tags[i] = []driver.Value{req.Tags[i]}
 	}
+	s = log.GetLogNow(isDebug)
 	err := stmtConvert(tags, fields, nil)
+	logger.Debugln("stmt convert cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		wsStmtErrorMsg(session, 0xffff, fmt.Sprintf("stmt convert error:%s", err.Error()), STMTSetTags, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, fmt.Sprintf("stmt convert error:%s", err.Error()), STMTSetTags, req.ReqID, &req.StmtID)
 		return
 	}
 	for i := 0; i < tagNums; i++ {
 		req.Tags[i] = tags[i][0]
 	}
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
+	logger.Debugln("taos_stmt_set_tags get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	code = wrapper.TaosStmtSetTags(stmt.stmt, req.Tags)
+	logger.Debugln("taos_stmt_set_tags cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
-		wsStmtErrorMsg(session, code, errStr, STMTSetTags, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, code, errStr, STMTSetTags, req.ReqID, &req.StmtID)
 		return
 	}
+	resp.Timing = getDuration(ctx)
 	wsWriteJson(session, resp)
 }
 
@@ -341,26 +367,32 @@ type StmtBindResp struct {
 	Message string `json:"message"`
 	Action  string `json:"action"`
 	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func (t *TaosStmt) bind(session *melody.Session, req *StmtBindReq) {
-	if t.Conn == nil {
-		wsStmtErrorMsg(session, 0xffff, "taos not connected", STMTBind, req.ReqID, &req.StmtID)
+func (t *TaosStmt) bind(ctx context.Context, session *melody.Session, req *StmtBindReq) {
+	if t.conn == nil {
+		wsStmtErrorMsg(ctx, session, 0xffff, "taos not connected", STMTBind, req.ReqID, &req.StmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
-		wsStmtErrorMsg(session, 0xffff, "stmt is nil", STMTBind, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", STMTBind, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
+	logger := getLogger(session).WithField("action", STMTBind)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
 	thread.Lock()
+	logger.Debugln("taos_stmt_get_col_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
 	code, colNums, colFields := wrapper.TaosStmtGetColFields(stmt.stmt)
+	logger.Debugln("taos_stmt_get_col_fields cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
-		wsStmtErrorMsg(session, code, errStr, STMTBind, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, code, errStr, STMTBind, req.ReqID, &req.StmtID)
 		return
 	}
 	resp := &StmtBindResp{
@@ -369,31 +401,41 @@ func (t *TaosStmt) bind(session *melody.Session, req *StmtBindReq) {
 		StmtID: req.StmtID,
 	}
 	if colNums == 0 {
+		resp.Timing = getDuration(ctx)
 		wsWriteJson(session, resp)
 		return
 	}
+	s = log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(colNums, colFields)
+	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
 	fieldTypes := make([]*types.ColumnType, colNums)
 	var err error
 	for i := 0; i < colNums; i++ {
 		fieldTypes[i], err = fields[i].GetType()
 		if err != nil {
-			wsStmtErrorMsg(session, 0xffff, fmt.Sprintf("stmt get column type error:%s", err.Error()), STMTBind, req.ReqID, &req.StmtID)
+			wsStmtErrorMsg(ctx, session, 0xffff, fmt.Sprintf("stmt get column type error:%s", err.Error()), STMTBind, req.ReqID, &req.StmtID)
 			return
 		}
 	}
 	if len(req.Columns) != colNums {
-		wsStmtErrorMsg(session, 0xffff, "stmt column count not match", STMTBind, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, "stmt column count not match", STMTBind, req.ReqID, &req.StmtID)
 		return
 	}
+	s = log.GetLogNow(isDebug)
 	err = stmtConvert(req.Columns, fields, fieldTypes)
+	logger.Debugln("stmt convert cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		wsStmtErrorMsg(session, 0xffff, fmt.Sprintf("stmt convert error:%s", err.Error()), STMTBind, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, fmt.Sprintf("stmt convert error:%s", err.Error()), STMTBind, req.ReqID, &req.StmtID)
 		return
 	}
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
+	logger.Debugln("taos_stmt_bind_param_batch get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	wrapper.TaosStmtBindParamBatch(stmt.stmt, req.Columns, fieldTypes)
+	logger.Debugln("taos_stmt_bind_param_batch cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
+	resp.Timing = getDuration(ctx)
 	wsWriteJson(session, resp)
 	return
 }
@@ -407,32 +449,40 @@ type StmtAddBatchResp struct {
 	Message string `json:"message"`
 	Action  string `json:"action"`
 	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func (t *TaosStmt) addBatch(session *melody.Session, req *StmtAddBatchReq) {
-	if t.Conn == nil {
-		wsStmtErrorMsg(session, 0xffff, "taos not connected", STMTAddBatch, req.ReqID, &req.StmtID)
+func (t *TaosStmt) addBatch(ctx context.Context, session *melody.Session, req *StmtAddBatchReq) {
+	if t.conn == nil {
+		wsStmtErrorMsg(ctx, session, 0xffff, "taos not connected", STMTAddBatch, req.ReqID, &req.StmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
-		wsStmtErrorMsg(session, 0xffff, "stmt is nil", STMTAddBatch, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", STMTAddBatch, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
+	logger := getLogger(session).WithField("action", STMTAddBatch)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
 	thread.Lock()
+	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	code := wrapper.TaosStmtAddBatch(stmt.stmt)
+	logger.Debugln("taos_stmt_add_batch cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
-		wsStmtErrorMsg(session, code, errStr, STMTAddBatch, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, code, errStr, STMTAddBatch, req.ReqID, &req.StmtID)
 		return
 	}
 	resp := &StmtAddBatchResp{
 		Action: STMTAddBatch,
 		ReqID:  req.ReqID,
 		StmtID: req.StmtID,
+		Timing: getDuration(ctx),
 	}
 	wsWriteJson(session, resp)
 }
@@ -446,34 +496,44 @@ type StmtExecResp struct {
 	Message  string `json:"message"`
 	Action   string `json:"action"`
 	ReqID    uint64 `json:"req_id"`
+	Timing   int64  `json:"timing"`
 	StmtID   uint64 `json:"stmt_id"`
 	Affected int    `json:"affected"`
 }
 
-func (t *TaosStmt) exec(session *melody.Session, req *StmtExecReq) {
-	if t.Conn == nil {
-		wsStmtErrorMsg(session, 0xffff, "taos not connected", STMTExec, req.ReqID, &req.StmtID)
+func (t *TaosStmt) exec(ctx context.Context, session *melody.Session, req *StmtExecReq) {
+	if t.conn == nil {
+		wsStmtErrorMsg(ctx, session, 0xffff, "taos not connected", STMTExec, req.ReqID, &req.StmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
-		wsStmtErrorMsg(session, 0xffff, "stmt is nil", STMTExec, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", STMTExec, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
+	logger := getLogger(session).WithField("action", STMTExec)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
 	thread.Lock()
+	logger.Debugln("taos_stmt_execute get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	code := wrapper.TaosStmtExecute(stmt.stmt)
+	logger.Debugln("taos_stmt_execute cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
-		wsStmtErrorMsg(session, code, errStr, STMTExec, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, code, errStr, STMTExec, req.ReqID, &req.StmtID)
 		return
 	}
+	s = log.GetLogNow(isDebug)
 	affected := wrapper.TaosStmtAffectedRowsOnce(stmt.stmt)
+	logger.Debugln("taos_stmt_affected_rows_once cost:", log.GetLogDuration(isDebug, s))
 	resp := &StmtExecResp{
 		Action:   STMTExec,
 		ReqID:    req.ReqID,
 		StmtID:   req.StmtID,
+		Timing:   getDuration(ctx),
 		Affected: affected,
 	}
 	wsWriteJson(session, resp)
@@ -484,14 +544,14 @@ type StmtClose struct {
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (t *TaosStmt) close(session *melody.Session, req *StmtClose) {
-	if t.Conn == nil {
-		wsStmtErrorMsg(session, 0xffff, "taos not connected", STMTExec, req.ReqID, &req.StmtID)
+func (t *TaosStmt) close(ctx context.Context, session *melody.Session, req *StmtClose) {
+	if t.conn == nil {
+		wsStmtErrorMsg(ctx, session, 0xffff, "taos not connected", STMTExec, req.ReqID, &req.StmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
-		wsStmtErrorMsg(session, 0xffff, "stmt is nil", STMTExec, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", STMTExec, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
@@ -499,30 +559,36 @@ func (t *TaosStmt) close(session *melody.Session, req *StmtClose) {
 	stmt.clean()
 }
 
-func (t *TaosStmt) setTagsBlock(session *melody.Session, reqID, stmtID, rows, columns uint64, block unsafe.Pointer) {
+func (t *TaosStmt) setTagsBlock(ctx context.Context, session *melody.Session, reqID, stmtID, rows, columns uint64, block unsafe.Pointer) {
 	if rows != 1 {
-		wsStmtErrorMsg(session, 0xffff, "rows not equal 1", STMTSetTags, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, "rows not equal 1", STMTSetTags, reqID, &stmtID)
 		return
 	}
-	if t.Conn == nil {
-		wsStmtErrorMsg(session, 0xffff, "taos not connected", STMTSetTags, reqID, &stmtID)
+	if t.conn == nil {
+		wsStmtErrorMsg(ctx, session, 0xffff, "taos not connected", STMTSetTags, reqID, &stmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(stmtID)
 	if stmtItem == nil {
-		wsStmtErrorMsg(session, 0xffff, "stmt is nil", STMTSetTags, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", STMTSetTags, reqID, &stmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
+	logger := getLogger(session).WithField("action", STMTSetTags)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
 	thread.Lock()
+	logger.Debugln("taos_stmt_get_tag_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	code, tagNums, tagFields := wrapper.TaosStmtGetTagFields(stmt.stmt)
+	logger.Debugln("taos_stmt_get_tag_fields cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
-		wsStmtErrorMsg(session, code, errStr, STMTSetTags, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, code, errStr, STMTSetTags, reqID, &stmtID)
 		return
 	}
-	resp := &StmtSetTableNameResp{
+	resp := &StmtSetTagsResp{
 		Action: STMTSetTags,
 		ReqID:  reqID,
 		StmtID: stmtID,
@@ -532,43 +598,58 @@ func (t *TaosStmt) setTagsBlock(session *melody.Session, reqID, stmtID, rows, co
 		return
 	}
 	if int(columns) != tagNums {
-		wsStmtErrorMsg(session, 0xffff, "stmt tags count not match", STMTSetTags, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, "stmt tags count not match", STMTSetTags, reqID, &stmtID)
 		return
 	}
+	s = log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(tagNums, tagFields)
+	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	tags := blockConvert(block, int(rows), fields)
-	thread.Lock()
+	logger.Debugln("block concert cost:", log.GetLogDuration(isDebug, s))
 	reTags := make([]driver.Value, tagNums)
 	for i := 0; i < tagNums; i++ {
 		reTags[i] = tags[i][0]
 	}
+	s = log.GetLogNow(isDebug)
+	thread.Lock()
+	logger.Debugln("taos_stmt_set_tags get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	code = wrapper.TaosStmtSetTags(stmt.stmt, reTags)
+	logger.Debugln("taos_stmt_set_tags cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
-		wsStmtErrorMsg(session, code, errStr, STMTSetTags, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, code, errStr, STMTSetTags, reqID, &stmtID)
 		return
 	}
+	resp.Timing = getDuration(ctx)
 	wsWriteJson(session, resp)
 }
 
-func (t *TaosStmt) bindBlock(session *melody.Session, reqID, stmtID, rows, columns uint64, block unsafe.Pointer) {
-	if t.Conn == nil {
-		wsStmtErrorMsg(session, 0xffff, "taos not connected", STMTBind, reqID, &stmtID)
+func (t *TaosStmt) bindBlock(ctx context.Context, session *melody.Session, reqID, stmtID, rows, columns uint64, block unsafe.Pointer) {
+	if t.conn == nil {
+		wsStmtErrorMsg(ctx, session, 0xffff, "taos not connected", STMTBind, reqID, &stmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(stmtID)
 	if stmtItem == nil {
-		wsStmtErrorMsg(session, 0xffff, "stmt is nil", STMTBind, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", STMTBind, reqID, &stmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
+	logger := getLogger(session).WithField("action", STMTBind)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
 	thread.Lock()
+	logger.Debugln("taos_stmt_get_col_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	code, colNums, colFields := wrapper.TaosStmtGetColFields(stmt.stmt)
+	logger.Debugln("taos_stmt_get_col_fields cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
-		wsStmtErrorMsg(session, code, errStr, STMTBind, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, code, errStr, STMTBind, reqID, &stmtID)
 		return
 	}
 	resp := &StmtBindResp{
@@ -577,27 +658,37 @@ func (t *TaosStmt) bindBlock(session *melody.Session, reqID, stmtID, rows, colum
 		StmtID: stmtID,
 	}
 	if colNums == 0 {
+		resp.Timing = getDuration(ctx)
 		wsWriteJson(session, resp)
 		return
 	}
+	s = log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(colNums, colFields)
+	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
 	fieldTypes := make([]*types.ColumnType, colNums)
 	var err error
 	for i := 0; i < colNums; i++ {
 		fieldTypes[i], err = fields[i].GetType()
 		if err != nil {
-			wsStmtErrorMsg(session, 0xffff, fmt.Sprintf("stmt get column type error:%s", err.Error()), STMTBind, reqID, &stmtID)
+			wsStmtErrorMsg(ctx, session, 0xffff, fmt.Sprintf("stmt get column type error:%s", err.Error()), STMTBind, reqID, &stmtID)
 			return
 		}
 	}
 	if int(columns) != colNums {
-		wsStmtErrorMsg(session, 0xffff, "stmt column count not match", STMTBind, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, "stmt column count not match", STMTBind, reqID, &stmtID)
 		return
 	}
+	s = log.GetLogNow(isDebug)
 	data := blockConvert(block, int(rows), fields)
+	logger.Debugln("block convert cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
+	logger.Debugln("taos_stmt_bind_param_batch get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	wrapper.TaosStmtBindParamBatch(stmt.stmt, data, fieldTypes)
+	logger.Debugln("taos_stmt_bind_param_batch cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
+	resp.Timing = getDuration(ctx)
 	wsWriteJson(session, resp)
 	return
 }
@@ -610,9 +701,11 @@ func (t *TaosStmt) Close() {
 	}
 	t.closed = true
 	t.cleanUp()
-	if t.Conn != nil {
-		t.Conn.Put()
-		t.Conn = nil
+	if t.conn != nil {
+		thread.Lock()
+		wrapper.TaosClose(t.conn)
+		thread.Unlock()
+		t.conn = nil
 	}
 }
 
@@ -648,6 +741,7 @@ func (ctl *Restful) InitStmt() {
 		if ctl.stmtM.IsClosed() {
 			return
 		}
+		ctx := context.WithValue(context.Background(), StartTimeKey, time.Now().UnixNano())
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("get ws message data:", string(data))
 		var action WSAction
@@ -667,7 +761,7 @@ func (ctl *Restful) InitStmt() {
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).connect(session, &req)
+			t.(*TaosStmt).connect(ctx, session, &req)
 		case STMTInit:
 			var req StmtInitReq
 			err = json.Unmarshal(action.Args, &req)
@@ -676,7 +770,7 @@ func (ctl *Restful) InitStmt() {
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).init(session, &req)
+			t.(*TaosStmt).init(ctx, session, &req)
 		case STMTPrepare:
 			var req StmtPrepareReq
 			err = json.Unmarshal(action.Args, &req)
@@ -685,7 +779,7 @@ func (ctl *Restful) InitStmt() {
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).prepare(session, &req)
+			t.(*TaosStmt).prepare(ctx, session, &req)
 		case STMTSetTableName:
 			var req StmtSetTableNameReq
 			err = json.Unmarshal(action.Args, &req)
@@ -694,7 +788,7 @@ func (ctl *Restful) InitStmt() {
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).setTableName(session, &req)
+			t.(*TaosStmt).setTableName(ctx, session, &req)
 		case STMTSetTags:
 			var req StmtSetTagsReq
 			err = json.Unmarshal(action.Args, &req)
@@ -703,7 +797,7 @@ func (ctl *Restful) InitStmt() {
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).setTags(session, &req)
+			t.(*TaosStmt).setTags(ctx, session, &req)
 		case STMTBind:
 			var req StmtBindReq
 			err = json.Unmarshal(action.Args, &req)
@@ -712,7 +806,7 @@ func (ctl *Restful) InitStmt() {
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).bind(session, &req)
+			t.(*TaosStmt).bind(ctx, session, &req)
 		case STMTAddBatch:
 			var req StmtAddBatchReq
 			err = json.Unmarshal(action.Args, &req)
@@ -721,7 +815,7 @@ func (ctl *Restful) InitStmt() {
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).addBatch(session, &req)
+			t.(*TaosStmt).addBatch(ctx, session, &req)
 		case STMTExec:
 			var req StmtExecReq
 			err = json.Unmarshal(action.Args, &req)
@@ -730,7 +824,7 @@ func (ctl *Restful) InitStmt() {
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).exec(session, &req)
+			t.(*TaosStmt).exec(ctx, session, &req)
 		case STMTClose:
 			var req StmtClose
 			err = json.Unmarshal(action.Args, &req)
@@ -739,18 +833,15 @@ func (ctl *Restful) InitStmt() {
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).close(session, &req)
+			t.(*TaosStmt).close(ctx, session, &req)
 		default:
 			logger.WithError(err).Errorln("unknown action: " + action.Action)
 			return
 		}
 	})
-	const (
-		SetTagsMessage = 1
-		BindMessage    = 2
-	)
 
 	ctl.stmtM.HandleMessageBinary(func(session *melody.Session, data []byte) {
+		ctx := context.WithValue(context.Background(), StartTimeKey, time.Now().UnixNano())
 		//p0 uin64 代表 req_id
 		//p0+8 uint64 代表 stmt_id
 		//p0+16 uint64 代表 操作类型(1 (set tag) 2 (bind))
@@ -772,16 +863,16 @@ func (ctl *Restful) InitStmt() {
 		switch action {
 		case BindMessage:
 			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).bindBlock(session, reqID, stmtID, counts, columns, block)
+			t.(*TaosStmt).bindBlock(ctx, session, reqID, stmtID, counts, columns, block)
 		case SetTagsMessage:
 			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).setTagsBlock(session, reqID, stmtID, counts, columns, block)
+			t.(*TaosStmt).setTagsBlock(ctx, session, reqID, stmtID, counts, columns, block)
 		}
 	})
 
 	ctl.stmtM.HandleClose(func(session *melody.Session, i int, s string) error {
-		message := melody.FormatCloseMessage(i, "")
-		session.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
+		//message := melody.FormatCloseMessage(i, "")
+		//session.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws close", i, s)
 		t, exist := session.Get(TaosStmtKey)
@@ -826,24 +917,26 @@ type WSStmtErrorResp struct {
 	Message string  `json:"message"`
 	Action  string  `json:"action"`
 	ReqID   uint64  `json:"req_id"`
+	Timing  int64   `json:"timing"`
 	StmtID  *uint64 `json:"stmt_id,omitempty"`
 }
 
-func wsStmtErrorMsg(session *melody.Session, code int, message string, action string, reqID uint64, stmtID *uint64) {
+func wsStmtErrorMsg(ctx context.Context, session *melody.Session, code int, message string, action string, reqID uint64, stmtID *uint64) {
 	b, _ := json.Marshal(&WSStmtErrorResp{
 		Code:    code & 0xffff,
 		Message: message,
 		Action:  action,
 		ReqID:   reqID,
+		Timing:  getDuration(ctx),
 		StmtID:  stmtID,
 	})
 	session.Write(b)
 }
-func wsStmtError(session *melody.Session, err error, action string, reqID uint64, stmtID *uint64) {
+func wsStmtError(ctx context.Context, session *melody.Session, err error, action string, reqID uint64, stmtID *uint64) {
 	e, is := err.(*tErrors.TaosError)
 	if is {
-		wsStmtErrorMsg(session, int(e.Code)&0xffff, e.ErrStr, action, reqID, stmtID)
+		wsStmtErrorMsg(ctx, session, int(e.Code)&0xffff, e.ErrStr, action, reqID, stmtID)
 	} else {
-		wsStmtErrorMsg(session, 0xffff, err.Error(), action, reqID, stmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, err.Error(), action, reqID, stmtID)
 	}
 }

@@ -110,7 +110,7 @@ type TDEngineRestfulResp struct {
 
 func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
 	var s time.Time
-	isDebug := logger.Logger.IsLevelEnabled(logrus.DebugLevel)
+	isDebug := log.IsDebug()
 	id := web.GetRequestID(c)
 	logger := logger.WithField("sessionID", id)
 	b, err := c.GetRawData()
@@ -144,8 +144,15 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
 		logger.WithError(err).Error("connect taosd error")
 		if tError, is := err.(*tErrors.TaosError); is {
 			switch tError.Code {
-			case 0x0101, 0x0214, 0x0512:
-				c.AbortWithStatus(http.StatusUnauthorized)
+			case httperror.TSDB_CODE_MND_USER_ALREADY_EXIST,
+				httperror.TSDB_CODE_MND_USER_NOT_EXIST,
+				httperror.TSDB_CODE_MND_INVALID_USER_FORMAT,
+				httperror.TSDB_CODE_MND_INVALID_PASS_FORMAT,
+				httperror.TSDB_CODE_MND_NO_USER_FROM_CONN,
+				httperror.TSDB_CODE_MND_TOO_MANY_USERS,
+				httperror.TSDB_CODE_MND_INVALID_ALTER_OPER,
+				httperror.TSDB_CODE_MND_AUTH_FAILURE:
+				c.AbortWithStatusJSON(http.StatusUnauthorized, tError)
 				return
 			default:
 				ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
@@ -191,7 +198,7 @@ var (
 )
 
 func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, sql string, timeFormat ctools.FormatTimeFunc) {
-	isDebug := logger.Logger.IsLevelEnabled(logrus.DebugLevel)
+	isDebug := log.IsDebug()
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	var s time.Time

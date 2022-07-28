@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"sync"
+	"time"
 
 	rotatelogs "github.com/huskar-t/file-rotatelogs/v2"
 	"github.com/prometheus/client_golang/prometheus"
@@ -176,4 +177,24 @@ func (t *TaosLogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	}
 	b.WriteByte('\n')
 	return b.Bytes(), nil
+}
+
+func IsDebug() bool {
+	return logger.IsLevelEnabled(logrus.DebugLevel)
+}
+
+var zeroTime = time.Time{}
+var zeroDuration = time.Duration(0)
+
+func GetLogNow(isDebug bool) time.Time {
+	if isDebug {
+		return time.Now()
+	}
+	return zeroTime
+}
+func GetLogDuration(isDebug bool, s time.Time) time.Duration {
+	if isDebug {
+		return time.Now().Sub(s)
+	}
+	return zeroDuration
 }
