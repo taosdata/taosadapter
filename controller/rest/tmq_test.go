@@ -241,7 +241,7 @@ func TestTMQ(t *testing.T) {
 				}
 			}
 		case AfterTMQFetchBlock:
-			_, _, value := parseblock.ParseTmqBlock(message, tmpFetchResp.FieldsTypes, tmpFetchResp.Rows, tmpFetchResp.Precision)
+			_, _, value := parseblock.ParseTmqBlock(message[8:], tmpFetchResp.FieldsTypes, tmpFetchResp.Rows, tmpFetchResp.Precision)
 			switch tmpFetchResp.TableName {
 			case "ct0":
 				assert.Equal(t, 1, len(value))
@@ -571,7 +571,7 @@ func TestMeta(t *testing.T) {
 				MessageID: messageID,
 			})
 			action, _ := json.Marshal(&WSAction{
-				Action: TMQFetchRawMeta,
+				Action: TMQFetchRaw,
 				Args:   b,
 			})
 			t.Log(string(action))
@@ -838,7 +838,7 @@ func writeRaw(t *testing.T, rawData []byte) {
 			}
 			//query
 			status = AfterWriteRaw
-			err = ws.WriteMessage(websocket.BinaryMessage, rawData)
+			err = ws.WriteMessage(websocket.BinaryMessage, rawData[8:])
 			if err != nil {
 				return err
 			}

@@ -7,6 +7,7 @@ import "C"
 import (
 	"bytes"
 	"container/list"
+	"context"
 	"encoding/json"
 	"sync"
 	"sync/atomic"
@@ -21,20 +22,10 @@ import (
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/db/async"
 	"github.com/taosdata/taosadapter/httperror"
+	"github.com/taosdata/taosadapter/log"
 	"github.com/taosdata/taosadapter/thread"
 	"github.com/taosdata/taosadapter/tools/jsontype"
 	"github.com/taosdata/taosadapter/tools/web"
-)
-
-const TaosSessionKey = "taos"
-const (
-	ClientVersion = "version"
-	WSConnect     = "conn"
-	WSQuery       = "query"
-	WSFetch       = "fetch"
-	WSFetchBlock  = "fetch_block"
-	WSFreeResult  = "free_result"
-	WSWriteMeta   = "write_meta"
 )
 
 type Taos struct {
@@ -128,26 +119,36 @@ type WSConnectResp struct {
 	Message string `json:"message"`
 	Action  string `json:"action"`
 	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
 }
 
-func (t *Taos) connect(session *melody.Session, req *WSConnectReq) {
+func (t *Taos) connect(ctx context.Context, session *melody.Session, req *WSConnectReq) {
+	logger := getLogger(session).WithField("action", WSConnect)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
 	t.Lock()
+	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer t.Unlock()
 	if t.conn != nil {
-		wsErrorMsg(session, 0xffff, "taos duplicate connections", WSConnect, req.ReqID)
+		wsErrorMsg(ctx, session, 0xffff, "taos duplicate connections", WSConnect, req.ReqID)
 		return
 	}
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
+	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	conn, err := wrapper.TaosConnect("", req.User, req.Password, req.DB, 0)
+	logger.Debugln("taos connect cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if err != nil {
-		wsError(session, err, WSConnect, req.ReqID)
+		wsError(ctx, session, err, WSConnect, req.ReqID)
 		return
 	}
 	t.conn = conn
 	wsWriteJson(session, &WSConnectResp{
 		Action: WSConnect,
 		ReqID:  req.ReqID,
+		Timing: getDuration(ctx),
 	})
 }
 
@@ -161,6 +162,7 @@ type WSQueryResult struct {
 	Message       string             `json:"message"`
 	Action        string             `json:"action"`
 	ReqID         uint64             `json:"req_id"`
+	Timing        int64              `json:"timing"`
 	ID            uint64             `json:"id"`
 	IsUpdate      bool               `json:"is_update"`
 	AffectedRows  int                `json:"affected_rows"`
@@ -171,43 +173,68 @@ type WSQueryResult struct {
 	Precision     int                `json:"precision"`
 }
 
-func (t *Taos) query(session *melody.Session, req *WSQueryReq) {
+func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryReq) {
 	if t.conn == nil {
-		wsErrorMsg(session, 0xffff, "taos not connected", WSQuery, req.ReqID)
+		wsErrorMsg(ctx, session, 0xffff, "taos not connected", WSQuery, req.ReqID)
 		return
 	}
+	logger := getLogger(session).WithField("action", WSQuery)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
 	handler := async.GlobalAsync.HandlerPool.Get()
+	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
 	defer async.GlobalAsync.HandlerPool.Put(handler)
+	s = log.GetLogNow(isDebug)
 	result, _ := async.GlobalAsync.TaosQuery(t.conn, req.SQL, handler)
+	logger.Debugln("taos query cost ", log.GetLogDuration(isDebug, s))
 	code := wrapper.TaosError(result.Res)
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosErrorStr(result.Res)
+		s = log.GetLogNow(isDebug)
 		thread.Lock()
+		logger.Debugln("taos free result get lock cost:", log.GetLogDuration(isDebug, s))
+		s = log.GetLogNow(isDebug)
 		wrapper.TaosFreeResult(result.Res)
+		logger.Debugln("taos free result cost:", log.GetLogDuration(isDebug, s))
 		thread.Unlock()
-		wsErrorMsg(session, code, errStr, WSQuery, req.ReqID)
+		wsErrorMsg(ctx, session, code, errStr, WSQuery, req.ReqID)
 		return
 	}
+	s = log.GetLogNow(isDebug)
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
+	logger.Debugln("taos_is_update_query cost:", log.GetLogDuration(isDebug, s))
 	queryResult := &WSQueryResult{Action: WSQuery, ReqID: req.ReqID}
 	if isUpdate {
 		var affectRows int
+		s = log.GetLogNow(isDebug)
 		affectRows = wrapper.TaosAffectedRows(result.Res)
+		logger.Debugln("taos_affected_rows cost:", log.GetLogDuration(isDebug, s))
 		queryResult.IsUpdate = true
 		queryResult.AffectedRows = affectRows
+		s = log.GetLogNow(isDebug)
 		thread.Lock()
+		logger.Debugln("taos_free_result get lock cost:", log.GetLogDuration(isDebug, s))
+		s = log.GetLogNow(isDebug)
 		wrapper.TaosFreeResult(result.Res)
+		logger.Debugln("taos_free_result cost:", log.GetLogDuration(isDebug, s))
 		thread.Unlock()
+		queryResult.Timing = getDuration(ctx)
 		wsWriteJson(session, queryResult)
 		return
 	} else {
+		s = log.GetLogNow(isDebug)
 		fieldsCount := wrapper.TaosNumFields(result.Res)
+		logger.Debugln("taos_num_fields cost:", log.GetLogDuration(isDebug, s))
 		queryResult.FieldsCount = fieldsCount
+		s = log.GetLogNow(isDebug)
 		rowsHeader, _ := wrapper.ReadColumn(result.Res, fieldsCount)
+		logger.Debugln("read column cost:", log.GetLogDuration(isDebug, s))
 		queryResult.FieldsNames = rowsHeader.ColNames
 		queryResult.FieldsLengths = rowsHeader.ColLength
 		queryResult.FieldsTypes = rowsHeader.ColTypes
+		s = log.GetLogNow(isDebug)
 		precision := wrapper.TaosResultPrecision(result.Res)
+		logger.Debugln("taos_result_precision cost:", log.GetLogDuration(isDebug, s))
 		queryResult.Precision = precision
 		result := &Result{
 			TaosResult:  result.Res,
@@ -217,6 +244,7 @@ func (t *Taos) query(session *melody.Session, req *WSQueryReq) {
 		}
 		t.addResult(result)
 		queryResult.ID = result.index
+		queryResult.Timing = getDuration(ctx)
 		wsWriteJson(session, queryResult)
 	}
 }
@@ -227,22 +255,64 @@ type WSWriteMetaResp struct {
 	Action    string `json:"action"`
 	ReqID     uint64 `json:"req_id"`
 	MessageID uint64 `json:"message_id"`
+	Timing    int64  `json:"timing"`
 }
 
-func (t *Taos) writeMeta(session *melody.Session, reqID, messageID uint64, length uint32, metaType uint16, data unsafe.Pointer) {
+func (t *Taos) writeRaw(ctx context.Context, session *melody.Session, reqID, messageID uint64, length uint32, metaType uint16, data unsafe.Pointer) {
+	logger := getLogger(session).WithField("action", WSWriteRaw)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
 	t.Lock()
+	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer t.Unlock()
 	if t.conn == nil {
-		wsTMQErrorMsg(session, 0xffff, "taos not connected", WSWriteMeta, reqID, &messageID)
+		wsTMQErrorMsg(ctx, session, 0xffff, "taos not connected", WSWriteRaw, reqID, &messageID)
 		return
 	}
-	handler := async.GlobalAsync.HandlerPool.Get()
-	defer async.GlobalAsync.HandlerPool.Put(handler)
 	meta := wrapper.BuildRawMeta(length, metaType, data)
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
-	wrapper.TaosWriteRawMeta(t.conn, meta)
+	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	wrapper.TMQWriteRaw(t.conn, meta)
+	logger.Debugln("taos_write_raw_meta cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
-	resp := &WSWriteMetaResp{Action: WSWriteMeta, ReqID: reqID, MessageID: messageID}
+	resp := &WSWriteMetaResp{Action: WSWriteRaw, ReqID: reqID, MessageID: messageID, Timing: getDuration(ctx)}
+	wsWriteJson(session, resp)
+}
+
+type WSWriteRawBlockResp struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Action  string `json:"action"`
+	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
+}
+
+func (t *Taos) writeRawBlock(ctx context.Context, session *melody.Session, reqID uint64, numOfRows int, tableName string, rawBlock unsafe.Pointer) {
+	logger := getLogger(session).WithField("action", WSWriteRawBlock)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
+	t.Lock()
+	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
+	defer t.Unlock()
+	if t.conn == nil {
+		wsErrorMsg(ctx, session, 0xffff, "taos not connected", WSWriteRawBlock, reqID)
+		return
+	}
+	s = log.GetLogNow(isDebug)
+	thread.Lock()
+	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	errCode := wrapper.TaosWriteRawBlock(t.conn, numOfRows, rawBlock, tableName)
+	thread.Unlock()
+	logger.Debugln("taos_write_raw_meta cost:", log.GetLogDuration(isDebug, s))
+	if errCode != 0 {
+		errStr := wrapper.TaosErrorStr(nil)
+		wsErrorMsg(ctx, session, errCode&0xffff, errStr, WSFetch, reqID)
+		return
+	}
+	resp := &WSWriteRawBlockResp{Action: WSWriteRaw, ReqID: reqID, Timing: getDuration(ctx)}
 	wsWriteJson(session, resp)
 }
 
@@ -256,31 +326,39 @@ type WSFetchResp struct {
 	Message   string `json:"message"`
 	Action    string `json:"action"`
 	ReqID     uint64 `json:"req_id"`
+	Timing    int64  `json:"timing"`
 	ID        uint64 `json:"id"`
 	Completed bool   `json:"completed"`
 	Lengths   []int  `json:"lengths"`
 	Rows      int    `json:"rows"`
 }
 
-func (t *Taos) fetch(session *melody.Session, req *WSFetchReq) {
+func (t *Taos) fetch(ctx context.Context, session *melody.Session, req *WSFetchReq) {
 	if t.conn == nil {
-		wsErrorMsg(session, 0xffff, "taos not connected", WSFetch, req.ReqID)
+		wsErrorMsg(ctx, session, 0xffff, "taos not connected", WSFetch, req.ReqID)
 		return
 	}
+	logger := getLogger(session).WithField("action", WSFetch)
+	isDebug := log.IsDebug()
 	resultItem := t.getResult(req.ID)
 	if resultItem == nil {
-		wsErrorMsg(session, 0xffff, "result is nil", WSFetch, req.ReqID)
+		wsErrorMsg(ctx, session, 0xffff, "result is nil", WSFetch, req.ReqID)
 		return
 	}
 	resultS := resultItem.Value.(*Result)
+	s := log.GetLogNow(isDebug)
 	handler := async.GlobalAsync.HandlerPool.Get()
+	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
 	defer async.GlobalAsync.HandlerPool.Put(handler)
+	s = log.GetLogNow(isDebug)
 	result, _ := async.GlobalAsync.TaosFetchRawBlockA(resultS.TaosResult, handler)
+	logger.Debugln("taos_fetch_raw_block_a cost:", log.GetLogDuration(isDebug, s))
 	if result.N == 0 {
 		t.FreeResult(resultItem)
 		wsWriteJson(session, &WSFetchResp{
 			Action:    WSFetch,
 			ReqID:     req.ReqID,
+			Timing:    getDuration(ctx),
 			ID:        req.ID,
 			Completed: true,
 		})
@@ -289,17 +367,22 @@ func (t *Taos) fetch(session *melody.Session, req *WSFetchReq) {
 	if result.N < 0 {
 		errStr := wrapper.TaosErrorStr(result.Res)
 		t.FreeResult(resultItem)
-		wsErrorMsg(session, result.N&0xffff, errStr, WSFetch, req.ReqID)
+		wsErrorMsg(ctx, session, result.N&0xffff, errStr, WSFetch, req.ReqID)
 		return
 	}
+	s = log.GetLogNow(isDebug)
 	resultS.Lengths = wrapper.FetchLengths(resultS.TaosResult, resultS.FieldsCount)
+	logger.Debugln("taos_fetch_lengths cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	block := wrapper.TaosGetRawBlock(resultS.TaosResult)
+	logger.Debugln("taos_get_raw_block cost:", log.GetLogDuration(isDebug, s))
 	resultS.Block = block
 	resultS.Size = result.N
 
 	wsWriteJson(session, &WSFetchResp{
 		Action:  WSFetch,
 		ReqID:   req.ReqID,
+		Timing:  getDuration(ctx),
 		ID:      req.ID,
 		Lengths: resultS.Lengths,
 		Rows:    result.N,
@@ -311,19 +394,22 @@ type WSFetchBlockReq struct {
 	ID    uint64 `json:"id"`
 }
 
-func (t *Taos) fetchBlock(session *melody.Session, req *WSFetchBlockReq) {
+func (t *Taos) fetchBlock(ctx context.Context, session *melody.Session, req *WSFetchBlockReq) {
 	if t.conn == nil {
-		wsErrorMsg(session, 0xffff, "taos not connected", WSFetchBlock, req.ReqID)
+		wsErrorMsg(ctx, session, 0xffff, "taos not connected", WSFetchBlock, req.ReqID)
 		return
 	}
+	logger := getLogger(session).WithField("action", WSFetchBlock)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
 	resultItem := t.getResult(req.ID)
 	if resultItem == nil {
-		wsErrorMsg(session, 0xffff, "result is nil", WSFetchBlock, req.ReqID)
+		wsErrorMsg(ctx, session, 0xffff, "result is nil", WSFetchBlock, req.ReqID)
 		return
 	}
 	resultS := resultItem.Value.(*Result)
 	if resultS.Block == nil {
-		wsErrorMsg(session, 0xffff, "block is nil", WSFetchBlock, req.ReqID)
+		wsErrorMsg(ctx, session, 0xffff, "block is nil", WSFetchBlock, req.ReqID)
 		return
 	}
 	resultS.Lock()
@@ -333,13 +419,15 @@ func (t *Taos) fetchBlock(session *melody.Session, req *WSFetchBlockReq) {
 	} else {
 		resultS.buffer.Reset()
 	}
-	resultS.buffer.Grow(blockLength + 8)
+	resultS.buffer.Grow(blockLength + 16)
+	writeUint64(resultS.buffer, uint64(getDuration(ctx)))
 	writeUint64(resultS.buffer, req.ID)
 	for offset := 0; offset < blockLength; offset++ {
 		resultS.buffer.WriteByte(*((*byte)(unsafe.Pointer(uintptr(resultS.Block) + uintptr(offset)))))
 	}
 	b := resultS.buffer.Bytes()
 	resultS.Unlock()
+	logger.Debugln("handle binary content cost:", log.GetLogDuration(isDebug, s))
 	session.WriteBinary(b)
 }
 
@@ -441,6 +529,7 @@ func (ctl *Restful) InitWS() {
 		if ctl.wsM.IsClosed() {
 			return
 		}
+		ctx := context.WithValue(context.Background(), StartTimeKey, time.Now().UnixNano())
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("get ws message data:", string(data))
 		var action WSAction
@@ -460,7 +549,7 @@ func (ctl *Restful) InitWS() {
 				return
 			}
 			t := session.MustGet(TaosSessionKey)
-			t.(*Taos).connect(session, &wsConnect)
+			t.(*Taos).connect(ctx, session, &wsConnect)
 		case WSQuery:
 			var wsQuery WSQueryReq
 			err = json.Unmarshal(action.Args, &wsQuery)
@@ -469,7 +558,7 @@ func (ctl *Restful) InitWS() {
 				return
 			}
 			t := session.MustGet(TaosSessionKey)
-			t.(*Taos).query(session, &wsQuery)
+			t.(*Taos).query(ctx, session, &wsQuery)
 		case WSFetch:
 			var wsFetch WSFetchReq
 			err = json.Unmarshal(action.Args, &wsFetch)
@@ -478,7 +567,7 @@ func (ctl *Restful) InitWS() {
 				return
 			}
 			t := session.MustGet(TaosSessionKey)
-			t.(*Taos).fetch(session, &wsFetch)
+			t.(*Taos).fetch(ctx, session, &wsFetch)
 		case WSFetchBlock:
 			var fetchBlock WSFetchBlockReq
 			err = json.Unmarshal(action.Args, &fetchBlock)
@@ -487,7 +576,7 @@ func (ctl *Restful) InitWS() {
 				return
 			}
 			t := session.MustGet(TaosSessionKey)
-			t.(*Taos).fetchBlock(session, &fetchBlock)
+			t.(*Taos).fetchBlock(ctx, session, &fetchBlock)
 		case WSFreeResult:
 			var fetchJson WSFreeResultReq
 			err = json.Unmarshal(action.Args, &fetchJson)
@@ -504,23 +593,34 @@ func (ctl *Restful) InitWS() {
 	})
 
 	ctl.wsM.HandleMessageBinary(func(session *melody.Session, data []byte) {
+		ctx := context.WithValue(context.Background(), StartTimeKey, time.Now().UnixNano())
 		p0 := *(*uintptr)(unsafe.Pointer(&data))
 		reqID := *(*uint64)(unsafe.Pointer(p0))
 		messageID := *(*uint64)(unsafe.Pointer(p0 + uintptr(8)))
 		action := *(*uint64)(unsafe.Pointer(p0 + uintptr(16)))
-		length := *(*uint32)(unsafe.Pointer(p0 + uintptr(24)))
-		metaType := *(*uint16)(unsafe.Pointer(p0 + uintptr(28)))
-		b := unsafe.Pointer(p0 + uintptr(30))
 		switch action {
-		case TMQRawMetaMessage:
+		case TMQRawMessage:
+			length := *(*uint32)(unsafe.Pointer(p0 + uintptr(24)))
+			metaType := *(*uint16)(unsafe.Pointer(p0 + uintptr(28)))
+			b := unsafe.Pointer(p0 + uintptr(30))
 			t := session.MustGet(TaosSessionKey)
-			t.(*Taos).writeMeta(session, reqID, messageID, length, metaType, b)
+			t.(*Taos).writeRaw(ctx, session, reqID, messageID, length, metaType, b)
+		case RawBlockMessage:
+			numOfRows := *(*int32)(unsafe.Pointer(p0 + uintptr(24)))
+			tableNameLength := *(*uint16)(unsafe.Pointer(p0 + uintptr(28)))
+			tableName := make([]byte, tableNameLength)
+			for i := 0; i < int(tableNameLength); i++ {
+				tableName[i] = *(*byte)(unsafe.Pointer(p0 + uintptr(30+i)))
+			}
+			b := unsafe.Pointer(p0 + uintptr(30+tableNameLength))
+			t := session.MustGet(TaosSessionKey)
+			t.(*Taos).writeRawBlock(ctx, session, reqID, int(numOfRows), string(tableName), b)
 		}
 	})
 
 	ctl.wsM.HandleClose(func(session *melody.Session, i int, s string) error {
-		message := melody.FormatCloseMessage(i, "")
-		session.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
+		//message := melody.FormatCloseMessage(i, "")
+		//session.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws close", i, s)
 		t, exist := session.Get(TaosSessionKey)
@@ -565,26 +665,36 @@ type WSErrorResp struct {
 	Message string `json:"message"`
 	Action  string `json:"action"`
 	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
 }
 
-func wsErrorMsg(session *melody.Session, code int, message string, action string, reqID uint64) {
+func wsErrorMsg(ctx context.Context, session *melody.Session, code int, message string, action string, reqID uint64) {
 	b, _ := json.Marshal(&WSErrorResp{
 		Code:    code & 0xffff,
 		Message: message,
 		Action:  action,
 		ReqID:   reqID,
+		Timing:  getDuration(ctx),
 	})
 	session.Write(b)
 }
-func wsError(session *melody.Session, err error, action string, reqID uint64) {
+func wsError(ctx context.Context, session *melody.Session, err error, action string, reqID uint64) {
 	e, is := err.(*tErrors.TaosError)
 	if is {
-		wsErrorMsg(session, int(e.Code)&0xffff, e.ErrStr, action, reqID)
+		wsErrorMsg(ctx, session, int(e.Code)&0xffff, e.ErrStr, action, reqID)
 	} else {
-		wsErrorMsg(session, 0xffff, err.Error(), action, reqID)
+		wsErrorMsg(ctx, session, 0xffff, err.Error(), action, reqID)
 	}
 }
 func wsWriteJson(session *melody.Session, data interface{}) {
 	b, _ := json.Marshal(data)
 	session.Write(b)
+}
+
+func getDuration(ctx context.Context) int64 {
+	return time.Now().UnixNano() - ctx.Value(StartTimeKey).(int64)
+}
+
+func getLogger(session *melody.Session) *logrus.Entry {
+	return session.MustGet("logger").(*logrus.Entry)
 }
