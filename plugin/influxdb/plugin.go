@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
@@ -77,7 +76,7 @@ func (p *Influxdb) Stop() error {
 func (p *Influxdb) write(c *gin.Context) {
 	id := web.GetRequestID(c)
 	logger := logger.WithField("sessionID", id)
-	isDebug := logger.Logger.IsLevelEnabled(logrus.DebugLevel)
+	isDebug := log.IsDebug()
 	precision := c.Query("precision")
 	if len(precision) == 0 {
 		precision = "ns"

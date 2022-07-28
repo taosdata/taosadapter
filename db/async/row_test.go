@@ -34,17 +34,17 @@ func TestAsync_TaosExec(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:   "show databases",
+			name:   "select 1",
 			fields: fields{NewHandlerPool(10000)},
 			args: args{
 				taosConnect: conn,
-				sql:         "show databases",
+				sql:         "select 1",
 				timeFormat: func(ts int64, precision int) driver.Value {
 					return ts
 				},
 			},
 			want: &ExecResult{
-				FieldCount: 21,
+				FieldCount: 1,
 			},
 			wantErr: false,
 		},

@@ -40,9 +40,9 @@ func initMonitor() {
 	_ = viper.BindEnv("monitor.identity", "TAOS_MONITOR_IDENTITY")
 	pflag.String("monitor.identity", "", `The identity of the current instance, or 'hostname:port' if it is empty. Env "TAOS_MONITOR_IDENTITY"`)
 
-	viper.SetDefault("monitor.writeToTD", true)
+	viper.SetDefault("monitor.writeToTD", false)
 	_ = viper.BindEnv("monitor.writeToTD", "TAOS_MONITOR_WRITE_TO_TD")
-	pflag.Bool("monitor.writeToTD", true, `Whether write metrics to TDengine. Env "TAOS_MONITOR_WRITE_TO_TD"`)
+	pflag.Bool("monitor.writeToTD", false, `Whether write metrics to TDengine. Env "TAOS_MONITOR_WRITE_TO_TD"`)
 
 	viper.SetDefault("monitor.user", "root")
 	_ = viper.BindEnv("monitor.user", "TAOS_MONITOR_USER")

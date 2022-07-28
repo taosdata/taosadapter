@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/taosadapter/db/commonpool"
 	"github.com/taosdata/taosadapter/log"
@@ -74,7 +73,7 @@ func (p *Plugin) Stop() error {
 // @Failure 500 {string} string "internal server error"
 // @Router /opentsdb/v1/put/json/:db [post]
 func (p *Plugin) insertJson(c *gin.Context) {
-	isDebug := logger.Logger.IsLevelEnabled(logrus.DebugLevel)
+	isDebug := log.IsDebug()
 	id := web.GetRequestID(c)
 	logger := logger.WithField("sessionID", id)
 	db := c.Param("db")
@@ -140,7 +139,7 @@ func (p *Plugin) insertJson(c *gin.Context) {
 func (p *Plugin) insertTelnet(c *gin.Context) {
 	id := web.GetRequestID(c)
 	logger := logger.WithField("sessionID", id)
-	isDebug := logger.Logger.IsLevelEnabled(logrus.DebugLevel)
+	isDebug := log.IsDebug()
 	db := c.Param("db")
 	if len(db) == 0 {
 		logger.Errorln("db required")

@@ -57,7 +57,7 @@ func TestInit(t *testing.T) {
 					PauseQueryMemoryThreshold: 70,
 					PauseAllMemoryThreshold:   80,
 					Identity:                  "",
-					WriteToTD:                 true,
+					WriteToTD:                 false,
 					User:                      "root",
 					Password:                  "taosdata",
 					WriteInterval:             30 * time.Second,
