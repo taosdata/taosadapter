@@ -15,18 +15,18 @@ import (
 	"github.com/taosdata/driver-go/v3/common"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
-	"github.com/taosdata/taosadapter/config"
-	"github.com/taosdata/taosadapter/controller"
-	"github.com/taosdata/taosadapter/db/async"
-	"github.com/taosdata/taosadapter/db/commonpool"
-	"github.com/taosdata/taosadapter/httperror"
-	"github.com/taosdata/taosadapter/log"
-	"github.com/taosdata/taosadapter/monitor"
-	"github.com/taosdata/taosadapter/thread"
-	"github.com/taosdata/taosadapter/tools/ctools"
-	"github.com/taosdata/taosadapter/tools/jsonbuilder"
-	"github.com/taosdata/taosadapter/tools/web"
-	"github.com/taosdata/taosadapter/version"
+	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/controller"
+	"github.com/taosdata/taosadapter/v3/db/async"
+	"github.com/taosdata/taosadapter/v3/db/commonpool"
+	"github.com/taosdata/taosadapter/v3/httperror"
+	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
+	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/tools/ctools"
+	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
+	"github.com/taosdata/taosadapter/v3/tools/web"
+	"github.com/taosdata/taosadapter/v3/version"
 )
 
 var logger = log.GetLogger("restful")
@@ -190,8 +190,8 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
 }
 
 var (
-	ExecHeader = []byte(`{"code":0,"column_meta":[["affected_rows","INT",4]],"rows":1,"data":[[`)
-	ExecEnd    = []byte(`]]}`)
+	ExecHeader = []byte(`{"code":0,"column_meta":[["affected_rows","INT",4]],"data":[[`)
+	ExecEnd    = []byte(`]],"rows":1}`)
 	Query2     = []byte(`{"code":0,"column_meta":[`)
 	Query3     = []byte(`],"data":[`)
 	Query4     = []byte(`],"rows":`)

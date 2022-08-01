@@ -8,8 +8,8 @@ import (
 
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
-	"github.com/taosdata/taosadapter/httperror"
-	"github.com/taosdata/taosadapter/thread"
+	"github.com/taosdata/taosadapter/v3/httperror"
+	"github.com/taosdata/taosadapter/v3/thread"
 )
 
 var FetchRowError = errors.New("fetch row error")

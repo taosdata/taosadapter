@@ -3,8 +3,8 @@ package inserter
 import (
 	"unsafe"
 
-	"github.com/taosdata/taosadapter/schemaless/capi"
-	"github.com/taosdata/taosadapter/schemaless/proto"
+	"github.com/taosdata/taosadapter/v3/schemaless/capi"
+	"github.com/taosdata/taosadapter/v3/schemaless/proto"
 )
 
 func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision string) (*proto.InfluxResult, error) {

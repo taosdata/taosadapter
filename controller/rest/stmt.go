@@ -18,10 +18,10 @@ import (
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/types"
 	"github.com/taosdata/driver-go/v3/wrapper"
-	"github.com/taosdata/taosadapter/httperror"
-	"github.com/taosdata/taosadapter/log"
-	"github.com/taosdata/taosadapter/thread"
-	"github.com/taosdata/taosadapter/tools/web"
+	"github.com/taosdata/taosadapter/v3/httperror"
+	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/tools/web"
 )
 
 type TaosStmt struct {
@@ -546,12 +546,12 @@ type StmtClose struct {
 
 func (t *TaosStmt) close(ctx context.Context, session *melody.Session, req *StmtClose) {
 	if t.conn == nil {
-		wsStmtErrorMsg(ctx, session, 0xffff, "taos not connected", STMTExec, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, "taos not connected", STMTClose, req.ReqID, &req.StmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
-		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", STMTExec, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", STMTClose, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)

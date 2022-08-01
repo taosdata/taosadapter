@@ -2,7 +2,7 @@ package log
 
 import (
 	"github.com/sirupsen/logrus"
-	"github.com/taosdata/taosadapter/tools/pool"
+	"github.com/taosdata/taosadapter/v3/tools/pool"
 )
 
 var sqlLogger = logrus.New()

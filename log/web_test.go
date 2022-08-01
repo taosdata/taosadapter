@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/taosadapter/log"
+	"github.com/taosdata/taosadapter/v3/log"
 )
 
 // @author: xftan

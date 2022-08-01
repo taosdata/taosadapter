@@ -6,9 +6,9 @@ import (
 	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
-	"github.com/taosdata/taosadapter/config"
-	"github.com/taosdata/taosadapter/db/async"
-	"github.com/taosdata/taosadapter/log"
+	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/db/async"
+	"github.com/taosdata/taosadapter/v3/log"
 )
 
 var once = sync.Once{}

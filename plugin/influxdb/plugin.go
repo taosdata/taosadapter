@@ -7,13 +7,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
-	"github.com/taosdata/taosadapter/db/commonpool"
-	"github.com/taosdata/taosadapter/log"
-	"github.com/taosdata/taosadapter/monitor"
-	"github.com/taosdata/taosadapter/plugin"
-	"github.com/taosdata/taosadapter/schemaless/inserter"
-	"github.com/taosdata/taosadapter/tools"
-	"github.com/taosdata/taosadapter/tools/web"
+	"github.com/taosdata/taosadapter/v3/db/commonpool"
+	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
+	"github.com/taosdata/taosadapter/v3/plugin"
+	"github.com/taosdata/taosadapter/v3/schemaless/inserter"
+	"github.com/taosdata/taosadapter/v3/tools"
+	"github.com/taosdata/taosadapter/v3/tools/web"
 )
 
 var logger = log.GetLogger("influxdb")

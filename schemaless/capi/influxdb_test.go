@@ -7,8 +7,8 @@ import (
 
 	"github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
-	"github.com/taosdata/taosadapter/schemaless/capi"
-	"github.com/taosdata/taosadapter/schemaless/proto"
+	"github.com/taosdata/taosadapter/v3/schemaless/capi"
+	"github.com/taosdata/taosadapter/v3/schemaless/proto"
 )
 
 // @author: xftan

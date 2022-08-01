@@ -13,12 +13,12 @@ import (
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
-	"github.com/taosdata/taosadapter/config"
-	"github.com/taosdata/taosadapter/controller"
-	"github.com/taosdata/taosadapter/db"
-	"github.com/taosdata/taosadapter/log"
-	"github.com/taosdata/taosadapter/monitor"
-	"github.com/taosdata/taosadapter/plugin"
+	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/controller"
+	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
+	"github.com/taosdata/taosadapter/v3/plugin"
 )
 
 var logger = log.GetLogger("main")

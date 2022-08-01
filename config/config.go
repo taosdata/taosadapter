@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"github.com/taosdata/taosadapter/version"
+	"github.com/taosdata/taosadapter/v3/version"
 )
 
 type Config struct {

@@ -20,10 +20,9 @@ taosAdapter 的源代码是作为一个独立的代码库托管的，也通过�
 ```shell
 git clone https://github.com/taosdata/TDengine
 cd TDengine
-git submodule update --init --recursive
 mkdir debug
 cd debug
-cmake ..
+cmake .. -DBUILD_HTTP=false
 make
 sudo make install
 ```

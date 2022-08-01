@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
-	"github.com/taosdata/taosadapter/log"
+	"github.com/taosdata/taosadapter/v3/log"
 )
 
 var logger = log.GetLogger("plugin")

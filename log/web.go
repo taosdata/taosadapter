@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/taosdata/taosadapter/config"
+	"github.com/taosdata/taosadapter/v3/config"
 )
 
 func GinLog() gin.HandlerFunc {

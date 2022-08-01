@@ -13,8 +13,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/sirupsen/logrus"
-	"github.com/taosdata/taosadapter/config"
-	"github.com/taosdata/taosadapter/tools/pool"
+	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/tools/pool"
 )
 
 var logger = logrus.New()

@@ -21,7 +21,6 @@ taosAdapter source code is hosted as a stand-alone repository and also is part o
 ```shell
 git clone https://github.com/taosdata/TDengine
 cd TDengine
-git submodule update --init --recursive
 mkdir debug
 cd debug
 cmake .. -DBUILD_HTTP=false
