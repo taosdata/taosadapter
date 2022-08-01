@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/driver-go/v3/common"
-	"github.com/taosdata/taosadapter/tools/jsonbuilder"
+	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
 )
 
 func TestJsonWriteRawBlock(t *testing.T) {

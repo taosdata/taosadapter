@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/taosdata/taosadapter/controller"
-	"github.com/taosdata/taosadapter/monitor"
+	"github.com/taosdata/taosadapter/v3/controller"
+	"github.com/taosdata/taosadapter/v3/monitor"
 )
 
 type Controller struct {

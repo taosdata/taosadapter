@@ -18,10 +18,10 @@ import (
 	io_prometheus_client "github.com/prometheus/client_model/go"
 	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/wrapper"
-	"github.com/taosdata/taosadapter/config"
-	"github.com/taosdata/taosadapter/db/async"
-	"github.com/taosdata/taosadapter/log"
-	"github.com/taosdata/taosadapter/tools/monitor"
+	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/db/async"
+	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/monitor"
 )
 
 var logger = log.GetLogger("monitor")

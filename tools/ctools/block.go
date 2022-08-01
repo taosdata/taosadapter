@@ -4,7 +4,7 @@ import (
 	"unsafe"
 
 	"github.com/taosdata/driver-go/v3/common"
-	"github.com/taosdata/taosadapter/tools/jsonbuilder"
+	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
 )
 
 type FormatTimeFunc func(builder *jsonbuilder.Stream, ts int64, precision int)

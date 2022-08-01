@@ -13,9 +13,9 @@ import (
 	"github.com/taosdata/driver-go/v3/af"
 	"github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
-	"github.com/taosdata/taosadapter/config"
-	"github.com/taosdata/taosadapter/db"
-	"github.com/taosdata/taosadapter/plugin/opentsdbtelnet"
+	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/plugin/opentsdbtelnet"
 )
 
 // @author: xftan

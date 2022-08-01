@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/prometheus/prompb"
-	"github.com/taosdata/taosadapter/config"
+	"github.com/taosdata/taosadapter/v3/config"
 )
 
 // @author: xftan

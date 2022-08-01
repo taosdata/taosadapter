@@ -10,10 +10,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/patrickmn/go-cache"
-	"github.com/taosdata/taosadapter/httperror"
-	"github.com/taosdata/taosadapter/tools"
-	"github.com/taosdata/taosadapter/tools/pool"
-	"github.com/taosdata/taosadapter/tools/web"
+	"github.com/taosdata/taosadapter/v3/httperror"
+	"github.com/taosdata/taosadapter/v3/tools"
+	"github.com/taosdata/taosadapter/v3/tools/pool"
+	"github.com/taosdata/taosadapter/v3/tools/web"
 )
 
 var authCache = cache.New(30*time.Minute, time.Hour)

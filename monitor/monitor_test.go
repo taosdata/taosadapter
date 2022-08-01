@@ -15,13 +15,13 @@ import (
 	"github.com/shirou/gopsutil/process"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/taosadapter/config"
-	"github.com/taosdata/taosadapter/controller/ping"
-	"github.com/taosdata/taosadapter/controller/rest"
-	"github.com/taosdata/taosadapter/db"
-	"github.com/taosdata/taosadapter/log"
-	"github.com/taosdata/taosadapter/monitor"
-	"github.com/taosdata/taosadapter/tools/ctest"
+	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/controller/ping"
+	"github.com/taosdata/taosadapter/v3/controller/rest"
+	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
+	"github.com/taosdata/taosadapter/v3/tools/ctest"
 )
 
 var router *gin.Engine

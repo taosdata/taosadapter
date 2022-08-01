@@ -14,7 +14,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/driver-go/v3/common"
-	"github.com/taosdata/taosadapter/tools/parseblock"
+	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 )
 
 func TestTMQ(t *testing.T) {

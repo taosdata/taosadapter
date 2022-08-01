@@ -3,7 +3,7 @@ package log
 import (
 	"testing"
 
-	"github.com/taosdata/taosadapter/config"
+	"github.com/taosdata/taosadapter/v3/config"
 )
 
 // @author: xftan

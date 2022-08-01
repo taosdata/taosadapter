@@ -1,7 +1,7 @@
 package system
 
 import (
-	_ "github.com/taosdata/taosadapter/controller/metrics"
-	_ "github.com/taosdata/taosadapter/controller/ping"
-	_ "github.com/taosdata/taosadapter/controller/rest"
+	_ "github.com/taosdata/taosadapter/v3/controller/metrics"
+	_ "github.com/taosdata/taosadapter/v3/controller/ping"
+	_ "github.com/taosdata/taosadapter/v3/controller/rest"
 )

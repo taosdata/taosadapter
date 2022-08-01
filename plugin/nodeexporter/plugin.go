@@ -19,11 +19,11 @@ import (
 	tmetric "github.com/influxdata/telegraf/metric"
 	"github.com/influxdata/telegraf/plugins/inputs/prometheus"
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
-	"github.com/taosdata/taosadapter/db/commonpool"
-	"github.com/taosdata/taosadapter/log"
-	"github.com/taosdata/taosadapter/monitor"
-	"github.com/taosdata/taosadapter/plugin"
-	"github.com/taosdata/taosadapter/schemaless/inserter"
+	"github.com/taosdata/taosadapter/v3/db/commonpool"
+	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
+	"github.com/taosdata/taosadapter/v3/plugin"
+	"github.com/taosdata/taosadapter/v3/schemaless/inserter"
 )
 
 var logger = log.GetLogger("NodeExporter")

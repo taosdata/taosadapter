@@ -19,11 +19,11 @@ import (
 	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
-	"github.com/taosdata/taosadapter/httperror"
-	"github.com/taosdata/taosadapter/log"
-	"github.com/taosdata/taosadapter/thread"
-	"github.com/taosdata/taosadapter/tools/jsontype"
-	"github.com/taosdata/taosadapter/tools/web"
+	"github.com/taosdata/taosadapter/v3/httperror"
+	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/tools/jsontype"
+	"github.com/taosdata/taosadapter/v3/tools/web"
 )
 
 type TMQ struct {
@@ -411,7 +411,7 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 	}
 	message := messageItem.Value.(*TMQMessage)
 	if message.messageType != common.TMQ_RES_DATA {
-		wsTMQErrorMsg(ctx, session, 0xffff, "message type is not data", TMQFetchBlock, req.ReqID, &req.MessageID)
+		wsTMQErrorMsg(ctx, session, 0xffff, "message type is not data", TMQFetch, req.ReqID, &req.MessageID)
 		return
 	}
 	s = log.GetLogNow(isDebug)

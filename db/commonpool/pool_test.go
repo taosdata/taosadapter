@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/taosadapter/config"
+	"github.com/taosdata/taosadapter/v3/config"
 )
 
 func TestMain(m *testing.M) {

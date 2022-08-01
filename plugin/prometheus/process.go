@@ -17,12 +17,12 @@ import (
 	"github.com/taosdata/driver-go/v3/common"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
-	"github.com/taosdata/taosadapter/config"
-	"github.com/taosdata/taosadapter/db/async"
-	"github.com/taosdata/taosadapter/db/tool"
-	"github.com/taosdata/taosadapter/httperror"
-	"github.com/taosdata/taosadapter/thread"
-	"github.com/taosdata/taosadapter/tools/pool"
+	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/db/async"
+	"github.com/taosdata/taosadapter/v3/db/tool"
+	"github.com/taosdata/taosadapter/v3/httperror"
+	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/tools/pool"
 )
 
 func processWrite(taosConn unsafe.Pointer, req *prompb.WriteRequest, db string) error {

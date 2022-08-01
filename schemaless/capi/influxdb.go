@@ -6,9 +6,9 @@ import (
 
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
-	"github.com/taosdata/taosadapter/db/tool"
-	"github.com/taosdata/taosadapter/schemaless/proto"
-	"github.com/taosdata/taosadapter/thread"
+	"github.com/taosdata/taosadapter/v3/db/tool"
+	"github.com/taosdata/taosadapter/v3/schemaless/proto"
+	"github.com/taosdata/taosadapter/v3/thread"
 )
 
 func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision string) (*proto.InfluxResult, error) {

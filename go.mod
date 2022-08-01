@@ -1,4 +1,4 @@
-module github.com/taosdata/taosadapter
+module github.com/taosdata/taosadapter/v3
 
 go 1.14
 

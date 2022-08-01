@@ -20,12 +20,12 @@ import (
 	"github.com/sirupsen/logrus"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
-	"github.com/taosdata/taosadapter/db/async"
-	"github.com/taosdata/taosadapter/httperror"
-	"github.com/taosdata/taosadapter/log"
-	"github.com/taosdata/taosadapter/thread"
-	"github.com/taosdata/taosadapter/tools/jsontype"
-	"github.com/taosdata/taosadapter/tools/web"
+	"github.com/taosdata/taosadapter/v3/db/async"
+	"github.com/taosdata/taosadapter/v3/httperror"
+	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/tools/jsontype"
+	"github.com/taosdata/taosadapter/v3/tools/web"
 )
 
 type Taos struct {
@@ -309,10 +309,10 @@ func (t *Taos) writeRawBlock(ctx context.Context, session *melody.Session, reqID
 	logger.Debugln("taos_write_raw_meta cost:", log.GetLogDuration(isDebug, s))
 	if errCode != 0 {
 		errStr := wrapper.TaosErrorStr(nil)
-		wsErrorMsg(ctx, session, errCode&0xffff, errStr, WSFetch, reqID)
+		wsErrorMsg(ctx, session, errCode&0xffff, errStr, WSWriteRawBlock, reqID)
 		return
 	}
-	resp := &WSWriteRawBlockResp{Action: WSWriteRaw, ReqID: reqID, Timing: getDuration(ctx)}
+	resp := &WSWriteRawBlockResp{Action: WSWriteRawBlock, ReqID: reqID, Timing: getDuration(ctx)}
 	wsWriteJson(session, resp)
 }
 

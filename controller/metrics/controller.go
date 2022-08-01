@@ -3,7 +3,7 @@ package metrics
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/taosdata/taosadapter/controller"
+	"github.com/taosdata/taosadapter/v3/controller"
 )
 
 type Controller struct {

@@ -13,7 +13,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/taosadapter/tools/parseblock"
+	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 )
 
 // @author: xftan

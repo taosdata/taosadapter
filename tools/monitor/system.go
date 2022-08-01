@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/taosdata/taosadapter/log"
+	"github.com/taosdata/taosadapter/v3/log"
 )
 
 var logger = log.GetLogger("monitor")
