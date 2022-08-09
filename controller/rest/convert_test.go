@@ -2,6 +2,8 @@ package rest
 
 import (
 	"database/sql/driver"
+	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -2538,6 +2540,154 @@ func Test_stmtConvert(t *testing.T) {
 			}
 			assert.Equal(t, tt.want, tt.args.src)
 			assert.Equal(t, tt.wantFieldTypes, tt.args.fieldTypes)
+		})
+	}
+}
+
+func Test_stmtParseColumn(t *testing.T) {
+	type args struct {
+		columns    json.RawMessage
+		fields     []*wrapper.StmtField
+		fieldTypes []*types.ColumnType
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    [][]driver.Value
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "all",
+			args: args{
+				columns: json.RawMessage("[[null,null],[true,false],[1,11],[2,22],[3,33],[4,44],[5,55],[6,66],[7,77],[8,88],[9,99],[10,1010],[\"b\",\"bb\"],[\"n\",\"nn\"],[1,\"2022-08-09T11:35:20+08:00\"]]"),
+				fields: []*wrapper.StmtField{
+					{FieldType: common.TSDB_DATA_TYPE_BOOL},
+					{FieldType: common.TSDB_DATA_TYPE_BOOL},
+					{FieldType: common.TSDB_DATA_TYPE_TINYINT},
+					{FieldType: common.TSDB_DATA_TYPE_SMALLINT},
+					{FieldType: common.TSDB_DATA_TYPE_INT},
+					{FieldType: common.TSDB_DATA_TYPE_BIGINT},
+					{FieldType: common.TSDB_DATA_TYPE_UTINYINT},
+					{FieldType: common.TSDB_DATA_TYPE_USMALLINT},
+					{FieldType: common.TSDB_DATA_TYPE_UINT},
+					{FieldType: common.TSDB_DATA_TYPE_UBIGINT},
+					{FieldType: common.TSDB_DATA_TYPE_FLOAT},
+					{FieldType: common.TSDB_DATA_TYPE_DOUBLE},
+					{FieldType: common.TSDB_DATA_TYPE_BINARY},
+					{FieldType: common.TSDB_DATA_TYPE_NCHAR},
+					{FieldType: common.TSDB_DATA_TYPE_TIMESTAMP, Precision: common.PrecisionMilliSecond},
+				},
+				fieldTypes: []*types.ColumnType{
+					{Type: types.TaosBoolType},
+					{Type: types.TaosBoolType},
+					{Type: types.TaosTinyintType},
+					{Type: types.TaosSmallintType},
+					{Type: types.TaosIntType},
+					{Type: types.TaosBigintType},
+					{Type: types.TaosUTinyintType},
+					{Type: types.TaosUSmallintType},
+					{Type: types.TaosUIntType},
+					{Type: types.TaosUBigintType},
+					{Type: types.TaosFloatType},
+					{Type: types.TaosDoubleType},
+					{Type: types.TaosBinaryType},
+					{Type: types.TaosNcharType},
+					{Type: types.TaosTimestampType},
+				},
+			},
+			want: [][]driver.Value{
+				{nil, nil},
+				{types.TaosBool(true), types.TaosBool(false)},
+				{types.TaosTinyint(1), types.TaosTinyint(11)},
+				{types.TaosSmallint(2), types.TaosSmallint(22)},
+				{types.TaosInt(3), types.TaosInt(33)},
+				{types.TaosBigint(4), types.TaosBigint(44)},
+				{types.TaosUTinyint(5), types.TaosUTinyint(55)},
+				{types.TaosUSmallint(6), types.TaosUSmallint(66)},
+				{types.TaosUInt(7), types.TaosUInt(77)},
+				{types.TaosUBigint(8), types.TaosUBigint(88)},
+				{types.TaosFloat(9), types.TaosFloat(99)},
+				{types.TaosDouble(10), types.TaosDouble(1010)},
+				{types.TaosBinary("b"), types.TaosBinary("bb")},
+				{types.TaosNchar("n"), types.TaosNchar("nn")},
+				{types.TaosTimestamp{T: time.Unix(0, 1e6)}, types.TaosTimestamp{T: time.Unix(1660016120, 0)}},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := stmtParseColumn(tt.args.columns, tt.args.fields, tt.args.fieldTypes)
+			if !tt.wantErr(t, err, fmt.Sprintf("stmtParseColumn(%v, %v, %v)", tt.args.columns, tt.args.fields, tt.args.fieldTypes)) {
+				return
+			}
+			assert.Equalf(t, tt.want, got, "stmtParseColumn(%v, %v, %v)", tt.args.columns, tt.args.fields, tt.args.fieldTypes)
+		})
+	}
+}
+
+func Test_stmtParseTag(t *testing.T) {
+	type args struct {
+		tags   json.RawMessage
+		fields []*wrapper.StmtField
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []driver.Value
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "all",
+			args: args{
+				tags: json.RawMessage(`[null,true,1,2,3,4,5,6,7,8,9,10,"b","n","2022-08-09T11:35:20+08:00","{\"a\":\"b\"}"]`),
+				fields: []*wrapper.StmtField{
+					{FieldType: common.TSDB_DATA_TYPE_BOOL},
+					{FieldType: common.TSDB_DATA_TYPE_BOOL},
+					{FieldType: common.TSDB_DATA_TYPE_TINYINT},
+					{FieldType: common.TSDB_DATA_TYPE_SMALLINT},
+					{FieldType: common.TSDB_DATA_TYPE_INT},
+					{FieldType: common.TSDB_DATA_TYPE_BIGINT},
+					{FieldType: common.TSDB_DATA_TYPE_UTINYINT},
+					{FieldType: common.TSDB_DATA_TYPE_USMALLINT},
+					{FieldType: common.TSDB_DATA_TYPE_UINT},
+					{FieldType: common.TSDB_DATA_TYPE_UBIGINT},
+					{FieldType: common.TSDB_DATA_TYPE_FLOAT},
+					{FieldType: common.TSDB_DATA_TYPE_DOUBLE},
+					{FieldType: common.TSDB_DATA_TYPE_BINARY},
+					{FieldType: common.TSDB_DATA_TYPE_NCHAR},
+					{FieldType: common.TSDB_DATA_TYPE_TIMESTAMP, Precision: common.PrecisionMilliSecond},
+					{FieldType: common.TSDB_DATA_TYPE_JSON},
+				},
+			},
+			want: []driver.Value{
+				nil,
+				types.TaosBool(true),
+				types.TaosTinyint(1),
+				types.TaosSmallint(2),
+				types.TaosInt(3),
+				types.TaosBigint(4),
+				types.TaosUTinyint(5),
+				types.TaosUSmallint(6),
+				types.TaosUInt(7),
+				types.TaosUBigint(8),
+				types.TaosFloat(9),
+				types.TaosDouble(10),
+				types.TaosBinary("b"),
+				types.TaosNchar("n"),
+				types.TaosTimestamp{T: time.Unix(1660016120, 0)},
+				types.TaosJson(`{"a":"b"}`),
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := stmtParseTag(tt.args.tags, tt.args.fields)
+			if !tt.wantErr(t, err, fmt.Sprintf("stmtParseTag(%v, %v)", tt.args.tags, tt.args.fields)) {
+				return
+			}
+			assert.Equalf(t, tt.want, got, "stmtParseTag(%v, %v)", tt.args.tags, tt.args.fields)
 		})
 	}
 }

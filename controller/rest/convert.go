@@ -2,16 +2,21 @@ package rest
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
+	"io"
 	"reflect"
 	"strconv"
 	"time"
 	"unsafe"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/types"
 	"github.com/taosdata/driver-go/v3/wrapper"
 )
+
+var jsonI = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes []*types.ColumnType) error {
 	for column := 0; column < len(src); column++ {
@@ -436,6 +441,164 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 		}
 	}
 	return nil
+}
+
+func stmtParseColumn(columns json.RawMessage, fields []*wrapper.StmtField, fieldTypes []*types.ColumnType) ([][]driver.Value, error) {
+	var err error
+	iter := jsonI.BorrowIterator(columns)
+	defer jsonI.ReturnIterator(iter)
+	data := make([][]driver.Value, len(fields))
+	rowNums := 0
+	rowIndex := 0
+	colIndex := 0
+	iter.ReadArrayCB(func(iterCol *jsoniter.Iterator) bool {
+		colType := fields[colIndex].FieldType
+		if colIndex == 1 {
+			rowNums = rowIndex
+		} else if colIndex > 1 {
+			if rowNums != rowIndex {
+				iterCol.ReportError("wrong row length", fmt.Sprintf("want %d rows got %d", rowNums, rowIndex))
+				return false
+			}
+		}
+		rowIndex = 0
+		iterCol.ReadArrayCB(func(iterRow *jsoniter.Iterator) bool {
+			if iterRow.ReadNil() {
+				data[colIndex] = append(data[colIndex], nil)
+			} else {
+				switch colType {
+				case common.TSDB_DATA_TYPE_BOOL:
+					data[colIndex] = append(data[colIndex], types.TaosBool(iterRow.ReadBool()))
+				case common.TSDB_DATA_TYPE_TINYINT:
+					data[colIndex] = append(data[colIndex], types.TaosTinyint(iterRow.ReadInt8()))
+				case common.TSDB_DATA_TYPE_SMALLINT:
+					data[colIndex] = append(data[colIndex], types.TaosSmallint(iterRow.ReadInt16()))
+				case common.TSDB_DATA_TYPE_INT:
+					data[colIndex] = append(data[colIndex], types.TaosInt(iterRow.ReadInt32()))
+				case common.TSDB_DATA_TYPE_BIGINT:
+					data[colIndex] = append(data[colIndex], types.TaosBigint(iterRow.ReadInt64()))
+				case common.TSDB_DATA_TYPE_FLOAT:
+					data[colIndex] = append(data[colIndex], types.TaosFloat(iterRow.ReadFloat32()))
+				case common.TSDB_DATA_TYPE_DOUBLE:
+					data[colIndex] = append(data[colIndex], types.TaosDouble(iterRow.ReadFloat64()))
+				case common.TSDB_DATA_TYPE_BINARY:
+					s := iterRow.ReadString()
+					data[colIndex] = append(data[colIndex], types.TaosBinary(s))
+					if fieldTypes != nil && len(s) > fieldTypes[colIndex].MaxLen {
+						fieldTypes[colIndex].MaxLen = len(s)
+					}
+				case common.TSDB_DATA_TYPE_TIMESTAMP:
+					valueType := iterRow.WhatIsNext()
+					ts := types.TaosTimestamp{
+						Precision: int(fields[colIndex].Precision),
+					}
+					switch valueType {
+					case jsoniter.NumberValue:
+						ts.T = common.TimestampConvertToTime(iterRow.ReadInt64(), ts.Precision)
+					case jsoniter.StringValue:
+						ts.T, err = time.Parse(time.RFC3339Nano, iterRow.ReadString())
+						if err != nil {
+							iterRow.ReportError("parse time", err.Error())
+						}
+					}
+					data[colIndex] = append(data[colIndex], ts)
+				case common.TSDB_DATA_TYPE_NCHAR:
+					s := iterRow.ReadString()
+					if fieldTypes != nil && len(s) > fieldTypes[colIndex].MaxLen {
+						fieldTypes[colIndex].MaxLen = len(s)
+					}
+					data[colIndex] = append(data[colIndex], types.TaosNchar(s))
+				case common.TSDB_DATA_TYPE_UTINYINT:
+					data[colIndex] = append(data[colIndex], types.TaosUTinyint(iterRow.ReadUint8()))
+				case common.TSDB_DATA_TYPE_USMALLINT:
+					data[colIndex] = append(data[colIndex], types.TaosUSmallint(iterRow.ReadUint16()))
+				case common.TSDB_DATA_TYPE_UINT:
+					data[colIndex] = append(data[colIndex], types.TaosUInt(iterRow.ReadUint32()))
+				case common.TSDB_DATA_TYPE_UBIGINT:
+					data[colIndex] = append(data[colIndex], types.TaosUBigint(iterRow.ReadUint64()))
+				default:
+					iterRow.ReportError("unknown column types", strconv.Itoa(int(colType)))
+				}
+			}
+			rowIndex += 1
+			return iterRow.Error == nil
+		})
+		colIndex += 1
+		return iterCol.Error == nil
+	})
+	if iter.Error != nil && iter.Error != io.EOF {
+		return nil, iter.Error
+	}
+	return data, nil
+}
+
+func stmtParseTag(tags json.RawMessage, fields []*wrapper.StmtField) ([]driver.Value, error) {
+	var err error
+	iter := jsonI.BorrowIterator(tags)
+	defer jsonI.ReturnIterator(iter)
+	data := make([]driver.Value, len(fields))
+	colIndex := 0
+	iter.ReadArrayCB(func(iterCol *jsoniter.Iterator) bool {
+		colType := fields[colIndex].FieldType
+		if iterCol.ReadNil() {
+			data[colIndex] = nil
+		} else {
+			switch colType {
+			case common.TSDB_DATA_TYPE_BOOL:
+				data[colIndex] = types.TaosBool(iterCol.ReadBool())
+			case common.TSDB_DATA_TYPE_TINYINT:
+				data[colIndex] = types.TaosTinyint(iterCol.ReadInt8())
+			case common.TSDB_DATA_TYPE_SMALLINT:
+				data[colIndex] = types.TaosSmallint(iterCol.ReadInt16())
+			case common.TSDB_DATA_TYPE_INT:
+				data[colIndex] = types.TaosInt(iterCol.ReadInt32())
+			case common.TSDB_DATA_TYPE_BIGINT:
+				data[colIndex] = types.TaosBigint(iterCol.ReadInt64())
+			case common.TSDB_DATA_TYPE_FLOAT:
+				data[colIndex] = types.TaosFloat(iterCol.ReadFloat32())
+			case common.TSDB_DATA_TYPE_DOUBLE:
+				data[colIndex] = types.TaosDouble(iterCol.ReadFloat64())
+			case common.TSDB_DATA_TYPE_BINARY:
+				data[colIndex] = types.TaosBinary(iterCol.ReadString())
+			case common.TSDB_DATA_TYPE_TIMESTAMP:
+				valueType := iterCol.WhatIsNext()
+				ts := types.TaosTimestamp{
+					Precision: int(fields[colIndex].Precision),
+				}
+				switch valueType {
+				case jsoniter.NumberValue:
+					ts.T = common.TimestampConvertToTime(iterCol.ReadInt64(), ts.Precision)
+				case jsoniter.StringValue:
+					ts.T, err = time.Parse(time.RFC3339Nano, iterCol.ReadString())
+					if err != nil {
+						iterCol.ReportError("parse time", err.Error())
+					}
+				}
+				data[colIndex] = ts
+			case common.TSDB_DATA_TYPE_NCHAR:
+				data[colIndex] = types.TaosNchar(iterCol.ReadString())
+			case common.TSDB_DATA_TYPE_UTINYINT:
+				data[colIndex] = types.TaosUTinyint(iterCol.ReadUint8())
+			case common.TSDB_DATA_TYPE_USMALLINT:
+				data[colIndex] = types.TaosUSmallint(iterCol.ReadUint16())
+			case common.TSDB_DATA_TYPE_UINT:
+				data[colIndex] = types.TaosUInt(iterCol.ReadUint32())
+			case common.TSDB_DATA_TYPE_UBIGINT:
+				data[colIndex] = types.TaosUBigint(iterCol.ReadUint64())
+			case common.TSDB_DATA_TYPE_JSON:
+				x := iterCol.ReadString()
+				data[colIndex] = types.TaosJson(x)
+			default:
+				iterCol.ReportError("unknown column types", strconv.Itoa(int(colType)))
+			}
+		}
+		colIndex += 1
+		return iterCol.Error == nil
+	})
+	if iter.Error != nil && iter.Error != io.EOF {
+		return nil, iter.Error
+	}
+	return data, nil
 }
 
 func blockConvert(block unsafe.Pointer, blockSize int, fields []*wrapper.StmtField) [][]driver.Value {

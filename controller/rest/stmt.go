@@ -272,9 +272,9 @@ func (t *TaosStmt) setTableName(ctx context.Context, session *melody.Session, re
 }
 
 type StmtSetTagsReq struct {
-	ReqID  uint64         `json:"req_id"`
-	StmtID uint64         `json:"stmt_id"`
-	Tags   []driver.Value `json:"tags"`
+	ReqID  uint64          `json:"req_id"`
+	StmtID uint64          `json:"stmt_id"`
+	Tags   json.RawMessage `json:"tags"`
 }
 
 type StmtSetTagsResp struct {
@@ -320,10 +320,6 @@ func (t *TaosStmt) setTags(ctx context.Context, session *melody.Session, req *St
 		wsWriteJson(session, resp)
 		return
 	}
-	if len(req.Tags) != tagNums {
-		wsStmtErrorMsg(ctx, session, 0xffff, "stmt tags count not match", STMTSetTags, req.ReqID, &req.StmtID)
-		return
-	}
 	s = log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(tagNums, tagFields)
 	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
@@ -332,20 +328,17 @@ func (t *TaosStmt) setTags(ctx context.Context, session *melody.Session, req *St
 		tags[i] = []driver.Value{req.Tags[i]}
 	}
 	s = log.GetLogNow(isDebug)
-	err := stmtConvert(tags, fields, nil)
-	logger.Debugln("stmt convert cost:", log.GetLogDuration(isDebug, s))
+	data, err := stmtParseTag(req.Tags, fields)
+	logger.Debugln("stmt parse tag json cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		wsStmtErrorMsg(ctx, session, 0xffff, fmt.Sprintf("stmt convert error:%s", err.Error()), STMTSetTags, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, fmt.Sprintf("stmt parse tag json:%s", err.Error()), STMTSetTags, req.ReqID, &req.StmtID)
 		return
-	}
-	for i := 0; i < tagNums; i++ {
-		req.Tags[i] = tags[i][0]
 	}
 	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("taos_stmt_set_tags get thread lock cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
-	code = wrapper.TaosStmtSetTags(stmt.stmt, req.Tags)
+	code = wrapper.TaosStmtSetTags(stmt.stmt, data)
 	logger.Debugln("taos_stmt_set_tags cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != httperror.SUCCESS {
@@ -358,9 +351,9 @@ func (t *TaosStmt) setTags(ctx context.Context, session *melody.Session, req *St
 }
 
 type StmtBindReq struct {
-	ReqID   uint64           `json:"req_id"`
-	StmtID  uint64           `json:"stmt_id"`
-	Columns [][]driver.Value `json:"columns"`
+	ReqID   uint64          `json:"req_id"`
+	StmtID  uint64          `json:"stmt_id"`
+	Columns json.RawMessage `json:"columns"`
 }
 type StmtBindResp struct {
 	Code    int    `json:"code"`
@@ -410,6 +403,7 @@ func (t *TaosStmt) bind(ctx context.Context, session *melody.Session, req *StmtB
 	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
 	fieldTypes := make([]*types.ColumnType, colNums)
 	var err error
+
 	for i := 0; i < colNums; i++ {
 		fieldTypes[i], err = fields[i].GetType()
 		if err != nil {
@@ -417,22 +411,18 @@ func (t *TaosStmt) bind(ctx context.Context, session *melody.Session, req *StmtB
 			return
 		}
 	}
-	if len(req.Columns) != colNums {
-		wsStmtErrorMsg(ctx, session, 0xffff, "stmt column count not match", STMTBind, req.ReqID, &req.StmtID)
-		return
-	}
 	s = log.GetLogNow(isDebug)
-	err = stmtConvert(req.Columns, fields, fieldTypes)
-	logger.Debugln("stmt convert cost:", log.GetLogDuration(isDebug, s))
+	data, err := stmtParseColumn(req.Columns, fields, fieldTypes)
+	logger.Debugln("stmt parse column json cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		wsStmtErrorMsg(ctx, session, 0xffff, fmt.Sprintf("stmt convert error:%s", err.Error()), STMTBind, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, 0xffff, fmt.Sprintf("stmt parse column json:%s", err.Error()), STMTBind, req.ReqID, &req.StmtID)
 		return
 	}
 	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("taos_stmt_bind_param_batch get thread lock cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
-	wrapper.TaosStmtBindParamBatch(stmt.stmt, req.Columns, fieldTypes)
+	wrapper.TaosStmtBindParamBatch(stmt.stmt, data, fieldTypes)
 	logger.Debugln("taos_stmt_bind_param_batch cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	resp.Timing = getDuration(ctx)
