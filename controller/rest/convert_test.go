@@ -2559,7 +2559,7 @@ func Test_stmtParseColumn(t *testing.T) {
 		{
 			name: "all",
 			args: args{
-				columns: json.RawMessage("[[null,null],[true,false],[1,11],[2,22],[3,33],[4,44],[5,55],[6,66],[7,77],[8,88],[9,99],[10,1010],[\"b\",\"bb\"],[\"n\",\"nn\"],[1,\"2022-08-09T11:35:20+08:00\"]]"),
+				columns: json.RawMessage("[[null,null],[true,false],[1,11],[2,22],[3,33],[4,44],[5,55],[6,66],[7,77],[8,88],[9,99],[10,1010],[\"b\",\"bb\"],[\"n\",\"nn\"],[1,\"2022-08-09T02:35:20Z\"]]"),
 				fields: []*wrapper.StmtField{
 					{FieldType: common.TSDB_DATA_TYPE_BOOL},
 					{FieldType: common.TSDB_DATA_TYPE_BOOL},
@@ -2610,7 +2610,7 @@ func Test_stmtParseColumn(t *testing.T) {
 				{types.TaosDouble(10), types.TaosDouble(1010)},
 				{types.TaosBinary("b"), types.TaosBinary("bb")},
 				{types.TaosNchar("n"), types.TaosNchar("nn")},
-				{types.TaosTimestamp{T: time.Unix(0, 1e6)}, types.TaosTimestamp{T: time.Unix(1660016120, 0)}},
+				{types.TaosTimestamp{T: time.Unix(0, 1e6)}, types.TaosTimestamp{T: time.Unix(1660012520, 0).UTC()}},
 			},
 			wantErr: assert.NoError,
 		},
@@ -2640,7 +2640,7 @@ func Test_stmtParseTag(t *testing.T) {
 		{
 			name: "all",
 			args: args{
-				tags: json.RawMessage(`[null,true,1,2,3,4,5,6,7,8,9,10,"b","n","2022-08-09T11:35:20+08:00","{\"a\":\"b\"}"]`),
+				tags: json.RawMessage(`[null,true,1,2,3,4,5,6,7,8,9,10,"b","n","2022-08-09T02:35:20Z","{\"a\":\"b\"}"]`),
 				fields: []*wrapper.StmtField{
 					{FieldType: common.TSDB_DATA_TYPE_BOOL},
 					{FieldType: common.TSDB_DATA_TYPE_BOOL},
@@ -2675,7 +2675,7 @@ func Test_stmtParseTag(t *testing.T) {
 				types.TaosDouble(10),
 				types.TaosBinary("b"),
 				types.TaosNchar("n"),
-				types.TaosTimestamp{T: time.Unix(1660016120, 0)},
+				types.TaosTimestamp{T: time.Unix(1660012520, 0).UTC()},
 				types.TaosJson(`{"a":"b"}`),
 			},
 			wantErr: assert.NoError,
