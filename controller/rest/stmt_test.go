@@ -168,12 +168,12 @@ func TestSTMT(t *testing.T) {
 			}
 
 			status = AfterSetTags
+
 			b, _ := json.Marshal(&StmtSetTagsReq{
 				ReqID:  5,
 				StmtID: stmtID,
-				Tags: []driver.Value{
-					`{"a":"b"}`,
-				},
+				// {"a":"b"}
+				Tags: json.RawMessage(`["{\"a\":\"b\"}"]`),
 			})
 			action, _ := json.Marshal(&WSAction{
 				Action: STMTSetTags,
@@ -198,81 +198,82 @@ func TestSTMT(t *testing.T) {
 				return fmt.Errorf("%s %d,%s", STMTSetTags, d.Code, d.Message)
 			}
 			status = AfterBind
-			b, _ := json.Marshal(&StmtBindReq{
-				ReqID:  5,
-				StmtID: stmtID,
-				Columns: [][]driver.Value{
-					{
-						now,
-						now.Add(time.Second),
-						now.Add(time.Second * 2),
-					},
-					{
-						true,
-						false,
-						nil,
-					},
-					{
-						2,
-						22,
-						nil,
-					},
-					{
-						3,
-						33,
-						nil,
-					},
-					{
-						4,
-						44,
-						nil,
-					},
-					{
-						5,
-						55,
-						nil,
-					},
-					{
-						6,
-						66,
-						nil,
-					},
-					{
-						7,
-						77,
-						nil,
-					},
-					{
-						8,
-						88,
-						nil,
-					},
-					{
-						9,
-						99,
-						nil,
-					},
-					{
-						10,
-						1010,
-						nil,
-					},
-					{
-						11,
-						1111,
-						nil,
-					},
-					{
-						"binary",
-						"binary2",
-						nil,
-					},
-					{
-						"nchar",
-						"nchar2",
-						nil,
-					},
+			c, err := json.Marshal([][]driver.Value{
+				{
+					now,
+					now.Add(time.Second),
+					now.Add(time.Second * 2),
 				},
+				{
+					true,
+					false,
+					nil,
+				},
+				{
+					2,
+					22,
+					nil,
+				},
+				{
+					3,
+					33,
+					nil,
+				},
+				{
+					4,
+					44,
+					nil,
+				},
+				{
+					5,
+					55,
+					nil,
+				},
+				{
+					6,
+					66,
+					nil,
+				},
+				{
+					7,
+					77,
+					nil,
+				},
+				{
+					8,
+					88,
+					nil,
+				},
+				{
+					9,
+					99,
+					nil,
+				},
+				{
+					10,
+					1010,
+					nil,
+				},
+				{
+					11,
+					1111,
+					nil,
+				},
+				{
+					"binary",
+					"binary2",
+					nil,
+				},
+				{
+					"nchar",
+					"nchar2",
+					nil,
+				},
+			})
+			b, _ := json.Marshal(&StmtBindReq{
+				ReqID:   5,
+				StmtID:  stmtID,
+				Columns: c,
 			})
 			action, _ := json.Marshal(&WSAction{
 				Action: STMTBind,
@@ -597,9 +598,7 @@ func TestBlock(t *testing.T) {
 			b, _ := json.Marshal(&StmtSetTagsReq{
 				ReqID:  5,
 				StmtID: stmtID,
-				Tags: []driver.Value{
-					`{"a":"b"}`,
-				},
+				Tags:   json.RawMessage(`["{\"a\":\"b\"}"]`),
 			})
 			action, _ := json.Marshal(&WSAction{
 				Action: STMTSetTags,
