@@ -549,7 +549,7 @@ func (t *TaosStmt) close(ctx context.Context, session *melody.Session, req *Stmt
 	stmt.clean()
 }
 
-func (t *TaosStmt) setTagsBlock(ctx context.Context, session *melody.Session, reqID, stmtID, rows, columns uint64, block unsafe.Pointer) {
+func (t *TaosStmt) setTagsBlock(ctx context.Context, session *melody.Session, reqID, stmtID uint64, rows, columns int, block unsafe.Pointer) {
 	if rows != 1 {
 		wsStmtErrorMsg(ctx, session, 0xffff, "rows not equal 1", STMTSetTags, reqID, &stmtID)
 		return
@@ -587,7 +587,7 @@ func (t *TaosStmt) setTagsBlock(ctx context.Context, session *melody.Session, re
 		wsWriteJson(session, resp)
 		return
 	}
-	if int(columns) != tagNums {
+	if columns != tagNums {
 		wsStmtErrorMsg(ctx, session, 0xffff, "stmt tags count not match", STMTSetTags, reqID, &stmtID)
 		return
 	}
@@ -617,7 +617,7 @@ func (t *TaosStmt) setTagsBlock(ctx context.Context, session *melody.Session, re
 	wsWriteJson(session, resp)
 }
 
-func (t *TaosStmt) bindBlock(ctx context.Context, session *melody.Session, reqID, stmtID, rows, columns uint64, block unsafe.Pointer) {
+func (t *TaosStmt) bindBlock(ctx context.Context, session *melody.Session, reqID, stmtID uint64, rows, columns int, block unsafe.Pointer) {
 	if t.conn == nil {
 		wsStmtErrorMsg(ctx, session, 0xffff, "taos not connected", STMTBind, reqID, &stmtID)
 		return
@@ -664,12 +664,12 @@ func (t *TaosStmt) bindBlock(ctx context.Context, session *melody.Session, reqID
 			return
 		}
 	}
-	if int(columns) != colNums {
+	if columns != colNums {
 		wsStmtErrorMsg(ctx, session, 0xffff, "stmt column count not match", STMTBind, reqID, &stmtID)
 		return
 	}
 	s = log.GetLogNow(isDebug)
-	data := blockConvert(block, int(rows), fields)
+	data := blockConvert(block, rows, fields)
 	logger.Debugln("block convert cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	thread.Lock()
@@ -835,16 +835,14 @@ func (ctl *Restful) InitStmt() {
 		//p0 uin64 代表 req_id
 		//p0+8 uint64 代表 stmt_id
 		//p0+16 uint64 代表 操作类型(1 (set tag) 2 (bind))
-		//p0+24 uint64 代表 列数
-		//p0+32 uint64 代表 行数
-		//p0+40 raw block
+		//p0+24 raw block
 		p0 := *(*uintptr)(unsafe.Pointer(&data))
 		reqID := *(*uint64)(unsafe.Pointer(p0))
 		stmtID := *(*uint64)(unsafe.Pointer(p0 + uintptr(8)))
 		action := *(*uint64)(unsafe.Pointer(p0 + uintptr(16)))
-		columns := *(*uint64)(unsafe.Pointer(p0 + uintptr(24)))
-		counts := *(*uint64)(unsafe.Pointer(p0 + uintptr(32)))
-		block := unsafe.Pointer(p0 + uintptr(40))
+		block := unsafe.Pointer(p0 + uintptr(24))
+		columns := wrapper.RawBlockGetNumOfCols(block)
+		rows := wrapper.RawBlockGetNumOfRows(block)
 		if ctl.stmtM.IsClosed() {
 			return
 		}
@@ -853,10 +851,10 @@ func (ctl *Restful) InitStmt() {
 		switch action {
 		case BindMessage:
 			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).bindBlock(ctx, session, reqID, stmtID, counts, columns, block)
+			t.(*TaosStmt).bindBlock(ctx, session, reqID, stmtID, int(rows), int(columns), block)
 		case SetTagsMessage:
 			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).setTagsBlock(ctx, session, reqID, stmtID, counts, columns, block)
+			t.(*TaosStmt).setTagsBlock(ctx, session, reqID, stmtID, int(rows), int(columns), block)
 		}
 	})
 

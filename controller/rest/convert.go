@@ -604,13 +604,13 @@ func stmtParseTag(tags json.RawMessage, fields []*wrapper.StmtField) ([]driver.V
 func blockConvert(block unsafe.Pointer, blockSize int, fields []*wrapper.StmtField) [][]driver.Value {
 	colCount := len(fields)
 	r := make([][]driver.Value, colCount)
-	payloadOffset := uintptr(4 * colCount)
 	nullBitMapOffset := uintptr(wrapper.BitmapLen(blockSize))
-	pHeader := uintptr(block) + payloadOffset + 12 + uintptr(6*colCount) // length i32, group u64
+	lengthOffset := wrapper.RawBlockGetColumnLengthOffset(colCount)
+	pHeader := uintptr(block) + wrapper.RawBlockGetColDataOffset(colCount)
 	pStart := pHeader
 	for column := 0; column < colCount; column++ {
 		r[column] = make([]driver.Value, blockSize)
-		colLength := *((*int32)(unsafe.Pointer(uintptr(block) + 12 + uintptr(6*colCount) + uintptr(column)*4)))
+		colLength := *((*int32)(unsafe.Pointer(uintptr(block) + lengthOffset + uintptr(column)*wrapper.Int32Size)))
 		if wrapper.IsVarDataType(uint8(fields[column].FieldType)) {
 			convertF := rawConvertVarDataMap[fields[column].FieldType]
 			pStart = pHeader + uintptr(4*blockSize)

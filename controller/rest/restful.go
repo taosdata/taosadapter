@@ -296,7 +296,6 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	}
 	precision := wrapper.TaosResultPrecision(res)
 	fetched := false
-	payloadOffset := uintptr(4 * fieldsCount)
 	pHeaderList := make([]uintptr, fieldsCount)
 	pStartList := make([]uintptr, fieldsCount)
 	for {
@@ -331,10 +330,11 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 			thread.Unlock()
 			blockSize := result.N
 			nullBitMapOffset := uintptr(ctools.BitmapLen(blockSize))
-			tmpPHeader := uintptr(block) + payloadOffset + 12 + uintptr(6*fieldsCount) // length i32, group u64
+			lengthOffset := wrapper.RawBlockGetColumnLengthOffset(fieldsCount)
+			tmpPHeader := uintptr(block) + wrapper.RawBlockGetColDataOffset(fieldsCount) // length i32, group u64
 			tmpPStart := tmpPHeader
 			for column := 0; column < fieldsCount; column++ {
-				colLength := *((*int32)(unsafe.Pointer(uintptr(block) + 12 + uintptr(6*fieldsCount) + uintptr(column)*4)))
+				colLength := *((*int32)(unsafe.Pointer(uintptr(block) + lengthOffset + uintptr(column)*wrapper.Int32Size)))
 				if ctools.IsVarDataType(rowsHeader.ColTypes[column]) {
 					pHeaderList[column] = tmpPHeader
 					tmpPStart = tmpPHeader + uintptr(4*blockSize)

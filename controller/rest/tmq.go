@@ -463,7 +463,7 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 	} else {
 		message.buffer.Reset()
 	}
-	blockLength := int(*(*int32)(block))
+	blockLength := int(wrapper.RawBlockGetLength(block))
 	message.buffer.Grow(blockLength + 24)
 	writeUint64(message.buffer, 0)
 	writeUint64(message.buffer, req.ReqID)

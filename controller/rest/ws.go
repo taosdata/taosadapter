@@ -413,7 +413,7 @@ func (t *Taos) fetchBlock(ctx context.Context, session *melody.Session, req *WSF
 		return
 	}
 	resultS.Lock()
-	blockLength := int(*(*int32)(resultS.Block))
+	blockLength := int(wrapper.RawBlockGetLength(resultS.Block))
 	if resultS.buffer == nil {
 		resultS.buffer = new(bytes.Buffer)
 	} else {
