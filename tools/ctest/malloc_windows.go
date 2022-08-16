@@ -1,5 +1,5 @@
-//go:build !windows
-// +build !windows
+//go:build windows
+// +build windows
 
 package ctest
 
@@ -11,8 +11,8 @@ import "C"
 import "unsafe"
 
 func Malloc(size int) unsafe.Pointer {
-	p := C.malloc(C.ulong(size))
-	C.memset(p, 1, C.ulong(size))
+	p := C.malloc(C.ulonglong(size))
+	C.memset(p, 1, C.ulonglong(size))
 	return p
 }
 

@@ -17,7 +17,7 @@ certFile = ""
 keyFile = ""
 
 [log]
-path = "/var/log/taos"
+#path = "/var/log/taos"
 rotationCount = 30
 rotationTime = "24h"
 rotationSize = "1GB"

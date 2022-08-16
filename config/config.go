@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -28,8 +29,16 @@ var (
 func Init() {
 	viper.SetConfigType("toml")
 	viper.SetConfigName("taosadapter")
-	viper.AddConfigPath("/etc/taos")
-	cp := pflag.StringP("config", "c", "", "config path default /etc/taos/taosadapter.toml")
+	var cp *string
+	switch runtime.GOOS {
+	case "windows":
+		viper.AddConfigPath("C:\\TDengine\\cfg")
+		cp = pflag.StringP("config", "c", "", "config path default C:\\TDengine\\cfg\\taosadapter.toml")
+	default:
+		viper.AddConfigPath("/etc/taos")
+		cp = pflag.StringP("config", "c", "", "config path default /etc/taos/taosadapter.toml")
+
+	}
 	v := pflag.Bool("version", false, "Print the version and exit")
 	help := pflag.Bool("help", false, "Print this help message and exit")
 	pflag.Parse()
@@ -71,7 +80,7 @@ func Init() {
 	Conf.Monitor.setValue()
 }
 
-//arg > file > env
+// arg > file > env
 func init() {
 	viper.SetDefault("debug", false)
 	_ = viper.BindEnv("debug", "TAOS_ADAPTER_DEBUG")

@@ -1,0 +1,39 @@
+name: Go
+
+on: [ push, pull_request ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        go: [ '1.14', '1.19' ]
+    name: Go ${{ matrix.go }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+        with:
+          path: 'taosadapter'
+      - name: checkout TDengine
+        uses: actions/checkout@v2
+        with:
+          repository: 'taosdata/TDengine'
+          path: 'TDengine'
+          ref: '3.0'
+
+      - name: install TDengine
+        run: cd TDengine && mkdir debug && cd debug && cmake .. -G "NMake Makefiles" && nmake
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: shell
+        env:
+          TAOS_SUPPORT_VNODES: 256
+        run: start /b ./TDengine/debug/build/bin/taosd.exe
+
+
+      - name: Test
+        run: cd ./taosadapter && go test -v ./...

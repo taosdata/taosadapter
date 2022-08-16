@@ -1,5 +1,5 @@
-//go:build !windows
-// +build !windows
+//go:build windows
+// +build windows
 
 package config
 
@@ -40,7 +40,7 @@ func TestInit(t *testing.T) {
 				LogLevel:        "info",
 				RestfulRowLimit: -1,
 				Log: Log{
-					Path:                "/var/log/taos",
+					Path:                "C:\\TDengine\\log",
 					RotationCount:       30,
 					RotationTime:        time.Hour * 24,
 					RotationSize:        1 * 1024 * 1024 * 1024, // 1G
