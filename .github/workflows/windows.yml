@@ -21,15 +21,16 @@ jobs:
           path: 'TDengine'
           ref: '3.0'
 
-      - name: prepare env
-        shell: cmd
-        run: |
-          "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-
       - name: install TDengine
         shell: cmd
         run: |
-          cd TDengine && mkdir debug && cd debug && cmake .. -G "NMake Makefiles" && nmake
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          cd TDengine
+          mkdir debug
+          cd debug
+          pwd
+          cmake .. -G "NMake Makefiles"
+          nmake
 
       - name: Set up Go
         uses: actions/setup-go@v2
