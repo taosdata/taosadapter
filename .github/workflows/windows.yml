@@ -4,7 +4,7 @@ on: [ push, pull_request ]
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2022
     strategy:
       matrix:
         go: [ '1.14', '1.19' ]
@@ -23,7 +23,7 @@ jobs:
 
       - name: install TDengine
         run: |
-          C:\"Program Files"\"Microsoft Visual Studio"\2022\Community\VC\Auxiliary\Build\vcvarsall.bat x64
+          C:\"Program Files"\"Microsoft Visual Studio"\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat x64
           cd TDengine && mkdir debug && cd debug && cmake .. -G "NMake Makefiles" && nmake
 
       - name: Set up Go
