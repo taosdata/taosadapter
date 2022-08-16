@@ -26,7 +26,7 @@ jobs:
         run: |
           cd TDengine
           mkdir debug && cd debug
-          "C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\vcvarsall.bat" x86
+          "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           cmake .. -G "NMake Makefiles"
           nmake
 
