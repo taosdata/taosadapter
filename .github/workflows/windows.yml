@@ -22,16 +22,21 @@ jobs:
           ref: '3.0'
 
       - name: install TDengine
+        shell: cmd
         run: |
-          C:\"Program Files"\"Microsoft Visual Studio"\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat x64
-          cd TDengine && mkdir debug && cd debug && cmake .. -G "NMake Makefiles" && nmake
+          cd TDengine
+          mkdir debug && cd debug
+          "C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\vcvarsall.bat" x86
+          cmake .. -G "NMake Makefiles"
+          nmake
 
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go }}
 
-      - name: shell
+      - name: run TDengine
+        shell: cmd
         env:
           TAOS_SUPPORT_VNODES: 256
         run: start /b ./TDengine/debug/build/bin/taosd.exe
