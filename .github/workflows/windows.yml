@@ -21,12 +21,19 @@ jobs:
           path: 'TDengine'
           ref: '3.0'
 
+      - name: Cache cmake
+        id: cache-cmake
+        uses: actions/cache@v3
+        with:
+          path: TDengine/debug
+          key: ${{ runner.os }}-cmake
+
       - name: install TDengine
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           cd TDengine
-          mkdir debug
+          mkdir debug || true
           cd debug
           pwd
           cmake .. -G "NMake Makefiles"
@@ -38,12 +45,19 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
 
-      - name: run TDengine
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~\go\pkg\mod
+          key: ${{ runner.os }}-go-${{ hashFiles('taosadapter/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: run TDengine and test
         shell: cmd
         env:
           TAOS_SUPPORT_VNODES: 256
-        run: start /b ./TDengine/debug/build/bin/taosd.exe
+        run: |
+          start /b ./TDengine/debug/build/bin/taosd.exe
+          cd ./taosadapter && go test -v ./...
 
-
-      - name: Test
-        run: cd ./taosadapter && go test -v ./...

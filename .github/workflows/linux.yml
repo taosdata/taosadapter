@@ -20,8 +20,13 @@ jobs:
           repository: 'taosdata/TDengine'
           path: 'TDengine'
           ref: '3.0'
-      #      - name: install build-essential
-      #        run: sudo apt-get update && sudo apt-get install -y build-essential curl gcc cmake
+
+      - name: Cache cmake
+        id: cache-cmake
+        uses: actions/cache@v3
+        with:
+          path: TDengine/debug
+          key: ${{ runner.os }}-cmake
 
       - name: install TDengine
         run: cd TDengine && mkdir debug && cd debug && cmake .. -DBUILD_HTTP=true -DBUILD_JDBC=false -DBUILD_TOOLS=false && make && sudo make install
@@ -30,6 +35,14 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go }}
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('taosadapter/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
       - name: shell
         run: |
