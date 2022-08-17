@@ -37,9 +37,10 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: TDengine
-          path: C:/
+          path: C:/TDengine
 
   test:
+    needs: build
     runs-on: windows-2022
     strategy:
       matrix:
@@ -50,7 +51,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: TDengine
-          path: C:/TDengine
+          path: C:/
 
       - name: checkout
         uses: actions/checkout@v2
