@@ -25,7 +25,7 @@ jobs:
           mkdir debug
           cd debug
           cmake .. -G "NMake Makefiles JOM"
-          jom.exe -j 32 install
+          jom.exe -j 4 install
 
       - name: Upload TDengine
         uses: actions/upload-artifact@v3
