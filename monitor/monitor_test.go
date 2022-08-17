@@ -1,3 +1,6 @@
+//go:build !windows
+// +build !windows
+
 package monitor_test
 
 import (

@@ -5,15 +5,8 @@ on: [ push, pull_request ]
 jobs:
   build:
     runs-on: windows-2022
-    strategy:
-      matrix:
-        go: [ '1.14', '1.19' ]
-    name: Go ${{ matrix.go }}
+    name: build TDengine
     steps:
-      - name: checkout
-        uses: actions/checkout@v2
-        with:
-          path: 'taosadapter'
       - name: checkout TDengine
         uses: actions/checkout@v2
         with:
@@ -40,6 +33,30 @@ jobs:
           nmake
           nmake install
 
+      - name: Upload TDengine
+        uses: actions/upload-artifact@v3
+        with:
+          name: TDengine
+          path: C:/
+
+  test:
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        go: [ '1.14', '1.19' ]
+    name: Go ${{ matrix.go }}
+    steps:
+      - name: Download TDengine
+        uses: actions/download-artifact@v3
+        with:
+          name: TDengine
+          path: C:/TDengine
+
+      - name: checkout
+        uses: actions/checkout@v2
+        with:
+          path: 'taosadapter'
+
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
@@ -58,6 +75,5 @@ jobs:
         env:
           TAOS_SUPPORT_VNODES: 256
         run: |
-          start /b ./TDengine/debug/build/bin/taosd.exe
+          start /b C:/TDengine/taosd.exe > log.txt
           cd ./taosadapter && go test -v ./...
-
