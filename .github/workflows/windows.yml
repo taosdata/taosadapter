@@ -12,23 +12,20 @@ jobs:
         with:
           repository: 'taosdata/TDengine'
           ref: '3.0'
-
-      - name: Cache cmake
-        id: cache-cmake
-        uses: actions/cache@v3
-        with:
-          path: |
-            debug
-            contrib/*/
-          key: ${{ runner.os }}-cmake
-
+      - name: install jom
+        shell: powershell
+        run: |
+          Start-BitsTransfer -Source http://download.qt.io/official_releases/jom/jom.zip
+          7z x jom.zip
       - name: install TDengine
         shell: cmd
         run: |
+          set PATH=%PATH%;%cd%
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-          mkdir debug && cd debug && cmake .. -G "NMake Makefiles" || cd debug
-          nmake
-          nmake install
+          mkdir debug
+          cd debug
+          cmake .. -G "NMake Makefiles JOM"
+          jom.exe -j 32 install
 
       - name: Upload TDengine
         uses: actions/upload-artifact@v3
@@ -48,6 +45,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: TDengine
+          path: TDengine
 
       - name: copy TDengine
         shell: cmd
@@ -74,5 +72,6 @@ jobs:
         env:
           TAOS_SUPPORT_VNODES: 256
         run: |
-          start /b C:/TDengine/taosd.exe > log.txt
+          set PATH=%PATH%;C:\TDengine\driver
+          start /b C:/TDengine/taosd.exe
           go test -v ./...
