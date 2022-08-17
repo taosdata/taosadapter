@@ -22,10 +22,12 @@ jobs:
           ref: '3.0'
 
       - name: Cache cmake
-        id: cache-cmake
+        id: cache-cmake-linux
         uses: actions/cache@v3
         with:
-          path: TDengine/debug
+          path: |
+            TDengine/debug
+            TDengine/contrib/*/
           key: ${{ runner.os }}-cmake
 
       - name: install TDengine

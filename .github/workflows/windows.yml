@@ -50,8 +50,11 @@ jobs:
       - name: Download TDengine
         uses: actions/download-artifact@v3
         with:
-          name: TDengine
-          path: C:/
+          name: TDengine C:/TDengine
+
+      - name: copy TDneinge
+        shell: cmd
+        run: cp -r TDengine
 
       - name: checkout
         uses: actions/checkout@v2
