@@ -29,7 +29,13 @@ jobs:
           key: ${{ runner.os }}-cmake
 
       - name: install TDengine
-        run: cd TDengine && mkdir debug && cd debug && cmake .. -DBUILD_HTTP=true -DBUILD_JDBC=false -DBUILD_TOOLS=false && make && sudo make install
+        run: |
+          cd TDengine
+          mkdir debug || true
+          cd debug
+          cmake .. -DBUILD_HTTP=true -DBUILD_JDBC=false -DBUILD_TOOLS=false
+          make
+          sudo make install
 
       - name: Set up Go
         uses: actions/setup-go@v2
