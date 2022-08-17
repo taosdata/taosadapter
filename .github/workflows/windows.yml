@@ -31,6 +31,7 @@ jobs:
           pwd
           cmake .. -G "NMake Makefiles"
           nmake
+          nmake install
 
       - name: Set up Go
         uses: actions/setup-go@v2
