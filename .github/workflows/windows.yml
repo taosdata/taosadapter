@@ -1,6 +1,6 @@
 name: Go_WINDOWS
 
-on: [ push, pull_request ]
+on: [ pull_request ]
 
 jobs:
   build:
@@ -38,7 +38,7 @@ jobs:
     runs-on: windows-2022
     strategy:
       matrix:
-        go: [ '1.14', '1.19' ]
+        go: [ '1.19' ]
     name: Go ${{ matrix.go }}
     steps:
       - name: Download TDengine
@@ -73,5 +73,5 @@ jobs:
           TAOS_SUPPORT_VNODES: 256
         run: |
           set PATH=%PATH%;C:\TDengine\driver
-          start /b C:/TDengine/taosd.exe
+          start /b C:/TDengine/taosd.exe > log.txt
           go test -v ./...
