@@ -33,9 +33,7 @@ jobs:
       - name: install TDengine
         run: |
           cd TDengine
-          mkdir debug || true
-          cd debug
-          cmake .. -DBUILD_HTTP=true -DBUILD_JDBC=false -DBUILD_TOOLS=false
+          mkdir debug && cd debug && cmake .. -DBUILD_HTTP=true -DBUILD_JDBC=false -DBUILD_TOOLS=false || cd debug
           make
           sudo make install
 
