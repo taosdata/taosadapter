@@ -8,7 +8,7 @@ jobs:
     name: build TDengine
     steps:
       - name: checkout TDengine
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: 'taosdata/TDengine'
           ref: '3.0'
@@ -25,7 +25,7 @@ jobs:
           mkdir debug
           cd debug
           cmake .. -G "NMake Makefiles JOM" -DBUILD_TEST=off
-          jom.exe -j 4 install
+          jom.exe -j 32 install
 
       - name: Upload TDengine
         uses: actions/upload-artifact@v3
@@ -52,7 +52,7 @@ jobs:
         run: cp -r TDengine C:/
 
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up Go
         uses: actions/setup-go@v2
@@ -66,6 +66,9 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+
+      - name: build taosadapter
+        run: go build
 
       - name: run TDengine and test
         shell: cmd
