@@ -37,7 +37,6 @@ func Init() {
 	default:
 		viper.AddConfigPath("/etc/taos")
 		cp = pflag.StringP("config", "c", "", "config path default /etc/taos/taosadapter.toml")
-
 	}
 	v := pflag.Bool("version", false, "Print the version and exit")
 	help := pflag.Bool("help", false, "Print this help message and exit")

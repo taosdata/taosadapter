@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"runtime"
 	"testing"
 	"time"
 
@@ -28,7 +29,20 @@ func TestPlugin(t *testing.T) {
 	db.PrepareConnection()
 	viper.Set("opentsdb_telnet.enable", true)
 	viper.Set("opentsdb_telnet.batchSize", 1)
-	err := p.Init(nil)
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer wrapper.TaosClose(conn)
+	afC, err := af.NewConnector(conn)
+	assert.NoError(t, err)
+	defer afC.Close()
+	if runtime.GOOS == "windows" {
+		_, err = afC.Exec("create database if not exists opentsdb_telnet")
+		assert.NoError(t, err)
+	}
+	err = p.Init(nil)
 	assert.NoError(t, err)
 	err = p.Start()
 	assert.NoError(t, err)
@@ -43,12 +57,7 @@ func TestPlugin(t *testing.T) {
 	_, err = c.Write([]byte(fmt.Sprintf("put sys.if.bytes.out 1479496100 %d host=web01 interface=eth0\r\n", number)))
 	assert.NoError(t, err)
 	time.Sleep(time.Second)
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer wrapper.TaosClose(conn)
+
 	defer func() {
 		r := wrapper.TaosQuery(conn, "drop database if exists opentsdb_telnet")
 		code := wrapper.TaosError(r)
@@ -58,8 +67,7 @@ func TestPlugin(t *testing.T) {
 		}
 		wrapper.TaosFreeResult(r)
 	}()
-	afC, err := af.NewConnector(conn)
-	assert.NoError(t, err)
+
 	r, err := afC.Query("select last(_value) from opentsdb_telnet.`sys.if.bytes.out`")
 	if err != nil {
 		t.Error(err)

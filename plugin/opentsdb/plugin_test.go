@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -34,7 +35,20 @@ func TestOpentsdb(t *testing.T) {
 	router.Use(func(c *gin.Context) {
 		c.Set("currentID", uint32(1))
 	})
-	err := p.Init(router)
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer wrapper.TaosClose(conn)
+	afC, err := af.NewConnector(conn)
+	assert.NoError(t, err)
+	defer afC.Close()
+	if runtime.GOOS == "windows" {
+		_, err = afC.Exec("create database if not exists test_plugin_opentsdb_http_json")
+		assert.NoError(t, err)
+	}
+	err = p.Init(router)
 	assert.NoError(t, err)
 	err = p.Start()
 	assert.NoError(t, err)
@@ -61,12 +75,6 @@ func TestOpentsdb(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer wrapper.TaosClose(conn)
 	defer func() {
 		r := wrapper.TaosQuery(conn, "drop database if exists test_plugin_opentsdb_http_json")
 		code := wrapper.TaosError(r)
@@ -85,8 +93,7 @@ func TestOpentsdb(t *testing.T) {
 		}
 		wrapper.TaosFreeResult(r)
 	}()
-	afC, err := af.NewConnector(conn)
-	assert.NoError(t, err)
+
 	r, err := afC.Query("select last(_value) from test_plugin_opentsdb_http_json.`sys.cpu.nice`")
 	if err != nil {
 		t.Error(err)
