@@ -34,7 +34,6 @@ func TestPlugin(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer wrapper.TaosClose(conn)
 	afC, err := af.NewConnector(conn)
 	assert.NoError(t, err)
 	defer afC.Close()
