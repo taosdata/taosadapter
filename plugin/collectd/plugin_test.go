@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"math/rand"
 	"net"
+	"runtime"
 	"testing"
 	"time"
 
@@ -74,7 +75,13 @@ func TestCollectd(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer wrapper.TaosClose(conn)
+	afC, err := af.NewConnector(conn)
+	assert.NoError(t, err)
+	defer afC.Close()
+	if runtime.GOOS == "windows" {
+		_, err = afC.Exec("create database if not exists collectd")
+		assert.NoError(t, err)
+	}
 	defer func() {
 		r := wrapper.TaosQuery(conn, "drop database if exists collectd")
 		code := wrapper.TaosError(r)
@@ -84,8 +91,6 @@ func TestCollectd(t *testing.T) {
 		}
 		wrapper.TaosFreeResult(r)
 	}()
-	afC, err := af.NewConnector(conn)
-	assert.NoError(t, err)
 	r, err := afC.Query("select last(`value`) from collectd.`cpu_value`")
 	if err != nil {
 		t.Error(err)

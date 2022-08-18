@@ -1,4 +1,4 @@
-name: Go
+name: GO_LINUX
 
 on: [ push, pull_request ]
 
@@ -7,29 +7,42 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: [ '1.14', '1.17' ]
+        go: [ '1.14', '1.19' ]
     name: Go ${{ matrix.go }}
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           path: 'taosadapter'
       - name: checkout TDengine
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: 'taosdata/TDengine'
           path: 'TDengine'
           ref: '3.0'
-      #      - name: install build-essential
-      #        run: sudo apt-get update && sudo apt-get install -y build-essential curl gcc cmake
 
       - name: install TDengine
-        run: cd TDengine && mkdir debug && cd debug && cmake .. -DBUILD_HTTP=true -DBUILD_JDBC=false -DBUILD_TOOLS=false && make && sudo make install
+        run: |
+          cd TDengine
+          mkdir debug
+          cd debug
+          cmake .. -DBUILD_HTTP=true -DBUILD_JDBC=false -DBUILD_TOOLS=false -DBUILD_TEST=off
+          make -j 32
+          sudo make install
 
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go }}
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ matrix.go }}-${{ hashFiles('taosadapter/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.go }}-
 
       - name: shell
         run: |

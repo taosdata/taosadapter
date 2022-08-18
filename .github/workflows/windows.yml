@@ -1,0 +1,81 @@
+name: Go_WINDOWS
+
+on: [ pull_request ]
+
+jobs:
+  build:
+    runs-on: windows-2022
+    name: build TDengine
+    steps:
+      - name: checkout TDengine
+        uses: actions/checkout@v3
+        with:
+          repository: 'taosdata/TDengine'
+          ref: '3.0'
+      - name: install jom
+        shell: powershell
+        run: |
+          Start-BitsTransfer -Source http://download.qt.io/official_releases/jom/jom.zip
+          7z x jom.zip
+      - name: install TDengine
+        shell: cmd
+        run: |
+          set PATH=%PATH%;%cd%
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          mkdir debug
+          cd debug
+          cmake .. -G "NMake Makefiles JOM" -DBUILD_HTTP=true -DBUILD_JDBC=false -DBUILD_TOOLS=false -DBUILD_TEST=off
+          jom.exe -j 32 install
+
+      - name: Upload TDengine
+        uses: actions/upload-artifact@v3
+        with:
+          name: TDengine
+          path: C:/TDengine
+
+  test:
+    needs: build
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        go: [ '1.19' ]
+    name: Go ${{ matrix.go }}
+    steps:
+      - name: Download TDengine
+        uses: actions/download-artifact@v3
+        with:
+          name: TDengine
+          path: TDengine
+
+      - name: copy TDengine
+        shell: cmd
+        run: cp -r TDengine C:/
+
+      - name: checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~\AppData\Local\go-build
+            ~\go\pkg\mod
+          key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: build taosadapter
+        run: go build
+
+      - name: run TDengine and test
+        shell: cmd
+        env:
+          TAOS_SUPPORT_VNODES: 256
+        run: |
+          set PATH=%PATH%;C:\TDengine\driver
+          start /b C:/TDengine/taosd.exe > log.txt
+          go test -v ./...

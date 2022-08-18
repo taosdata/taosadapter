@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"runtime"
 	"testing"
 	"time"
 
@@ -27,7 +28,19 @@ func TestStatsd(t *testing.T) {
 	db.PrepareConnection()
 	viper.Set("statsd.gatherInterval", time.Millisecond)
 	viper.Set("statsd.enable", true)
-	err := p.Init(nil)
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	afC, err := af.NewConnector(conn)
+	assert.NoError(t, err)
+	defer afC.Close()
+	if runtime.GOOS == "windows" {
+		_, err = afC.Exec("create database if not exists statsd")
+		assert.NoError(t, err)
+	}
+	err = p.Init(nil)
 	assert.NoError(t, err)
 	err = p.Start()
 	assert.NoError(t, err)
@@ -42,12 +55,6 @@ func TestStatsd(t *testing.T) {
 	_, err = c.Write([]byte(fmt.Sprintf("foo:%d|c", number)))
 	assert.NoError(t, err)
 	time.Sleep(time.Second)
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer wrapper.TaosClose(conn)
 	defer func() {
 		r := wrapper.TaosQuery(conn, "drop database if exists statsd")
 		code := wrapper.TaosError(r)
@@ -57,8 +64,7 @@ func TestStatsd(t *testing.T) {
 		}
 		wrapper.TaosFreeResult(r)
 	}()
-	afC, err := af.NewConnector(conn)
-	assert.NoError(t, err)
+
 	r, err := afC.Query("select last(`value`) from statsd.`foo`")
 	if err != nil {
 		t.Error(err)

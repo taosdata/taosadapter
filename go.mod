@@ -37,6 +37,6 @@ require (
 	github.com/spf13/viper v1.9.0
 	github.com/stretchr/testify v1.7.1
 	github.com/swaggo/swag v1.7.6
-	github.com/taosdata/driver-go/v3 v3.0.0-20220810121502-84ebab64fbd7
+	github.com/taosdata/driver-go/v3 v3.0.1-0.20220818061925-7306167d7ab1
 	gonum.org/v1/gonum v0.8.2 // indirect
 )

@@ -1,9 +1,5 @@
 package rest
 
-/*
-#include <taos.h>
-*/
-import "C"
 import (
 	"bytes"
 	"container/list"
@@ -594,6 +590,8 @@ func (ctl *Restful) InitWS() {
 
 	ctl.wsM.HandleMessageBinary(func(session *melody.Session, data []byte) {
 		ctx := context.WithValue(context.Background(), StartTimeKey, time.Now().UnixNano())
+		logger := session.MustGet("logger").(*logrus.Entry)
+		logger.Debugln("get ws block message data:", data)
 		p0 := *(*uintptr)(unsafe.Pointer(&data))
 		reqID := *(*uint64)(unsafe.Pointer(p0))
 		messageID := *(*uint64)(unsafe.Pointer(p0 + uintptr(8)))

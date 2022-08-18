@@ -1,6 +1,7 @@
 package ctools
 
 import (
+	"math"
 	"unsafe"
 
 	"github.com/taosdata/driver-go/v3/common"
@@ -80,11 +81,11 @@ func WriteRawJsonUBigint(builder *jsonbuilder.Stream, pStart uintptr, row int) {
 }
 
 func WriteRawJsonFloat(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteFloat32(*((*float32)(unsafe.Pointer(pStart + uintptr(row)*wrapper.Float32Size))))
+	builder.WriteFloat32(math.Float32frombits(*((*uint32)(unsafe.Pointer(pStart + uintptr(row)*wrapper.Float32Size)))))
 }
 
 func WriteRawJsonDouble(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteFloat64(*((*float64)(unsafe.Pointer(pStart + uintptr(row)*wrapper.Float64Size))))
+	builder.WriteFloat64(math.Float64frombits(*((*uint64)(unsafe.Pointer(pStart + uintptr(row)*wrapper.Float64Size)))))
 }
 
 func WriteRawJsonTime(builder *jsonbuilder.Stream, pStart uintptr, row int, precision int, timeFormat FormatTimeFunc) {
@@ -140,7 +141,6 @@ func WriteRawJsonJson(builder *jsonbuilder.Stream, pHeader, pStart uintptr, row 
 	}
 }
 
-// ReadBlock in-place
 func JsonWriteRawBlock(builder *jsonbuilder.Stream, colType uint8, pHeader, pStart uintptr, row int, precision int, timeFormat FormatTimeFunc) {
 	if IsVarDataType(colType) {
 		switch colType {

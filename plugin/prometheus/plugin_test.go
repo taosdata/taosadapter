@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"testing"
 	"time"
 
@@ -24,12 +25,16 @@ func TestMain(m *testing.M) {
 	config.Init()
 	viper.Set("prometheus.enable", true)
 	db.PrepareConnection()
-	m.Run()
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		panic(err)
 		return
 	}
+	if runtime.GOOS == "windows" {
+		r := wrapper.TaosQuery(conn, "create database if not exists test_plugin_prometheus")
+		wrapper.TaosFreeResult(r)
+	}
+	m.Run()
 	r := wrapper.TaosQuery(conn, "drop database if exists test_plugin_prometheus")
 	wrapper.TaosFreeResult(r)
 }
