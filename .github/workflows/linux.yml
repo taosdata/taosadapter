@@ -38,10 +38,11 @@ jobs:
       - uses: actions/cache@v3
         with:
           path: |
+            ~/.cache/go-build
             ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('taosadapter/go.sum') }}
+          key: ${{ runner.os }}-go-${{ matrix.go }}-${{ hashFiles('taosadapter/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-go-
+            ${{ runner.os }}-go-${{ matrix.go }}-
 
       - name: shell
         run: |
