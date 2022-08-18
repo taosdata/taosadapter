@@ -24,7 +24,7 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           mkdir debug
           cd debug
-          cmake .. -G "NMake Makefiles JOM" -DBUILD_TEST=off
+          cmake .. -G "NMake Makefiles JOM" -DBUILD_HTTP=true -DBUILD_JDBC=false -DBUILD_TOOLS=false -DBUILD_TEST=off
           jom.exe -j 32 install
 
       - name: Upload TDengine
