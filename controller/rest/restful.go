@@ -409,6 +409,8 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	w.Flush()
 }
 
+const MAXSQLLength = 1024 * 1024 * 1
+
 func (ctl *Restful) upload(c *gin.Context) {
 	db := c.Query("db")
 	if len(db) == 0 {
@@ -420,18 +422,10 @@ func (ctl *Restful) upload(c *gin.Context) {
 		ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff, "table required")
 		return
 	}
-	batch := 1
-	var err error
-	batchStr := c.Query("batch")
-	if len(batchStr) > 0 {
-		batch, err = strconv.Atoi(batchStr)
-		if err != nil || batch < 1 {
-			ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff, "wrong batch")
-			return
-		}
-	}
 	buffer := pool.BytesPoolGet()
 	defer pool.BytesPoolPut(buffer)
+	colBuffer := pool.BytesPoolGet()
+	defer pool.BytesPoolPut(colBuffer)
 	isDebug := log.IsDebug()
 	logger = logger.WithField("uri", "upload")
 	buffer.WriteString(db)
@@ -552,26 +546,26 @@ func (ctl *Restful) upload(c *gin.Context) {
 				ErrorResponseWithMsg(c, 0xffff, "column count not enough")
 				return
 			}
-			buffer.WriteString("(")
+			colBuffer.WriteString("(")
 			for i := 0; i < columnCount; i++ {
 				if record[i] == nil {
-					buffer.WriteString("null")
+					colBuffer.WriteString("null")
 				} else {
 					if isStr[i] {
-						buffer.WriteByte('\'')
-						buffer.WriteString(ctl.uploadReplacer.Replace(*record[i]))
-						buffer.WriteByte('\'')
+						colBuffer.WriteByte('\'')
+						colBuffer.WriteString(ctl.uploadReplacer.Replace(*record[i]))
+						colBuffer.WriteByte('\'')
 					} else {
-						buffer.WriteString(*record[i])
+						colBuffer.WriteString(*record[i])
 					}
 				}
 				if i != columnCount-1 {
-					buffer.WriteByte(',')
+					colBuffer.WriteByte(',')
 				}
 			}
-			buffer.WriteByte(')')
+			colBuffer.WriteByte(')')
 			rows += 1
-			if rows >= batch {
+			if buffer.Len()+colBuffer.Len() >= MAXSQLLength {
 				s = log.GetLogNow(isDebug)
 				err = async.GlobalAsync.TaosExecWithoutResult(taosConnect.TaosConnection, buffer.String())
 				logger.Debugln("execute insert sql1 cost:", log.GetLogDuration(isDebug, s))
@@ -589,6 +583,7 @@ func (ctl *Restful) upload(c *gin.Context) {
 				buffer.WriteString(tableName)
 				buffer.WriteString(" values")
 			}
+			colBuffer.WriteTo(buffer)
 		}
 	}
 	if buffer.Len() > prefixLength {
