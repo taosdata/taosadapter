@@ -1,10 +1,14 @@
 package rest
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -203,6 +207,78 @@ func TestRowLimit(t *testing.T) {
 	config.Conf.RestfulRowLimit = -1
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`drop database if exists test_rowlimit`))
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+}
+
+func TestUpload(t *testing.T) {
+	data := `2022-08-30 11:45:30.754,123,123.123000000,"abcd,abcd"
+2022-08-30 11:45:40.871,123,123.123000000,"a""bcd,abcd"
+2022-08-30 11:45:47.039,123,123.123000000,"abcd"",""abcd"
+2022-08-30 11:47:22.607,123,123.123000000,"abcd"",""abcd",""""
+2022-08-30 11:52:40.548,123,123.123000000,"abcd','abcd"
+2022-08-30 11:52:40.549,123,123.123000000,
+`
+	w := httptest.NewRecorder()
+	body := strings.NewReader("create database if not exists test_upload")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("create table if not exists test_upload.t2(ts timestamp,n1 int,n2 double,n3 binary(30))")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	payload := &bytes.Buffer{}
+	writer := multipart.NewWriter(payload)
+	part1, _ := writer.CreateFormFile("data", filepath.Base("sql.csv"))
+	_, err := io.Copy(part1, strings.NewReader(data))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = writer.Close()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	req, _ = http.NewRequest(http.MethodPost, "/rest/upload?db=test_upload&table=t2&batch=10", payload)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("select n1,n2,n3 from test_upload.t2")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	var result TDEngineRestfulRespDoc
+	err = json.Unmarshal(w.Body.Bytes(), &result)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, result.Code)
+	assert.Equal(t, 6, len(result.Data))
+	for i := 0; i < 6; i++ {
+		result.Data[i][0] = float64(123)
+		result.Data[i][1] = float64(123.123)
+	}
+	result.Data[0][2] = "abcd,abcd"
+	result.Data[1][2] = "a\"bcd,abcd"
+	result.Data[2][2] = "abcd\",\"abcd"
+	result.Data[3][2] = "abcd\",\"abcd"
+	result.Data[4][2] = "abcd','abcd"
+	result.Data[5][2] = nil
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader(fmt.Sprintf(`drop database if exists test_upload`))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)

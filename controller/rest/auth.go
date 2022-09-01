@@ -187,3 +187,11 @@ func ErrorResponseWithMsg(c *gin.Context, code int, msg string) {
 	})
 	web.SetTaosErrorCode(c, code&0xffff)
 }
+
+func ErrorResponseWithStatusMsg(c *gin.Context, httpCode int, code int, msg string) {
+	c.AbortWithStatusJSON(httpCode, &Message{
+		Code: code & 0xffff,
+		Desc: msg,
+	})
+	web.SetTaosErrorCode(c, code&0xffff)
+}

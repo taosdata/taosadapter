@@ -3,6 +3,7 @@ package rest
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,8 +24,10 @@ import (
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/tools/csv"
 	"github.com/taosdata/taosadapter/v3/tools/ctools"
 	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
+	"github.com/taosdata/taosadapter/v3/tools/pool"
 	"github.com/taosdata/taosadapter/v3/tools/web"
 	"github.com/taosdata/taosadapter/v3/version"
 )
@@ -32,10 +35,11 @@ import (
 var logger = log.GetLogger("restful")
 
 type Restful struct {
-	wsM           *melody.Melody
-	stmtM         *melody.Melody
-	tmqM          *melody.Melody
-	wsVersionResp []byte
+	wsM            *melody.Melody
+	stmtM          *melody.Melody
+	tmqM           *melody.Melody
+	uploadReplacer *strings.Replacer
+	wsVersionResp  []byte
 }
 
 func (ctl *Restful) Init(r gin.IRouter) {
@@ -43,6 +47,12 @@ func (ctl *Restful) Init(r gin.IRouter) {
 		Action:  ClientVersion,
 		Version: version.TaosClientVersion,
 	}
+	ctl.uploadReplacer = strings.NewReplacer(
+		"\\", "\\\\",
+		"'", "\\'",
+		"(", "\\(",
+		")", "\\)",
+	)
 	ctl.wsVersionResp, _ = json.Marshal(resp)
 	ctl.InitWS()
 	ctl.InitStmt()
@@ -60,6 +70,7 @@ func (ctl *Restful) Init(r gin.IRouter) {
 	api.GET("ws", ctl.ws)
 	api.GET("stmt", ctl.stmt)
 	api.GET("tmq", ctl.tmq)
+	api.POST("upload", CheckAuth, ctl.upload)
 }
 
 type TDEngineRestfulRespDoc struct {
@@ -152,7 +163,7 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
 				httperror.TSDB_CODE_MND_TOO_MANY_USERS,
 				httperror.TSDB_CODE_MND_INVALID_ALTER_OPER,
 				httperror.TSDB_CODE_MND_AUTH_FAILURE:
-				c.AbortWithStatusJSON(http.StatusUnauthorized, tError)
+				ErrorResponseWithStatusMsg(c, http.StatusUnauthorized, int(tError.Code), tError.ErrStr)
 				return
 			default:
 				ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
@@ -396,6 +407,204 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 		return
 	}
 	w.Flush()
+}
+
+const MAXSQLLength = 1024 * 1024 * 1
+
+func (ctl *Restful) upload(c *gin.Context) {
+	db := c.Query("db")
+	if len(db) == 0 {
+		ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff, "db required")
+		return
+	}
+	table := c.Query("table")
+	if len(table) == 0 {
+		ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff, "table required")
+		return
+	}
+	buffer := pool.BytesPoolGet()
+	defer pool.BytesPoolPut(buffer)
+	colBuffer := pool.BytesPoolGet()
+	defer pool.BytesPoolPut(colBuffer)
+	isDebug := log.IsDebug()
+	logger = logger.WithField("uri", "upload")
+	buffer.WriteString(db)
+	buffer.WriteByte('.')
+	buffer.WriteString(table)
+	tableName := buffer.String()
+	buffer.Reset()
+	buffer.WriteString("describe ")
+	buffer.WriteString(tableName)
+	sql := buffer.String()
+	buffer.Reset()
+	user := c.MustGet(UserKey).(string)
+	password := c.MustGet(PasswordKey).(string)
+	s := log.GetLogNow(isDebug)
+	taosConnect, err := commonpool.GetConnection(user, password)
+	if isDebug {
+		logger.Debugln("taos connect cost:", log.GetLogDuration(isDebug, s))
+	}
+
+	if err != nil {
+		logger.WithError(err).Error("connect taosd error")
+		if tError, is := err.(*tErrors.TaosError); is {
+			switch tError.Code {
+			case httperror.TSDB_CODE_MND_USER_ALREADY_EXIST,
+				httperror.TSDB_CODE_MND_USER_NOT_EXIST,
+				httperror.TSDB_CODE_MND_INVALID_USER_FORMAT,
+				httperror.TSDB_CODE_MND_INVALID_PASS_FORMAT,
+				httperror.TSDB_CODE_MND_NO_USER_FROM_CONN,
+				httperror.TSDB_CODE_MND_TOO_MANY_USERS,
+				httperror.TSDB_CODE_MND_INVALID_ALTER_OPER,
+				httperror.TSDB_CODE_MND_AUTH_FAILURE:
+				ErrorResponseWithStatusMsg(c, http.StatusUnauthorized, int(tError.Code), tError.ErrStr)
+				return
+			default:
+				ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
+				return
+			}
+		}
+		ErrorResponseWithMsg(c, 0xffff, err.Error())
+		return
+	}
+	defer func() {
+		if isDebug {
+			s = time.Now()
+		}
+		err := taosConnect.Put()
+		if err != nil {
+			panic(err)
+		}
+		if isDebug {
+			logger.Debugln("taos put connect cost:", log.GetLogDuration(isDebug, s))
+		}
+	}()
+	s = log.GetLogNow(isDebug)
+	result, err := async.GlobalAsync.TaosExec(taosConnect.TaosConnection, sql, func(ts int64, precision int) driver.Value {
+		return ts
+	})
+	logger.Debugln("describe table cost:", log.GetLogDuration(isDebug, s))
+	if err != nil {
+		taosError, is := err.(*tErrors.TaosError)
+		if is {
+			ErrorResponseWithMsg(c, int(taosError.Code), taosError.ErrStr)
+			return
+		}
+		ErrorResponseWithMsg(c, 0xffff, err.Error())
+		return
+	}
+	columnCount := 0
+	var isStr []bool
+	for _, v := range result.Data {
+		if v[3].(string) == "TAG" {
+			break
+		}
+		switch v[1].(string) {
+		case common.TSDB_DATA_TYPE_TIMESTAMP_Str, common.TSDB_DATA_TYPE_BINARY_Str, common.TSDB_DATA_TYPE_NCHAR_Str:
+			isStr = append(isStr, true)
+		default:
+			isStr = append(isStr, false)
+		}
+		columnCount += 1
+	}
+	reader, err := c.Request.MultipartReader()
+	if err != nil {
+		logger.WithError(err).Error("get multi part reader error")
+		ErrorResponseWithMsg(c, 0xffff, err.Error())
+		return
+	}
+	rows := 0
+	buffer.WriteString("insert into ")
+	buffer.WriteString(tableName)
+	buffer.WriteString(" values")
+	prefixLength := buffer.Len()
+	for {
+		part, err := reader.NextPart()
+		if err != nil {
+			if err == io.EOF {
+				break
+			} else {
+				logger.WithError(err).Error("get next part error")
+				ErrorResponseWithMsg(c, 0xffff, err.Error())
+				return
+			}
+		}
+		if part.FormName() != "data" {
+			continue
+		}
+		csvReader := csv.NewReader(part)
+		csvReader.ReuseRecord = true
+		for {
+			record, err := csvReader.Read()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+			}
+			if len(record) < columnCount {
+				logger.Errorf("column count not enough got %d want %d", len(record), columnCount)
+				ErrorResponseWithMsg(c, 0xffff, "column count not enough")
+				return
+			}
+			colBuffer.WriteString("(")
+			for i := 0; i < columnCount; i++ {
+				if record[i] == nil {
+					colBuffer.WriteString("null")
+				} else {
+					if isStr[i] {
+						colBuffer.WriteByte('\'')
+						colBuffer.WriteString(ctl.uploadReplacer.Replace(*record[i]))
+						colBuffer.WriteByte('\'')
+					} else {
+						colBuffer.WriteString(*record[i])
+					}
+				}
+				if i != columnCount-1 {
+					colBuffer.WriteByte(',')
+				}
+			}
+			colBuffer.WriteByte(')')
+			rows += 1
+			if buffer.Len()+colBuffer.Len() >= MAXSQLLength {
+				s = log.GetLogNow(isDebug)
+				err = async.GlobalAsync.TaosExecWithoutResult(taosConnect.TaosConnection, buffer.String())
+				logger.Debugln("execute insert sql1 cost:", log.GetLogDuration(isDebug, s))
+				if err != nil {
+					taosError, is := err.(*tErrors.TaosError)
+					if is {
+						ErrorResponseWithMsg(c, int(taosError.Code), taosError.ErrStr)
+						return
+					}
+					ErrorResponseWithMsg(c, 0xffff, err.Error())
+					return
+				}
+				buffer.Reset()
+				buffer.WriteString("insert into ")
+				buffer.WriteString(tableName)
+				buffer.WriteString(" values")
+			}
+			colBuffer.WriteTo(buffer)
+		}
+	}
+	if buffer.Len() > prefixLength {
+		s = log.GetLogNow(isDebug)
+		err = async.GlobalAsync.TaosExecWithoutResult(taosConnect.TaosConnection, buffer.String())
+		logger.Debugln("execute insert sql2 cost:", log.GetLogDuration(isDebug, s))
+		if err != nil {
+			taosError, is := err.(*tErrors.TaosError)
+			if is {
+				ErrorResponseWithMsg(c, int(taosError.Code), taosError.ErrStr)
+				return
+			}
+			ErrorResponseWithMsg(c, 0xffff, err.Error())
+			return
+		}
+	}
+	buffer.Reset()
+	buffer.Write(ExecHeader)
+	buffer.WriteString(strconv.Itoa(rows))
+	buffer.Write(ExecEnd)
+	c.String(http.StatusOK, buffer.String())
 }
 
 // @Tags rest
