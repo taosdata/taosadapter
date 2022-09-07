@@ -83,7 +83,7 @@ func (t *TMQ) getMessage(index uint64) *list.Element {
 		if item == nil || item == root {
 			return nil
 		}
-		if item.Value.(*Result).index == index {
+		if item.Value.(*TMQMessage).index == index {
 			return item
 		}
 		item = item.Next()
