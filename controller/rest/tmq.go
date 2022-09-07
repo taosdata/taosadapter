@@ -189,6 +189,12 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
 		return
 	}
+	errCode = wrapper.TMQConfSet(config, "experimental.snapshot.enable", "true")
+	if errCode != httperror.SUCCESS {
+		errStr := wrapper.TMQErr2Str(errCode)
+		wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
+		return
+	}
 	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("tmq_consumer_new get thread lock cost:", log.GetLogDuration(isDebug, s))
@@ -262,7 +268,7 @@ type TMQCommitResp struct {
 	MessageID uint64 `json:"message_id"`
 }
 
-//todo
+// todo
 func (t *TMQ) commit(ctx context.Context, session *melody.Session, req *TMQCommitReq) {
 	if t.consumer == nil {
 		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQCommit, req.ReqID, nil)
