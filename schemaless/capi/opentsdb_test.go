@@ -1,7 +1,9 @@
 package capi_test
 
 import (
+	"fmt"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/taosdata/driver-go/v3/errors"
@@ -125,6 +127,7 @@ func TestInsertOpentsdbJson(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	now := time.Now().Unix()
 	defer wrapper.TaosClose(conn)
 	defer func() {
 		r := wrapper.TaosQuery(conn, "drop database if exists test_capi")
@@ -149,16 +152,16 @@ func TestInsertOpentsdbJson(t *testing.T) {
 			name: "test",
 			args: args{
 				taosConnect: conn,
-				data: []byte(`
+				data: []byte(fmt.Sprintf(`
 {
     "metric": "sys.cpu.nice",
-    "timestamp": 1346846400,
+    "timestamp": %d,
     "value": 18,
     "tags": {
        "host": "web01",
        "dc": "lga"
     }
-}`),
+}`, now)),
 				db: "test_capi",
 			},
 			wantErr: false,
@@ -166,16 +169,16 @@ func TestInsertOpentsdbJson(t *testing.T) {
 			name: "wrong",
 			args: args{
 				taosConnect: conn,
-				data: []byte(`
+				data: []byte(fmt.Sprintf(`
 {
     "metric": "sys.cpu.nice",
-    "timestamp": 1346846400,
+    "timestamp": %d,
     "value": 18,
     "tags": {
        "host": "web01",
        "dc": "lga"
     },
-}`),
+}`, now)),
 				db: "test_capi",
 			},
 			wantErr: true,
