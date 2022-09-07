@@ -151,7 +151,7 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	}
 
 	if len(req.OffsetRest) != 0 {
-		errCode := wrapper.TMQConfSet(config, "auto.offset.reset", req.DB)
+		errCode := wrapper.TMQConfSet(config, "auto.offset.reset", req.OffsetRest)
 		if errCode != httperror.SUCCESS {
 			errStr := wrapper.TMQErr2Str(errCode)
 			wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
