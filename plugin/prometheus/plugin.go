@@ -72,18 +72,18 @@ func (p *Plugin) Read(c *gin.Context) {
 	db := c.Param("db")
 	user, password, err := plugin.GetAuth(c)
 	if err != nil {
-		_ = c.AbortWithError(http.StatusUnauthorized, err)
+		c.String(http.StatusUnauthorized, err.Error())
 		return
 	}
 	data, err := c.GetRawData()
 	if err != nil {
-		_ = c.AbortWithError(http.StatusInternalServerError, err)
+		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
 	start := time.Now()
 	buf, err := snappy.Decode(nil, data)
 	if err != nil {
-		_ = c.AbortWithError(http.StatusBadRequest, err)
+		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
 	logger.Debug("read snappy decode cost:", time.Now().Sub(start))
@@ -91,7 +91,7 @@ func (p *Plugin) Read(c *gin.Context) {
 	start = time.Now()
 	err = proto.Unmarshal(buf, &req)
 	if err != nil {
-		_ = c.AbortWithError(http.StatusBadRequest, err)
+		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
 	logger.Debug("read protobuf unmarshal cost:", time.Now().Sub(start))
@@ -99,7 +99,7 @@ func (p *Plugin) Read(c *gin.Context) {
 	taosConn, err := commonpool.GetConnection(user, password)
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
-		_ = c.AbortWithError(http.StatusBadRequest, err)
+		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
 	logger.Debug("read commonpool.GetConnection cost:", time.Now().Sub(start))
@@ -115,13 +115,13 @@ func (p *Plugin) Read(c *gin.Context) {
 		if is {
 			web.SetTaosErrorCode(c, int(taosError.Code))
 		}
-		_ = c.AbortWithError(http.StatusBadRequest, err)
+		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
 	start = time.Now()
 	respData, err := proto.Marshal(resp)
 	if err != nil {
-		_ = c.AbortWithError(http.StatusBadRequest, err)
+		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
 	logger.Debug("read protobuf marshal cost:", time.Now().Sub(start))
@@ -136,7 +136,7 @@ func (p *Plugin) Write(c *gin.Context) {
 	db := c.Param("db")
 	user, password, err := plugin.GetAuth(c)
 	if err != nil {
-		_ = c.AbortWithError(http.StatusUnauthorized, err)
+		c.String(http.StatusUnauthorized, err.Error())
 		return
 	}
 	c.Status(http.StatusAccepted)
@@ -153,7 +153,7 @@ func (p *Plugin) Write(c *gin.Context) {
 	bb.B, err = snappy.Decode(bb.B[:cap(bb.B)], bp.B)
 	bufferPool.Put(bp)
 	if err != nil {
-		_ = c.AbortWithError(http.StatusBadRequest, err)
+		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
 	logger.Debug("snappy decode cost:", time.Now().Sub(start))
@@ -162,7 +162,7 @@ func (p *Plugin) Write(c *gin.Context) {
 	start = time.Now()
 	err = req.Unmarshal(bb.B)
 	if err != nil {
-		_ = c.AbortWithError(http.StatusBadRequest, err)
+		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
 	logger.Debug("protobuf unmarshal cost:", time.Now().Sub(start))
@@ -173,7 +173,7 @@ func (p *Plugin) Write(c *gin.Context) {
 	taosConn, err := commonpool.GetConnection(user, password)
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
-		_ = c.AbortWithError(http.StatusBadRequest, err)
+		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
 	logger.Debug("commonpool.GetConnection cost:", time.Now().Sub(start))
