@@ -35,7 +35,7 @@ func TestInit(t *testing.T) {
 					AllowWebSockets:  false,
 				},
 				TaosConfigDir:   "",
-				Debug:           false,
+				Debug:           true,
 				Port:            6041,
 				LogLevel:        "info",
 				RestfulRowLimit: -1,

@@ -1,8 +1,9 @@
 package log
 
 import (
+	"bytes"
+
 	"github.com/sirupsen/logrus"
-	"github.com/taosdata/taosadapter/v3/tools/pool"
 )
 
 var sqlLogger = logrus.New()
@@ -11,8 +12,12 @@ type TaosSqlLogFormatter struct {
 }
 
 func (t *TaosSqlLogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
-	b := pool.BytesPoolGet()
-	defer pool.BytesPoolPut(b)
+	var b *bytes.Buffer
+	if entry.Buffer != nil {
+		b = entry.Buffer
+	} else {
+		b = &bytes.Buffer{}
+	}
 	b.Reset()
 	b.WriteString(entry.Time.Format("01/02 15:04:05.000000"))
 	b.WriteByte(' ')

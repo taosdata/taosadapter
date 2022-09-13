@@ -13,6 +13,7 @@ import (
 	"time"
 	"unsafe"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/taosdata/driver-go/v3/common"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
@@ -21,11 +22,16 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/async"
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/httperror"
+	prompbWrite "github.com/taosdata/taosadapter/v3/plugin/prometheus/proto/write"
 	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
 )
 
-func processWrite(taosConn unsafe.Pointer, req *prompb.WriteRequest, db string) error {
+var jsonI = jsoniter.ConfigCompatibleWithStandardLibrary
+var timeBufferPool pool.ByteBufferPool
+
+func processWrite(taosConn unsafe.Pointer, req *prompbWrite.WriteRequest, db string) error {
 	start := time.Now()
 	err := tool.SelectDB(taosConn, db)
 	if err != nil {
@@ -33,13 +39,12 @@ func processWrite(taosConn unsafe.Pointer, req *prompb.WriteRequest, db string) 
 	}
 	logger.Debug("processWrite SelectDB cost:", time.Now().Sub(start))
 	start = time.Now()
-	sql, err := generateWriteSql(req.GetTimeseries())
-	if err != nil {
-		return err
-	}
+	bp := pool.BytesPoolGet()
+	defer pool.BytesPoolPut(bp)
+	generateWriteSql(req.Timeseries, bp)
 	logger.Debug("generateWriteSql cost:", time.Now().Sub(start))
 	start = time.Now()
-	err = async.GlobalAsync.TaosExecWithoutResult(taosConn, sql)
+	err = async.GlobalAsync.TaosExecWithoutResult(taosConn, bytesutil.ToUnsafeString(bp.Bytes()))
 	logger.Debug("processWrite TaosExecWithoutResult cost:", time.Now().Sub(start))
 	if err != nil {
 		if tErr, is := err.(*tErrors.TaosError); is {
@@ -50,73 +55,80 @@ func processWrite(taosConn unsafe.Pointer, req *prompb.WriteRequest, db string) 
 					return err
 				}
 				// retry
-				err = async.GlobalAsync.TaosExecWithoutResult(taosConn, sql)
+				err = async.GlobalAsync.TaosExecWithoutResult(taosConn, bytesutil.ToUnsafeString(bp.Bytes()))
 				if err != nil {
-					logger.WithError(err).Error(sql)
+					logger.WithError(err).Error(bp.String())
 					return err
 				}
 				logger.Debug("retry processWrite cost", time.Now().Sub(start))
 				return nil
 			} else {
-				logger.WithError(err).Error(sql)
+				logger.WithError(err).Error(bp.String())
 				return err
 			}
 		} else {
-			logger.WithError(err).Error(sql)
+			logger.WithError(err).Error(bp.String())
 			return err
 		}
 	}
 	return nil
 }
 
-func generateWriteSql(timeseries []prompb.TimeSeries) (string, error) {
-	sql := pool.StringBuilderPoolGet()
-	defer pool.StringBuilderPoolPut(sql)
+func generateWriteSql(timeseries []prompbWrite.TimeSeries, sql *bytes.Buffer) {
 	sql.WriteString("insert into ")
 	tmp := pool.BytesPoolGet()
 	defer pool.BytesPoolPut(tmp)
-	for _, timeSeriesData := range timeseries {
-		tagName := make([]string, len(timeSeriesData.Labels))
-		tagMap := make(map[string]string, len(timeSeriesData.Labels))
-		for i, label := range timeSeriesData.GetLabels() {
-			tagName[i] = label.Name
-			tagMap[label.Name] = label.Value
-		}
-		sort.Strings(tagName)
+	timeBuffer := timeBufferPool.Get()
+	defer timeBufferPool.Put(timeBuffer)
+	bb := bufferPool.Get()
+	defer bufferPool.Put(bb)
+	jsonBuilder := jsonI.BorrowStream(nil)
+	defer jsonI.ReturnStream(jsonBuilder)
+	for i := 0; i < len(timeseries); i++ {
+		labelCount := len(timeseries[i].Labels)
 		tmp.Reset()
-		for i, s := range tagName {
-			v := tagMap[s]
-			tmp.WriteString(s)
+		sort.Sort(timeseries[i].Labels)
+		for labelIndex := 0; labelIndex < labelCount; labelIndex++ {
+			tmp.Write(timeseries[i].Labels[labelIndex].Name)
 			tmp.WriteByte('=')
-			tmp.WriteString(v)
-			if i != len(tagName)-1 {
+			tmp.Write(timeseries[i].Labels[labelIndex].Value)
+			if labelIndex != labelCount-1 {
 				tmp.WriteByte(',')
 			}
-		}
-		labelsJson, err := json.Marshal(tagMap)
-		if err != nil {
-			return "", err
 		}
 		tableName := fmt.Sprintf("t_%x", md5.Sum(tmp.Bytes()))
 		sql.WriteString(tableName)
 		sql.WriteString(" using metrics tags('")
-		sql.Write(escapeBytes(labelsJson))
+		bb.Reset()
+		jsonBuilder.Reset(bb)
+		jsonBuilder.WriteObjectStart()
+		for labelIndex := 0; labelIndex < labelCount; labelIndex++ {
+			if labelIndex != 0 {
+				jsonBuilder.WriteMore()
+			}
+			jsonBuilder.WriteObjectField(bytesutil.ToUnsafeString(timeseries[i].Labels[labelIndex].Name))
+			jsonBuilder.WriteString(bytesutil.ToUnsafeString(timeseries[i].Labels[labelIndex].Value))
+		}
+		jsonBuilder.WriteObjectEnd()
+		jsonBuilder.Flush()
+		sql.Write(escapeBytes(bb.B))
 		sql.WriteString("') values")
-		for _, sample := range timeSeriesData.Samples {
+		for _, sample := range timeseries[i].Samples {
 			sql.WriteString("('")
-			sql.WriteString(time.Unix(0, sample.GetTimestamp()*1e6).UTC().Format(time.RFC3339Nano))
+			timeBuffer.Reset()
+			timeBuffer.B = time.Unix(0, sample.Timestamp*1e6).UTC().AppendFormat(timeBuffer.B, time.RFC3339Nano)
+			sql.WriteString(bytesutil.ToUnsafeString(timeBuffer.B))
 			sql.WriteString("',")
-			if math.IsNaN(sample.GetValue()) {
+			if math.IsNaN(sample.Value) {
 				sql.WriteString("null")
-			} else if math.IsInf(sample.GetValue(), 0) {
+			} else if math.IsInf(sample.Value, 0) {
 				sql.WriteString("null")
 			} else {
-				fmt.Fprintf(sql, "%v", sample.GetValue())
+				fmt.Fprintf(sql, "%v", sample.Value)
 			}
 			sql.WriteString(") ")
 		}
 	}
-	return sql.String(), nil
 }
 
 func processRead(taosConn unsafe.Pointer, req *prompb.ReadRequest, db string) (resp *prompb.ReadResponse, err error) {
@@ -206,8 +218,8 @@ func processRead(taosConn unsafe.Pointer, req *prompb.ReadRequest, db string) (r
 }
 
 func generateReadSql(query *prompb.Query) (string, error) {
-	sql := pool.StringBuilderPoolGet()
-	defer pool.StringBuilderPoolPut(sql)
+	sql := pool.BytesPoolGet()
+	defer pool.BytesPoolPut(sql)
 	sql.WriteString("select metrics.*,tbname from metrics where ts >= '")
 	sql.WriteString(ms2Time(query.GetStartTimestampMs()))
 	sql.WriteString("' and ts <= '")
@@ -256,5 +268,13 @@ var escapeBackslashOld = []byte{'\\'}
 var escapeBackslashNew = []byte{'\\', '\\'}
 
 func escapeBytes(s []byte) []byte {
-	return bytes.ReplaceAll(bytes.ReplaceAll(s, escapeBackslashOld, escapeBackslashNew), escapeSingleQuoteOld, escapeSingleQuoteNew)
+	n := bytes.Count(s, escapeBackslashOld)
+	if n > 0 {
+		s = bytes.ReplaceAll(s, escapeBackslashOld, escapeBackslashNew)
+	}
+	n = bytes.Count(s, escapeSingleQuoteOld)
+	if n > 0 {
+		s = bytes.ReplaceAll(s, escapeSingleQuoteOld, escapeSingleQuoteNew)
+	}
+	return s
 }

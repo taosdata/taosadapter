@@ -1,4 +1,4 @@
-debug = false
+debug = true
 taosConfigDir = ""
 port = 6041
 logLevel = "info"

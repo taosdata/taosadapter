@@ -81,9 +81,9 @@ func Init() {
 
 // arg > file > env
 func init() {
-	viper.SetDefault("debug", false)
+	viper.SetDefault("debug", true)
 	_ = viper.BindEnv("debug", "TAOS_ADAPTER_DEBUG")
-	pflag.Bool("debug", false, `enable debug mode. Env "TAOS_ADAPTER_DEBUG"`)
+	pflag.Bool("debug", true, `enable debug mode. Env "TAOS_ADAPTER_DEBUG"`)
 
 	viper.SetDefault("port", 6041)
 	_ = viper.BindEnv("port", "TAOS_ADAPTER_PORT")
