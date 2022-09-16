@@ -2,6 +2,7 @@ package prometheus
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -134,6 +135,15 @@ func (p *Plugin) Read(c *gin.Context) {
 
 func (p *Plugin) Write(c *gin.Context) {
 	db := c.Param("db")
+	ttl := c.Query("ttl")
+	ttlI := 0
+	var err error
+	if len(ttl) > 0 {
+		ttlI, err = strconv.Atoi(ttl)
+		if err != nil {
+			c.String(http.StatusBadRequest, err.Error())
+		}
+	}
 	user, password, err := plugin.GetAuth(c)
 	if err != nil {
 		c.String(http.StatusUnauthorized, err.Error())
@@ -183,7 +193,7 @@ func (p *Plugin) Write(c *gin.Context) {
 			logger.WithError(putErr).Errorln("taos connect pool put error")
 		}
 	}()
-	err = processWrite(taosConn.TaosConnection, req, db)
+	err = processWrite(taosConn.TaosConnection, req, db, ttlI)
 	if err != nil {
 		taosError, is := err.(*tErrors.TaosError)
 		if is {
