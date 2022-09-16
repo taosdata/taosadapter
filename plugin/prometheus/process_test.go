@@ -16,6 +16,7 @@ func Test_generateWriteSql(t *testing.T) {
 	config.Conf.RestfulRowLimit = -1
 	type args struct {
 		timeseries []prompbWrite.TimeSeries
+		ttl        int
 	}
 	tests := []struct {
 		name string
@@ -156,12 +157,38 @@ func Test_generateWriteSql(t *testing.T) {
 			},
 			want: `insert into t_376843ecdb3abb76454247aaf9bbe7b8 using metrics tags('{"key":"k\\\\\'v"}') values('2021-12-20T05:58:22Z',123.456) ('2021-12-20T05:58:23Z',456.789) `,
 		},
+		{
+			name: "escapeBackslashWithTTL",
+			args: args{
+				timeseries: []prompbWrite.TimeSeries{
+					{
+						Labels: []prompbWrite.Label{
+							{
+								Name:  []byte(`key`),
+								Value: []byte(`k\'v`),
+							},
+						},
+						Samples: []prompbWrite.Sample{
+							{
+								Value:     123.456,
+								Timestamp: 1639979902000,
+							}, {
+								Value:     456.789,
+								Timestamp: 1639979903000,
+							},
+						},
+					},
+				},
+				ttl: 12,
+			},
+			want: `insert into t_376843ecdb3abb76454247aaf9bbe7b8 using metrics tags('{"key":"k\\\\\'v"}') ttl 12 values('2021-12-20T05:58:22Z',123.456) ('2021-12-20T05:58:23Z',456.789) `,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			bp := pool.BytesPoolGet()
 			defer pool.BytesPoolPut(bp)
-			generateWriteSql(tt.args.timeseries, bp)
+			generateWriteSql(tt.args.timeseries, bp, tt.args.ttl)
 			got := bp.String()
 			if got != tt.want {
 				t.Errorf("generateWriteSql() got = %v, want %v", got, tt.want)

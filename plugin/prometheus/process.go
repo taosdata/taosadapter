@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unsafe"
@@ -31,7 +32,7 @@ import (
 var jsonI = jsoniter.ConfigCompatibleWithStandardLibrary
 var timeBufferPool pool.ByteBufferPool
 
-func processWrite(taosConn unsafe.Pointer, req *prompbWrite.WriteRequest, db string) error {
+func processWrite(taosConn unsafe.Pointer, req *prompbWrite.WriteRequest, db string, ttl int) error {
 	start := time.Now()
 	err := tool.SelectDB(taosConn, db)
 	if err != nil {
@@ -41,7 +42,7 @@ func processWrite(taosConn unsafe.Pointer, req *prompbWrite.WriteRequest, db str
 	start = time.Now()
 	bp := pool.BytesPoolGet()
 	defer pool.BytesPoolPut(bp)
-	generateWriteSql(req.Timeseries, bp)
+	generateWriteSql(req.Timeseries, bp, ttl)
 	logger.Debug("generateWriteSql cost:", time.Now().Sub(start))
 	start = time.Now()
 	err = async.GlobalAsync.TaosExecWithoutResult(taosConn, bytesutil.ToUnsafeString(bp.Bytes()))
@@ -74,7 +75,7 @@ func processWrite(taosConn unsafe.Pointer, req *prompbWrite.WriteRequest, db str
 	return nil
 }
 
-func generateWriteSql(timeseries []prompbWrite.TimeSeries, sql *bytes.Buffer) {
+func generateWriteSql(timeseries []prompbWrite.TimeSeries, sql *bytes.Buffer, ttl int) {
 	sql.WriteString("insert into ")
 	tmp := pool.BytesPoolGet()
 	defer pool.BytesPoolPut(tmp)
@@ -112,7 +113,13 @@ func generateWriteSql(timeseries []prompbWrite.TimeSeries, sql *bytes.Buffer) {
 		jsonBuilder.WriteObjectEnd()
 		jsonBuilder.Flush()
 		sql.Write(escapeBytes(bb.B))
-		sql.WriteString("') values")
+		sql.WriteString("') ")
+		if ttl > 0 {
+			sql.WriteString("ttl ")
+			sql.WriteString(strconv.Itoa(ttl))
+			sql.WriteByte(' ')
+		}
+		sql.WriteString("values")
 		for _, sample := range timeseries[i].Samples {
 			sql.WriteString("('")
 			timeBuffer.Reset()
