@@ -15,6 +15,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
+	"github.com/taosdata/driver-go/v3/common/parser"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/types"
 	"github.com/taosdata/driver-go/v3/wrapper"
@@ -841,8 +842,8 @@ func (ctl *Restful) InitStmt() {
 		stmtID := *(*uint64)(unsafe.Pointer(p0 + uintptr(8)))
 		action := *(*uint64)(unsafe.Pointer(p0 + uintptr(16)))
 		block := unsafe.Pointer(p0 + uintptr(24))
-		columns := wrapper.RawBlockGetNumOfCols(block)
-		rows := wrapper.RawBlockGetNumOfRows(block)
+		columns := parser.RawBlockGetNumOfCols(block)
+		rows := parser.RawBlockGetNumOfRows(block)
 		if ctl.stmtM.IsClosed() {
 			return
 		}

@@ -16,7 +16,7 @@ require (
 	github.com/google/flatbuffers v2.0.0+incompatible // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20190812055157-5d271430af9f // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
-	github.com/gorilla/websocket v1.4.2
+	github.com/gorilla/websocket v1.5.0
 	github.com/huskar-t/file-rotatelogs/v2 v2.4.1
 	github.com/huskar-t/melody v0.0.0-20220722113213-5f82fb933d2a
 	github.com/influxdata/telegraf v1.20.0
@@ -37,6 +37,6 @@ require (
 	github.com/spf13/viper v1.9.0
 	github.com/stretchr/testify v1.7.1
 	github.com/swaggo/swag v1.7.6
-	github.com/taosdata/driver-go/v3 v3.0.1-0.20220818061925-7306167d7ab1
+	github.com/taosdata/driver-go/v3 v3.0.1-0.20220921101151-1286be109a68
 	gonum.org/v1/gonum v0.8.2 // indirect
 )

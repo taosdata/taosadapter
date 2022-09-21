@@ -14,6 +14,7 @@ import (
 	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/common"
+	"github.com/taosdata/driver-go/v3/common/parser"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
@@ -341,11 +342,11 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 			thread.Unlock()
 			blockSize := result.N
 			nullBitMapOffset := uintptr(ctools.BitmapLen(blockSize))
-			lengthOffset := wrapper.RawBlockGetColumnLengthOffset(fieldsCount)
-			tmpPHeader := uintptr(block) + wrapper.RawBlockGetColDataOffset(fieldsCount) // length i32, group u64
+			lengthOffset := parser.RawBlockGetColumnLengthOffset(fieldsCount)
+			tmpPHeader := uintptr(block) + parser.RawBlockGetColDataOffset(fieldsCount) // length i32, group u64
 			tmpPStart := tmpPHeader
 			for column := 0; column < fieldsCount; column++ {
-				colLength := *((*int32)(unsafe.Pointer(uintptr(block) + lengthOffset + uintptr(column)*wrapper.Int32Size)))
+				colLength := *((*int32)(unsafe.Pointer(uintptr(block) + lengthOffset + uintptr(column)*parser.Int32Size)))
 				if ctools.IsVarDataType(rowsHeader.ColTypes[column]) {
 					pHeaderList[column] = tmpPHeader
 					tmpPStart = tmpPHeader + uintptr(4*blockSize)
