@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
+	"github.com/taosdata/driver-go/v3/common/parser"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/db/async"
@@ -409,7 +410,7 @@ func (t *Taos) fetchBlock(ctx context.Context, session *melody.Session, req *WSF
 		return
 	}
 	resultS.Lock()
-	blockLength := int(wrapper.RawBlockGetLength(resultS.Block))
+	blockLength := int(parser.RawBlockGetLength(resultS.Block))
 	if resultS.buffer == nil {
 		resultS.buffer = new(bytes.Buffer)
 	} else {

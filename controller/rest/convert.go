@@ -12,6 +12,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/taosdata/driver-go/v3/common"
+	"github.com/taosdata/driver-go/v3/common/parser"
 	"github.com/taosdata/driver-go/v3/types"
 	"github.com/taosdata/driver-go/v3/wrapper"
 )
@@ -604,14 +605,14 @@ func stmtParseTag(tags json.RawMessage, fields []*wrapper.StmtField) ([]driver.V
 func blockConvert(block unsafe.Pointer, blockSize int, fields []*wrapper.StmtField) [][]driver.Value {
 	colCount := len(fields)
 	r := make([][]driver.Value, colCount)
-	nullBitMapOffset := uintptr(wrapper.BitmapLen(blockSize))
-	lengthOffset := wrapper.RawBlockGetColumnLengthOffset(colCount)
-	pHeader := uintptr(block) + wrapper.RawBlockGetColDataOffset(colCount)
+	nullBitMapOffset := uintptr(parser.BitmapLen(blockSize))
+	lengthOffset := parser.RawBlockGetColumnLengthOffset(colCount)
+	pHeader := uintptr(block) + parser.RawBlockGetColDataOffset(colCount)
 	pStart := pHeader
 	for column := 0; column < colCount; column++ {
 		r[column] = make([]driver.Value, blockSize)
-		colLength := *((*int32)(unsafe.Pointer(uintptr(block) + lengthOffset + uintptr(column)*wrapper.Int32Size)))
-		if wrapper.IsVarDataType(uint8(fields[column].FieldType)) {
+		colLength := *((*int32)(unsafe.Pointer(uintptr(block) + lengthOffset + uintptr(column)*parser.Int32Size)))
+		if parser.IsVarDataType(uint8(fields[column].FieldType)) {
 			convertF := rawConvertVarDataMap[fields[column].FieldType]
 			pStart = pHeader + uintptr(4*blockSize)
 			for row := 0; row < blockSize; row++ {
@@ -658,9 +659,9 @@ var rawConvertVarDataMap = map[int8]rawConvertVarDataFunc{
 }
 
 func ItemIsNull(pHeader uintptr, row int) bool {
-	offset := wrapper.CharOffset(row)
+	offset := parser.CharOffset(row)
 	c := *((*byte)(unsafe.Pointer(pHeader + uintptr(offset))))
-	if wrapper.BMIsNull(c, row) {
+	if parser.BMIsNull(c, row) {
 		return true
 	}
 	return false

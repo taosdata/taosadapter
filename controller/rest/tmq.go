@@ -17,6 +17,7 @@ import (
 	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/common"
+	"github.com/taosdata/driver-go/v3/common/parser"
 	"github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/httperror"
@@ -355,8 +356,7 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 	}
 	if message != nil {
 		messageType := wrapper.TMQGetResType(message)
-		if messageType == common.TMQ_RES_DATA || messageType == common.TMQ_RES_TABLE_META {
-
+		if messageTypeIsValid(messageType) {
 			m := &TMQMessage{
 				cPointer:    message,
 				buffer:      new(bytes.Buffer),
@@ -416,7 +416,7 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 		return
 	}
 	message := messageItem.Value.(*TMQMessage)
-	if message.messageType != common.TMQ_RES_DATA {
+	if !canGetData(message.messageType) {
 		wsTMQErrorMsg(ctx, session, 0xffff, "message type is not data", TMQFetch, req.ReqID, &req.MessageID)
 		return
 	}
@@ -469,7 +469,7 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 	} else {
 		message.buffer.Reset()
 	}
-	blockLength := int(wrapper.RawBlockGetLength(block))
+	blockLength := int(parser.RawBlockGetLength(block))
 	message.buffer.Grow(blockLength + 24)
 	writeUint64(message.buffer, 0)
 	writeUint64(message.buffer, req.ReqID)
@@ -505,7 +505,7 @@ func (t *TMQ) fetchBlock(ctx context.Context, session *melody.Session, req *TMQF
 		return
 	}
 	message := messageItem.Value.(*TMQMessage)
-	if message.messageType != common.TMQ_RES_DATA {
+	if !canGetData(message.messageType) {
 		wsTMQErrorMsg(ctx, session, 0xffff, "message type is not data", TMQFetchBlock, req.ReqID, &req.MessageID)
 		return
 	}
@@ -545,10 +545,6 @@ func (t *TMQ) fetchRawMeta(ctx context.Context, session *melody.Session, req *TM
 		return
 	}
 	message := messageItem.Value.(*TMQMessage)
-	//if message.messageType != common.TMQ_RES_TABLE_META {
-	//	wsTMQErrorMsg(ctx, session, 0xffff, "message type is not meta", TMQFetchRaw, req.ReqID, &req.MessageID)
-	//	return
-	//}
 	message.Lock()
 	s = log.GetLogNow(isDebug)
 	thread.Lock()
@@ -619,7 +615,7 @@ func (t *TMQ) fetchJsonMeta(ctx context.Context, session *melody.Session, req *T
 		return
 	}
 	message := messageItem.Value.(*TMQMessage)
-	if message.messageType != common.TMQ_RES_TABLE_META {
+	if !canGetMeta(message.messageType) {
 		wsTMQErrorMsg(ctx, session, 0xffff, "message type is not meta", TMQFetchJsonMeta, req.ReqID, &req.MessageID)
 		return
 	}
@@ -853,4 +849,20 @@ func wsTMQErrorMsg(ctx context.Context, session *melody.Session, code int, messa
 		MessageID: messageID,
 	})
 	session.Write(b)
+}
+
+func canGetMeta(messageType int32) bool {
+	return messageType == common.TMQ_RES_TABLE_META || messageType == common.TMQ_RES_METADATA
+}
+
+func canGetData(messageType int32) bool {
+	return messageType == common.TMQ_RES_DATA || messageType == common.TMQ_RES_METADATA
+}
+
+func messageTypeIsValid(messageType int32) bool {
+	switch messageType {
+	case common.TMQ_RES_DATA, common.TMQ_RES_TABLE_META, common.TMQ_RES_METADATA:
+		return true
+	}
+	return false
 }

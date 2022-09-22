@@ -5,7 +5,7 @@ import (
 	"unsafe"
 
 	"github.com/taosdata/driver-go/v3/common"
-	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/driver-go/v3/common/parser"
 	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
 )
 
@@ -49,47 +49,47 @@ func WriteRawJsonBool(builder *jsonbuilder.Stream, pStart uintptr, row int) {
 }
 
 func WriteRawJsonTinyint(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteInt8(*((*int8)(unsafe.Pointer(pStart + uintptr(row)*wrapper.Int8Size))))
+	builder.WriteInt8(*((*int8)(unsafe.Pointer(pStart + uintptr(row)*parser.Int8Size))))
 }
 
 func WriteRawJsonSmallint(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteInt16(*((*int16)(unsafe.Pointer(pStart + uintptr(row)*wrapper.Int16Size))))
+	builder.WriteInt16(*((*int16)(unsafe.Pointer(pStart + uintptr(row)*parser.Int16Size))))
 }
 
 func WriteRawJsonInt(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteInt32(*((*int32)(unsafe.Pointer(pStart + uintptr(row)*wrapper.Int32Size))))
+	builder.WriteInt32(*((*int32)(unsafe.Pointer(pStart + uintptr(row)*parser.Int32Size))))
 }
 
 func WriteRawJsonBigint(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteInt64(*((*int64)(unsafe.Pointer(pStart + uintptr(row)*wrapper.Int64Size))))
+	builder.WriteInt64(*((*int64)(unsafe.Pointer(pStart + uintptr(row)*parser.Int64Size))))
 }
 
 func WriteRawJsonUTinyint(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteUint8(*((*uint8)(unsafe.Pointer(pStart + uintptr(row)*wrapper.UInt8Size))))
+	builder.WriteUint8(*((*uint8)(unsafe.Pointer(pStart + uintptr(row)*parser.UInt8Size))))
 }
 
 func WriteRawJsonUSmallint(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteUint16(*((*uint16)(unsafe.Pointer(pStart + uintptr(row)*wrapper.UInt16Size))))
+	builder.WriteUint16(*((*uint16)(unsafe.Pointer(pStart + uintptr(row)*parser.UInt16Size))))
 }
 
 func WriteRawJsonUInt(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteUint32(*((*uint32)(unsafe.Pointer(pStart + uintptr(row)*wrapper.UInt32Size))))
+	builder.WriteUint32(*((*uint32)(unsafe.Pointer(pStart + uintptr(row)*parser.UInt32Size))))
 }
 
 func WriteRawJsonUBigint(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteUint64(*((*uint64)(unsafe.Pointer(pStart + uintptr(row)*wrapper.UInt64Size))))
+	builder.WriteUint64(*((*uint64)(unsafe.Pointer(pStart + uintptr(row)*parser.UInt64Size))))
 }
 
 func WriteRawJsonFloat(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteFloat32(math.Float32frombits(*((*uint32)(unsafe.Pointer(pStart + uintptr(row)*wrapper.Float32Size)))))
+	builder.WriteFloat32(math.Float32frombits(*((*uint32)(unsafe.Pointer(pStart + uintptr(row)*parser.Float32Size)))))
 }
 
 func WriteRawJsonDouble(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteFloat64(math.Float64frombits(*((*uint64)(unsafe.Pointer(pStart + uintptr(row)*wrapper.Float64Size)))))
+	builder.WriteFloat64(math.Float64frombits(*((*uint64)(unsafe.Pointer(pStart + uintptr(row)*parser.Float64Size)))))
 }
 
 func WriteRawJsonTime(builder *jsonbuilder.Stream, pStart uintptr, row int, precision int, timeFormat FormatTimeFunc) {
-	value := *((*int64)(unsafe.Pointer(pStart + uintptr(row)*wrapper.Int64Size)))
+	value := *((*int64)(unsafe.Pointer(pStart + uintptr(row)*parser.Int64Size)))
 	timeFormat(builder, value, precision)
 }
 
