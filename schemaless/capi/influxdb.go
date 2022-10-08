@@ -16,9 +16,8 @@ func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision strin
 	if err != nil {
 		return nil, err
 	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 	thread.Lock()
-	result := wrapper.TaosSchemalessInsert(taosConnect, lines, wrapper.InfluxDBLineProtocol, precision)
+	lines, result := wrapper.TaosSchemalessInsertRaw(taosConnect, strings.TrimSpace(string(data)), wrapper.InfluxDBLineProtocol, precision)
 	thread.Unlock()
 	code := wrapper.TaosError(result)
 	if code != 0 {
@@ -29,11 +28,11 @@ func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision strin
 		return nil, tErrors.NewError(code, errStr)
 	}
 	successCount := wrapper.TaosAffectedRows(result)
-	failCount := len(lines) - successCount
+	failCount := int(lines) - successCount
 	r := &proto.InfluxResult{
 		SuccessCount: successCount,
 		FailCount:    failCount,
-		ErrorList:    make([]string, len(lines)),
+		ErrorList:    make([]string, lines),
 	}
 	thread.Lock()
 	wrapper.TaosFreeResult(result)
