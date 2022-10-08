@@ -8,6 +8,7 @@ import (
 	"github.com/taosdata/driver-go/v2/wrapper"
 	"github.com/taosdata/taosadapter/db/tool"
 	"github.com/taosdata/taosadapter/thread"
+	"github.com/taosdata/taosadapter/tools/pool"
 )
 
 func InsertOpentsdbJson(taosConnect unsafe.Pointer, data []byte, db string) error {
@@ -19,7 +20,7 @@ func InsertOpentsdbJson(taosConnect unsafe.Pointer, data []byte, db string) erro
 		return err
 	}
 	thread.Lock()
-	result := wrapper.TaosSchemalessInsert(taosConnect, []string{string(data)}, wrapper.OpenTSDBJsonFormatProtocol, "")
+	_, result := wrapper.TaosSchemalessInsertRaw(taosConnect, string(data), wrapper.OpenTSDBJsonFormatProtocol, "")
 	thread.Unlock()
 	code := wrapper.TaosError(result)
 	if code != 0 {
@@ -43,8 +44,9 @@ func InsertOpentsdbTelnet(taosConnect unsafe.Pointer, data, db string) error {
 	if err != nil {
 		return err
 	}
+	line := strings.TrimPrefix(strings.TrimSpace(data), "put ")
 	thread.Lock()
-	result := wrapper.TaosSchemalessInsert(taosConnect, []string{strings.TrimPrefix(strings.TrimSpace(data), "put ")}, wrapper.OpenTSDBTelnetLineProtocol, "")
+	_, result := wrapper.TaosSchemalessInsertRaw(taosConnect, line, wrapper.OpenTSDBTelnetLineProtocol, "")
 	thread.Unlock()
 	code := wrapper.TaosError(result)
 	if code != 0 {
@@ -68,11 +70,17 @@ func InsertOpentsdbTelnetBatch(taosConnect unsafe.Pointer, data []string, db str
 	if err != nil {
 		return err
 	}
-	for i := 0; i < len(data); i++ {
-		data[i] = strings.TrimPrefix(strings.TrimSpace(data[i]), "put ")
+	buffer := pool.BytesPoolGet()
+	defer pool.BytesPoolPut(buffer)
+	rows := len(data)
+	for i := 0; i < rows; i++ {
+		buffer.WriteString(strings.TrimPrefix(strings.TrimSpace(data[i]), "put "))
+		if i != rows-1 {
+			buffer.WriteByte('\n')
+		}
 	}
 	thread.Lock()
-	result := wrapper.TaosSchemalessInsert(taosConnect, data, wrapper.OpenTSDBTelnetLineProtocol, "")
+	_, result := wrapper.TaosSchemalessInsertRaw(taosConnect, buffer.String(), wrapper.OpenTSDBTelnetLineProtocol, "")
 	thread.Unlock()
 	code := wrapper.TaosError(result)
 	if code != 0 {

@@ -1,7 +1,9 @@
 package capi_test
 
 import (
+	"fmt"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/taosdata/driver-go/v2/wrapper"
@@ -101,6 +103,7 @@ func BenchmarkTelnet(b *testing.B) {
 // @date: 2021/12/14 15:12
 // @description: test insert opentsdb json
 func TestInsertOpentsdbJson(t *testing.T) {
+	now := time.Now().Unix()
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Error(err)
@@ -121,16 +124,16 @@ func TestInsertOpentsdbJson(t *testing.T) {
 			name: "test",
 			args: args{
 				taosConnect: conn,
-				data: []byte(`
+				data: []byte(fmt.Sprintf(`
 {
     "metric": "sys.cpu.nice",
-    "timestamp": 1346846400,
+    "timestamp": %d,
     "value": 18,
     "tags": {
        "host": "web01",
        "dc": "lga"
     }
-}`),
+}`, now)),
 				db: "test_capi",
 			},
 			wantErr: false,
@@ -138,16 +141,16 @@ func TestInsertOpentsdbJson(t *testing.T) {
 			name: "wrong",
 			args: args{
 				taosConnect: conn,
-				data: []byte(`
+				data: []byte(fmt.Sprintf(`
 {
     "metric": "sys.cpu.nice",
-    "timestamp": 1346846400,
+    "timestamp": %d,
     "value": 18,
     "tags": {
        "host": "web01",
        "dc": "lga"
     },
-}`),
+}`, now)),
 				db: "test_capi",
 			},
 			wantErr: true,
@@ -155,16 +158,16 @@ func TestInsertOpentsdbJson(t *testing.T) {
 			name: "wrongdb",
 			args: args{
 				taosConnect: conn,
-				data: []byte(`
+				data: []byte(fmt.Sprintf(`
 {
     "metric": "sys.cpu.nice",
-    "timestamp": 1346846400,
+    "timestamp": %d,
     "value": 18,
     "tags": {
        "host": "web01",
        "dc": "lga"
     },
-}`),
+}`, now)),
 				db: "1'test_capi",
 			},
 			wantErr: true,
