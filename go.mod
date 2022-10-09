@@ -38,5 +38,6 @@ require (
 	github.com/stretchr/testify v1.7.1
 	github.com/swaggo/swag v1.7.6
 	github.com/taosdata/driver-go/v3 v3.0.1-0.20220921101151-1286be109a68
+	go.uber.org/automaxprocs v1.5.1
 	gonum.org/v1/gonum v0.8.2 // indirect
 )

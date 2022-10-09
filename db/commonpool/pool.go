@@ -1,6 +1,7 @@
 package commonpool
 
 import (
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,10 +22,16 @@ type ConnectorPool struct {
 
 func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	a := &ConnectorPool{user: user, password: password}
+	maxConnect := config.Conf.Pool.MaxConnect
+	maxIdle := config.Conf.Pool.MaxIdle
+	if maxConnect == 0 {
+		maxConnect = runtime.GOMAXPROCS(0) * 2
+		maxIdle = maxConnect
+	}
 	poolConfig := &pool.Config{
 		InitialCap:  1,
-		MaxCap:      config.Conf.Pool.MaxConnect,
-		MaxIdle:     config.Conf.Pool.MaxIdle,
+		MaxCap:      maxConnect,
+		MaxIdle:     maxIdle,
 		Factory:     a.factory,
 		Close:       a.close,
 		IdleTimeout: config.Conf.Pool.IdleTimeout,

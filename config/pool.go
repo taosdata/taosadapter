@@ -14,17 +14,17 @@ type Pool struct {
 }
 
 func initPool() {
-	viper.SetDefault("pool.maxConnect", 4000)
+	viper.SetDefault("pool.maxConnect", 0)
 	_ = viper.BindEnv("pool.maxConnect", "TAOS_ADAPTER_POOL_MAX_CONNECT")
-	pflag.Int("pool.maxConnect", 4000, `max connections to taosd. Env "TAOS_ADAPTER_POOL_MAX_CONNECT"`)
+	pflag.Int("pool.maxConnect", 0, `max connections to taosd. Env "TAOS_ADAPTER_POOL_MAX_CONNECT"`)
 
-	viper.SetDefault("pool.maxIdle", 4000)
+	viper.SetDefault("pool.maxIdle", 0)
 	_ = viper.BindEnv("pool.maxIdle", "TAOS_ADAPTER_POOL_MAX_IDLE")
-	pflag.Int("pool.maxIdle", 4000, `max idle connections to taosd. Env "TAOS_ADAPTER_POOL_MAX_IDLE"`)
+	pflag.Int("pool.maxIdle", 0, `max idle connections to taosd. Env "TAOS_ADAPTER_POOL_MAX_IDLE"`)
 
-	viper.SetDefault("pool.idleTimeout", time.Hour)
+	viper.SetDefault("pool.idleTimeout", time.Duration(0))
 	_ = viper.BindEnv("pool.idleTimeout", "TAOS_ADAPTER_POOL_IDLE_TIMEOUT")
-	pflag.Duration("pool.idleTimeout", time.Hour, `Set idle connection timeout. Env "TAOS_ADAPTER_POOL_IDLE_TIMEOUT"`)
+	pflag.Duration("pool.idleTimeout", time.Duration(0), `Set idle connection timeout. Env "TAOS_ADAPTER_POOL_IDLE_TIMEOUT"`)
 
 }
 
