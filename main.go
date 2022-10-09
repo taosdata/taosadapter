@@ -8,13 +8,10 @@ package main
 // @query.collection.format multi
 
 import (
-	"runtime"
-
 	"github.com/taosdata/taosadapter/system"
 )
 
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
 	r := system.Init()
 	system.Start(r)
 }
