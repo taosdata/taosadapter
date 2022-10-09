@@ -50,9 +50,9 @@ func TestInit(t *testing.T) {
 					SqlRotationSize:     1 * 1024 * 1024 * 1024,
 				},
 				Pool: Pool{
-					MaxConnect:  4000,
-					MaxIdle:     4000,
-					IdleTimeout: time.Hour,
+					MaxConnect:  0,
+					MaxIdle:     0,
+					IdleTimeout: 0,
 				},
 				Monitor: Monitor{
 					CollectDuration:           3 * time.Second,

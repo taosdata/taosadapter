@@ -9,7 +9,6 @@ package main
 
 import (
 	"net/http"
-	"runtime"
 
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/system"
@@ -18,7 +17,6 @@ import (
 var logger = log.GetLogger("main")
 
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
 	r := system.Init()
 	system.Start(r, func(server *http.Server) {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
