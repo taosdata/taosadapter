@@ -6,10 +6,10 @@ logLevel = "info"
 [cors]
 allowAllOrigins = true
 
-[pool]
-maxConnect = 4000
-maxIdle = 4000
-idleTimeout = "1h"
+#[pool]
+#maxConnect = 0
+#maxIdle = 0
+#idleTimeout = 0
 
 [ssl]
 enable = false

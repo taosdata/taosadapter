@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/taosdata/taosadapter/version"
+	"go.uber.org/automaxprocs/maxprocs"
 )
 
 type Config struct {
@@ -73,8 +74,9 @@ func Init() {
 	Conf.Monitor.setValue()
 }
 
-//arg > file > env
+// arg > file > env
 func init() {
+	maxprocs.Set()
 	viper.SetDefault("debug", false)
 	_ = viper.BindEnv("debug", "TAOS_ADAPTER_DEBUG")
 	pflag.Bool("debug", false, `enable debug mode. Env "TAOS_ADAPTER_DEBUG"`)

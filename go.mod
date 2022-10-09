@@ -35,8 +35,9 @@ require (
 	github.com/smartystreets/assertions v1.0.1 // indirect
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.9.0
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 	github.com/swaggo/swag v1.7.6
 	github.com/taosdata/driver-go/v2 v2.0.6-0.20221008080749-09ea57ac36b2
+	go.uber.org/automaxprocs v1.5.1
 	gonum.org/v1/gonum v0.8.2 // indirect
 )
