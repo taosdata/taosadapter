@@ -669,7 +669,14 @@ func (t *TMQ) Close(logger logrus.FieldLogger) {
 	defer func() {
 		if t.consumer != nil {
 			thread.Lock()
-			errCode := wrapper.TMQConsumerClose(t.consumer)
+			errCode := wrapper.TMQUnsubscribe(t.consumer)
+			thread.Unlock()
+			if errCode != 0 {
+				errMsg := wrapper.TMQErr2Str(errCode)
+				logger.WithError(errors.NewError(int(errCode), errMsg)).Error("tmq unsubscribe consumer")
+			}
+			thread.Lock()
+			errCode = wrapper.TMQConsumerClose(t.consumer)
 			thread.Unlock()
 			if errCode != 0 {
 				errMsg := wrapper.TMQErr2Str(errCode)
