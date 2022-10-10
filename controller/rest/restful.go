@@ -107,7 +107,7 @@ func (ctl *Restful) sql(c *gin.Context) {
 	if len(timeZone) != 0 {
 		location, err = time.LoadLocation(timeZone)
 		if err != nil {
-			ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff, "db required")
+			ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff, err.Error())
 			return
 		}
 	}
