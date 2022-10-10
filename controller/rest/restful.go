@@ -34,9 +34,9 @@ import (
 )
 
 const (
-	LayoutMillSecond  = "2006-01-02 15:04:05.000"
-	LayoutMicroSecond = "2006-01-02 15:04:05.000000"
-	LayoutNanoSecond  = "2006-01-02 15:04:05.000000000"
+	LayoutMillSecond  = "2006-01-02T15:04:05.000Z07:00"
+	LayoutMicroSecond = "2006-01-02T15:04:05.000000Z07:00"
+	LayoutNanoSecond  = "2006-01-02T15:04:05.000000000Z07:00"
 )
 
 var logger = log.GetLogger("restful")
