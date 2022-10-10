@@ -117,14 +117,18 @@ type Reader struct {
 	fieldPositions []position
 
 	// lastRecord is a record cache and only used when ReuseRecord == true.
-	lastRecord []*string
+	lastRecord  []*string
+	isFirstLine bool
 }
+
+var bom = []byte{0xef, 0xbb, 0xbf}
 
 // NewReader returns a new Reader that reads from r.
 func NewReader(r io.Reader) *Reader {
 	return &Reader{
-		Comma: ',',
-		r:     bufio.NewReader(r),
+		Comma:       ',',
+		r:           bufio.NewReader(r),
+		isFirstLine: true,
 	}
 }
 
@@ -219,6 +223,12 @@ func (r *Reader) readLine() ([]byte, error) {
 	//	line[n-2] = '\n'
 	//	line = line[:n-1]
 	//}
+	if r.isFirstLine {
+		r.isFirstLine = false
+		if len(line) >= 3 && line[0] == bom[0] && line[1] == bom[1] && line[2] == bom[2] {
+			line = line[3:]
+		}
+	}
 	return line, err
 }
 
