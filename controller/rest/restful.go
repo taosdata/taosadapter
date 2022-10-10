@@ -101,16 +101,26 @@ type TDEngineRestfulRespDoc struct {
 // @Router /rest/sql [post]
 func (ctl *Restful) sql(c *gin.Context) {
 	db := c.Param("db")
+	timeZone := c.Query("tz")
+	location := time.UTC
+	var err error
+	if len(timeZone) != 0 {
+		location, err = time.LoadLocation(timeZone)
+		if err != nil {
+			ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff, err.Error())
+			return
+		}
+	}
 	timeBuffer := make([]byte, 0, 30)
 	DoQuery(c, db, func(builder *jsonbuilder.Stream, ts int64, precision int) {
 		timeBuffer = timeBuffer[:0]
 		switch precision {
 		case common.PrecisionMilliSecond: // milli-second
-			timeBuffer = time.Unix(0, ts*1e6).UTC().AppendFormat(timeBuffer, LayoutMillSecond)
+			timeBuffer = time.Unix(0, ts*1e6).In(location).AppendFormat(timeBuffer, LayoutMillSecond)
 		case common.PrecisionMicroSecond: // micro-second
-			timeBuffer = time.Unix(0, ts*1e3).UTC().AppendFormat(timeBuffer, LayoutMicroSecond)
+			timeBuffer = time.Unix(0, ts*1e3).In(location).AppendFormat(timeBuffer, LayoutMicroSecond)
 		case common.PrecisionNanoSecond: // nano-second
-			timeBuffer = time.Unix(0, ts).UTC().AppendFormat(timeBuffer, LayoutNanoSecond)
+			timeBuffer = time.Unix(0, ts).In(location).AppendFormat(timeBuffer, LayoutNanoSecond)
 		default:
 			panic("unknown precision")
 		}
