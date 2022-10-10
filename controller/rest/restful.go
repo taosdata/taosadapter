@@ -33,6 +33,12 @@ import (
 	"github.com/taosdata/taosadapter/v3/version"
 )
 
+const (
+	LayoutMillSecond  = "2006-01-02T15:04:05.000Z07:00"
+	LayoutMicroSecond = "2006-01-02T15:04:05.000000Z07:00"
+	LayoutNanoSecond  = "2006-01-02T15:04:05.000000000Z07:00"
+)
+
 var logger = log.GetLogger("restful")
 
 type Restful struct {
@@ -100,11 +106,11 @@ func (ctl *Restful) sql(c *gin.Context) {
 		timeBuffer = timeBuffer[:0]
 		switch precision {
 		case common.PrecisionMilliSecond: // milli-second
-			timeBuffer = time.Unix(0, ts*1e6).UTC().AppendFormat(timeBuffer, time.RFC3339Nano)
+			timeBuffer = time.Unix(0, ts*1e6).UTC().AppendFormat(timeBuffer, LayoutMillSecond)
 		case common.PrecisionMicroSecond: // micro-second
-			timeBuffer = time.Unix(0, ts*1e3).UTC().AppendFormat(timeBuffer, time.RFC3339Nano)
+			timeBuffer = time.Unix(0, ts*1e3).UTC().AppendFormat(timeBuffer, LayoutMicroSecond)
 		case common.PrecisionNanoSecond: // nano-second
-			timeBuffer = time.Unix(0, ts).UTC().AppendFormat(timeBuffer, time.RFC3339Nano)
+			timeBuffer = time.Unix(0, ts).UTC().AppendFormat(timeBuffer, LayoutNanoSecond)
 		default:
 			panic("unknown precision")
 		}
