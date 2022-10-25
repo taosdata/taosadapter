@@ -11,79 +11,70 @@ import (
 )
 
 func InsertOpentsdbJson(taosConnect unsafe.Pointer, data []byte, db string) error {
-	if len(data) == 0 {
-		return nil
-	}
-	err := tool.SelectDB(taosConnect, db)
-	if err != nil {
-		return err
-	}
-	thread.Lock()
-	result := wrapper.TaosSchemalessInsert(taosConnect, []string{string(data)}, wrapper.OpenTSDBJsonFormatProtocol, "")
-	thread.Unlock()
-	code := wrapper.TaosError(result)
-	if code != 0 {
-		errStr := wrapper.TaosErrorStr(result)
-		thread.Lock()
-		wrapper.TaosFreeResult(result)
-		thread.Unlock()
-		return tErrors.NewError(code, errStr)
-	}
-	thread.Lock()
-	wrapper.TaosFreeResult(result)
-	thread.Unlock()
-	return nil
+	return insertOpentsdbJson(taosConnect, data, db, false)
 }
 
-func InsertOpentsdbTelnet(taosConnect unsafe.Pointer, data, db string) error {
+func InsertOpentsdbJsonRaw(conn unsafe.Pointer, data []byte, db string) error {
+	return insertOpentsdbJson(conn, data, db, true)
+}
+
+func insertOpentsdbJson(conn unsafe.Pointer, data []byte, db string, raw bool) error {
 	if len(data) == 0 {
 		return nil
 	}
-	err := tool.SelectDB(taosConnect, db)
-	if err != nil {
+	if err := tool.SelectDB(conn, db); err != nil {
 		return err
 	}
+
+	var result unsafe.Pointer
 	thread.Lock()
-	result := wrapper.TaosSchemalessInsert(taosConnect, []string{strings.TrimPrefix(strings.TrimSpace(data), "put ")}, wrapper.OpenTSDBTelnetLineProtocol, "")
-	thread.Unlock()
-	code := wrapper.TaosError(result)
-	if code != 0 {
-		errStr := wrapper.TaosErrorStr(result)
-		thread.Lock()
-		wrapper.TaosFreeResult(result)
-		thread.Unlock()
-		return tErrors.NewError(code, errStr)
+	if raw {
+		_, result = wrapper.TaosSchemalessInsertRaw(conn, string(data), wrapper.OpenTSDBJsonFormatProtocol, "")
+	} else {
+		result = wrapper.TaosSchemalessInsert(conn, []string{string(data)}, wrapper.OpenTSDBJsonFormatProtocol, "")
 	}
-	thread.Lock()
-	wrapper.TaosFreeResult(result)
 	thread.Unlock()
+
+	defer wrapper.TaosFreeResult(result)
+	if code := wrapper.TaosError(result); code != 0 {
+		return tErrors.NewError(code, wrapper.TaosErrorStr(result))
+	}
 	return nil
 }
 
 func InsertOpentsdbTelnetBatch(taosConnect unsafe.Pointer, data []string, db string) error {
+	return insertOpentsdbTelnet(taosConnect, data, db, false)
+}
+
+func InsertOpentsdbTelnetBatchRaw(conn unsafe.Pointer, data []string, db string) error {
+	return insertOpentsdbTelnet(conn, data, db, true)
+}
+
+func insertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string, raw bool) error {
 	if len(data) == 0 {
 		return nil
 	}
-	err := tool.SelectDB(taosConnect, db)
-	if err != nil {
+	if err := tool.SelectDB(conn, db); err != nil {
 		return err
 	}
 	for i := 0; i < len(data); i++ {
 		data[i] = strings.TrimPrefix(strings.TrimSpace(data[i]), "put ")
 	}
+
+	var result unsafe.Pointer
 	thread.Lock()
-	result := wrapper.TaosSchemalessInsert(taosConnect, data, wrapper.OpenTSDBTelnetLineProtocol, "")
+	if raw {
+		_, result = wrapper.TaosSchemalessInsertRaw(conn, strings.Join(data, "\n"),
+			wrapper.OpenTSDBTelnetLineProtocol, "")
+	} else {
+		result = wrapper.TaosSchemalessInsert(conn, data, wrapper.OpenTSDBTelnetLineProtocol, "")
+	}
 	thread.Unlock()
+	defer wrapper.TaosFreeResult(result)
+
 	code := wrapper.TaosError(result)
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(result)
-		thread.Lock()
-		wrapper.TaosFreeResult(result)
-		thread.Unlock()
-		return tErrors.NewError(code, errStr)
+		return tErrors.NewError(code, wrapper.TaosErrorStr(result))
 	}
-	thread.Lock()
-	wrapper.TaosFreeResult(result)
-	thread.Unlock()
 	return nil
 }

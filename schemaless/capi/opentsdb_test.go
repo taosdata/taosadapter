@@ -84,7 +84,10 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := capi.InsertOpentsdbTelnet(tt.args.taosConnect, tt.args.data, tt.args.db); (err != nil) != tt.wantErr {
+			if err := capi.InsertOpentsdbTelnetBatch(tt.args.taosConnect, []string{tt.args.data}, tt.args.db); (err != nil) != tt.wantErr {
+				t.Errorf("InsertOpentsdbTelnet() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err := capi.InsertOpentsdbTelnetBatchRaw(tt.args.taosConnect, []string{tt.args.data}, tt.args.db); (err != nil) != tt.wantErr {
 				t.Errorf("InsertOpentsdbTelnet() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -111,7 +114,7 @@ func BenchmarkTelnet(b *testing.B) {
 		//`sys.if.bytes.out`,`host`=web01,`interface`=eth0
 		//t_98df8453856519710bfc2f1b5f8202cf
 		//t_98df8453856519710bfc2f1b5f8202cf
-		err := capi.InsertOpentsdbTelnet(conn, `put sys.if.bytes.out 1479496100 1.3E3 host=web01 interface=eth0`, "test")
+		err := capi.InsertOpentsdbTelnetBatch(conn, []string{`put sys.if.bytes.out 1479496100 1.3E3 host=web01 interface=eth0`}, "test")
 		if err != nil {
 			b.Error(err)
 		}
@@ -260,6 +263,9 @@ func TestInsertOpentsdbTelnetBatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := capi.InsertOpentsdbTelnetBatch(tt.args.taosConnect, tt.args.data, tt.args.db); (err != nil) != tt.wantErr {
+				t.Errorf("InsertOpentsdbTelnet() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err := capi.InsertOpentsdbTelnetBatchRaw(tt.args.taosConnect, tt.args.data, tt.args.db); (err != nil) != tt.wantErr {
 				t.Errorf("InsertOpentsdbTelnet() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

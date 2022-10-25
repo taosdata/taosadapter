@@ -45,6 +45,7 @@ type Restful struct {
 	wsM            *melody.Melody
 	stmtM          *melody.Melody
 	tmqM           *melody.Melody
+	schemaless     *melody.Melody
 	uploadReplacer *strings.Replacer
 	wsVersionResp  []byte
 }
@@ -64,6 +65,7 @@ func (ctl *Restful) Init(r gin.IRouter) {
 	ctl.InitWS()
 	ctl.InitStmt()
 	ctl.InitTMQ()
+	ctl.InitSchemaless()
 	api := r.Group("rest")
 	api.Use(func(c *gin.Context) {
 		if monitor.AllPaused() {
@@ -78,6 +80,7 @@ func (ctl *Restful) Init(r gin.IRouter) {
 	api.GET("stmt", ctl.stmt)
 	api.GET("tmq", ctl.tmq)
 	api.POST("upload", CheckAuth, ctl.upload)
+	api.GET("schemaless", CheckAuth, ctl.schemalessWs)
 }
 
 type TDEngineRestfulRespDoc struct {
