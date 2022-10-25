@@ -656,6 +656,7 @@ var rawConvertFuncMap = map[int8]rawConvertFunc{
 var rawConvertVarDataMap = map[int8]rawConvertVarDataFunc{
 	int8(common.TSDB_DATA_TYPE_BINARY): rawConvertBinary,
 	int8(common.TSDB_DATA_TYPE_NCHAR):  rawConvertNchar,
+	int8(common.TSDB_DATA_TYPE_JSON):   rawConvertJson,
 }
 
 func ItemIsNull(pHeader uintptr, row int) bool {
@@ -754,4 +755,21 @@ func rawConvertNchar(pHeader, pStart uintptr, row int) driver.Value {
 		binaryVal[index] = *((*rune)(unsafe.Pointer(uintptr(currentRow) + uintptr(index*4))))
 	}
 	return types.TaosNchar(binaryVal)
+}
+
+func rawConvertJson(pHeader, pStart uintptr, row int) driver.Value {
+	offset := *((*int32)(unsafe.Pointer(pHeader + uintptr(row*4))))
+	if offset == -1 {
+		return nil
+	}
+	currentRow := unsafe.Pointer(pStart + uintptr(offset))
+	clen := *((*int16)(currentRow))
+	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
+
+	binaryVal := make([]byte, clen)
+
+	for index := int16(0); index < clen; index++ {
+		binaryVal[index] = *((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index))))
+	}
+	return types.TaosJson(binaryVal)
 }
