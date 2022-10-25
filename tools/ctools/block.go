@@ -34,10 +34,7 @@ func BMIsNull(c byte, n int) bool {
 func ItemIsNull(pHeader uintptr, row int) bool {
 	offset := CharOffset(row)
 	c := *((*byte)(unsafe.Pointer(pHeader + uintptr(offset))))
-	if BMIsNull(c, row) {
-		return true
-	}
-	return false
+	return BMIsNull(c, row)
 }
 
 func WriteRawJsonBool(builder *jsonbuilder.Stream, pStart uintptr, row int) {

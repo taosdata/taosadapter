@@ -102,8 +102,6 @@ func generateData(id string, loop int) [][]byte {
 	return reqs
 }
 
-var src = rand.NewSource(time.Now().UnixNano())
-
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const (
 	letterIdxBits = 6                    // 6 bits to represent a letter index
