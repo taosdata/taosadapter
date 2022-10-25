@@ -87,9 +87,6 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 			if err := capi.InsertOpentsdbTelnetBatch(tt.args.taosConnect, []string{tt.args.data}, tt.args.db); (err != nil) != tt.wantErr {
 				t.Errorf("InsertOpentsdbTelnet() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if err := capi.InsertOpentsdbTelnetBatchRaw(tt.args.taosConnect, []string{tt.args.data}, tt.args.db); (err != nil) != tt.wantErr {
-				t.Errorf("InsertOpentsdbTelnet() error = %v, wantErr %v", err, tt.wantErr)
-			}
 		})
 	}
 }

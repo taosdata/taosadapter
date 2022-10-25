@@ -51,23 +51,27 @@ func InsertOpentsdbTelnetBatchRaw(conn unsafe.Pointer, data []string, db string)
 }
 
 func insertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string, raw bool) error {
-	if len(data) == 0 {
+	trimData := make([]string, 0, len(data))
+	for i := 0; i < len(data); i++ {
+		if len(data[i]) == 0 {
+			continue
+		}
+		trimData = append(trimData, strings.TrimPrefix(strings.TrimSpace(data[i]), "put "))
+	}
+	if len(trimData) == 0 {
 		return nil
 	}
 	if err := tool.SelectDB(conn, db); err != nil {
 		return err
 	}
-	for i := 0; i < len(data); i++ {
-		data[i] = strings.TrimPrefix(strings.TrimSpace(data[i]), "put ")
-	}
 
 	var result unsafe.Pointer
 	thread.Lock()
 	if raw {
-		_, result = wrapper.TaosSchemalessInsertRaw(conn, strings.Join(data, "\n"),
+		_, result = wrapper.TaosSchemalessInsertRaw(conn, strings.Join(trimData, "\n"),
 			wrapper.OpenTSDBTelnetLineProtocol, "")
 	} else {
-		result = wrapper.TaosSchemalessInsert(conn, data, wrapper.OpenTSDBTelnetLineProtocol, "")
+		result = wrapper.TaosSchemalessInsert(conn, trimData, wrapper.OpenTSDBTelnetLineProtocol, "")
 	}
 	thread.Unlock()
 	defer wrapper.TaosFreeResult(result)
