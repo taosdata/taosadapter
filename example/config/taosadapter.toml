@@ -44,7 +44,7 @@ enable = true
 enable = true
 
 [statsd]
-enable = true
+enable = false
 port = 6044
 db = "statsd"
 user = "root"
