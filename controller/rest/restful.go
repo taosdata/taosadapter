@@ -80,7 +80,7 @@ func (ctl *Restful) Init(r gin.IRouter) {
 	api.GET("stmt", ctl.stmt)
 	api.GET("tmq", ctl.tmq)
 	api.POST("upload", CheckAuth, ctl.upload)
-	api.GET("schemaless", CheckAuth, ctl.schemalessWs)
+	api.GET("schemaless", ctl.schemalessWs)
 }
 
 type TDEngineRestfulRespDoc struct {

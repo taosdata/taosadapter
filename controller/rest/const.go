@@ -10,15 +10,14 @@ const (
 
 const TaosSessionKey = "taos"
 const (
-	ClientVersion     = "version"
-	WSConnect         = "conn"
-	WSQuery           = "query"
-	WSFetch           = "fetch"
-	WSFetchBlock      = "fetch_block"
-	WSFreeResult      = "free_result"
-	WSWriteRaw        = "write_raw"
-	WSWriteRawBlock   = "write_raw_block"
-	WSWriteSchemaless = "write_schemaless"
+	ClientVersion   = "version"
+	WSConnect       = "conn"
+	WSQuery         = "query"
+	WSFetch         = "fetch"
+	WSFetchBlock    = "fetch_block"
+	WSFreeResult    = "free_result"
+	WSWriteRaw      = "write_raw"
+	WSWriteRawBlock = "write_raw_block"
 )
 
 //tmq
@@ -55,4 +54,10 @@ const (
 	BindMessage     = 2
 	TMQRawMessage   = 3
 	RawBlockMessage = 4
+)
+
+const taosSchemalessKey = "taos_schemaless"
+const (
+	SchemalessConn  = "conn"
+	SchemalessWrite = "insert"
 )
