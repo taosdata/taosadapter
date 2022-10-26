@@ -111,7 +111,7 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		start = time.Now()
 	}
 	logger.Debug(start, "insert json payload", string(data))
-	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db)
+	err = inserter.InsertOpentsdbJsonRaw(taosConn.TaosConnection, data, db)
 	logger.Debug("insert json payload cost:", time.Now().Sub(start))
 	if err != nil {
 		taosError, is := err.(*tErrors.TaosError)
@@ -190,7 +190,7 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 		start = time.Now()
 	}
 	logger.Debug(start, "insert telnet payload", lines)
-	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db)
+	err = inserter.InsertOpentsdbTelnetBatchRaw(taosConn.TaosConnection, lines, db)
 	logger.Debug("insert telnet payload cost:", time.Now().Sub(start))
 	if err != nil {
 		logger.WithError(err).Error("insert telnet payload error", lines)

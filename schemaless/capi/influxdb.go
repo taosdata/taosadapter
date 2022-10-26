@@ -11,6 +11,8 @@ import (
 	"github.com/taosdata/taosadapter/v3/thread"
 )
 
+// InsertInfluxdb
+// Deprecated
 func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision string) (*proto.InfluxResult, error) {
 	return insertInfluxdb(taosConnect, data, db, precision, false)
 }

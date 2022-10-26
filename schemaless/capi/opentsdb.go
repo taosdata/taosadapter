@@ -10,6 +10,8 @@ import (
 	"github.com/taosdata/taosadapter/v3/thread"
 )
 
+// InsertOpentsdbJson
+// Deprecated
 func InsertOpentsdbJson(taosConnect unsafe.Pointer, data []byte, db string) error {
 	return insertOpentsdbJson(taosConnect, data, db, false)
 }
@@ -42,6 +44,8 @@ func insertOpentsdbJson(conn unsafe.Pointer, data []byte, db string, raw bool) e
 	return nil
 }
 
+// InsertOpentsdbTelnetBatch
+// Deprecated
 func InsertOpentsdbTelnetBatch(taosConnect unsafe.Pointer, data []string, db string) error {
 	return insertOpentsdbTelnet(taosConnect, data, db, false)
 }

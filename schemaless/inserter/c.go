@@ -7,6 +7,8 @@ import (
 	"github.com/taosdata/taosadapter/v3/schemaless/proto"
 )
 
+// InsertInfluxdb
+// Deprecated
 func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision string) (*proto.InfluxResult, error) {
 	return capi.InsertInfluxdb(taosConnect, data, db, precision)
 }
@@ -15,6 +17,8 @@ func InsertInfluxdbRaw(conn unsafe.Pointer, data []byte, db, precision string) (
 	return capi.InsertInfluxdbRaw(conn, data, db, precision)
 }
 
+// InsertOpentsdbJson
+// Deprecated
 func InsertOpentsdbJson(taosConnect unsafe.Pointer, data []byte, db string) error {
 	return capi.InsertOpentsdbJson(taosConnect, data, db)
 }
@@ -27,6 +31,8 @@ func InsertOpentsdbTelnet(taosConnect unsafe.Pointer, data, db string) error {
 	return capi.InsertOpentsdbTelnetBatch(taosConnect, []string{data}, db)
 }
 
+// InsertOpentsdbTelnetBatch
+// Deprecated
 func InsertOpentsdbTelnetBatch(taosConnect unsafe.Pointer, data []string, db string) error {
 	return capi.InsertOpentsdbTelnetBatch(taosConnect, data, db)
 }
