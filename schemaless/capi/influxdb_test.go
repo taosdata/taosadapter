@@ -87,7 +87,7 @@ func TestInsertInfluxdb(t *testing.T) {
 			}
 
 			// raw
-			got, err = capi.InsertInfluxdbRaw(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.precision)
+			got, err = capi.InsertInfluxdb(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.precision)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("InsertInfluxdb() error = %v, wantErr %v", err, tt.wantErr)
 				return

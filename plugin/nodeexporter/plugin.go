@@ -232,7 +232,7 @@ func (p *NodeExporter) requestSingle(conn unsafe.Pointer, req *Req) error {
 		if err != nil {
 			return err
 		}
-		result, err := inserter.InsertInfluxdbRaw(conn, data, p.conf.DB, "ns")
+		result, err := inserter.InsertInfluxdb(conn, data, p.conf.DB, "ns")
 		if err != nil {
 			return err
 		}
