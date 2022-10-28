@@ -15,10 +15,6 @@ func InsertOpentsdbJson(taosConnect unsafe.Pointer, data []byte, db string) erro
 	return capi.InsertOpentsdbJson(taosConnect, data, db)
 }
 
-func InsertOpentsdbTelnet(taosConnect unsafe.Pointer, data, db string) error {
-	return capi.InsertOpentsdbTelnet(taosConnect, data, db)
-}
-
 func InsertOpentsdbTelnetBatch(taosConnect unsafe.Pointer, data []string, db string) error {
-	return capi.InsertOpentsdbTelnetBatch(taosConnect, data, db)
+	return capi.InsertOpentsdbTelnet(taosConnect, data, db)
 }

@@ -80,17 +80,6 @@ func Start(router *gin.Engine, startHttpServer func(server *http.Server)) {
 		}
 	}()
 	logger.Println("Stop Plugins ...")
-	ticker := time.NewTicker(time.Second * 5)
-	done := make(chan struct{})
-	go func() {
-		plugin.Stop()
-		close(done)
-	}()
-	select {
-	case <-done:
-		break
-	case <-ticker.C:
-		break
-	}
+	plugin.StopWithCtx(ctx)
 	logger.Println("Server exiting")
 }

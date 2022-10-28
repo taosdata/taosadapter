@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/gin-gonic/gin"
@@ -55,5 +56,18 @@ func Stop() {
 		if err != nil {
 			logger.WithError(err).Warnf("stop plugin %s", name)
 		}
+	}
+}
+
+func StopWithCtx(ctx context.Context) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		Stop()
+	}()
+
+	select {
+	case <-ctx.Done():
+	case <-done:
 	}
 }

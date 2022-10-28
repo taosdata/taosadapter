@@ -85,6 +85,16 @@ func TestInsertInfluxdb(t *testing.T) {
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("InsertInfluxdb() got = %v, want %v", got, tt.want)
 			}
+
+			// raw
+			got, err = capi.InsertInfluxdb(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.precision)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("InsertInfluxdb() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("InsertInfluxdb() got = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }

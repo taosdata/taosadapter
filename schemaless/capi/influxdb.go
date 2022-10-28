@@ -11,32 +11,34 @@ import (
 	"github.com/taosdata/taosadapter/v3/thread"
 )
 
-func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision string) (*proto.InfluxResult, error) {
-	err := tool.SelectDB(taosConnect, db)
+func InsertInfluxdb(conn unsafe.Pointer, data []byte, db, precision string) (*proto.InfluxResult, error) {
+	err := tool.SelectDB(conn, db)
 	if err != nil {
 		return nil, err
 	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+
+	d := strings.TrimSpace(string(data))
+
 	thread.Lock()
-	result := wrapper.TaosSchemalessInsert(taosConnect, lines, wrapper.InfluxDBLineProtocol, precision)
+	rows, result := wrapper.TaosSchemalessInsertRaw(conn, d, wrapper.InfluxDBLineProtocol, precision)
 	thread.Unlock()
-	code := wrapper.TaosError(result)
-	if code != 0 {
-		errStr := wrapper.TaosErrorStr(result)
+
+	defer func() {
 		thread.Lock()
 		wrapper.TaosFreeResult(result)
 		thread.Unlock()
-		return nil, tErrors.NewError(code, errStr)
+	}()
+
+	if code := wrapper.TaosError(result); code != 0 {
+		return nil, tErrors.NewError(code, wrapper.TaosErrorStr(result))
 	}
 	successCount := wrapper.TaosAffectedRows(result)
-	failCount := len(lines) - successCount
+	failCount := int(rows) - successCount
 	r := &proto.InfluxResult{
 		SuccessCount: successCount,
 		FailCount:    failCount,
-		ErrorList:    make([]string, len(lines)),
+		ErrorList:    make([]string, rows), // todo
 	}
-	thread.Lock()
-	wrapper.TaosFreeResult(result)
-	thread.Unlock()
+
 	return r, nil
 }

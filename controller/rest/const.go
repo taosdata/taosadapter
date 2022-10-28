@@ -48,10 +48,16 @@ const (
 	STMTClose        = "close"
 )
 
-//binaryMessageType
+// binaryMessageType
 const (
 	SetTagsMessage  = 1
 	BindMessage     = 2
 	TMQRawMessage   = 3
 	RawBlockMessage = 4
+)
+
+const taosSchemalessKey = "taos_schemaless"
+const (
+	SchemalessConn  = "conn"
+	SchemalessWrite = "insert"
 )
