@@ -17,8 +17,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/web"
 )
 
-const reqIdKey = "reqId"
-
 func (ctl *Restful) InitSchemaless() {
 	ctl.schemaless = melody.New()
 	ctl.schemaless.Config.MaxMessageSize = 4 * 1024 * 1024
@@ -30,9 +28,6 @@ func (ctl *Restful) InitSchemaless() {
 	ctl.schemaless.HandleMessageBinary(ctl.handleMessage)
 
 	ctl.schemaless.HandleClose(func(session *melody.Session, i int, s string) error {
-		l := session.MustGet("logger").(*logrus.Entry)
-		l.Debugln("ws close", i, s)
-		closeTaos(session)
 		return nil
 	})
 
@@ -43,14 +38,9 @@ func (ctl *Restful) InitSchemaless() {
 		} else {
 			l.WithError(err).Errorln("ws error")
 		}
-
-		closeTaos(session)
 	})
 
 	ctl.schemaless.HandleDisconnect(func(session *melody.Session) {
-		l := session.MustGet("logger").(*logrus.Entry)
-		l.Debugln("ws disconnect")
-		closeTaos(session)
 	})
 }
 
@@ -115,6 +105,7 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 			wsError(ctx, session, err, SchemalessWrite, schemaless.ReqID)
 			return
 		}
+		defer func() { _ = conn.Put() }()
 
 		switch schemaless.Protocol {
 		case wrapper.InfluxDBLineProtocol:
@@ -139,19 +130,8 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 // @Param Authorization header string true "authorization token"
 // @Router /schemaless?db=test&precision=ms
 func (ctl *Restful) schemalessWs(c *gin.Context) {
-	reqId := web.GetRequestID(c)
-	l := logger.WithField("sessionID", reqId)
-
-	_ = ctl.schemaless.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{
-		"logger": l,
-		reqIdKey: reqId,
-	})
-}
-
-func closeTaos(session *melody.Session) {
-	if t, exist := session.Get(taosSchemalessKey); exist && t != nil {
-		t.(*Taos).Close()
-	}
+	l := logger.WithField("sessionID", web.GetRequestID(c))
+	_ = ctl.schemaless.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": l})
 }
 
 type schemalessConnReq struct {

@@ -23,7 +23,11 @@ func InsertInfluxdb(conn unsafe.Pointer, data []byte, db, precision string) (*pr
 	rows, result := wrapper.TaosSchemalessInsertRaw(conn, d, wrapper.InfluxDBLineProtocol, precision)
 	thread.Unlock()
 
-	defer wrapper.TaosFreeResult(result)
+	defer func() {
+		thread.Lock()
+		wrapper.TaosFreeResult(result)
+		thread.Unlock()
+	}()
 
 	if code := wrapper.TaosError(result); code != 0 {
 		return nil, tErrors.NewError(code, wrapper.TaosErrorStr(result))

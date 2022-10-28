@@ -22,7 +22,11 @@ func InsertOpentsdbJson(conn unsafe.Pointer, data []byte, db string) error {
 	_, result := wrapper.TaosSchemalessInsertRaw(conn, string(data), wrapper.OpenTSDBJsonFormatProtocol, "")
 	thread.Unlock()
 
-	defer wrapper.TaosFreeResult(result)
+	defer func() {
+		thread.Lock()
+		wrapper.TaosFreeResult(result)
+		thread.Unlock()
+	}()
 	if code := wrapper.TaosError(result); code != 0 {
 		return tErrors.NewError(code, wrapper.TaosErrorStr(result))
 	}
@@ -47,7 +51,11 @@ func InsertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string) error {
 	thread.Lock()
 	_, result := wrapper.TaosSchemalessInsertRaw(conn, strings.Join(trimData, "\n"), wrapper.OpenTSDBTelnetLineProtocol, "")
 	thread.Unlock()
-	defer wrapper.TaosFreeResult(result)
+	defer func() {
+		thread.Lock()
+		wrapper.TaosFreeResult(result)
+		thread.Unlock()
+	}()
 
 	code := wrapper.TaosError(result)
 	if code != 0 {
