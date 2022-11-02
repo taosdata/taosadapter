@@ -2,23 +2,47 @@ package log
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"path"
 	"sync"
+	"time"
 
 	rotatelogs "github.com/huskar-t/file-rotatelogs/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/config"
-	"github.com/taosdata/taosadapter/tools/pool"
 )
 
 var logger = logrus.New()
 var ServerID = randomID()
 var globalLogFormatter = &TaosLogFormatter{}
+var finish = make(chan struct{})
+var exist = make(chan struct{})
+
+var bufferPool = &defaultPool{
+	pool: &sync.Pool{
+		New: func() interface{} {
+			return new(bytes.Buffer)
+		},
+	},
+}
+
+type defaultPool struct {
+	pool *sync.Pool
+}
+
+func (p *defaultPool) Put(buf *bytes.Buffer) {
+	buf.Reset()
+	p.pool.Put(buf)
+}
+
+func (p *defaultPool) Get() *bytes.Buffer {
+	return p.pool.Get().(*bytes.Buffer)
+}
 
 var (
 	TotalRequest *prometheus.GaugeVec
@@ -34,11 +58,33 @@ type FileHook struct {
 	formatter logrus.Formatter
 	writer    io.Writer
 	buf       *bytes.Buffer
-	sync.RWMutex
+	sync.Mutex
 }
 
 func NewFileHook(formatter logrus.Formatter, writer io.Writer) *FileHook {
-	return &FileHook{formatter: formatter, writer: writer, buf: &bytes.Buffer{}}
+	fh := &FileHook{formatter: formatter, writer: writer, buf: &bytes.Buffer{}}
+	ticker := time.NewTicker(time.Second * 3)
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				//can be optimized by tryLock
+				if fh.buf.Len() > 0 {
+					fh.Lock()
+					fh.flush()
+					fh.Unlock()
+				}
+			case <-exist:
+				fh.Lock()
+				fh.flush()
+				fh.Unlock()
+				ticker.Stop()
+				close(finish)
+				return
+			}
+		}
+	}()
+	return fh
 }
 
 func (f *FileHook) Levels() []logrus.Level {
@@ -46,19 +92,36 @@ func (f *FileHook) Levels() []logrus.Level {
 }
 
 func (f *FileHook) Fire(entry *logrus.Entry) error {
+	if entry.Buffer == nil {
+		entry.Buffer = bufferPool.Get()
+		defer func() {
+			bufferPool.Put(entry.Buffer)
+			entry.Buffer = nil
+		}()
+	}
 	data, err := f.formatter.Format(entry)
 	if err != nil {
 		return err
 	}
 	f.Lock()
-	defer f.Unlock()
 	f.buf.Write(data)
-	if f.buf.Len() > 1024 {
-		_, err = f.writer.Write(f.buf.Bytes())
-		f.buf.Reset()
-		if err != nil {
-			return err
-		}
+	if entry.Level == logrus.FatalLevel || entry.Level == logrus.PanicLevel {
+		err = f.flush()
+	} else if f.buf.Len() > 1024 {
+		err = f.flush()
+	}
+	f.Unlock()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (f *FileHook) flush() error {
+	_, err := f.writer.Write(f.buf.Bytes())
+	f.buf.Reset()
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -146,6 +209,7 @@ func GetLogger(model string) *logrus.Entry {
 	return logger.WithFields(logrus.Fields{"model": model})
 }
 func init() {
+	logrus.SetBufferPool(bufferPool)
 	logger.SetFormatter(globalLogFormatter)
 }
 
@@ -157,8 +221,12 @@ type TaosLogFormatter struct {
 }
 
 func (t *TaosLogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
-	b := pool.BytesPoolGet()
-	defer pool.BytesPoolPut(b)
+	var b *bytes.Buffer
+	if entry.Buffer != nil {
+		b = entry.Buffer
+	} else {
+		b = &bytes.Buffer{}
+	}
 	b.Reset()
 	b.WriteString(entry.Time.Format("01/02 15:04:05.000000"))
 	b.WriteByte(' ')
@@ -176,4 +244,16 @@ func (t *TaosLogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	}
 	b.WriteByte('\n')
 	return b.Bytes(), nil
+}
+
+func Close(ctx context.Context) {
+	close(exist)
+	for {
+		select {
+		case <-finish:
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
 }
