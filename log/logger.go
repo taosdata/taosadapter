@@ -105,25 +105,17 @@ func (f *FileHook) Fire(entry *logrus.Entry) error {
 	}
 	f.Lock()
 	f.buf.Write(data)
-	if entry.Level == logrus.FatalLevel || entry.Level == logrus.PanicLevel {
-		err = f.flush()
-	} else if f.buf.Len() > 1024 {
+	if f.buf.Len() > 1024 || entry.Level == logrus.FatalLevel || entry.Level == logrus.PanicLevel {
 		err = f.flush()
 	}
 	f.Unlock()
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func (f *FileHook) flush() error {
 	_, err := f.writer.Write(f.buf.Bytes())
 	f.buf.Reset()
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 var once sync.Once
@@ -248,12 +240,10 @@ func (t *TaosLogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 func Close(ctx context.Context) {
 	close(exist)
-	for {
-		select {
-		case <-finish:
-			return
-		case <-ctx.Done():
-			return
-		}
+	select {
+	case <-finish:
+		return
+	case <-ctx.Done():
+		return
 	}
 }
