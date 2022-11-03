@@ -17,6 +17,7 @@ StandardOutput=null
 Restart=always
 StartLimitBurst=3
 StartLimitInterval=60s
+Environment="GOTRACEBACK=crash"
 
 [Install]
 WantedBy=multi-user.target
