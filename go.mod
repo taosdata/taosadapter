@@ -21,6 +21,7 @@ require (
 	github.com/huskar-t/melody v0.0.0-20220722113213-5f82fb933d2a
 	github.com/influxdata/telegraf v1.20.0
 	github.com/json-iterator/go v1.1.12
+	github.com/kardianos/service v1.2.2
 	github.com/lestrrat-go/strftime v1.0.5 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/onsi/gomega v1.8.1 // indirect

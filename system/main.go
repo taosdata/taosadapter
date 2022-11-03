@@ -3,16 +3,14 @@ package system
 import (
 	"context"
 	"net/http"
-	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
+	"github.com/kardianos/service"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller"
 	"github.com/taosdata/taosadapter/v3/db"
@@ -61,25 +59,63 @@ func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin
 }
 
 func Start(router *gin.Engine, startHttpServer func(server *http.Server)) {
-	monitor.StartMonitor()
+	prg := newProgram(router, startHttpServer)
+	svcConfig := &service.Config{
+		Name:        "taosadapter",
+		DisplayName: "taosadapter",
+		Description: "taosAdapter is a TDengine’s companion tool and is a bridge/adapter between TDengine cluster and application.",
+	}
+	s, err := service.New(prg, svcConfig)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	err = s.Run()
+	if err != nil {
+		logger.Fatal(err)
+	}
+}
+
+type program struct {
+	router          *gin.Engine
+	server          *http.Server
+	startHttpServer func(server *http.Server)
+}
+
+func newProgram(router *gin.Engine, startHttpServer func(server *http.Server)) *program {
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(config.Conf.Port),
 		Handler: router,
 	}
+	return &program{router: router, server: server, startHttpServer: startHttpServer}
+}
+
+func (p *program) Start(s service.Service) error {
+	if service.Interactive() {
+		logger.Info("Running in terminal.")
+	} else {
+		logger.Info("Running under service manager.")
+	}
+	monitor.StartMonitor()
 	logger.Println("server on :", config.Conf.Port)
-	go startHttpServer(server)
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
-	<-quit
+	go p.startHttpServer(p.server)
+	return nil
+}
+
+func (p *program) Stop(s service.Service) error {
 	logger.Println("Shutdown WebServer ...")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	go func() {
-		if err := server.Shutdown(ctx); err != nil {
+		if err := p.server.Shutdown(ctx); err != nil {
 			logger.Println("WebServer Shutdown error:", err)
 		}
 	}()
 	logger.Println("Stop Plugins ...")
 	plugin.StopWithCtx(ctx)
 	logger.Println("Server exiting")
+	ctxLog, cancelLog := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelLog()
+	logger.Println("Flushing Log")
+	log.Close(ctxLog)
+	return nil
 }
