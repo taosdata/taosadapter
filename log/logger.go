@@ -2,6 +2,7 @@ package log
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -19,6 +20,8 @@ import (
 var logger = logrus.New()
 var ServerID = randomID()
 var globalLogFormatter = &TaosLogFormatter{}
+var finish = make(chan struct{})
+var exist = make(chan struct{})
 
 var bufferPool = &defaultPool{
 	pool: &sync.Pool{
@@ -55,11 +58,33 @@ type FileHook struct {
 	formatter logrus.Formatter
 	writer    io.Writer
 	buf       *bytes.Buffer
-	sync.RWMutex
+	sync.Mutex
 }
 
 func NewFileHook(formatter logrus.Formatter, writer io.Writer) *FileHook {
-	return &FileHook{formatter: formatter, writer: writer, buf: &bytes.Buffer{}}
+	fh := &FileHook{formatter: formatter, writer: writer, buf: &bytes.Buffer{}}
+	ticker := time.NewTicker(time.Second * 5)
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				//can be optimized by tryLock
+				fh.Lock()
+				if fh.buf.Len() > 0 {
+					fh.flush()
+				}
+				fh.Unlock()
+			case <-exist:
+				fh.Lock()
+				fh.flush()
+				fh.Unlock()
+				ticker.Stop()
+				close(finish)
+				return
+			}
+		}
+	}()
+	return fh
 }
 
 func (f *FileHook) Levels() []logrus.Level {
@@ -79,16 +104,18 @@ func (f *FileHook) Fire(entry *logrus.Entry) error {
 		return err
 	}
 	f.Lock()
-	defer f.Unlock()
 	f.buf.Write(data)
-	if f.buf.Len() > 1024 {
-		_, err = f.writer.Write(f.buf.Bytes())
-		f.buf.Reset()
-		if err != nil {
-			return err
-		}
+	if f.buf.Len() > 1024 || entry.Level == logrus.FatalLevel || entry.Level == logrus.PanicLevel {
+		err = f.flush()
 	}
-	return nil
+	f.Unlock()
+	return err
+}
+
+func (f *FileHook) flush() error {
+	_, err := f.writer.Write(f.buf.Bytes())
+	f.buf.Reset()
+	return err
 }
 
 var once sync.Once
@@ -229,4 +256,14 @@ func GetLogDuration(isDebug bool, s time.Time) time.Duration {
 		return time.Now().Sub(s)
 	}
 	return zeroDuration
+}
+
+func Close(ctx context.Context) {
+	close(exist)
+	select {
+	case <-finish:
+		return
+	case <-ctx.Done():
+		return
+	}
 }
