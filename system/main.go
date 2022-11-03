@@ -105,4 +105,8 @@ func Start(router *gin.Engine) {
 		break
 	}
 	logger.Println("Server exiting")
+	logContext, logCancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer logCancel()
+	logger.Println("Flushing log")
+	log.Close(logContext)
 }
