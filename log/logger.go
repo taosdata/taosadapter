@@ -69,11 +69,11 @@ func NewFileHook(formatter logrus.Formatter, writer io.Writer) *FileHook {
 			select {
 			case <-ticker.C:
 				//can be optimized by tryLock
+				fh.Lock()
 				if fh.buf.Len() > 0 {
-					fh.Lock()
 					fh.flush()
-					fh.Unlock()
 				}
+				fh.Unlock()
 			case <-exist:
 				fh.Lock()
 				fh.flush()
