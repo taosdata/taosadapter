@@ -72,7 +72,7 @@ func TestInit(t *testing.T) {
 					AllowOrigins:           nil,
 					AllowOriginFunc:        (func(string) bool)(nil),
 					AllowMethods:           []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
-					AllowHeaders:           []string{"Origin", "Content-Length", "Content-Type"},
+					AllowHeaders:           []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
 					AllowCredentials:       false,
 					ExposeHeaders:          []string{"Authorization"},
 					MaxAge:                 12 * time.Hour,
