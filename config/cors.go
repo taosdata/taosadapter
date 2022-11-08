@@ -28,6 +28,7 @@ func (conf *CorsConfig) GetConfig() cors.Config {
 			corsConfig.AllowOrigins = conf.AllowOrigins
 		}
 	}
+	corsConfig.AddAllowHeaders("Authorization")
 	if len(conf.AllowHeaders) > 0 {
 		corsConfig.AddAllowHeaders(conf.AllowHeaders...)
 	}
