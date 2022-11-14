@@ -200,9 +200,11 @@ func SetLevel(level string) error {
 func GetLogger(model string) *logrus.Entry {
 	return logger.WithFields(logrus.Fields{"model": model})
 }
+
 func init() {
 	logrus.SetBufferPool(bufferPool)
 	logger.SetFormatter(globalLogFormatter)
+	logger.SetOutput(os.Stdout)
 }
 
 func randomID() string {
