@@ -7,13 +7,14 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/taosadapter &
+ExecStart=/usr/bin/taosadapter
 TimeoutStopSec=1000000s
 LimitNOFILE=infinity
 LimitNPROC=infinity
 LimitCORE=infinity
 TimeoutStartSec=0
 StandardOutput=null
+StandardError=journal
 Restart=always
 StartLimitBurst=3
 StartLimitInterval=60s
