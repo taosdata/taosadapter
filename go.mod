@@ -1,6 +1,6 @@
 module github.com/taosdata/taosadapter/v3
 
-go 1.14
+go 1.17
 
 require (
 	cloud.google.com/go/kms v1.0.0 // indirect
