@@ -271,9 +271,14 @@ func (t *Taos) writeRaw(ctx context.Context, session *melody.Session, reqID, mes
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
-	wrapper.TMQWriteRaw(t.conn, meta)
-	logger.Debugln("taos_write_raw_meta cost:", log.GetLogDuration(isDebug, s))
+	errCode := wrapper.TMQWriteRaw(t.conn, meta)
 	thread.Unlock()
+	logger.Debugln("taos_write_raw_meta cost:", log.GetLogDuration(isDebug, s))
+	if errCode != 0 {
+		errStr := wrapper.TaosErrorStr(nil)
+		wsErrorMsg(ctx, session, int(errCode)&0xffff, errStr, WSWriteRaw, reqID)
+		return
+	}
 	resp := &WSWriteMetaResp{Action: WSWriteRaw, ReqID: reqID, MessageID: messageID, Timing: getDuration(ctx)}
 	wsWriteJson(session, resp)
 }
