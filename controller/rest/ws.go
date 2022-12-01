@@ -313,6 +313,41 @@ func (t *Taos) writeRawBlock(ctx context.Context, session *melody.Session, reqID
 	wsWriteJson(session, resp)
 }
 
+type WSWriteRawBlockWithFieldsResp struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Action  string `json:"action"`
+	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
+}
+
+func (t *Taos) writeRawBlockWithFields(ctx context.Context, session *melody.Session, reqID uint64, numOfRows int, tableName string, rawBlock unsafe.Pointer, fields unsafe.Pointer, numFields int) {
+	logger := getLogger(session).WithField("action", WSWriteRawBlockWithFields)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
+	t.Lock()
+	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
+	defer t.Unlock()
+	if t.conn == nil {
+		wsErrorMsg(ctx, session, 0xffff, "taos not connected", WSWriteRawBlockWithFields, reqID)
+		return
+	}
+	s = log.GetLogNow(isDebug)
+	thread.Lock()
+	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	errCode := wrapper.TaosWriteRawBlockWithFields(t.conn, numOfRows, rawBlock, tableName, fields, numFields)
+	thread.Unlock()
+	logger.Debugln("taos_write_raw_meta cost:", log.GetLogDuration(isDebug, s))
+	if errCode != 0 {
+		errStr := wrapper.TaosErrorStr(nil)
+		wsErrorMsg(ctx, session, errCode&0xffff, errStr, WSWriteRawBlockWithFields, reqID)
+		return
+	}
+	resp := &WSWriteRawBlockWithFieldsResp{Action: WSWriteRawBlockWithFields, ReqID: reqID, Timing: getDuration(ctx)}
+	wsWriteJson(session, resp)
+}
+
 type WSFetchReq struct {
 	ReqID uint64 `json:"req_id"`
 	ID    uint64 `json:"id"`
@@ -614,6 +649,19 @@ func (ctl *Restful) InitWS() {
 			b := unsafe.Pointer(p0 + uintptr(30+tableNameLength))
 			t := session.MustGet(TaosSessionKey)
 			t.(*Taos).writeRawBlock(ctx, session, reqID, int(numOfRows), string(tableName), b)
+		case RawBlockMessageWithFields:
+			numOfRows := *(*int32)(unsafe.Pointer(p0 + uintptr(24)))
+			tableNameLength := int(*(*uint16)(unsafe.Pointer(p0 + uintptr(28))))
+			tableName := make([]byte, tableNameLength)
+			for i := 0; i < tableNameLength; i++ {
+				tableName[i] = *(*byte)(unsafe.Pointer(p0 + uintptr(30+i)))
+			}
+			b := unsafe.Pointer(p0 + uintptr(30+tableNameLength))
+			blockLength := int(parser.RawBlockGetLength(b))
+			numOfColumn := int(parser.RawBlockGetNumOfCols(b))
+			fieldsBlock := unsafe.Pointer(p0 + uintptr(30+tableNameLength+blockLength))
+			t := session.MustGet(TaosSessionKey)
+			t.(*Taos).writeRawBlockWithFields(ctx, session, reqID, int(numOfRows), string(tableName), b, fieldsBlock, numOfColumn)
 		}
 	})
 

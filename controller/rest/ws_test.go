@@ -787,3 +787,492 @@ func TestWriteBlock(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 }
+
+func TestWriteBlockWithFields(t *testing.T) {
+	now := time.Now().Local().UnixNano() / 1e6
+	w := httptest.NewRecorder()
+	body := strings.NewReader("create database if not exists test_ws_write_block_with_fields")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	w = httptest.NewRecorder()
+	body = strings.NewReader("drop table if exists test_ws_write_block_with_fields")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_write_block_with_fields", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	w = httptest.NewRecorder()
+	body = strings.NewReader("create table if not exists test_ws_write_block_with_fields(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20)) tags (info json)")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_write_block_with_fields", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	w = httptest.NewRecorder()
+	body = strings.NewReader(fmt.Sprintf(`insert into t1 using test_ws_write_block_with_fields tags('{"table":"t1"}') values (%d,true,2,3,4,5,6,7,8,9,10,11,'中文"binary','中文nchar')(%d,false,12,13,14,15,16,17,18,19,110,111,'中文"binary','中文nchar')(%d,null,null,null,null,null,null,null,null,null,null,null,null,null)`, now, now+1, now+3))
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_write_block_with_fields", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	w = httptest.NewRecorder()
+	body = strings.NewReader(`create table t2 using test_ws_write_block_with_fields tags('{"table":"t2"}')`)
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_write_block_with_fields", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	const (
+		AfterConnect                 = 1
+		AfterQuery                   = 2
+		AfterFetch                   = 3
+		AfterWriteRawBlockWithFields = 4
+		AfterFetchBlock              = 5
+		AfterVersion                 = 6
+	)
+
+	status := 0
+	var queryResult *WSQueryResult
+	var rows int
+	finish := make(chan struct{})
+	testMessageHandler := func(messageType int, message []byte) error {
+		//json
+		switch status {
+		case AfterConnect:
+			var d WSConnectResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", WSConnect, d.Code, d.Message)
+			}
+			//query
+			status = AfterQuery
+			b, _ := json.Marshal(&WSQueryReq{
+				ReqID: 2,
+				SQL:   "select ts,v1 from t1",
+			})
+			action, _ := json.Marshal(&WSAction{
+				Action: "query",
+				Args:   b,
+			})
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			if err != nil {
+				return err
+			}
+		case AfterQuery:
+			var d WSQueryResult
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", WSQuery, d.Code, d.Message)
+			}
+			queryResult = &d
+			status = AfterFetch
+			//fetch
+			b, _ := json.Marshal(&WSFetchReq{
+				ReqID: 3,
+				ID:    queryResult.ID,
+			})
+			action, _ := json.Marshal(&WSAction{
+				Action: WSFetch,
+				Args:   b,
+			})
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			if err != nil {
+				return err
+			}
+		case AfterFetch:
+			var d WSFetchResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", WSFetch, d.Code, d.Message)
+			}
+			rows = d.Rows
+			if d.Completed {
+				status = AfterVersion
+				action, _ := json.Marshal(&WSAction{
+					Action: ClientVersion,
+					Args:   nil,
+				})
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				return nil
+			}
+
+			status = AfterFetchBlock
+			b, _ := json.Marshal(&WSFetchBlockReq{
+				ReqID: 4,
+				ID:    queryResult.ID,
+			})
+			action, _ := json.Marshal(&WSAction{
+				Action: WSFetchBlock,
+				Args:   b,
+			})
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			if err != nil {
+				return err
+			}
+		case AfterFetchBlock:
+			//block
+			buffer := &bytes.Buffer{}
+			// req id
+			writeUint64(buffer, 300)
+			// message id
+			writeUint64(buffer, 400)
+			// action
+			writeUint64(buffer, RawBlockMessageWithFields)
+			// rows
+			writeUint32(buffer, uint32(rows))
+			// table name length
+			writeUint16(buffer, uint16(2))
+			// table name
+			buffer.WriteString("t2")
+			// raw block
+			buffer.Write(message[16:])
+			// fields
+			fields := []byte{
+				// ts
+				0x74, 0x73, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00,
+				// type
+				0x09,
+				// padding
+				0x00, 0x00,
+				// bytes
+				0x08, 0x00, 0x00, 0x00,
+				// v1
+				0x76, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00,
+				// type
+				0x01,
+				// padding
+				0x00, 0x00,
+				// bytes
+				0x01, 0x00, 0x00, 0x00,
+			}
+			buffer.Write(fields)
+			status = AfterWriteRawBlockWithFields
+			err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
+			if err != nil {
+				return err
+			}
+		case AfterWriteRawBlockWithFields:
+			var d WSWriteRawBlockWithFieldsResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", WSWriteRawBlockWithFields, d.Code, d.Message)
+			}
+			status = AfterFetch
+			b, _ := json.Marshal(&WSFetchReq{
+				ReqID: 3,
+				ID:    queryResult.ID,
+			})
+			action, _ := json.Marshal(&WSAction{
+				Action: WSFetch,
+				Args:   b,
+			})
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			if err != nil {
+				return err
+			}
+		case AfterVersion:
+			var d WSVersionResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", WSFetch, d.Code, d.Message)
+			}
+			assert.NotEmpty(t, d.Version)
+			t.Log("client version", d.Version)
+			finish <- struct{}{}
+			return nil
+		}
+		return nil
+	}
+	go func() {
+		for {
+			mt, message, err := ws.ReadMessage()
+			if err != nil {
+				if strings.Contains(err.Error(), "use of closed network connection") {
+					return
+				}
+				t.Error(err)
+				finish <- struct{}{}
+				return
+			}
+			err = testMessageHandler(mt, message)
+			if err != nil {
+				if mt == websocket.BinaryMessage {
+					t.Error(err, message)
+				} else {
+					t.Error(err, string(message))
+				}
+				finish <- struct{}{}
+				return
+			}
+		}
+	}()
+
+	connect := &WSConnectReq{
+		ReqID:    0,
+		User:     "root",
+		Password: "taosdata",
+		DB:       "test_ws_write_block_with_fields",
+	}
+
+	b, _ := json.Marshal(connect)
+	action, _ := json.Marshal(&WSAction{
+		Action: WSConnect,
+		Args:   b,
+	})
+	status = AfterConnect
+	err = ws.WriteMessage(
+		websocket.TextMessage,
+		action,
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	<-finish
+	ws.Close()
+	ws, _, err = websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	var blockResult [][]driver.Value
+	testMessageHandler2 := func(messageType int, message []byte) error {
+		switch status {
+		case AfterConnect:
+			var d WSConnectResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", WSConnect, d.Code, d.Message)
+			}
+			//query
+			status = AfterQuery
+			b, _ := json.Marshal(&WSQueryReq{
+				ReqID: 2,
+				SQL:   "select * from t2",
+			})
+			action, _ := json.Marshal(&WSAction{
+				Action: "query",
+				Args:   b,
+			})
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			if err != nil {
+				return err
+			}
+		case AfterQuery:
+			var d WSQueryResult
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", WSQuery, d.Code, d.Message)
+			}
+			queryResult = &d
+			status = AfterFetch
+			//fetch
+			b, _ := json.Marshal(&WSFetchReq{
+				ReqID: 3,
+				ID:    queryResult.ID,
+			})
+			action, _ := json.Marshal(&WSAction{
+				Action: WSFetch,
+				Args:   b,
+			})
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			if err != nil {
+				return err
+			}
+		case AfterFetch:
+			var d WSFetchResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", WSFetch, d.Code, d.Message)
+			}
+			rows = d.Rows
+			if d.Completed {
+				status = AfterVersion
+				action, _ := json.Marshal(&WSAction{
+					Action: ClientVersion,
+					Args:   nil,
+				})
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				return nil
+			}
+
+			status = AfterFetchBlock
+			b, _ := json.Marshal(&WSFetchBlockReq{
+				ReqID: 4,
+				ID:    queryResult.ID,
+			})
+			action, _ := json.Marshal(&WSAction{
+				Action: WSFetchBlock,
+				Args:   b,
+			})
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			if err != nil {
+				return err
+			}
+		case AfterFetchBlock:
+			_, blockResult = parseblock.ParseBlock(message[8:], queryResult.FieldsTypes, rows, queryResult.Precision)
+			status = AfterFetch
+			b, _ := json.Marshal(&WSFetchReq{
+				ReqID: 3,
+				ID:    queryResult.ID,
+			})
+			action, _ := json.Marshal(&WSAction{
+				Action: WSFetch,
+				Args:   b,
+			})
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			if err != nil {
+				return err
+			}
+		case AfterVersion:
+			var d WSVersionResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", WSFetch, d.Code, d.Message)
+			}
+			assert.NotEmpty(t, d.Version)
+			t.Log("client version", d.Version)
+			finish <- struct{}{}
+			return nil
+		}
+		return nil
+	}
+	go func() {
+		for {
+			mt, message, err := ws.ReadMessage()
+			if err != nil {
+				if strings.Contains(err.Error(), "use of closed network connection") {
+					return
+				}
+				t.Error(err)
+				finish <- struct{}{}
+				return
+			}
+			err = testMessageHandler2(mt, message)
+			if err != nil {
+				if mt == websocket.BinaryMessage {
+					t.Error(err, message)
+				} else {
+					t.Error(err, string(message))
+				}
+				finish <- struct{}{}
+				return
+			}
+		}
+	}()
+	connect = &WSConnectReq{
+		ReqID:    0,
+		User:     "root",
+		Password: "taosdata",
+		DB:       "test_ws_write_block_with_fields",
+	}
+
+	b, _ = json.Marshal(connect)
+	action, _ = json.Marshal(&WSAction{
+		Action: WSConnect,
+		Args:   b,
+	})
+	status = AfterConnect
+	err = ws.WriteMessage(
+		websocket.TextMessage,
+		action,
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	<-finish
+	ws.Close()
+	assert.Equal(t, 3, len(blockResult))
+	assert.Equal(t, now, blockResult[0][0].(time.Time).UnixNano()/1e6)
+	assert.Equal(t, true, blockResult[0][1])
+	for i := 2; i < 14; i++ {
+		assert.Equal(t, nil, blockResult[0][i])
+	}
+	assert.Equal(t, now+1, blockResult[1][0].(time.Time).UnixNano()/1e6)
+	assert.Equal(t, false, blockResult[1][1])
+	for i := 2; i < 14; i++ {
+		assert.Equal(t, nil, blockResult[1][i])
+	}
+	assert.Equal(t, now+3, blockResult[2][0].(time.Time).UnixNano()/1e6)
+	for i := 1; i < 14; i++ {
+		assert.Equal(t, nil, blockResult[2][i])
+	}
+	w = httptest.NewRecorder()
+	body = strings.NewReader("drop database if exists test_ws_write_block_with_fields")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+}
