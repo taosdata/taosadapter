@@ -28,14 +28,14 @@ require (
 	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/prometheus v1.8.2-0.20200911110723-e83ef207b6c2
-	github.com/shirou/gopsutil v3.21.8+incompatible
+	github.com/shirou/gopsutil/v3 v3.22.11
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/silenceper/pool v1.0.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/smartystreets/assertions v1.0.1 // indirect
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.9.0
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.8.1
 	github.com/swaggo/swag v1.7.6
 	github.com/taosdata/driver-go/v2 v2.0.6-0.20221008080749-09ea57ac36b2
 	go.uber.org/automaxprocs v1.5.1
