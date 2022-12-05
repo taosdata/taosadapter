@@ -14,7 +14,6 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/driver-go/v3/af"
-	"github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
@@ -24,12 +23,22 @@ import (
 // @date: 2021/12/14 15:07
 // @description: test collectd plugin
 func TestCollectd(t *testing.T) {
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	afC, err := af.NewConnector(conn)
+	assert.NoError(t, err)
+	defer afC.Close()
+	_, err = afC.Exec("drop database if exists collectd")
+
 	rand.Seed(time.Now().UnixNano())
 	p := &Plugin{}
 	config.Init()
 	db.PrepareConnection()
 	viper.Set("collectd.enable", true)
-	err := p.Init(nil)
+	err = p.Init(nil)
 	assert.NoError(t, err)
 	err = p.Start()
 	assert.NoError(t, err)
@@ -69,27 +78,20 @@ func TestCollectd(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	time.Sleep(time.Second)
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	afC, err := af.NewConnector(conn)
-	assert.NoError(t, err)
-	defer afC.Close()
+	time.Sleep(3 * time.Second)
+
 	if runtime.GOOS == "windows" {
 		_, err = afC.Exec("create database if not exists collectd")
 		assert.NoError(t, err)
 	}
 	defer func() {
-		r := wrapper.TaosQuery(conn, "drop database if exists collectd")
-		code := wrapper.TaosError(r)
-		if code != 0 {
-			errStr := wrapper.TaosErrorStr(r)
-			t.Error(errors.NewError(code, errStr))
-		}
-		wrapper.TaosFreeResult(r)
+		//r := wrapper.TaosQuery(conn, "drop database if exists collectd")
+		//code := wrapper.TaosError(r)
+		//if code != 0 {
+		//	errStr := wrapper.TaosErrorStr(r)
+		//	t.Error(errors.NewError(code, errStr))
+		//}
+		//wrapper.TaosFreeResult(r)
 	}()
 	r, err := afC.Query("select last(`value`) from collectd.`cpu_value`")
 	if err != nil {
