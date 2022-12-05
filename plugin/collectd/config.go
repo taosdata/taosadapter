@@ -13,6 +13,7 @@ type Config struct {
 	User     string
 	Password string
 	Worker   int
+	TTL      int
 }
 
 func (c *Config) setValue() {
@@ -22,6 +23,7 @@ func (c *Config) setValue() {
 	c.User = viper.GetString("collectd.user")
 	c.Password = viper.GetString("collectd.password")
 	c.Worker = viper.GetInt("collectd.worker")
+	c.TTL = viper.GetInt("collected.ttl")
 }
 
 func init() {
@@ -48,4 +50,8 @@ func init() {
 	_ = viper.BindEnv("collectd.worker", "TAOS_ADAPTER_COLLECTD_WORKER")
 	pflag.Int("collectd.worker", 10, `collectd write worker. Env "TAOS_ADAPTER_COLLECTD_WORKER"`)
 	viper.SetDefault("collectd.worker", 10)
+
+	_ = viper.BindEnv("collectd.ttl", "TAOS_ADAPTER_COLLECTD_TTL")
+	pflag.Int("collectd.ttl", 0, `collectd data ttl. Env "TAOS_ADAPTER_COLLECTD_TTL"`)
+	viper.SetDefault("collectd.ttl", 0)
 }

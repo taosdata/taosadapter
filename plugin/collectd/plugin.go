@@ -10,7 +10,6 @@ import (
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/parsers/collectd"
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
-	"github.com/spf13/viper"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
@@ -35,10 +34,6 @@ func (p *Plugin) Init(_ gin.IRouter) error {
 		logger.Info("collectd disabled")
 		return nil
 	}
-	p.conf.Port = viper.GetInt("collectd.port")
-	p.conf.DB = viper.GetString("collectd.db")
-	p.conf.User = viper.GetString("collectd.user")
-	p.conf.Password = viper.GetString("collectd.password")
 	p.parser = &collectd.CollectdParser{
 		ParseMultiValue: "split",
 	}
@@ -126,7 +121,7 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metrics []telegraf
 	}()
 	start := time.Now()
 	logger.Debugln(start, "insert lines", string(data))
-	result, err := inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns")
+	result, err := inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns", p.conf.TTL)
 	logger.Debugln("insert lines finish cost:", time.Now().Sub(start), string(data))
 	if err != nil || result.FailCount != 0 {
 		logger.WithError(err).WithField("result", result).Errorln("insert lines error", string(data))

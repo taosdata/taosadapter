@@ -11,7 +11,7 @@ import (
 )
 
 func TestRestful_InitSchemaless(t *testing.T) {
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 6030)
 	if err != nil {
 		t.Error(err)
 		return
@@ -19,7 +19,7 @@ func TestRestful_InitSchemaless(t *testing.T) {
 	wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "drop database if exists test_schemaless_ws"))
 	wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "create database if not exists test_schemaless_ws"))
 	defer func() {
-		wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "drop database if exists test_schemaless_ws"))
+		//wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "drop database if exists test_schemaless_ws"))
 	}()
 
 	useDbRes := wrapper.TaosQuery(conn, "use test_schemaless_ws")
@@ -35,6 +35,7 @@ func TestRestful_InitSchemaless(t *testing.T) {
 		protocol  int
 		precision string
 		data      string
+		ttl       int
 		code      int
 	}{
 		{
@@ -46,6 +47,7 @@ func TestRestful_InitSchemaless(t *testing.T) {
 				"measurement,host=host1 field1=2i,field2=2.0 1577837400000\n" +
 				"measurement,host=host1 field1=2i,field2=2.0 1577837500000\n" +
 				"measurement,host=host1 field1=2i,field2=2.0 1577837600000",
+			ttl:  1000,
 			code: 0,
 		},
 		{
@@ -61,6 +63,7 @@ func TestRestful_InitSchemaless(t *testing.T) {
 				"meters.voltage 1648432611250 218 location=California.SanFrancisco group=2\n" +
 				"meters.voltage 1648432611249 221 location=California.LosAngeles group=3\n" +
 				"meters.voltage 1648432611250 217 location=California.LosAngeles group=3",
+			ttl:  1000,
 			code: 0,
 		},
 		{
@@ -75,6 +78,7 @@ func TestRestful_InitSchemaless(t *testing.T) {
 				"\"tags\": {\"location\": \"California.SanFrancisco\", \"groupid\": 2 } }, {\"metric\": \"meters.voltage\", " +
 				"\"timestamp\": 1648432611250, \"value\": 221, \"tags\": {\"location\": \"California.LosAngeles\", " +
 				"\"groupid\": 1 } }]",
+			ttl:  100,
 			code: 0,
 		},
 	}
@@ -105,6 +109,7 @@ func TestRestful_InitSchemaless(t *testing.T) {
 					"protocol":  c.protocol,
 					"precision": c.precision,
 					"data":      c.data,
+					"ttl":       c.ttl,
 				},
 			})
 			if err := ws.WriteMessage(websocket.BinaryMessage, j); err != nil {

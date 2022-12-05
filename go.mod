@@ -27,7 +27,7 @@ require (
 	github.com/spf13/viper v1.9.0
 	github.com/stretchr/testify v1.8.1
 	github.com/swaggo/swag v1.7.6
-	github.com/taosdata/driver-go/v3 v3.0.4-0.20221201121043-392f39788832
+	github.com/taosdata/driver-go/v3 v3.0.4-0.20221202113010-8f45635013b9
 	go.uber.org/automaxprocs v1.5.1
 )
 
@@ -69,6 +69,7 @@ require (
 	github.com/google/flatbuffers v2.0.0+incompatible // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
+	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/gnostic v0.4.1 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect

@@ -100,3 +100,61 @@ func TestInfluxdb(t *testing.T) {
 		return
 	}
 }
+
+func TestInfluxdb_TTL(t *testing.T) {
+	config.Init()
+	viper.Set("influxdb.enable", true)
+	db.PrepareConnection()
+	p := Influxdb{}
+	router := gin.Default()
+	router.Use(func(c *gin.Context) {
+		c.Set("currentID", uint32(1))
+	})
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	afC, err := af.NewConnector(conn)
+	assert.NoError(t, err)
+	defer afC.Close()
+	if runtime.GOOS == "windows" {
+		_, err = afC.Exec("create database if not exists test_plugin_influxdb_ttl")
+		assert.NoError(t, err)
+	}
+	defer func() {
+		r := wrapper.TaosQuery(conn, "drop database if exists test_plugin_influxdb_ttl")
+		code := wrapper.TaosError(r)
+		if code != 0 {
+			errStr := wrapper.TaosErrorStr(r)
+			t.Error(errors.NewError(code, errStr))
+		}
+		wrapper.TaosFreeResult(r)
+	}()
+	err = p.Init(router)
+	assert.NoError(t, err)
+	err = p.Start()
+	assert.NoError(t, err)
+	number := rand.Int31()
+	defer p.Stop()
+
+	w := httptest.NewRecorder()
+	reader := strings.NewReader(fmt.Sprintf("measurement_ttl,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
+	req, _ := http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb_ttl&ttl=1000", reader)
+	router.ServeHTTP(w, req)
+	time.Sleep(time.Second)
+
+	r, err := afC.Query("select `ttl` from information_schema.ins_tables " +
+		" where db_name='test_plugin_influxdb_ttl' and stable_name='measurement_ttl'")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer r.Close()
+	values := make([]driver.Value, 1)
+	err = r.Next(values)
+	assert.NoError(t, err)
+	if values[0].(int32) != 1000 {
+		t.Fatal("ttl miss")
+	}
+}
