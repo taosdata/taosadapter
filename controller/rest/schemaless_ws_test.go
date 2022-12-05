@@ -11,7 +11,7 @@ import (
 )
 
 func TestRestful_InitSchemaless(t *testing.T) {
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 6030)
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Error(err)
 		return
@@ -19,7 +19,7 @@ func TestRestful_InitSchemaless(t *testing.T) {
 	wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "drop database if exists test_schemaless_ws"))
 	wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "create database if not exists test_schemaless_ws"))
 	defer func() {
-		//wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "drop database if exists test_schemaless_ws"))
+		wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "drop database if exists test_schemaless_ws"))
 	}()
 
 	useDbRes := wrapper.TaosQuery(conn, "use test_schemaless_ws")
