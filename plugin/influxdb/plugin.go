@@ -105,9 +105,6 @@ func (p *Influxdb) write(c *gin.Context) {
 	var ttl int
 	ttlStr := c.Query("ttl")
 	if len(ttlStr) > 0 {
-		ttl, _ = strconv.Atoi(ttlStr)
-	}
-	if len(ttlStr) > 0 {
 		ttl, err = strconv.Atoi(ttlStr)
 		if err != nil {
 			p.badRequestResponse(c, &badRequest{
