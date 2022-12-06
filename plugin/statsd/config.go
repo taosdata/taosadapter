@@ -24,6 +24,7 @@ type Config struct {
 	DeleteGauges           bool
 	DeleteSets             bool
 	DeleteTimings          bool
+	TTL                    int
 }
 
 func (c *Config) setValue() {
@@ -42,6 +43,7 @@ func (c *Config) setValue() {
 	c.DeleteGauges = viper.GetBool("statsd.deleteGauges")
 	c.DeleteSets = viper.GetBool("statsd.deleteSets")
 	c.DeleteTimings = viper.GetBool("statsd.deleteTimings")
+	c.TTL = viper.GetInt("statsd.ttl")
 }
 
 func init() {
@@ -104,4 +106,8 @@ func init() {
 	_ = viper.BindEnv("statsd.deleteTimings", "TAOS_ADAPTER_STATSD_DELETE_TIMINGS")
 	pflag.Bool("statsd.deleteTimings", true, `statsd delete timing cache after gather. Env "TAOS_ADAPTER_STATSD_DELETE_TIMINGS"`)
 	viper.SetDefault("statsd.deleteTimings", true)
+
+	_ = viper.BindEnv("statsd.ttl", "TAOS_ADAPTER_STATSD_TTL")
+	pflag.Int("statsd.ttl", 0, `statsd data ttl. Env "TAOS_ADAPTER_STATSD_TTL"`)
+	viper.SetDefault("statsd.ttl", 0)
 }

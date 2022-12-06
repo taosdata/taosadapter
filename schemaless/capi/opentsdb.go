@@ -10,7 +10,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/thread"
 )
 
-func InsertOpentsdbJson(conn unsafe.Pointer, data []byte, db string) error {
+func InsertOpentsdbJson(conn unsafe.Pointer, data []byte, db string, ttl int) error {
 	if len(data) == 0 {
 		return nil
 	}
@@ -18,8 +18,14 @@ func InsertOpentsdbJson(conn unsafe.Pointer, data []byte, db string) error {
 		return err
 	}
 
+	var result unsafe.Pointer
 	thread.Lock()
-	_, result := wrapper.TaosSchemalessInsertRaw(conn, string(data), wrapper.OpenTSDBJsonFormatProtocol, "")
+	if ttl > 0 {
+		_, result = wrapper.TaosSchemalessInsertRawTTL(conn, string(data), wrapper.OpenTSDBJsonFormatProtocol, "",
+			ttl)
+	} else {
+		_, result = wrapper.TaosSchemalessInsertRaw(conn, string(data), wrapper.OpenTSDBJsonFormatProtocol, "")
+	}
 	thread.Unlock()
 
 	defer func() {
@@ -33,7 +39,7 @@ func InsertOpentsdbJson(conn unsafe.Pointer, data []byte, db string) error {
 	return nil
 }
 
-func InsertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string) error {
+func InsertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string, ttl int) error {
 	trimData := make([]string, 0, len(data))
 	for i := 0; i < len(data); i++ {
 		if len(data[i]) == 0 {
@@ -48,8 +54,15 @@ func InsertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string) error {
 		return err
 	}
 
+	var result unsafe.Pointer
 	thread.Lock()
-	_, result := wrapper.TaosSchemalessInsertRaw(conn, strings.Join(trimData, "\n"), wrapper.OpenTSDBTelnetLineProtocol, "")
+	if ttl > 0 {
+		_, result = wrapper.TaosSchemalessInsertRawTTL(conn, strings.Join(trimData, "\n"),
+			wrapper.OpenTSDBTelnetLineProtocol, "", ttl)
+	} else {
+		_, result = wrapper.TaosSchemalessInsertRaw(conn, strings.Join(trimData, "\n"),
+			wrapper.OpenTSDBTelnetLineProtocol, "")
+	}
 	thread.Unlock()
 	defer func() {
 		thread.Lock()

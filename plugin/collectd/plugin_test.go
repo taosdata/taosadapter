@@ -24,12 +24,23 @@ import (
 // @date: 2021/12/14 15:07
 // @description: test collectd plugin
 func TestCollectd(t *testing.T) {
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	afC, err := af.NewConnector(conn)
+	assert.NoError(t, err)
+	defer afC.Close()
+	_, err = afC.Exec("drop database if exists collectd")
+
 	rand.Seed(time.Now().UnixNano())
 	p := &Plugin{}
 	config.Init()
 	db.PrepareConnection()
 	viper.Set("collectd.enable", true)
-	err := p.Init(nil)
+	viper.Set("collectd.ttl", 1000)
+	err = p.Init(nil)
 	assert.NoError(t, err)
 	err = p.Start()
 	assert.NoError(t, err)
@@ -69,15 +80,8 @@ func TestCollectd(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	time.Sleep(time.Second)
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	afC, err := af.NewConnector(conn)
-	assert.NoError(t, err)
-	defer afC.Close()
+	time.Sleep(3 * time.Second)
+
 	if runtime.GOOS == "windows" {
 		_, err = afC.Exec("create database if not exists collectd")
 		assert.NoError(t, err)
@@ -104,4 +108,17 @@ func TestCollectd(t *testing.T) {
 		t.Errorf("got %f expect %d", values[0], number)
 	}
 
+	r, err = afC.Query("select `ttl` from information_schema.ins_tables " +
+		" where db_name='collectd' and stable_name='cpu_value'")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer r.Close()
+	values = make([]driver.Value, 1)
+	err = r.Next(values)
+	assert.NoError(t, err)
+	if values[0].(int32) != 1000 {
+		t.Fatal("ttl miss")
+	}
 }

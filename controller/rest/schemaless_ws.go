@@ -109,11 +109,14 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 
 		switch schemaless.Protocol {
 		case wrapper.InfluxDBLineProtocol:
-			_, err = inserter.InsertInfluxdb(conn.TaosConnection, []byte(schemaless.Data), schemaless.DB, schemaless.Precision)
+			_, err = inserter.InsertInfluxdb(conn.TaosConnection, []byte(schemaless.Data), schemaless.DB,
+				schemaless.Precision, schemaless.TTL)
 		case wrapper.OpenTSDBTelnetLineProtocol:
-			err = inserter.InsertOpentsdbTelnetBatch(conn.TaosConnection, strings.Split(schemaless.Data, "\n"), schemaless.DB)
+			err = inserter.InsertOpentsdbTelnetBatch(conn.TaosConnection, strings.Split(schemaless.Data, "\n"),
+				schemaless.DB, schemaless.TTL)
 		case wrapper.OpenTSDBJsonFormatProtocol:
-			err = inserter.InsertOpentsdbJson(conn.TaosConnection, []byte(schemaless.Data), schemaless.DB)
+			err = inserter.InsertOpentsdbJson(conn.TaosConnection, []byte(schemaless.Data), schemaless.DB,
+				schemaless.TTL)
 		default:
 			err = unknownProtocolError
 		}
@@ -146,6 +149,7 @@ type schemalessWriteReq struct {
 	DB        string `json:"db"`
 	Protocol  int    `json:"protocol"`
 	Precision string `json:"precision"`
+	TTL       int    `json:"ttl"`
 	Data      string `json:"data"`
 }
 

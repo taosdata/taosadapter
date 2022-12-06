@@ -23,6 +23,7 @@ type Config struct {
 	KeyFile               string
 	InsecureSkipVerify    bool
 	GatherDuration        time.Duration
+	TTL                   int
 }
 
 func (c *Config) setValue() {
@@ -40,7 +41,7 @@ func (c *Config) setValue() {
 	c.KeyFile = viper.GetString("node_exporter.keyFile")
 	c.InsecureSkipVerify = viper.GetBool("node_exporter.insecureSkipVerify")
 	c.GatherDuration = viper.GetDuration("node_exporter.gatherDuration")
-
+	c.TTL = viper.GetInt("node_exporter.ttl")
 }
 
 func init() {
@@ -99,4 +100,8 @@ func init() {
 	_ = viper.BindEnv("node_exporter.gatherDuration", "TAOS_ADAPTER_NODE_EXPORTER_GATHER_DURATION")
 	pflag.Duration("node_exporter.gatherDuration", 5*time.Second, `node_exporter gather duration. Env "TAOS_ADAPTER_NODE_EXPORTER_GATHER_DURATION"`)
 	viper.SetDefault("node_exporter.gatherDuration", "5s")
+
+	_ = viper.BindEnv("node_exporter.ttl", "TAOS_ADAPTER_NODE_EXPORTER_TTL")
+	pflag.Int("node_exporter.ttl", 0, `node_exporter data ttl. Env "TAOS_ADAPTER_NODE_EXPORTER_TTL"`)
+	viper.SetDefault("node_exporter.ttl", 0)
 }

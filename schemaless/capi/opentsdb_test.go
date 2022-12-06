@@ -42,6 +42,7 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 		taosConnect unsafe.Pointer
 		data        string
 		db          string
+		ttl         int
 	}
 	tests := []struct {
 		name    string
@@ -54,6 +55,7 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 				taosConnect: conn,
 				data:        "df.data.df_complex.used 1636539620 21393473536 fqdn=vm130  status=production",
 				db:          "test_capi",
+				ttl:         100,
 			},
 			wantErr: false,
 		}, {
@@ -70,6 +72,7 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 				taosConnect: conn,
 				data:        "df.data.df_complex.used 1636539620 21393473536 fqdn=vm130  status=production",
 				db:          "1'test_capi",
+				ttl:         1000,
 			},
 			wantErr: true,
 		}, {
@@ -78,13 +81,14 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 				taosConnect: conn,
 				data:        "",
 				db:          "test_capi",
+				ttl:         1000,
 			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := capi.InsertOpentsdbTelnet(tt.args.taosConnect, []string{tt.args.data}, tt.args.db); (err != nil) != tt.wantErr {
+			if err := capi.InsertOpentsdbTelnet(tt.args.taosConnect, []string{tt.args.data}, tt.args.db, tt.args.ttl); (err != nil) != tt.wantErr {
 				t.Errorf("InsertOpentsdbTelnet() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -111,7 +115,7 @@ func BenchmarkTelnet(b *testing.B) {
 		//`sys.if.bytes.out`,`host`=web01,`interface`=eth0
 		//t_98df8453856519710bfc2f1b5f8202cf
 		//t_98df8453856519710bfc2f1b5f8202cf
-		err := capi.InsertOpentsdbTelnet(conn, []string{`put sys.if.bytes.out 1479496100 1.3E3 host=web01 interface=eth0`}, "test")
+		err := capi.InsertOpentsdbTelnet(conn, []string{`put sys.if.bytes.out 1479496100 1.3E3 host=web01 interface=eth0`}, "test", 0)
 		if err != nil {
 			b.Error(err)
 		}
@@ -142,6 +146,7 @@ func TestInsertOpentsdbJson(t *testing.T) {
 		taosConnect unsafe.Pointer
 		data        []byte
 		db          string
+		ttl         int
 	}
 	tests := []struct {
 		name    string
@@ -162,7 +167,8 @@ func TestInsertOpentsdbJson(t *testing.T) {
        "dc": "lga"
     }
 }`, now)),
-				db: "test_capi",
+				db:  "test_capi",
+				ttl: 100,
 			},
 			wantErr: false,
 		}, {
@@ -179,7 +185,8 @@ func TestInsertOpentsdbJson(t *testing.T) {
        "dc": "lga"
     }
 }`, now)),
-				db: "test_capi",
+				db:  "test_capi",
+				ttl: 0,
 			},
 			wantErr: false,
 		}, {
@@ -205,13 +212,14 @@ func TestInsertOpentsdbJson(t *testing.T) {
 				taosConnect: conn,
 				data:        nil,
 				db:          "test_capi",
+				ttl:         1000,
 			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := capi.InsertOpentsdbJson(tt.args.taosConnect, tt.args.data, tt.args.db); (err != nil) != tt.wantErr {
+			if err := capi.InsertOpentsdbJson(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.ttl); (err != nil) != tt.wantErr {
 				t.Errorf("InsertOpentsdbJson() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -238,6 +246,7 @@ func TestInsertOpentsdbTelnetBatch(t *testing.T) {
 		taosConnect unsafe.Pointer
 		data        []string
 		db          string
+		ttl         int
 	}
 	tests := []struct {
 		name    string
@@ -252,14 +261,15 @@ func TestInsertOpentsdbTelnetBatch(t *testing.T) {
 					"df.data.df_complex.used 1636539620 21393473536 fqdn=vm130  status=production",
 					"df.data.df_complex.used 1636539621 21393473536 fqdn=vm129  status=production",
 				},
-				db: "test_capi",
+				db:  "test_capi",
+				ttl: 100,
 			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := capi.InsertOpentsdbTelnet(tt.args.taosConnect, tt.args.data, tt.args.db); (err != nil) != tt.wantErr {
+			if err := capi.InsertOpentsdbTelnet(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.ttl); (err != nil) != tt.wantErr {
 				t.Errorf("InsertOpentsdbTelnet() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

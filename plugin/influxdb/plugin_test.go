@@ -99,4 +99,24 @@ func TestInfluxdb(t *testing.T) {
 		t.Errorf("got %d expect %d", values[1].(int64), number)
 		return
 	}
+
+	w = httptest.NewRecorder()
+	reader = strings.NewReader(fmt.Sprintf("measurement_ttl,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
+	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb_ttl&ttl=1000", reader)
+	router.ServeHTTP(w, req)
+	time.Sleep(time.Second)
+
+	r, err = afC.Query("select `ttl` from information_schema.ins_tables " +
+		" where db_name='test_plugin_influxdb_ttl' and stable_name='measurement_ttl'")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer r.Close()
+	values = make([]driver.Value, 1)
+	err = r.Next(values)
+	assert.NoError(t, err)
+	if values[0].(int32) != 1000 {
+		t.Fatal("ttl miss")
+	}
 }

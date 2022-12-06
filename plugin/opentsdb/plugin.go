@@ -3,8 +3,10 @@ package opentsdb
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -94,6 +96,15 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		p.errorResponse(c, http.StatusBadRequest, err)
 		return
 	}
+	var ttl int
+	ttlStr := c.Query("ttl")
+	if len(ttlStr) > 0 {
+		ttl, err = strconv.Atoi(ttlStr)
+		if err != nil {
+			p.errorResponse(c, http.StatusBadRequest, fmt.Errorf("illegal param, ttl must be numeric %v", err))
+			return
+		}
+	}
 	taosConn, err := commonpool.GetConnection(user, password)
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
@@ -111,7 +122,7 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		start = time.Now()
 	}
 	logger.Debug(start, "insert json payload", string(data))
-	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db)
+	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db, ttl)
 	logger.Debug("insert json payload cost:", time.Now().Sub(start))
 	if err != nil {
 		taosError, is := err.(*tErrors.TaosError)
@@ -146,6 +157,18 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 		p.errorResponse(c, http.StatusBadRequest, errors.New("db required"))
 		return
 	}
+
+	var ttl int
+	var err error
+	ttlStr := c.Query("ttl")
+	if len(ttlStr) > 0 {
+		ttl, err = strconv.Atoi(ttlStr)
+		if err != nil {
+			p.errorResponse(c, http.StatusBadRequest, fmt.Errorf("illegal param, ttl must be numeric %v", err))
+			return
+		}
+	}
+
 	rd := bufio.NewReader(c.Request.Body)
 	var lines []string
 	tmp := pool.BytesPoolGet()
@@ -190,7 +213,7 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 		start = time.Now()
 	}
 	logger.Debug(start, "insert telnet payload", lines)
-	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db)
+	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db, ttl)
 	logger.Debug("insert telnet payload cost:", time.Now().Sub(start))
 	if err != nil {
 		logger.WithError(err).Error("insert telnet payload error", lines)

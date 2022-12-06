@@ -11,7 +11,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/thread"
 )
 
-func InsertInfluxdb(conn unsafe.Pointer, data []byte, db, precision string) (*proto.InfluxResult, error) {
+func InsertInfluxdb(conn unsafe.Pointer, data []byte, db, precision string, ttl int) (*proto.InfluxResult, error) {
 	err := tool.SelectDB(conn, db)
 	if err != nil {
 		return nil, err
@@ -19,8 +19,15 @@ func InsertInfluxdb(conn unsafe.Pointer, data []byte, db, precision string) (*pr
 
 	d := strings.TrimSpace(string(data))
 
+	var rows int32
+	var result unsafe.Pointer
+
 	thread.Lock()
-	rows, result := wrapper.TaosSchemalessInsertRaw(conn, d, wrapper.InfluxDBLineProtocol, precision)
+	if ttl > 0 {
+		rows, result = wrapper.TaosSchemalessInsertRawTTL(conn, d, wrapper.InfluxDBLineProtocol, precision, ttl)
+	} else {
+		rows, result = wrapper.TaosSchemalessInsertRaw(conn, d, wrapper.InfluxDBLineProtocol, precision)
+	}
 	thread.Unlock()
 
 	defer func() {

@@ -2,6 +2,7 @@ package influxdb
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -101,6 +102,23 @@ func (p *Influxdb) write(c *gin.Context) {
 		})
 		return
 	}
+	var ttl int
+	ttlStr := c.Query("ttl")
+	if len(ttlStr) > 0 {
+		ttl, _ = strconv.Atoi(ttlStr)
+	}
+	if len(ttlStr) > 0 {
+		ttl, err = strconv.Atoi(ttlStr)
+		if err != nil {
+			p.badRequestResponse(c, &badRequest{
+				Code:    "illegal param",
+				Message: "ttl must be numeric",
+				Op:      "parse ttl",
+				Err:     "ttl must be numeric",
+			})
+			return
+		}
+	}
 	data, err := c.GetRawData()
 	if err != nil {
 		logger.WithError(err).Errorln("read line error")
@@ -131,7 +149,7 @@ func (p *Influxdb) write(c *gin.Context) {
 		start = time.Now()
 	}
 	logger.WithTime(start).Debugln("start insert influxdb:", string(data))
-	result, err := inserter.InsertInfluxdb(conn, data, db, precision)
+	result, err := inserter.InsertInfluxdb(conn, data, db, precision, ttl)
 	logger.Debugln("finish insert influxdb cost:", time.Now().Sub(start))
 	if err != nil {
 		taosError, is := err.(*tErrors.TaosError)

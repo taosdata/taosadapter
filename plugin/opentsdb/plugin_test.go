@@ -55,7 +55,7 @@ func TestOpentsdb(t *testing.T) {
 	defer p.Stop()
 	w := httptest.NewRecorder()
 	reader := strings.NewReader(fmt.Sprintf("put metric %d %d host=web01 interface=eth0 ", time.Now().Unix(), number))
-	req, _ := http.NewRequest("POST", "/put/telnet/test_plugin_opentsdb_http_telnet", reader)
+	req, _ := http.NewRequest("POST", "/put/telnet/test_plugin_opentsdb_http_telnet?ttl=1000", reader)
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -69,7 +69,7 @@ func TestOpentsdb(t *testing.T) {
        "dc": "lga"
     }
 }`, time.Now().Unix(), number))
-	req, _ = http.NewRequest("POST", "/put/json/test_plugin_opentsdb_http_json", reader)
+	req, _ = http.NewRequest("POST", "/put/json/test_plugin_opentsdb_http_json?ttl=1000", reader)
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -117,5 +117,33 @@ func TestOpentsdb(t *testing.T) {
 	assert.NoError(t, err)
 	if int32(values[0].(float64)) != number {
 		t.Errorf("got %f expect %d", values[0], number)
+	}
+
+	rows, err := afC.Query("select `ttl` from information_schema.ins_tables " +
+		" where db_name='test_plugin_opentsdb_http_json' and stable_name='sys.cpu.nice'")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer rows.Close()
+	values = make([]driver.Value, 1)
+	err = rows.Next(values)
+	assert.NoError(t, err)
+	if values[0].(int32) != 1000 {
+		t.Fatal("ttl miss")
+	}
+
+	rows, err = afC.Query("select `ttl` from information_schema.ins_tables " +
+		" where db_name='test_plugin_opentsdb_http_telnet' and stable_name='metric'")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer rows.Close()
+	values = make([]driver.Value, 1)
+	err = rows.Next(values)
+	assert.NoError(t, err)
+	if values[0].(int32) != 1000 {
+		t.Fatal("ttl miss")
 	}
 }
