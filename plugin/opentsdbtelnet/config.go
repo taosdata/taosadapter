@@ -74,6 +74,6 @@ func init() {
 	viper.SetDefault("opentsdb_telnet.flushInterval", time.Duration(0))
 
 	_ = viper.BindEnv("opentsdb_telnet.ttl", "TAOS_ADAPTER_OPENTSDB_TELNET_TTL")
-	pflag.Duration("opentsdb_telnet.ttl", 0, `opentsdb_telnet data ttl. Env "TAOS_ADAPTER_OPENTSDB_TELNET_TTL"`)
+	pflag.Int("opentsdb_telnet.ttl", 0, `opentsdb_telnet data ttl. Env "TAOS_ADAPTER_OPENTSDB_TELNET_TTL"`)
 	viper.SetDefault("opentsdb_telnet.ttl", 0)
 }

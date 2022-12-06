@@ -23,7 +23,7 @@ func (c *Config) setValue() {
 	c.User = viper.GetString("collectd.user")
 	c.Password = viper.GetString("collectd.password")
 	c.Worker = viper.GetInt("collectd.worker")
-	c.TTL = viper.GetInt("collected.ttl")
+	c.TTL = viper.GetInt("collectd.ttl")
 }
 
 func init() {

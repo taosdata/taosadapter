@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/driver-go/v3/af"
+	"github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
@@ -38,6 +39,7 @@ func TestCollectd(t *testing.T) {
 	config.Init()
 	db.PrepareConnection()
 	viper.Set("collectd.enable", true)
+	viper.Set("collectd.ttl", 1000)
 	err = p.Init(nil)
 	assert.NoError(t, err)
 	err = p.Start()
@@ -85,13 +87,13 @@ func TestCollectd(t *testing.T) {
 		assert.NoError(t, err)
 	}
 	defer func() {
-		//r := wrapper.TaosQuery(conn, "drop database if exists collectd")
-		//code := wrapper.TaosError(r)
-		//if code != 0 {
-		//	errStr := wrapper.TaosErrorStr(r)
-		//	t.Error(errors.NewError(code, errStr))
-		//}
-		//wrapper.TaosFreeResult(r)
+		r := wrapper.TaosQuery(conn, "drop database if exists collectd")
+		code := wrapper.TaosError(r)
+		if code != 0 {
+			errStr := wrapper.TaosErrorStr(r)
+			t.Error(errors.NewError(code, errStr))
+		}
+		wrapper.TaosFreeResult(r)
 	}()
 	r, err := afC.Query("select last(`value`) from collectd.`cpu_value`")
 	if err != nil {
@@ -106,4 +108,17 @@ func TestCollectd(t *testing.T) {
 		t.Errorf("got %f expect %d", values[0], number)
 	}
 
+	r, err = afC.Query("select `ttl` from information_schema.ins_tables " +
+		" where db_name='collectd' and stable_name='cpu_value'")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer r.Close()
+	values = make([]driver.Value, 1)
+	err = r.Next(values)
+	assert.NoError(t, err)
+	if values[0].(int32) != 1000 {
+		t.Fatal("ttl miss")
+	}
 }

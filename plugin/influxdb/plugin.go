@@ -107,6 +107,18 @@ func (p *Influxdb) write(c *gin.Context) {
 	if len(ttlStr) > 0 {
 		ttl, _ = strconv.Atoi(ttlStr)
 	}
+	if len(ttlStr) > 0 {
+		ttl, err = strconv.Atoi(ttlStr)
+		if err != nil {
+			p.badRequestResponse(c, &badRequest{
+				Code:    "illegal param",
+				Message: "ttl must be numeric",
+				Op:      "parse ttl",
+				Err:     "ttl must be numeric",
+			})
+			return
+		}
+	}
 	data, err := c.GetRawData()
 	if err != nil {
 		logger.WithError(err).Errorln("read line error")

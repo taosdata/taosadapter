@@ -46,6 +46,7 @@ func TestNodeExporter_Gather(t *testing.T) {
 	viper.Set("node_exporter.enable", true)
 	viper.Set("node_exporter.urls", []string{api})
 	viper.Set("node_exporter.gatherDuration", time.Second)
+	viper.Set("node_exporter.ttl", 1000)
 	n := NodeExporter{}
 	err := n.Init(nil)
 	assert.NoError(t, err)
@@ -58,19 +59,32 @@ func TestNodeExporter_Gather(t *testing.T) {
 	assert.NoError(t, err)
 	err = conn.SelectDB("node_exporter")
 	assert.NoError(t, err)
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second)
 	rows, err := conn.Query("select last(`value`) as `value` from node_exporter.test_metric;")
 	assert.NoError(t, err)
 	defer rows.Close()
-	t.Log(rows.Columns())
 	assert.Equal(t, 1, len(rows.Columns()))
 	d := make([]driver.Value, 1)
 	err = rows.Next(d)
 	assert.NoError(t, err)
 	assert.Equal(t, float64(1), d[0])
-	t.Logf("%#v", d)
 	err = n.Stop()
 	assert.NoError(t, err)
+
+	rows, err = conn.Query("select `ttl` from information_schema.ins_tables " +
+		" where db_name='node_exporter' and stable_name='test_metric'")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer rows.Close()
+	values := make([]driver.Value, 1)
+	err = rows.Next(values)
+	assert.NoError(t, err)
+	if values[0].(int32) != 1000 {
+		t.Fatal("ttl miss")
+	}
+
 	_, err = conn.Exec("drop database if exists node_exporter")
 	assert.NoError(t, err)
 }

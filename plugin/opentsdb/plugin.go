@@ -3,6 +3,7 @@ package opentsdb
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -96,9 +97,13 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		return
 	}
 	var ttl int
-	ttlStr := c.Param("ttl")
+	ttlStr := c.Query("ttl")
 	if len(ttlStr) > 0 {
-		ttl, _ = strconv.Atoi(ttlStr)
+		ttl, err = strconv.Atoi(ttlStr)
+		if err != nil {
+			p.errorResponse(c, http.StatusBadRequest, fmt.Errorf("illegal param, ttl must be numeric %v", err))
+			return
+		}
 	}
 	taosConn, err := commonpool.GetConnection(user, password)
 	if err != nil {
@@ -154,9 +159,14 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 	}
 
 	var ttl int
-	ttlStr := c.Param("ttl")
+	var err error
+	ttlStr := c.Query("ttl")
 	if len(ttlStr) > 0 {
-		ttl, _ = strconv.Atoi(ttlStr)
+		ttl, err = strconv.Atoi(ttlStr)
+		if err != nil {
+			p.errorResponse(c, http.StatusBadRequest, fmt.Errorf("illegal param, ttl must be numeric %v", err))
+			return
+		}
 	}
 
 	rd := bufio.NewReader(c.Request.Body)

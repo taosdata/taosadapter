@@ -108,6 +108,6 @@ func init() {
 	viper.SetDefault("statsd.deleteTimings", true)
 
 	_ = viper.BindEnv("statsd.ttl", "TAOS_ADAPTER_STATSD_TTL")
-	pflag.Bool("statsd.ttl", true, `statsd data ttl. Env "TAOS_ADAPTER_STATSD_TTL"`)
+	pflag.Int("statsd.ttl", 0, `statsd data ttl. Env "TAOS_ADAPTER_STATSD_TTL"`)
 	viper.SetDefault("statsd.ttl", 0)
 }

@@ -28,6 +28,7 @@ func TestStatsd(t *testing.T) {
 	db.PrepareConnection()
 	viper.Set("statsd.gatherInterval", time.Millisecond)
 	viper.Set("statsd.enable", true)
+	viper.Set("statsd.ttl", 1000)
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Error(err)
@@ -76,5 +77,19 @@ func TestStatsd(t *testing.T) {
 	assert.NoError(t, err)
 	if int32(values[0].(int64)) != number {
 		t.Errorf("got %f expect %d", values[0], number)
+	}
+
+	rows, err := afC.Query("select `ttl` from information_schema.ins_tables " +
+		" where db_name='statsd' and stable_name='foo'")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer rows.Close()
+	values = make([]driver.Value, 1)
+	err = rows.Next(values)
+	assert.NoError(t, err)
+	if values[0].(int32) != 1000 {
+		t.Fatal("ttl miss")
 	}
 }

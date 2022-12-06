@@ -102,6 +102,6 @@ func init() {
 	viper.SetDefault("node_exporter.gatherDuration", "5s")
 
 	_ = viper.BindEnv("node_exporter.ttl", "TAOS_ADAPTER_NODE_EXPORTER_TTL")
-	pflag.Duration("node_exporter.ttl", 0, `node_exporter data ttl. Env "TAOS_ADAPTER_NODE_EXPORTER_TTL"`)
+	pflag.Int("node_exporter.ttl", 0, `node_exporter data ttl. Env "TAOS_ADAPTER_NODE_EXPORTER_TTL"`)
 	viper.SetDefault("node_exporter.ttl", 0)
 }

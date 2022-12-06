@@ -29,6 +29,7 @@ func TestPlugin(t *testing.T) {
 	db.PrepareConnection()
 	viper.Set("opentsdb_telnet.enable", true)
 	viper.Set("opentsdb_telnet.batchSize", 1)
+	viper.Set("opentsdb_telnet.ttl", 1000)
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Error(err)
@@ -78,5 +79,19 @@ func TestPlugin(t *testing.T) {
 	assert.NoError(t, err)
 	if int32(values[0].(float64)) != number {
 		t.Errorf("got %f expect %d", values[0], number)
+	}
+
+	rows, err := afC.Query("select `ttl` from information_schema.ins_tables " +
+		" where db_name='opentsdb_telnet' and stable_name='sys.if.bytes.out'")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer rows.Close()
+	values = make([]driver.Value, 1)
+	err = rows.Next(values)
+	assert.NoError(t, err)
+	if values[0].(int32) != 1000 {
+		t.Fatal("ttl miss")
 	}
 }
