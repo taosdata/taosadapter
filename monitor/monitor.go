@@ -65,8 +65,8 @@ func StartMonitor() {
 		if err != nil {
 			logger.WithError(err).Panic("can not get hostname")
 		}
-		if len(hostname) > 40 {
-			hostname = hostname[:40]
+		if len(hostname) > 39 {
+			hostname = hostname[:39]
 		}
 		identity = fmt.Sprintf("%s:%d", hostname, config.Conf.Port)
 	}
