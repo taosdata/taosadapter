@@ -54,7 +54,7 @@ jobs:
         run: nohup sudo sh ./start.sh &
 
       - name: build taosadapter
-        run: go build
+        run: cd ./taosadapter && go build
 
       - name: Test
         run: cd ./taosadapter && go test -v --count=1 ./...
