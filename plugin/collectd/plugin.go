@@ -22,7 +22,7 @@ var logger = log.GetLogger("collectd")
 type Plugin struct {
 	conf       Config
 	conn       net.PacketConn
-	parser     *collectd.Parser
+	parser     *collectd.CollectdParser
 	metricChan chan []telegraf.Metric
 	closeChan  chan struct{}
 }
@@ -33,7 +33,7 @@ func (p *Plugin) Init(_ gin.IRouter) error {
 		logger.Info("collectd disabled")
 		return nil
 	}
-	p.parser = &collectd.Parser{
+	p.parser = &collectd.CollectdParser{
 		ParseMultiValue: "split",
 	}
 	return nil
