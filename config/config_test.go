@@ -73,7 +73,7 @@ func TestInit(t *testing.T) {
 					AllowAllOrigins:        true,
 					AllowOrigins:           nil,
 					AllowOriginFunc:        (func(string) bool)(nil),
-					AllowMethods:           []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
+					AllowMethods:           []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
 					AllowHeaders:           []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
 					AllowCredentials:       false,
 					ExposeHeaders:          []string{"Authorization"},
