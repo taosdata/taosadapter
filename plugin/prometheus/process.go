@@ -38,15 +38,15 @@ func processWrite(taosConn unsafe.Pointer, req *prompbWrite.WriteRequest, db str
 	if err != nil {
 		return err
 	}
-	logger.Debug("processWrite SelectDB cost:", time.Now().Sub(start))
+	logger.Debug("processWrite SelectDB cost:", time.Since(start))
 	start = time.Now()
 	bp := pool.BytesPoolGet()
 	defer pool.BytesPoolPut(bp)
 	generateWriteSql(req.Timeseries, bp, ttl)
-	logger.Debug("generateWriteSql cost:", time.Now().Sub(start))
+	logger.Debug("generateWriteSql cost:", time.Since(start))
 	start = time.Now()
 	err = async.GlobalAsync.TaosExecWithoutResult(taosConn, bytesutil.ToUnsafeString(bp.Bytes()))
-	logger.Debug("processWrite TaosExecWithoutResult cost:", time.Now().Sub(start))
+	logger.Debug("processWrite TaosExecWithoutResult cost:", time.Since(start))
 	if err != nil {
 		if tErr, is := err.(*tErrors.TaosError); is {
 			start = time.Now()
@@ -61,7 +61,7 @@ func processWrite(taosConn unsafe.Pointer, req *prompbWrite.WriteRequest, db str
 					logger.WithError(err).Error(bp.String())
 					return err
 				}
-				logger.Debug("retry processWrite cost", time.Now().Sub(start))
+				logger.Debug("retry processWrite cost", time.Since(start))
 				return nil
 			} else {
 				logger.WithError(err).Error(bp.String())
@@ -143,12 +143,12 @@ func processRead(taosConn unsafe.Pointer, req *prompb.ReadRequest, db string) (r
 	thread.Lock()
 	wrapper.TaosSelectDB(taosConn, db)
 	thread.Unlock()
-	logger.Debug("processRead SelectDB cost:", time.Now().Sub(start))
+	logger.Debug("processRead SelectDB cost:", time.Since(start))
 	resp = &prompb.ReadResponse{}
 	for i, query := range req.Queries {
 		start = time.Now()
 		sql, err := generateReadSql(query)
-		logger.Debug("processRead generateReadSql cost:", time.Now().Sub(start))
+		logger.Debug("processRead generateReadSql cost:", time.Since(start))
 		if err != nil {
 			return nil, err
 		}
@@ -169,7 +169,7 @@ func processRead(taosConn unsafe.Pointer, req *prompb.ReadRequest, db string) (r
 			logger.WithError(err).Error(sql)
 			return nil, err
 		}
-		logger.Debug("processRead TaosExec cost:", time.Now().Sub(start))
+		logger.Debug("processRead TaosExec cost:", time.Since(start))
 		//ts value labels time.Time float64 []byte
 		start = time.Now()
 		group := map[string]*prompb.TimeSeries{}
@@ -219,7 +219,7 @@ func processRead(taosConn unsafe.Pointer, req *prompb.ReadRequest, db string) (r
 		for _, series := range group {
 			resp.Results[i].Timeseries = append(resp.Results[i].Timeseries, series)
 		}
-		logger.Debug("processRead process result cost:", time.Now().Sub(start))
+		logger.Debug("processRead process result cost:", time.Since(start))
 	}
 	return resp, err
 }

@@ -67,7 +67,7 @@ func TestInfluxdb(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 204, w.Code)
 	w = httptest.NewRecorder()
-	reader = strings.NewReader(fmt.Sprintf("measurement,host=host1 field1=a1"))
+	reader = strings.NewReader("measurement,host=host1 field1=a1")
 	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb", reader)
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 500, w.Code)

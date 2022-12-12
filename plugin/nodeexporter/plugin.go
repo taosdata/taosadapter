@@ -7,10 +7,11 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 	"unsafe"
@@ -104,7 +105,7 @@ func (p *NodeExporter) prepareUrls() error {
 	}
 	certPool := x509.NewCertPool()
 	if len(p.conf.CaCertFile) != 0 {
-		caCert, err := ioutil.ReadFile(p.conf.CaCertFile)
+		caCert, err := os.ReadFile(p.conf.CaCertFile)
 		if err != nil {
 			return err
 		}
@@ -218,11 +219,11 @@ func (p *NodeExporter) requestSingle(conn unsafe.Pointer, req *Req) error {
 		return fmt.Errorf("%s returned HTTP status %s", req.req.URL, resp.Status)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("error reading body: %s", err)
 	}
-	metrics, err := prometheus.Parse(body, resp.Header)
+	metrics, err := prometheus.Parse(body, resp.Header, false)
 	serializer := influx.NewSerializer()
 	for _, metric := range metrics {
 		metric.AddTag("url", req.url)

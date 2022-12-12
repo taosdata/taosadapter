@@ -59,7 +59,7 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 				rv := reflect.ValueOf(src[column][row])
 				switch rv.Kind() {
 				case reflect.Bool:
-					if rv.Bool() == true {
+					if rv.Bool() {
 						src[column][row] = types.TaosTinyint(1)
 					} else {
 						src[column][row] = types.TaosTinyint(0)
@@ -88,7 +88,7 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 				rv := reflect.ValueOf(src[column][row])
 				switch rv.Kind() {
 				case reflect.Bool:
-					if rv.Bool() == true {
+					if rv.Bool() {
 						src[column][row] = types.TaosSmallint(1)
 					} else {
 						src[column][row] = types.TaosSmallint(0)
@@ -117,7 +117,7 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 				rv := reflect.ValueOf(src[column][row])
 				switch rv.Kind() {
 				case reflect.Bool:
-					if rv.Bool() == true {
+					if rv.Bool() {
 						src[column][row] = types.TaosInt(1)
 					} else {
 						src[column][row] = types.TaosInt(0)
@@ -146,7 +146,7 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 				rv := reflect.ValueOf(src[column][row])
 				switch rv.Kind() {
 				case reflect.Bool:
-					if rv.Bool() == true {
+					if rv.Bool() {
 						src[column][row] = types.TaosBigint(1)
 					} else {
 						src[column][row] = types.TaosBigint(0)
@@ -176,7 +176,7 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 				rv := reflect.ValueOf(src[column][row])
 				switch rv.Kind() {
 				case reflect.Bool:
-					if rv.Bool() == true {
+					if rv.Bool() {
 						src[column][row] = types.TaosFloat(1)
 					} else {
 						src[column][row] = types.TaosFloat(0)
@@ -205,7 +205,7 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 				rv := reflect.ValueOf(src[column][row])
 				switch rv.Kind() {
 				case reflect.Bool:
-					if rv.Bool() == true {
+					if rv.Bool() {
 						src[column][row] = types.TaosDouble(1)
 					} else {
 						src[column][row] = types.TaosDouble(0)
@@ -314,7 +314,7 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 				rv := reflect.ValueOf(src[column][row])
 				switch rv.Kind() {
 				case reflect.Bool:
-					if rv.Bool() == true {
+					if rv.Bool() {
 						src[column][row] = types.TaosUTinyint(1)
 					} else {
 						src[column][row] = types.TaosUTinyint(0)
@@ -343,7 +343,7 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 				rv := reflect.ValueOf(src[column][row])
 				switch rv.Kind() {
 				case reflect.Bool:
-					if rv.Bool() == true {
+					if rv.Bool() {
 						src[column][row] = types.TaosUSmallint(1)
 					} else {
 						src[column][row] = types.TaosUSmallint(0)
@@ -372,7 +372,7 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 				rv := reflect.ValueOf(src[column][row])
 				switch rv.Kind() {
 				case reflect.Bool:
-					if rv.Bool() == true {
+					if rv.Bool() {
 						src[column][row] = types.TaosUInt(1)
 					} else {
 						src[column][row] = types.TaosUInt(0)
@@ -401,7 +401,7 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 				rv := reflect.ValueOf(src[column][row])
 				switch rv.Kind() {
 				case reflect.Bool:
-					if rv.Bool() == true {
+					if rv.Bool() {
 						src[column][row] = types.TaosUBigint(1)
 					} else {
 						src[column][row] = types.TaosUBigint(0)
@@ -662,10 +662,7 @@ var rawConvertVarDataMap = map[int8]rawConvertVarDataFunc{
 func ItemIsNull(pHeader uintptr, row int) bool {
 	offset := parser.CharOffset(row)
 	c := *((*byte)(unsafe.Pointer(pHeader + uintptr(offset))))
-	if parser.BMIsNull(c, row) {
-		return true
-	}
-	return false
+	return parser.BMIsNull(c, row)
 }
 
 func rawConvertBool(pStart uintptr, row int, _ ...interface{}) driver.Value {

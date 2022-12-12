@@ -1,7 +1,7 @@
 package monitor
 
 import (
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -9,7 +9,7 @@ import (
 //https://github.com/containerd/cgroups/blob/main/utils.go
 
 func readUint(path string) (uint64, error) {
-	v, err := ioutil.ReadFile(path)
+	v, err := os.ReadFile(path)
 	if err != nil {
 		return 0, err
 	}

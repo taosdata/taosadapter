@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net"
 	"net/http"
@@ -43,7 +43,7 @@ func main() {
 		}()
 	}
 	wg.Wait()
-	fmt.Println(time.Now().Sub(t))
+	fmt.Println(time.Since(t))
 	wg.Add(worker)
 	for i := 0; i < worker; i++ {
 		i := i
@@ -55,7 +55,7 @@ func main() {
 					panic(err)
 				}
 				if resp.StatusCode != 202 {
-					d, _ := ioutil.ReadAll(resp.Body)
+					d, _ := io.ReadAll(resp.Body)
 					resp.Body.Close()
 					panic(string(d))
 				}

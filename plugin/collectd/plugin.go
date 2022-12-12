@@ -22,8 +22,7 @@ var logger = log.GetLogger("collectd")
 type Plugin struct {
 	conf       Config
 	conn       net.PacketConn
-	serializer *influx.Serializer
-	parser     *collectd.CollectdParser
+	parser     *collectd.Parser
 	metricChan chan []telegraf.Metric
 	closeChan  chan struct{}
 }
@@ -34,7 +33,7 @@ func (p *Plugin) Init(_ gin.IRouter) error {
 		logger.Info("collectd disabled")
 		return nil
 	}
-	p.parser = &collectd.CollectdParser{
+	p.parser = &collectd.Parser{
 		ParseMultiValue: "split",
 	}
 	return nil
@@ -122,7 +121,7 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metrics []telegraf
 	start := time.Now()
 	logger.Debugln(start, "insert lines", string(data))
 	result, err := inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns", p.conf.TTL)
-	logger.Debugln("insert lines finish cost:", time.Now().Sub(start), string(data))
+	logger.Debugln("insert lines finish cost:", time.Since(start), string(data))
 	if err != nil || result.FailCount != 0 {
 		logger.WithError(err).WithField("result", result).Errorln("insert lines error", string(data))
 		return

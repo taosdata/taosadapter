@@ -28,7 +28,6 @@ func TestMain(m *testing.M) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		panic(err)
-		return
 	}
 	if runtime.GOOS == "windows" {
 		r := wrapper.TaosQuery(conn, "create database if not exists test_plugin_prometheus")

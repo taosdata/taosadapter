@@ -428,7 +428,6 @@ func (t *TaosStmt) bind(ctx context.Context, session *melody.Session, req *StmtB
 	thread.Unlock()
 	resp.Timing = getDuration(ctx)
 	wsWriteJson(session, resp)
-	return
 }
 
 type StmtAddBatchReq struct {
@@ -681,7 +680,6 @@ func (t *TaosStmt) bindBlock(ctx context.Context, session *melody.Session, reqID
 	thread.Unlock()
 	resp.Timing = getDuration(ctx)
 	wsWriteJson(session, resp)
-	return
 }
 
 func (t *TaosStmt) Close() {
