@@ -34,7 +34,6 @@ func (p *Plugin) Init(r gin.IRouter) error {
 	}
 	r.Use(plugin.Auth(func(c *gin.Context, code int, err error) {
 		c.AbortWithError(code, err)
-		return
 	}))
 	r.POST("remote_read/:db", func(c *gin.Context) {
 		if monitor.QueryPaused() {
@@ -87,7 +86,7 @@ func (p *Plugin) Read(c *gin.Context) {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
-	logger.Debug("read snappy decode cost:", time.Now().Sub(start))
+	logger.Debug("read snappy decode cost:", time.Since(start))
 	var req prompb.ReadRequest
 	start = time.Now()
 	err = proto.Unmarshal(buf, &req)
@@ -95,7 +94,7 @@ func (p *Plugin) Read(c *gin.Context) {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
-	logger.Debug("read protobuf unmarshal cost:", time.Now().Sub(start))
+	logger.Debug("read protobuf unmarshal cost:", time.Since(start))
 	start = time.Now()
 	taosConn, err := commonpool.GetConnection(user, password)
 	if err != nil {
@@ -103,7 +102,7 @@ func (p *Plugin) Read(c *gin.Context) {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
-	logger.Debug("read commonpool.GetConnection cost:", time.Now().Sub(start))
+	logger.Debug("read commonpool.GetConnection cost:", time.Since(start))
 	defer func() {
 		putErr := taosConn.Put()
 		if putErr != nil {
@@ -125,10 +124,10 @@ func (p *Plugin) Read(c *gin.Context) {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
-	logger.Debug("read protobuf marshal cost:", time.Now().Sub(start))
+	logger.Debug("read protobuf marshal cost:", time.Since(start))
 	start = time.Now()
 	compressed := snappy.Encode(nil, respData)
-	logger.Debug("read snappy encode cost:", time.Now().Sub(start))
+	logger.Debug("read snappy encode cost:", time.Since(start))
 	c.Header("Content-Encoding", "snappy")
 	c.Data(http.StatusAccepted, "application/x-protobuf", compressed)
 }
@@ -166,7 +165,7 @@ func (p *Plugin) Write(c *gin.Context) {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
-	logger.Debug("snappy decode cost:", time.Now().Sub(start))
+	logger.Debug("snappy decode cost:", time.Since(start))
 	req := prompbWrite.GetWriteRequest()
 	defer prompbWrite.PutWriteRequest(req)
 	start = time.Now()
@@ -175,7 +174,7 @@ func (p *Plugin) Write(c *gin.Context) {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
-	logger.Debug("protobuf unmarshal cost:", time.Now().Sub(start))
+	logger.Debug("protobuf unmarshal cost:", time.Since(start))
 	if len(req.Timeseries) == 0 {
 		return
 	}
@@ -186,7 +185,7 @@ func (p *Plugin) Write(c *gin.Context) {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
-	logger.Debug("commonpool.GetConnection cost:", time.Now().Sub(start))
+	logger.Debug("commonpool.GetConnection cost:", time.Since(start))
 	defer func() {
 		putErr := taosConn.Put()
 		if putErr != nil {

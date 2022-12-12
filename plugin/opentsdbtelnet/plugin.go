@@ -303,7 +303,7 @@ func (p *Plugin) handleData(index int, line []string) {
 	if err != nil {
 		logger.WithError(err).Errorln("insert telnet payload error :", line)
 	}
-	logger.Debug("insert telnet payload cost:", time.Now().Sub(start))
+	logger.Debug("insert telnet payload cost:", time.Since(start))
 }
 
 func init() {

@@ -85,11 +85,8 @@ func Start(collectDuration time.Duration, inCGroup bool) {
 	SysMonitor.collect()
 	SysMonitor.ticker = time.NewTicker(SysMonitor.collectDuration)
 	go func() {
-		for {
-			select {
-			case <-SysMonitor.ticker.C:
-				SysMonitor.collect()
-			}
+		for range SysMonitor.ticker.C {
+			SysMonitor.collect()
 		}
 	}()
 }

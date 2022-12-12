@@ -72,31 +72,28 @@ func StartMonitor() {
 	}
 	systemStatus := make(chan monitor.SysStatus)
 	go func() {
-		for {
-			select {
-			case status := <-systemStatus:
-				if status.CpuError == nil {
-					cpuPercent.Set(status.CpuPercent)
-				}
-				if status.MemError == nil {
-					memPercent.Set(status.MemPercent)
-					if status.MemPercent >= config.Conf.Monitor.PauseAllMemoryThreshold {
-						if atomic.CompareAndSwapUint32(&pauseStatus, NormalStatus, PauseStatus) {
-							logger.Warn("pause all")
-						}
-					} else {
-						if atomic.CompareAndSwapUint32(&pauseStatus, PauseStatus, NormalStatus) {
-							logger.Warn("resume all")
-						}
+		for status := range systemStatus {
+			if status.CpuError == nil {
+				cpuPercent.Set(status.CpuPercent)
+			}
+			if status.MemError == nil {
+				memPercent.Set(status.MemPercent)
+				if status.MemPercent >= config.Conf.Monitor.PauseAllMemoryThreshold {
+					if atomic.CompareAndSwapUint32(&pauseStatus, NormalStatus, PauseStatus) {
+						logger.Warn("pause all")
 					}
-					if status.MemPercent >= config.Conf.Monitor.PauseQueryMemoryThreshold {
-						if atomic.CompareAndSwapUint32(&queryStatus, NormalStatus, PauseStatus) {
-							logger.Warn("pause query")
-						}
-					} else {
-						if atomic.CompareAndSwapUint32(&queryStatus, PauseStatus, NormalStatus) {
-							logger.Warn("resume query")
-						}
+				} else {
+					if atomic.CompareAndSwapUint32(&pauseStatus, PauseStatus, NormalStatus) {
+						logger.Warn("resume all")
+					}
+				}
+				if status.MemPercent >= config.Conf.Monitor.PauseQueryMemoryThreshold {
+					if atomic.CompareAndSwapUint32(&queryStatus, NormalStatus, PauseStatus) {
+						logger.Warn("pause query")
+					}
+				} else {
+					if atomic.CompareAndSwapUint32(&queryStatus, PauseStatus, NormalStatus) {
+						logger.Warn("resume query")
 					}
 				}
 			}
@@ -107,13 +104,10 @@ func StartMonitor() {
 	if config.Conf.Monitor.WriteToTD {
 		ticker := time.NewTicker(config.Conf.Monitor.WriteInterval)
 		go func() {
-			for {
-				select {
-				case <-ticker.C:
-					err := writeToTDLog()
-					if err != nil {
-						logger.WithError(err).Error("write to TDengine error")
-					}
+			for range ticker.C {
+				err := writeToTDLog()
+				if err != nil {
+					logger.WithError(err).Error("write to TDengine error")
 				}
 			}
 		}()

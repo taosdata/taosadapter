@@ -147,7 +147,7 @@ func (p *Influxdb) write(c *gin.Context) {
 	}
 	logger.WithTime(start).Debugln("start insert influxdb:", string(data))
 	result, err := inserter.InsertInfluxdb(conn, data, db, precision, ttl)
-	logger.Debugln("finish insert influxdb cost:", time.Now().Sub(start))
+	logger.Debugln("finish insert influxdb cost:", time.Since(start))
 	if err != nil {
 		taosError, is := err.(*tErrors.TaosError)
 		if is {

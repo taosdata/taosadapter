@@ -53,6 +53,8 @@ jobs:
       - name: taosd
         run: nohup sudo sh ./start.sh &
 
+      - name: build taosadapter
+        run: cd ./taosadapter && go build
 
       - name: Test
         run: cd ./taosadapter && go test -v --count=1 ./...

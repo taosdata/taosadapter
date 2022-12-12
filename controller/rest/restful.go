@@ -169,7 +169,7 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
 	}
 	taosConnect, err := commonpool.GetConnection(user, password)
 	if isDebug {
-		logger.Debugln("taos connect cost:", time.Now().Sub(s))
+		logger.Debugln("taos connect cost:", time.Since(s))
 	}
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
@@ -202,7 +202,7 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
 			panic(err)
 		}
 		if isDebug {
-			logger.Debugln("taos put connect cost:", time.Now().Sub(s))
+			logger.Debugln("taos put connect cost:", time.Since(s))
 		}
 	}()
 
@@ -215,7 +215,7 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
 		thread.Lock()
 		_ = wrapper.TaosSelectDB(taosConnect.TaosConnection, db)
 		thread.Unlock()
-		logger.Debugln("taos select db cost:", time.Now().Sub(s))
+		logger.Debugln("taos select db cost:", time.Since(s))
 	}
 	execute(c, logger, taosConnect.TaosConnection, sql, timeFunc)
 }
@@ -238,7 +238,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	}
 	result, _ := async.GlobalAsync.TaosQuery(taosConnect, sql, handler)
 	if isDebug {
-		logger.Debugln("taos query cost:", time.Now().Sub(s))
+		logger.Debugln("taos query cost:", time.Since(s))
 	}
 	defer func() {
 		if result != nil && result.Res != nil {
@@ -249,7 +249,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 			wrapper.TaosFreeResult(result.Res)
 			thread.Unlock()
 			if isDebug {
-				logger.Debugln("taos free result cost:", time.Now().Sub(s))
+				logger.Debugln("taos free result cost:", time.Since(s))
 			}
 		}
 	}()
@@ -342,7 +342,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 		}
 		result, _ = async.GlobalAsync.TaosFetchRawBlockA(res, handler)
 		if isDebug {
-			logger.Debugln("taos fetch_rows_a cost:", time.Now().Sub(s))
+			logger.Debugln("taos fetch_rows_a cost:", time.Since(s))
 		}
 		if result.N == 0 {
 			break
@@ -638,7 +638,7 @@ func (ctl *Restful) upload(c *gin.Context) {
 func (ctl *Restful) des(c *gin.Context) {
 	user := c.Param("user")
 	password := c.Param("password")
-	if len(user) < 0 || len(user) > 24 || len(password) < 0 || len(password) > 24 {
+	if len(user) == 0 || len(user) > 24 || len(password) == 0 || len(password) > 24 {
 		ErrorResponse(c, httperror.HTTP_GEN_TAOSD_TOKEN_ERR)
 		return
 	}
@@ -660,7 +660,6 @@ func (ctl *Restful) des(c *gin.Context) {
 }
 
 func (ctl *Restful) Close() {
-	return
 }
 
 func init() {
