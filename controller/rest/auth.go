@@ -180,12 +180,19 @@ func ErrorResponseWithStatus(c *gin.Context, status, code int) {
 	web.SetTaosErrorCode(c, code)
 }
 
+const RPC_NETWORK_UNAVAIL = 0x000B
+
 func ErrorResponseWithMsg(c *gin.Context, code int, msg string) {
-	c.AbortWithStatusJSON(http.StatusOK, &Message{
-		Code: code & 0xffff,
+	status := http.StatusOK
+	code = code & 0xffff
+	if code == RPC_NETWORK_UNAVAIL {
+		status = http.StatusBadGateway
+	}
+	c.AbortWithStatusJSON(status, &Message{
+		Code: code,
 		Desc: msg,
 	})
-	web.SetTaosErrorCode(c, code&0xffff)
+	web.SetTaosErrorCode(c, code)
 }
 
 func ErrorResponseWithStatusMsg(c *gin.Context, httpCode int, code int, msg string) {
