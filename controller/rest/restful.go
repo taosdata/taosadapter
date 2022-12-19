@@ -3,7 +3,6 @@ package rest
 import (
 	"database/sql/driver"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -180,14 +179,13 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
 	}
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
-		var tError *tErrors.TaosError
-		if errors.As(err, &tError) {
+		tError, is := err.(*tErrors.TaosError)
+		if is {
 			ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
-			return
 		} else {
 			ErrorResponseWithMsg(c, 0xffff, err.Error())
-			return
 		}
+		return
 	}
 	defer func() {
 		if isDebug {
