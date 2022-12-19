@@ -173,13 +173,14 @@ func ErrorResponse(c *gin.Context, code int) {
 
 func ErrorResponseWithMsg(c *gin.Context, code int, msg string) {
 	status := http.StatusOK
+	code = code & 0xffff
 	if code == int(tErrors.RPC_NETWORK_UNAVAIL) {
 		status = http.StatusBadGateway
 	}
 	c.AbortWithStatusJSON(status, &Message{
 		Status: "error",
-		Code:   code & 0xffff,
+		Code:   code,
 		Desc:   msg,
 	})
-	web.SetTaosErrorCode(c, code&0xffff)
+	web.SetTaosErrorCode(c, code)
 }
