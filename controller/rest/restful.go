@@ -179,7 +179,6 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
 	}
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
-		var tError *tErrors.TaosError
 		tError, is := err.(*tErrors.TaosError)
 		if is {
 			ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
