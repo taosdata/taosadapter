@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/patrickmn/go-cache"
+	tErrors "github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/taosadapter/httperror"
 	"github.com/taosdata/taosadapter/tools"
 	"github.com/taosdata/taosadapter/tools/pool"
@@ -171,7 +172,11 @@ func ErrorResponse(c *gin.Context, code int) {
 }
 
 func ErrorResponseWithMsg(c *gin.Context, code int, msg string) {
-	c.AbortWithStatusJSON(http.StatusOK, &Message{
+	status := http.StatusOK
+	if code == int(tErrors.RPC_NETWORK_UNAVAIL) {
+		status = http.StatusBadGateway
+	}
+	c.AbortWithStatusJSON(status, &Message{
 		Status: "error",
 		Code:   code & 0xffff,
 		Desc:   msg,
