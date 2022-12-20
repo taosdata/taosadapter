@@ -41,9 +41,8 @@ func (*Restful) tableVgID(c *gin.Context) {
 	}
 
 	vgID, code := wrapper.TaosGetTableVgID(taosConn.TaosConnection, db, table)
-
 	if code != 0 {
-		ErrorResponseWithStatusMsg(c, http.StatusInternalServerError, code, "get table vgroup id fail")
+		ErrorResponseWithStatusMsg(c, http.StatusInternalServerError, code, wrapper.TaosErrorStr(nil))
 		return
 	}
 
