@@ -25,4 +25,11 @@ func TestVgID(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatal("get vgID fail ", w.Code, w.Body)
 	}
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("drop database if exists test_vgid")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
 }
