@@ -1,7 +1,6 @@
 package rest
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -46,11 +45,10 @@ func (*Restful) tableVgID(c *gin.Context) {
 		return
 	}
 
-	j, _ := json.Marshal(map[string]int{"vgID": vgID})
+	c.JSON(http.StatusOK, tableVgIDResp{Code: 0, VgID: vgID})
+}
 
-	w := c.Writer
-	w.WriteHeader(http.StatusOK)
-	c.Header("Content-Type", "application/json; charset=utf-8")
-	w.Write(j)
-	w.Flush()
+type tableVgIDResp struct {
+	Code int `json:"code"`
+	VgID int `json:"vgID"`
 }
