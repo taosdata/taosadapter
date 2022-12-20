@@ -12,6 +12,6 @@ func TestVgID(t *testing.T) {
 	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
-		t.Fatal("get vgID fail")
+		t.Fatal("get vgID fail ", w.Code, w.Body)
 	}
 }
