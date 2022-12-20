@@ -81,6 +81,7 @@ func (ctl *Restful) Init(r gin.IRouter) {
 	api.GET("tmq", ctl.tmq)
 	api.POST("upload", CheckAuth, ctl.upload)
 	api.GET("schemaless", ctl.schemalessWs)
+	api.GET("vgid", CheckAuth, ctl.tableVgID)
 }
 
 type TDEngineRestfulRespDoc struct {
@@ -174,21 +175,12 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
 		if tError, is := err.(*tErrors.TaosError); is {
-			switch tError.Code {
-			case httperror.TSDB_CODE_MND_USER_ALREADY_EXIST,
-				httperror.TSDB_CODE_MND_USER_NOT_EXIST,
-				httperror.TSDB_CODE_MND_INVALID_USER_FORMAT,
-				httperror.TSDB_CODE_MND_INVALID_PASS_FORMAT,
-				httperror.TSDB_CODE_MND_NO_USER_FROM_CONN,
-				httperror.TSDB_CODE_MND_TOO_MANY_USERS,
-				httperror.TSDB_CODE_MND_INVALID_ALTER_OPER,
-				httperror.TSDB_CODE_MND_AUTH_FAILURE:
+			if isDbAuthFail(tError.Code) {
 				ErrorResponseWithStatusMsg(c, http.StatusUnauthorized, int(tError.Code), tError.ErrStr)
 				return
-			default:
-				ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
-				return
 			}
+			ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
+			return
 		}
 		ErrorResponseWithMsg(c, 0xffff, err.Error())
 		return
@@ -468,21 +460,12 @@ func (ctl *Restful) upload(c *gin.Context) {
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
 		if tError, is := err.(*tErrors.TaosError); is {
-			switch tError.Code {
-			case httperror.TSDB_CODE_MND_USER_ALREADY_EXIST,
-				httperror.TSDB_CODE_MND_USER_NOT_EXIST,
-				httperror.TSDB_CODE_MND_INVALID_USER_FORMAT,
-				httperror.TSDB_CODE_MND_INVALID_PASS_FORMAT,
-				httperror.TSDB_CODE_MND_NO_USER_FROM_CONN,
-				httperror.TSDB_CODE_MND_TOO_MANY_USERS,
-				httperror.TSDB_CODE_MND_INVALID_ALTER_OPER,
-				httperror.TSDB_CODE_MND_AUTH_FAILURE:
+			if isDbAuthFail(tError.Code) {
 				ErrorResponseWithStatusMsg(c, http.StatusUnauthorized, int(tError.Code), tError.ErrStr)
 				return
-			default:
-				ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
-				return
 			}
+			ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
+			return
 		}
 		ErrorResponseWithMsg(c, 0xffff, err.Error())
 		return
@@ -665,4 +648,15 @@ func (ctl *Restful) Close() {
 func init() {
 	r := &Restful{}
 	controller.AddController(r)
+}
+
+func isDbAuthFail(code int32) bool {
+	return code == httperror.TSDB_CODE_MND_USER_ALREADY_EXIST ||
+		code == httperror.TSDB_CODE_MND_USER_NOT_EXIST ||
+		code == httperror.TSDB_CODE_MND_INVALID_USER_FORMAT ||
+		code == httperror.TSDB_CODE_MND_INVALID_PASS_FORMAT ||
+		code == httperror.TSDB_CODE_MND_NO_USER_FROM_CONN ||
+		code == httperror.TSDB_CODE_MND_TOO_MANY_USERS ||
+		code == httperror.TSDB_CODE_MND_INVALID_ALTER_OPER ||
+		code == httperror.TSDB_CODE_MND_AUTH_FAILURE
 }
