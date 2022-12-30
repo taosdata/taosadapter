@@ -38,6 +38,7 @@ func (*Restful) tableVgID(c *gin.Context) {
 		ErrorResponseWithMsg(c, 0xffff, err.Error())
 		return
 	}
+	defer func() { _ = taosConn.Put() }()
 
 	vgID, code := wrapper.TaosGetTableVgID(taosConn.TaosConnection, db, table)
 	if code != 0 {
