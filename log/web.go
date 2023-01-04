@@ -15,7 +15,9 @@ func GinLog() gin.HandlerFunc {
 	id := uint32(0)
 
 	return func(c *gin.Context) {
-		RequestInFlight.Inc()
+		if !config.Conf.Monitor.Disable {
+			RequestInFlight.Inc()
+		}
 		currentID := atomic.AddUint32(&id, 1)
 		startTime := time.Now()
 		c.Set("currentID", currentID)
@@ -33,13 +35,15 @@ func GinLog() gin.HandlerFunc {
 			reqUri,
 		)
 		statusCodeStr := strconv.Itoa(statusCode)
-		RequestSummery.WithLabelValues(reqMethod, reqUri).Observe(latencyTime.Seconds() * 1e3)
-		TotalRequest.WithLabelValues(statusCodeStr, clientIP, reqMethod, reqUri).Inc()
-		_, exist := c.Get("taos_error_code")
-		if exist || (statusCode >= 400) {
-			FailRequest.WithLabelValues(statusCodeStr, clientIP, reqMethod, reqUri).Inc()
+		if !config.Conf.Monitor.Disable {
+			RequestSummery.WithLabelValues(reqMethod, reqUri).Observe(latencyTime.Seconds() * 1e3)
+			TotalRequest.WithLabelValues(statusCodeStr, clientIP, reqMethod, reqUri).Inc()
+			_, exist := c.Get("taos_error_code")
+			if exist || (statusCode >= 400) {
+				FailRequest.WithLabelValues(statusCodeStr, clientIP, reqMethod, reqUri).Inc()
+			}
+			RequestInFlight.Dec()
 		}
-		RequestInFlight.Dec()
 		if config.Conf.Log.EnableRecordHttpSql {
 			sql, exist := c.Get("sql")
 			if exist {

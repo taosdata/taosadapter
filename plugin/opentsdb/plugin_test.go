@@ -58,7 +58,7 @@ func TestOpentsdb(t *testing.T) {
 	req, _ := http.NewRequest("POST", "/put/telnet/test_plugin_opentsdb_http_telnet?ttl=1000", reader)
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, 204, w.Code)
 	w = httptest.NewRecorder()
 	reader = strings.NewReader(fmt.Sprintf(`{
     "metric": "sys.cpu.nice",
@@ -72,7 +72,7 @@ func TestOpentsdb(t *testing.T) {
 	req, _ = http.NewRequest("POST", "/put/json/test_plugin_opentsdb_http_json?ttl=1000", reader)
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, 204, w.Code)
 
 	defer func() {
 		r := wrapper.TaosQuery(conn, "drop database if exists test_plugin_opentsdb_http_json")

@@ -101,7 +101,7 @@ func StartMonitor() {
 	}()
 	monitor.SysMonitor.Register(systemStatus)
 	monitor.Start(config.Conf.Monitor.CollectDuration, config.Conf.Monitor.InCGroup)
-	if config.Conf.Monitor.WriteToTD {
+	if !config.Conf.Monitor.Disable && config.Conf.Monitor.WriteToTD {
 		ticker := time.NewTicker(config.Conf.Monitor.WriteInterval)
 		go func() {
 			for range ticker.C {

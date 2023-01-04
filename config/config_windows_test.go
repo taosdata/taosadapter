@@ -55,6 +55,7 @@ func TestInit(t *testing.T) {
 					IdleTimeout: 0,
 				},
 				Monitor: Monitor{
+					Disable:                   false,
 					CollectDuration:           3 * time.Second,
 					InCGroup:                  false,
 					PauseQueryMemoryThreshold: 70,
