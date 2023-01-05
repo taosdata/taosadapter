@@ -43,7 +43,6 @@ func (*Restful) tableVgID(c *gin.Context) {
 		ErrorResponseWithMsg(c, 0xffff, err.Error())
 		return
 	}
-	defer func() { _ = taosConn.Put() }()
 	defer func() {
 		putErr := taosConn.Put()
 		if putErr != nil {
