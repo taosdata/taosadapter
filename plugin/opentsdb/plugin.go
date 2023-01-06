@@ -69,7 +69,7 @@ func (p *Plugin) Stop() error {
 // @Accept json
 // @Produce json
 // @Param Authorization header string false "basic authorization"
-// @Success 200 {object} message "success"
+// @Success 204 {string} string "no content"
 // @Failure 401 {object} message "unauthorized"
 // @Failure 400 {string} string "badRequest"
 // @Failure 500 {string} string "internal server error"
@@ -142,7 +142,7 @@ func (p *Plugin) insertJson(c *gin.Context) {
 // @Accept plain
 // @Produce json
 // @Param Authorization header string false "basic authorization"
-// @Success 200 {object} message "success"
+// @Success 204 {string} string "no content"
 // @Failure 401 {object} message "unauthorized"
 // @Failure 400 {string} string "badRequest"
 // @Failure 500 {string} string "internal server error"
@@ -236,7 +236,7 @@ func (p *Plugin) errorResponse(c *gin.Context, code int, err error) {
 }
 
 func (p *Plugin) successResponse(c *gin.Context) {
-	c.JSON(http.StatusOK, message{Code: http.StatusOK})
+	c.Status(http.StatusNoContent)
 }
 
 func init() {

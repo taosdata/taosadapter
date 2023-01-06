@@ -75,13 +75,13 @@ func (ctl *Restful) Init(r gin.IRouter) {
 	})
 	api.POST("sql", CheckAuth, ctl.sql)
 	api.POST("sql/:db", CheckAuth, ctl.sql)
+	api.POST("sql/:db/vgid", CheckAuth, ctl.tableVgID)
 	api.GET("login/:user/:password", ctl.des)
 	api.GET("ws", ctl.ws)
 	api.GET("stmt", ctl.stmt)
 	api.GET("tmq", ctl.tmq)
 	api.POST("upload", CheckAuth, ctl.upload)
 	api.GET("schemaless", ctl.schemalessWs)
-	api.GET("vgid", CheckAuth, ctl.tableVgID)
 }
 
 type TDEngineRestfulRespDoc struct {
