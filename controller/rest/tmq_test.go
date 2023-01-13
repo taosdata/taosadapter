@@ -13,7 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/driver-go/v3/common"
+	"github.com/taosdata/driver-go/v3/common/tmq"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 )
 
@@ -561,7 +561,7 @@ func TestMeta(t *testing.T) {
 			if d.Code != 0 {
 				return fmt.Errorf("%s %d,%s", TMQFetch, d.Code, d.Message)
 			}
-			var meta common.Meta
+			var meta tmq.Meta
 			err = jsoniter.Unmarshal(d.Data, &meta)
 			assert.NoError(t, err)
 			t.Log(meta)
