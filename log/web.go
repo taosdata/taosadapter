@@ -34,8 +34,17 @@ func GinLog() gin.HandlerFunc {
 			reqMethod,
 			reqUri,
 		)
+		if config.Conf.Log.EnableRecordHttpSql {
+			sql, exist := c.Get("sql")
+			if exist {
+				sqlLogger.Infof("%d '%s' '%s' '%s' %s", currentID, reqUri, reqMethod, clientIP, sql)
+			}
+		}
 		statusCodeStr := strconv.Itoa(statusCode)
 		if !config.Conf.Monitor.Disable {
+			if config.Conf.Monitor.DisableClientIP {
+				clientIP = "invisible"
+			}
 			RequestSummery.WithLabelValues(reqMethod, reqUri).Observe(latencyTime.Seconds() * 1e3)
 			TotalRequest.WithLabelValues(statusCodeStr, clientIP, reqMethod, reqUri).Inc()
 			_, exist := c.Get("taos_error_code")
@@ -43,12 +52,6 @@ func GinLog() gin.HandlerFunc {
 				FailRequest.WithLabelValues(statusCodeStr, clientIP, reqMethod, reqUri).Inc()
 			}
 			RequestInFlight.Dec()
-		}
-		if config.Conf.Log.EnableRecordHttpSql {
-			sql, exist := c.Get("sql")
-			if exist {
-				sqlLogger.Infof("%d '%s' '%s' '%s' %s", currentID, reqUri, reqMethod, clientIP, sql)
-			}
 		}
 	}
 }

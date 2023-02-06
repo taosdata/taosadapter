@@ -10,6 +10,7 @@ import (
 type Monitor struct {
 	Disable                   bool
 	CollectDuration           time.Duration
+	DisableClientIP           bool
 	InCGroup                  bool
 	PauseQueryMemoryThreshold float64
 	PauseAllMemoryThreshold   float64
@@ -28,6 +29,10 @@ func initMonitor() {
 	viper.SetDefault("monitor.collectDuration", time.Second*3)
 	_ = viper.BindEnv("monitor.collectDuration", "TAOS_ADAPTER_MONITOR_COLLECT_DURATION")
 	pflag.Duration("monitor.collectDuration", time.Second*3, `Set monitor duration. Env "TAOS_ADAPTER_MONITOR_COLLECT_DURATION"`)
+
+	viper.SetDefault("monitor.disableCollectClientIP", false)
+	_ = viper.BindEnv("monitor.disableCollectClientIP", "TAOS_ADAPTER_MONITOR_DISABLE_COLLECT_CLIENT_IP")
+	pflag.Bool("monitor.disableCollectClientIP", false, `Whether to disable collecting clientIP. Env "TAOS_ADAPTER_MONITOR_DISABLE_COLLECT_CLIENT_IP"`)
 
 	viper.SetDefault("monitor.incgroup", false)
 	_ = viper.BindEnv("monitor.incgroup", "TAOS_ADAPTER_MONITOR_INCGROUP")
@@ -66,6 +71,7 @@ func (p *Monitor) setValue() {
 	p.Disable = viper.GetBool("monitor.disable")
 	p.CollectDuration = viper.GetDuration("monitor.collectDuration")
 	p.InCGroup = viper.GetBool("monitor.incgroup")
+	p.DisableClientIP = viper.GetBool("monitor.disableCollectClientIP")
 	p.PauseQueryMemoryThreshold = viper.GetFloat64("monitor.pauseQueryMemoryThreshold")
 	p.PauseAllMemoryThreshold = viper.GetFloat64("monitor.pauseAllMemoryThreshold")
 	p.Identity = viper.GetString("monitor.identity")
