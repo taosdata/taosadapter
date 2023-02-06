@@ -57,6 +57,7 @@ func TestInit(t *testing.T) {
 				Monitor: Monitor{
 					Disable:                   false,
 					CollectDuration:           3 * time.Second,
+					DisableClientIP:           false,
 					InCGroup:                  false,
 					PauseQueryMemoryThreshold: 70,
 					PauseAllMemoryThreshold:   80,
