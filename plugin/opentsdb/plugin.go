@@ -106,9 +106,12 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		}
 	}
 	var reqID uint64
-	reqIDStr := c.Query("req_id")
-	if len(reqIDStr) > 0 {
-		reqID, _ = strconv.ParseUint(reqIDStr, 10, 64)
+	if reqIDStr := c.Query("req_id"); len(reqIDStr) > 0 {
+		if reqID, err = strconv.ParseUint(reqIDStr, 10, 64); err != nil {
+			p.errorResponse(c, http.StatusBadRequest,
+				fmt.Errorf("illegal param, req_id must be numeric %s", err.Error()))
+			return
+		}
 	}
 
 	taosConn, err := commonpool.GetConnection(user, password)
@@ -175,9 +178,12 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 			return
 		}
 	}
-	reqIDStr := c.Query("req_id")
-	if len(reqIDStr) > 0 {
-		reqID, _ = strconv.ParseUint(reqIDStr, 10, 64)
+	if reqIDStr := c.Query("req_id"); len(reqIDStr) > 0 {
+		if reqID, err = strconv.ParseUint(reqIDStr, 10, 64); err != nil {
+			p.errorResponse(c, http.StatusBadRequest,
+				fmt.Errorf("illegal param, req_id must be numeric %s", err.Error()))
+			return
+		}
 	}
 
 	rd := bufio.NewReader(c.Request.Body)

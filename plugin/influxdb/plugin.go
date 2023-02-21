@@ -117,9 +117,16 @@ func (p *Influxdb) write(c *gin.Context) {
 		}
 	}
 	var reqID uint64
-	reqIDStr := c.Query("req_id")
-	if len(reqIDStr) > 0 {
-		reqID, _ = strconv.ParseUint(reqIDStr, 10, 64)
+	if reqIDStr := c.Query("req_id"); len(reqIDStr) > 0 {
+		if reqID, err = strconv.ParseUint(reqIDStr, 10, 64); err != nil {
+			p.badRequestResponse(c, &badRequest{
+				Code:    "illegal param",
+				Message: "req_id must be numeric",
+				Op:      "parse req_id",
+				Err:     "req_id must be numeric",
+			})
+			return
+		}
 	}
 
 	data, err := c.GetRawData()

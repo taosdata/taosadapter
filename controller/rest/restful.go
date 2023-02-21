@@ -3,6 +3,7 @@ package rest
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -117,7 +118,11 @@ func (ctl *Restful) sql(c *gin.Context) {
 	}
 	var reqID int64
 	if reqIDStr := c.Query("req_id"); len(reqIDStr) != 0 {
-		reqID, _ = strconv.ParseInt(reqIDStr, 10, 64)
+		if reqID, err = strconv.ParseInt(reqIDStr, 10, 64); err != nil {
+			ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff,
+				fmt.Sprintf("illegal param, req_id must be numeric %s", err.Error()))
+			return
+		}
 	}
 
 	timeBuffer := make([]byte, 0, 30)
@@ -440,8 +445,13 @@ func (ctl *Restful) upload(c *gin.Context) {
 		return
 	}
 	var reqID int64
-	if reqIDStr := c.Query("req_id"); len(reqIDStr) > 0 {
-		reqID, _ = strconv.ParseInt(reqIDStr, 10, 64)
+	var err error
+	if reqIDStr := c.Query("req_id"); len(reqIDStr) != 0 {
+		if reqID, err = strconv.ParseInt(reqIDStr, 10, 64); err != nil {
+			ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff,
+				fmt.Sprintf("illegal param, req_id must be numeric %s", err.Error()))
+			return
+		}
 	}
 	buffer := pool.BytesPoolGet()
 	defer pool.BytesPoolPut(buffer)

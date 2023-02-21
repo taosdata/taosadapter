@@ -224,6 +224,9 @@ func (p *NodeExporter) requestSingle(conn unsafe.Pointer, req *Req) error {
 		return fmt.Errorf("error reading body: %s", err)
 	}
 	metrics, err := prometheus.Parse(body, resp.Header, false)
+	if err != nil {
+		return fmt.Errorf("error pase body: %s", err)
+	}
 	serializer := influx.NewSerializer()
 	for _, metric := range metrics {
 		metric.AddTag("url", req.url)

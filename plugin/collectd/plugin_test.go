@@ -33,6 +33,7 @@ func TestCollectd(t *testing.T) {
 	assert.NoError(t, err)
 	defer afC.Close()
 	_, err = afC.Exec("drop database if exists collectd")
+	assert.NoError(t, err)
 
 	rand.Seed(time.Now().UnixNano())
 	p := &Plugin{}
