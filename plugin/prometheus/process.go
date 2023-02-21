@@ -34,7 +34,7 @@ var timeBufferPool pool.ByteBufferPool
 
 func processWrite(taosConn unsafe.Pointer, req *prompbWrite.WriteRequest, db string, ttl int) error {
 	start := time.Now()
-	err := tool.SelectDB(taosConn, db)
+	err := tool.SelectDB(taosConn, db, 0)
 	if err != nil {
 		return err
 	}
@@ -45,18 +45,18 @@ func processWrite(taosConn unsafe.Pointer, req *prompbWrite.WriteRequest, db str
 	generateWriteSql(req.Timeseries, bp, ttl)
 	logger.Debug("generateWriteSql cost:", time.Since(start))
 	start = time.Now()
-	err = async.GlobalAsync.TaosExecWithoutResult(taosConn, bytesutil.ToUnsafeString(bp.Bytes()))
+	err = async.GlobalAsync.TaosExecWithoutResult(taosConn, bytesutil.ToUnsafeString(bp.Bytes()), 0)
 	logger.Debug("processWrite TaosExecWithoutResult cost:", time.Since(start))
 	if err != nil {
 		if tErr, is := err.(*tErrors.TaosError); is {
 			start = time.Now()
 			if tErr.Code == httperror.PAR_TABLE_NOT_EXIST || tErr.Code == httperror.MND_INVALID_TABLE_NAME || tErr.Code == httperror.TSC_INVALID_TABLE_NAME {
-				err := async.GlobalAsync.TaosExecWithoutResult(taosConn, "create stable if not exists metrics(ts timestamp,v double) tags (labels json)")
+				err := async.GlobalAsync.TaosExecWithoutResult(taosConn, "create stable if not exists metrics(ts timestamp,v double) tags (labels json)", 0)
 				if err != nil {
 					return err
 				}
 				// retry
-				err = async.GlobalAsync.TaosExecWithoutResult(taosConn, bytesutil.ToUnsafeString(bp.Bytes()))
+				err = async.GlobalAsync.TaosExecWithoutResult(taosConn, bytesutil.ToUnsafeString(bp.Bytes()), 0)
 				if err != nil {
 					logger.WithError(err).Error(bp.String())
 					return err
@@ -164,7 +164,7 @@ func processRead(taosConn unsafe.Pointer, req *prompb.ReadRequest, db string) (r
 			default:
 				return 0
 			}
-		})
+		}, 0)
 		if err != nil {
 			logger.WithError(err).Error(sql)
 			return nil, err

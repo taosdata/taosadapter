@@ -299,7 +299,7 @@ func (p *Plugin) handleData(index int, line []string) {
 		start = time.Now()
 	}
 	logger.Debugln(start, " insert telnet payload ", line)
-	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, line, p.conf.DBList[index], p.conf.TTL)
+	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, line, p.conf.DBList[index], p.conf.TTL, 0)
 	if err != nil {
 		logger.WithError(err).Errorln("insert telnet payload error :", line)
 	}

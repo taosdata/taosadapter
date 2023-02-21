@@ -15,6 +15,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
+	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/common/parser"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/types"
@@ -159,7 +160,11 @@ func (t *TaosStmt) init(ctx context.Context, session *melody.Session, req *StmtI
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
-	stmt := wrapper.TaosStmtInit(t.conn)
+	reqID := int64(req.ReqID)
+	if reqID == 0 {
+		reqID = common.GetReqID()
+	}
+	stmt := wrapper.TaosStmtInitWithReqID(t.conn, reqID)
 	logger.Debugln("taos_stmt_init cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if stmt == nil {

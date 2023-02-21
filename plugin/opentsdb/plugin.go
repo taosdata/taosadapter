@@ -105,6 +105,12 @@ func (p *Plugin) insertJson(c *gin.Context) {
 			return
 		}
 	}
+	var reqID uint64
+	reqIDStr := c.Query("req_id")
+	if len(reqIDStr) > 0 {
+		reqID, _ = strconv.ParseUint(reqIDStr, 10, 64)
+	}
+
 	taosConn, err := commonpool.GetConnection(user, password)
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
@@ -122,7 +128,7 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		start = time.Now()
 	}
 	logger.Debug(start, "insert json payload", string(data))
-	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db, ttl)
+	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db, ttl, reqID)
 	logger.Debug("insert json payload cost:", time.Since(start))
 	if err != nil {
 		taosError, is := err.(*tErrors.TaosError)
@@ -160,6 +166,7 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 
 	var ttl int
 	var err error
+	var reqID uint64
 	ttlStr := c.Query("ttl")
 	if len(ttlStr) > 0 {
 		ttl, err = strconv.Atoi(ttlStr)
@@ -167,6 +174,10 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 			p.errorResponse(c, http.StatusBadRequest, fmt.Errorf("illegal param, ttl must be numeric %v", err))
 			return
 		}
+	}
+	reqIDStr := c.Query("req_id")
+	if len(reqIDStr) > 0 {
+		reqID, _ = strconv.ParseUint(reqIDStr, 10, 64)
 	}
 
 	rd := bufio.NewReader(c.Request.Body)
@@ -213,7 +224,7 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 		start = time.Now()
 	}
 	logger.Debug(start, "insert telnet payload", lines)
-	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db, ttl)
+	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db, ttl, reqID)
 	logger.Debug("insert telnet payload cost:", time.Since(start))
 	if err != nil {
 		logger.WithError(err).Error("insert telnet payload error", lines)

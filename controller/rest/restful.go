@@ -115,6 +115,11 @@ func (ctl *Restful) sql(c *gin.Context) {
 			return
 		}
 	}
+	var reqID int64
+	if reqIDStr := c.Query("req_id"); len(reqIDStr) != 0 {
+		reqID, _ = strconv.ParseInt(reqIDStr, 10, 64)
+	}
+
 	timeBuffer := make([]byte, 0, 30)
 	DoQuery(c, db, func(builder *jsonbuilder.Stream, ts int64, precision int) {
 		timeBuffer = timeBuffer[:0]
@@ -129,7 +134,7 @@ func (ctl *Restful) sql(c *gin.Context) {
 			panic("unknown precision")
 		}
 		builder.WriteString(string(timeBuffer))
-	})
+	}, reqID)
 }
 
 type TDEngineRestfulResp struct {
@@ -140,7 +145,7 @@ type TDEngineRestfulResp struct {
 	Rows       int              `json:"rows,omitempty"`
 }
 
-func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
+func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID int64) {
 	var s time.Time
 	isDebug := log.IsDebug()
 	id := web.GetRequestID(c)
@@ -209,7 +214,7 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc) {
 		thread.Unlock()
 		logger.Debugln("taos select db cost:", time.Since(s))
 	}
-	execute(c, logger, taosConnect.TaosConnection, sql, timeFunc)
+	execute(c, logger, taosConnect.TaosConnection, sql, timeFunc, reqID)
 }
 
 var (
@@ -220,7 +225,7 @@ var (
 	Query4     = []byte(`],"rows":`)
 )
 
-func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, sql string, timeFormat ctools.FormatTimeFunc) {
+func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, sql string, timeFormat ctools.FormatTimeFunc, reqID int64) {
 	isDebug := log.IsDebug()
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
@@ -228,7 +233,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	if isDebug {
 		s = time.Now()
 	}
-	result, _ := async.GlobalAsync.TaosQuery(taosConnect, sql, handler)
+	result, _ := async.GlobalAsync.TaosQuery(taosConnect, sql, handler, reqID)
 	if isDebug {
 		logger.Debugln("taos query cost:", time.Since(s))
 	}
@@ -434,6 +439,10 @@ func (ctl *Restful) upload(c *gin.Context) {
 		ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff, "table required")
 		return
 	}
+	var reqID int64
+	if reqIDStr := c.Query("req_id"); len(reqIDStr) > 0 {
+		reqID, _ = strconv.ParseInt(reqIDStr, 10, 64)
+	}
 	buffer := pool.BytesPoolGet()
 	defer pool.BytesPoolPut(buffer)
 	colBuffer := pool.BytesPoolGet()
@@ -485,7 +494,7 @@ func (ctl *Restful) upload(c *gin.Context) {
 	s = log.GetLogNow(isDebug)
 	result, err := async.GlobalAsync.TaosExec(taosConnect.TaosConnection, sql, func(ts int64, precision int) driver.Value {
 		return ts
-	})
+	}, reqID)
 	logger.Debugln("describe table cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		taosError, is := err.(*tErrors.TaosError)
@@ -570,7 +579,7 @@ func (ctl *Restful) upload(c *gin.Context) {
 			rows += 1
 			if buffer.Len()+colBuffer.Len() >= MAXSQLLength {
 				s = log.GetLogNow(isDebug)
-				err = async.GlobalAsync.TaosExecWithoutResult(taosConnect.TaosConnection, buffer.String())
+				err = async.GlobalAsync.TaosExecWithoutResult(taosConnect.TaosConnection, buffer.String(), reqID)
 				logger.Debugln("execute insert sql1 cost:", log.GetLogDuration(isDebug, s))
 				if err != nil {
 					taosError, is := err.(*tErrors.TaosError)
@@ -591,7 +600,7 @@ func (ctl *Restful) upload(c *gin.Context) {
 	}
 	if buffer.Len() > prefixLength {
 		s = log.GetLogNow(isDebug)
-		err = async.GlobalAsync.TaosExecWithoutResult(taosConnect.TaosConnection, buffer.String())
+		err = async.GlobalAsync.TaosExecWithoutResult(taosConnect.TaosConnection, buffer.String(), reqID)
 		logger.Debugln("execute insert sql2 cost:", log.GetLogDuration(isDebug, s))
 		if err != nil {
 			taosError, is := err.(*tErrors.TaosError)
