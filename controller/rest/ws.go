@@ -14,7 +14,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
-	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/common/parser"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
@@ -183,11 +182,7 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	s = log.GetLogNow(isDebug)
-	reqID := req.ReqID
-	if reqID == 0 {
-		reqID = uint64(common.GetReqID())
-	}
-	result, _ := async.GlobalAsync.TaosQuery(t.conn, req.SQL, handler, int64(reqID))
+	result, _ := async.GlobalAsync.TaosQuery(t.conn, req.SQL, handler, int64(req.ReqID))
 	logger.Debugln("taos query cost ", log.GetLogDuration(isDebug, s))
 	code := wrapper.TaosError(result.Res)
 	if code != httperror.SUCCESS {
