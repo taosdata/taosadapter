@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/huskar-t/melody"
-	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
@@ -32,11 +31,10 @@ func (ctl *Restful) InitSchemaless() {
 	})
 
 	ctl.schemaless.HandleError(func(session *melody.Session, err error) {
-		l := session.MustGet("logger").(*logrus.Entry)
 		if _, is := err.(*websocket.CloseError); is {
-			l.WithError(err).Debugln("ws close in error")
+			logger.WithError(err).Debugln("ws close in error")
 		} else {
-			l.WithError(err).Errorln("ws error")
+			logger.WithError(err).Errorln("ws error")
 		}
 	})
 
@@ -68,7 +66,7 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 		var connReq schemalessConnReq
 		if err = json.Unmarshal(action.Args, &connReq); err != nil {
 			logger.WithError(err).Errorln("unmarshal connect request args")
-			wsError(ctx, session, err, SchemalessConn, 0)
+			wsError(ctx, session, err, SchemalessConn, connReq.ReqID)
 			return
 		}
 
@@ -80,6 +78,11 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 		}
 		_ = conn.Put()
 		session.Set(taosSchemalessKey, &connReq)
+		wsWriteJson(session, &schemalessConnResp{
+			Action: SchemalessConn,
+			ReqID:  connReq.ReqID,
+			Timing: getDuration(ctx),
+		})
 	case SchemalessWrite:
 		var schemaless schemalessWriteReq
 		if err = json.Unmarshal(action.Args, &schemaless); err != nil {
@@ -142,6 +145,14 @@ type schemalessConnReq struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	DB       string `json:"db"`
+}
+
+type schemalessConnResp struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Action  string `json:"action"`
+	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
 }
 
 type schemalessWriteReq struct {

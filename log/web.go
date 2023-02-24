@@ -65,8 +65,7 @@ func (r *recoverLog) Write(p []byte) (n int, err error) {
 func GinRecoverLog() gin.HandlerFunc {
 	logger := GetLogger("web")
 	return func(c *gin.Context) {
-		id := c.MustGet(config.ReqIDKey).(uint32)
-		writer := &recoverLog{logger: logger.WithField("id", id)}
+		writer := &recoverLog{logger: logger}
 		gin.RecoveryWithWriter(writer)(c)
 	}
 }
