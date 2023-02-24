@@ -20,11 +20,11 @@ import (
 	"github.com/taosdata/driver-go/v3/common/parser"
 	"github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
-	"github.com/taosdata/taosadapter/v3/tools/web"
 )
 
 type TMQ struct {
@@ -112,7 +112,7 @@ type TMQSubscribeResp struct {
 }
 
 func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSubscribeReq) {
-	logger := getLogger(session).WithField("action", TMQSubscribe)
+	logger := getLogger(session).WithField("action", TMQSubscribe).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.Lock()
@@ -275,7 +275,7 @@ func (t *TMQ) commit(ctx context.Context, session *melody.Session, req *TMQCommi
 		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQCommit, req.ReqID, nil)
 		return
 	}
-	logger := getLogger(session).WithField("action", TMQCommit)
+	logger := getLogger(session).WithField("action", TMQCommit).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.listLocker.Lock()
@@ -404,7 +404,7 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQFetch, req.ReqID, &req.MessageID)
 		return
 	}
-	logger := getLogger(session).WithField("action", WSFetch)
+	logger := getLogger(session).WithField("action", WSFetch).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.listLocker.RLock()
@@ -493,7 +493,7 @@ func (t *TMQ) fetchBlock(ctx context.Context, session *melody.Session, req *TMQF
 		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQFetchBlock, req.ReqID, &req.MessageID)
 		return
 	}
-	logger := getLogger(session).WithField("action", TMQFetchBlock)
+	logger := getLogger(session).WithField("action", TMQFetchBlock).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.listLocker.RLock()
@@ -533,7 +533,7 @@ func (t *TMQ) fetchRawMeta(ctx context.Context, session *melody.Session, req *TM
 		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQFetchRaw, req.ReqID, &req.MessageID)
 		return
 	}
-	logger := getLogger(session).WithField("action", TMQFetchRaw)
+	logger := getLogger(session).WithField("action", TMQFetchRaw).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.listLocker.RLock()
@@ -603,7 +603,7 @@ func (t *TMQ) fetchJsonMeta(ctx context.Context, session *melody.Session, req *T
 		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQFetchJsonMeta, req.ReqID, &req.MessageID)
 		return
 	}
-	logger := getLogger(session).WithField("action", TMQFetchJsonMeta)
+	logger := getLogger(session).WithField("action", TMQFetchJsonMeta).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.listLocker.RLock()
@@ -731,7 +731,7 @@ func (ctl *Restful) InitTMQ() {
 			var req TMQSubscribeReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal subscribe args")
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal subscribe args")
 				return
 			}
 			t := session.MustGet(TaosTMQKey)
@@ -740,7 +740,7 @@ func (ctl *Restful) InitTMQ() {
 			var req TMQPollReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal pool args")
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal pool args")
 				return
 			}
 			t := session.MustGet(TaosTMQKey)
@@ -749,7 +749,7 @@ func (ctl *Restful) InitTMQ() {
 			var req TMQFetchReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch args")
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch args")
 				return
 			}
 			t := session.MustGet(TaosTMQKey)
@@ -758,7 +758,7 @@ func (ctl *Restful) InitTMQ() {
 			var req TMQFetchBlockReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch block args")
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch block args")
 				return
 			}
 			t := session.MustGet(TaosTMQKey)
@@ -767,7 +767,7 @@ func (ctl *Restful) InitTMQ() {
 			var req TMQCommitReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal commit args")
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal commit args")
 				return
 			}
 			t := session.MustGet(TaosTMQKey)
@@ -776,7 +776,7 @@ func (ctl *Restful) InitTMQ() {
 			var req TMQFetchJsonMetaReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch json meta args")
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch json meta args")
 				return
 			}
 			t := session.MustGet(TaosTMQKey)
@@ -785,7 +785,7 @@ func (ctl *Restful) InitTMQ() {
 			var req TMQFetchRawMetaReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch raw meta args")
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch raw meta args")
 				return
 			}
 			t := session.MustGet(TaosTMQKey)
@@ -832,8 +832,7 @@ func (ctl *Restful) InitTMQ() {
 }
 
 func (ctl *Restful) tmq(c *gin.Context) {
-	id := web.GetRequestID(c)
-	loggerWithID := logger.WithField("sessionID", id).WithField("wsType", "tmq")
+	loggerWithID := logger.WithField("wsType", "tmq")
 	_ = ctl.tmqM.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": loggerWithID})
 }
 

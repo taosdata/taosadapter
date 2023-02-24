@@ -30,7 +30,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/ctools"
 	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
-	"github.com/taosdata/taosadapter/v3/tools/web"
 	"github.com/taosdata/taosadapter/v3/version"
 )
 
@@ -117,13 +116,17 @@ func (ctl *Restful) sql(c *gin.Context) {
 		}
 	}
 	var reqID int64
-	if reqIDStr := c.Query("req_id"); len(reqIDStr) != 0 {
+	if reqIDStr := c.Query(config.ReqIDKey); len(reqIDStr) != 0 {
 		if reqID, err = strconv.ParseInt(reqIDStr, 10, 64); err != nil {
 			ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff,
 				fmt.Sprintf("illegal param, req_id must be numeric %s", err.Error()))
 			return
 		}
 	}
+	if reqID == 0 {
+		reqID = common.GetReqID()
+	}
+	c.Set(config.ReqIDKey, reqID)
 
 	timeBuffer := make([]byte, 0, 30)
 	DoQuery(c, db, func(builder *jsonbuilder.Stream, ts int64, precision int) {
@@ -153,8 +156,7 @@ type TDEngineRestfulResp struct {
 func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID int64) {
 	var s time.Time
 	isDebug := log.IsDebug()
-	id := web.GetRequestID(c)
-	logger := logger.WithField("sessionID", id)
+	logger := logger.WithField(config.ReqIDKey, reqID)
 	b, err := c.GetRawData()
 	if err != nil {
 		logger.WithError(err).Error("get request body error")
@@ -446,13 +448,18 @@ func (ctl *Restful) upload(c *gin.Context) {
 	}
 	var reqID int64
 	var err error
-	if reqIDStr := c.Query("req_id"); len(reqIDStr) != 0 {
+	if reqIDStr := c.Query(config.ReqIDKey); len(reqIDStr) != 0 {
 		if reqID, err = strconv.ParseInt(reqIDStr, 10, 64); err != nil {
 			ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff,
 				fmt.Sprintf("illegal param, req_id must be numeric %s", err.Error()))
 			return
 		}
 	}
+	if reqID == 0 {
+		reqID = common.GetReqID()
+	}
+	c.Set(config.ReqIDKey, reqID)
+
 	buffer := pool.BytesPoolGet()
 	defer pool.BytesPoolPut(buffer)
 	colBuffer := pool.BytesPoolGet()

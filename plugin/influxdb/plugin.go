@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/taosdata/driver-go/v3/common"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
@@ -75,8 +77,25 @@ func (p *Influxdb) Stop() error {
 // @Failure 500 {object} message
 // @Router /influxdb/v1/write [post]
 func (p *Influxdb) write(c *gin.Context) {
-	id := web.GetRequestID(c)
-	logger := logger.WithField("sessionID", id)
+	var reqID uint64
+	var err error
+	if reqIDStr := c.Query(config.ReqIDKey); len(reqIDStr) > 0 {
+		if reqID, err = strconv.ParseUint(reqIDStr, 10, 64); err != nil {
+			p.badRequestResponse(c, &badRequest{
+				Code:    "illegal param",
+				Message: "req_id must be numeric",
+				Op:      "parse req_id",
+				Err:     "req_id must be numeric",
+			})
+			return
+		}
+	}
+	if reqID == 0 {
+		reqID = uint64(common.GetReqID())
+	}
+	c.Set(config.ReqIDKey, reqID)
+	logger := logger.WithField(config.ReqIDKey, reqID)
+
 	isDebug := log.IsDebug()
 	precision := c.Query("precision")
 	if len(precision) == 0 {
@@ -112,18 +131,6 @@ func (p *Influxdb) write(c *gin.Context) {
 				Message: "ttl must be numeric",
 				Op:      "parse ttl",
 				Err:     "ttl must be numeric",
-			})
-			return
-		}
-	}
-	var reqID uint64
-	if reqIDStr := c.Query("req_id"); len(reqIDStr) > 0 {
-		if reqID, err = strconv.ParseUint(reqIDStr, 10, 64); err != nil {
-			p.badRequestResponse(c, &badRequest{
-				Code:    "illegal param",
-				Message: "req_id must be numeric",
-				Op:      "parse req_id",
-				Err:     "req_id must be numeric",
 			})
 			return
 		}

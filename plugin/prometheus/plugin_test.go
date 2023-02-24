@@ -45,9 +45,6 @@ func TestPrometheus(t *testing.T) {
 	config.Conf.RestfulRowLimit = -1
 	p := Plugin{}
 	router := gin.Default()
-	router.Use(func(c *gin.Context) {
-		c.Set("currentID", uint32(1))
-	})
 	err := p.Init(router)
 	assert.NoError(t, err)
 	err = p.Start()
@@ -132,9 +129,6 @@ func TestPrometheusEscapeString(t *testing.T) {
 	config.Conf.RestfulRowLimit = -1
 	p := Plugin{}
 	router := gin.Default()
-	router.Use(func(c *gin.Context) {
-		c.Set("currentID", uint32(1))
-	})
 	err := p.Init(router)
 	assert.NoError(t, err)
 	err = p.Start()
@@ -216,9 +210,6 @@ func TestPrometheusWithTTL(t *testing.T) {
 	config.Conf.RestfulRowLimit = -1
 	p := Plugin{}
 	router := gin.Default()
-	router.Use(func(c *gin.Context) {
-		c.Set("currentID", uint32(1))
-	})
 	err := p.Init(router)
 	assert.NoError(t, err)
 	err = p.Start()
@@ -303,9 +294,6 @@ func TestPrometheusEscape(t *testing.T) {
 	config.Conf.RestfulRowLimit = -1
 	p := Plugin{}
 	router := gin.Default()
-	router.Use(func(c *gin.Context) {
-		c.Set("currentID", uint32(1))
-	})
 	err := p.Init(router)
 	assert.NoError(t, err)
 	err = p.Start()
@@ -389,9 +377,6 @@ func TestPrometheusEscape(t *testing.T) {
 func TestPrometheusWithLimit(t *testing.T) {
 	p := Plugin{}
 	router := gin.Default()
-	router.Use(func(c *gin.Context) {
-		c.Set("currentID", uint32(1))
-	})
 	err := p.Init(router)
 	assert.NoError(t, err)
 	err = p.Start()

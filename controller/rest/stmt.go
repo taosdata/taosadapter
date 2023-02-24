@@ -20,10 +20,10 @@ import (
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/types"
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
-	"github.com/taosdata/taosadapter/v3/tools/web"
 )
 
 type TaosStmt struct {
@@ -108,7 +108,7 @@ type StmtConnectResp struct {
 }
 
 func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *StmtConnectReq) {
-	logger := getLogger(session).WithField("action", STMTConnect)
+	logger := getLogger(session).WithField("action", STMTConnect).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.Lock()
@@ -154,7 +154,7 @@ func (t *TaosStmt) init(ctx context.Context, session *melody.Session, req *StmtI
 		wsStmtErrorMsg(ctx, session, 0xffff, "taos not connected", STMTInit, req.ReqID, nil)
 		return
 	}
-	logger := getLogger(session).WithField("action", STMTInit)
+	logger := getLogger(session).WithField("action", STMTInit).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	thread.Lock()
@@ -254,7 +254,7 @@ func (t *TaosStmt) setTableName(ctx context.Context, session *melody.Session, re
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
-	logger := getLogger(session).WithField("action", STMTSetTableName)
+	logger := getLogger(session).WithField("action", STMTSetTableName).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	thread.Lock()
@@ -381,7 +381,7 @@ func (t *TaosStmt) bind(ctx context.Context, session *melody.Session, req *StmtB
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
-	logger := getLogger(session).WithField("action", STMTBind)
+	logger := getLogger(session).WithField("action", STMTBind).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	thread.Lock()
@@ -459,7 +459,7 @@ func (t *TaosStmt) addBatch(ctx context.Context, session *melody.Session, req *S
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
-	logger := getLogger(session).WithField("action", STMTAddBatch)
+	logger := getLogger(session).WithField("action", STMTAddBatch).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	thread.Lock()
@@ -507,7 +507,7 @@ func (t *TaosStmt) exec(ctx context.Context, session *melody.Session, req *StmtE
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
-	logger := getLogger(session).WithField("action", STMTExec)
+	logger := getLogger(session).WithField("action", STMTExec).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	thread.Lock()
@@ -569,7 +569,7 @@ func (t *TaosStmt) setTagsBlock(ctx context.Context, session *melody.Session, re
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
-	logger := getLogger(session).WithField("action", STMTSetTags)
+	logger := getLogger(session).WithField("action", STMTSetTags).WithField(config.ReqIDKey, reqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	thread.Lock()
@@ -633,7 +633,7 @@ func (t *TaosStmt) bindBlock(ctx context.Context, session *melody.Session, reqID
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
-	logger := getLogger(session).WithField("action", STMTBind)
+	logger := getLogger(session).WithField("action", STMTBind).WithField(config.ReqIDKey, reqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	thread.Lock()
@@ -751,7 +751,7 @@ func (ctl *Restful) InitStmt() {
 			var req StmtConnectReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal connect request args")
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal connect request args")
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
@@ -760,7 +760,7 @@ func (ctl *Restful) InitStmt() {
 			var req StmtInitReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal init args")
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal init args")
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
@@ -769,7 +769,7 @@ func (ctl *Restful) InitStmt() {
 			var req StmtPrepareReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal prepare args")
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal prepare args")
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
@@ -778,7 +778,7 @@ func (ctl *Restful) InitStmt() {
 			var req StmtSetTableNameReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal set table name args")
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal set table name args")
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
@@ -787,7 +787,7 @@ func (ctl *Restful) InitStmt() {
 			var req StmtSetTagsReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal set tags args")
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal set tags args")
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
@@ -796,7 +796,7 @@ func (ctl *Restful) InitStmt() {
 			var req StmtBindReq
 			err = json.Unmarshal(action.Args, &req)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal bind args")
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal bind args")
 				return
 			}
 			t := session.MustGet(TaosStmtKey)
@@ -899,8 +899,7 @@ func (ctl *Restful) InitStmt() {
 }
 
 func (ctl *Restful) stmt(c *gin.Context) {
-	id := web.GetRequestID(c)
-	loggerWithID := logger.WithField("sessionID", id).WithField("wsType", "stmt")
+	loggerWithID := logger.WithField("wsType", "stmt")
 	_ = ctl.stmtM.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": loggerWithID})
 }
 

@@ -30,9 +30,6 @@ func TestMain(m *testing.M) {
 	db.PrepareConnection()
 	gin.SetMode(gin.ReleaseMode)
 	router = gin.New()
-	router.Use(func(context *gin.Context) {
-		context.Set("currentID", uint32(0))
-	})
 	var ctl Restful
 	ctl.Init(router)
 	m.Run()

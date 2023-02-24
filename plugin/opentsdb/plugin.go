@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/taosdata/driver-go/v3/common"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
@@ -75,9 +77,22 @@ func (p *Plugin) Stop() error {
 // @Failure 500 {string} string "internal server error"
 // @Router /opentsdb/v1/put/json/:db [post]
 func (p *Plugin) insertJson(c *gin.Context) {
+	var reqID uint64
+	var err error
+	if reqIDStr := c.Query(config.ReqIDKey); len(reqIDStr) > 0 {
+		if reqID, err = strconv.ParseUint(reqIDStr, 10, 64); err != nil {
+			p.errorResponse(c, http.StatusBadRequest,
+				fmt.Errorf("illegal param, req_id must be numeric %s", err.Error()))
+			return
+		}
+	}
+	if reqID == 0 {
+		reqID = uint64(common.GetReqID())
+	}
+	c.Set(config.ReqIDKey, reqID)
+
 	isDebug := log.IsDebug()
-	id := web.GetRequestID(c)
-	logger := logger.WithField("sessionID", id)
+	logger := logger.WithField(config.ReqIDKey, reqID)
 	db := c.Param("db")
 	if len(db) == 0 {
 		logger.Errorln("db required")
@@ -102,14 +117,6 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		ttl, err = strconv.Atoi(ttlStr)
 		if err != nil {
 			p.errorResponse(c, http.StatusBadRequest, fmt.Errorf("illegal param, ttl must be numeric %v", err))
-			return
-		}
-	}
-	var reqID uint64
-	if reqIDStr := c.Query("req_id"); len(reqIDStr) > 0 {
-		if reqID, err = strconv.ParseUint(reqIDStr, 10, 64); err != nil {
-			p.errorResponse(c, http.StatusBadRequest,
-				fmt.Errorf("illegal param, req_id must be numeric %s", err.Error()))
 			return
 		}
 	}
@@ -157,8 +164,22 @@ func (p *Plugin) insertJson(c *gin.Context) {
 // @Failure 500 {string} string "internal server error"
 // @Router /opentsdb/v1/put/telnet/:db [post]
 func (p *Plugin) insertTelnet(c *gin.Context) {
-	id := web.GetRequestID(c)
-	logger := logger.WithField("sessionID", id)
+	var ttl int
+	var err error
+	var reqID uint64
+	if reqIDStr := c.Query(config.ReqIDKey); len(reqIDStr) > 0 {
+		if reqID, err = strconv.ParseUint(reqIDStr, 10, 64); err != nil {
+			p.errorResponse(c, http.StatusBadRequest,
+				fmt.Errorf("illegal param, req_id must be numeric %s", err.Error()))
+			return
+		}
+	}
+	if reqID == 0 {
+		reqID = uint64(common.GetReqID())
+	}
+	c.Set(config.ReqIDKey, reqID)
+
+	logger := logger.WithField(config.ReqIDKey, reqID)
 	isDebug := log.IsDebug()
 	db := c.Param("db")
 	if len(db) == 0 {
@@ -167,21 +188,11 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 		return
 	}
 
-	var ttl int
-	var err error
-	var reqID uint64
 	ttlStr := c.Query("ttl")
 	if len(ttlStr) > 0 {
 		ttl, err = strconv.Atoi(ttlStr)
 		if err != nil {
 			p.errorResponse(c, http.StatusBadRequest, fmt.Errorf("illegal param, ttl must be numeric %v", err))
-			return
-		}
-	}
-	if reqIDStr := c.Query("req_id"); len(reqIDStr) > 0 {
-		if reqID, err = strconv.ParseUint(reqIDStr, 10, 64); err != nil {
-			p.errorResponse(c, http.StatusBadRequest,
-				fmt.Errorf("illegal param, req_id must be numeric %s", err.Error()))
 			return
 		}
 	}
