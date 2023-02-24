@@ -264,8 +264,8 @@ func TestUpload(t *testing.T) {
 	assert.Equal(t, 0, result.Code)
 	assert.Equal(t, 6, len(result.Data))
 	for i := 0; i < 6; i++ {
-		result.Data[i][0] = float64(123)
-		result.Data[i][1] = float64(123.123)
+		result.Data[i] = append(result.Data[i], float64(123))
+		result.Data[i] = append(result.Data[i], 123.123)
 	}
 	result.Data[0][2] = "abcd,abcd"
 	result.Data[1][2] = "a\"bcd,abcd"
