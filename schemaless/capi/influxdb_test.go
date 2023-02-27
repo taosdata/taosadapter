@@ -81,7 +81,7 @@ func TestInsertInfluxdb(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := capi.InsertInfluxdb(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.precision, tt.args.ttl)
+			got, err := capi.InsertInfluxdb(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.precision, tt.args.ttl, 0)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("InsertInfluxdb() error = %v, wantErr %v", err, tt.wantErr)
 				return

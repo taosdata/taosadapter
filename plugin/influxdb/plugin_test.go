@@ -31,9 +31,6 @@ func TestInfluxdb(t *testing.T) {
 	db.PrepareConnection()
 	p := Influxdb{}
 	router := gin.Default()
-	router.Use(func(c *gin.Context) {
-		c.Set("currentID", uint32(1))
-	})
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Error(err)

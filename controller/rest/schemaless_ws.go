@@ -10,11 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/huskar-t/melody"
-	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/schemaless/inserter"
-	"github.com/taosdata/taosadapter/v3/tools/web"
 )
 
 func (ctl *Restful) InitSchemaless() {
@@ -32,11 +31,10 @@ func (ctl *Restful) InitSchemaless() {
 	})
 
 	ctl.schemaless.HandleError(func(session *melody.Session, err error) {
-		l := session.MustGet("logger").(*logrus.Entry)
 		if _, is := err.(*websocket.CloseError); is {
-			l.WithError(err).Debugln("ws close in error")
+			logger.WithError(err).Debugln("ws close in error")
 		} else {
-			l.WithError(err).Errorln("ws error")
+			logger.WithError(err).Errorln("ws error")
 		}
 	})
 
@@ -53,9 +51,8 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 	if ctl.schemaless.IsClosed() {
 		return
 	}
-	l := session.MustGet("logger").(*logrus.Entry)
 
-	l.Debugln("get ws byte message data:", string(bytes))
+	logger.Debugln("get ws byte message data:", string(bytes))
 	var action WSAction
 	err := json.Unmarshal(bytes, &action)
 	if err != nil {
@@ -69,7 +66,7 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 		var connReq schemalessConnReq
 		if err = json.Unmarshal(action.Args, &connReq); err != nil {
 			logger.WithError(err).Errorln("unmarshal connect request args")
-			wsError(ctx, session, err, SchemalessConn, 0)
+			wsError(ctx, session, err, SchemalessConn, connReq.ReqID)
 			return
 		}
 
@@ -81,10 +78,16 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 		}
 		_ = conn.Put()
 		session.Set(taosSchemalessKey, &connReq)
+		wsWriteJson(session, &schemalessConnResp{
+			Action: SchemalessConn,
+			ReqID:  connReq.ReqID,
+			Timing: getDuration(ctx),
+		})
 	case SchemalessWrite:
 		var schemaless schemalessWriteReq
 		if err = json.Unmarshal(action.Args, &schemaless); err != nil {
-			logger.WithError(err).Errorln("unmarshal schemaless write request args")
+			logger.WithError(err).WithField(config.ReqIDKey, schemaless.ReqID).
+				Errorln("unmarshal schemaless write request args")
 			wsError(ctx, session, err, SchemalessWrite, schemaless.ReqID)
 			return
 		}
@@ -101,7 +104,8 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 		connInfo := connReq.(*schemalessConnReq)
 		conn, err := commonpool.GetConnection(connInfo.User, connInfo.Password)
 		if err != nil {
-			logger.WithError(err).Errorln("get taos connection error ")
+			logger.WithError(err).WithField(config.ReqIDKey, schemaless.ReqID).
+				Errorln("get taos connection error ")
 			wsError(ctx, session, err, SchemalessWrite, schemaless.ReqID)
 			return
 		}
@@ -110,13 +114,13 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 		switch schemaless.Protocol {
 		case wrapper.InfluxDBLineProtocol:
 			_, err = inserter.InsertInfluxdb(conn.TaosConnection, []byte(schemaless.Data), schemaless.DB,
-				schemaless.Precision, schemaless.TTL)
+				schemaless.Precision, schemaless.TTL, schemaless.ReqID)
 		case wrapper.OpenTSDBTelnetLineProtocol:
 			err = inserter.InsertOpentsdbTelnetBatch(conn.TaosConnection, strings.Split(schemaless.Data, "\n"),
-				schemaless.DB, schemaless.TTL)
+				schemaless.DB, schemaless.TTL, schemaless.ReqID)
 		case wrapper.OpenTSDBJsonFormatProtocol:
 			err = inserter.InsertOpentsdbJson(conn.TaosConnection, []byte(schemaless.Data), schemaless.DB,
-				schemaless.TTL)
+				schemaless.TTL, schemaless.ReqID)
 		default:
 			err = unknownProtocolError
 		}
@@ -133,8 +137,7 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 // @Param Authorization header string true "authorization token"
 // @Router /schemaless?db=test&precision=ms
 func (ctl *Restful) schemalessWs(c *gin.Context) {
-	l := logger.WithField("sessionID", web.GetRequestID(c))
-	_ = ctl.schemaless.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": l})
+	_ = ctl.schemaless.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{})
 }
 
 type schemalessConnReq struct {
@@ -142,6 +145,14 @@ type schemalessConnReq struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	DB       string `json:"db"`
+}
+
+type schemalessConnResp struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Action  string `json:"action"`
+	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
 }
 
 type schemalessWriteReq struct {

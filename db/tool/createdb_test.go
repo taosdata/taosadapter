@@ -43,7 +43,7 @@ func TestCreateDBWithConnection(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := CreateDBWithConnection(tt.args.connection, tt.args.db); (err != nil) != tt.wantErr {
+			if err := CreateDBWithConnection(tt.args.connection, tt.args.db, 0); (err != nil) != tt.wantErr {
 				t.Errorf("CreateDBWithConnection() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			code := wrapper.TaosSelectDB(tt.args.connection, tt.args.db)
@@ -98,7 +98,7 @@ func Test_selectDB(t *testing.T) {
 				return
 			}
 			wrapper.TaosFreeResult(result)
-			if err := SelectDB(tt.args.taosConnect, tt.args.db); (err != nil) != tt.wantErr {
+			if err := SelectDB(tt.args.taosConnect, tt.args.db, 0); (err != nil) != tt.wantErr {
 				t.Errorf("selectDB() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			r := wrapper.TaosQuery(tt.args.taosConnect, fmt.Sprintf("drop database if exists %s", tt.args.db))

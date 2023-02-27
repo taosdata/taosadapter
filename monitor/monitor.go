@@ -148,18 +148,18 @@ func writeToTDLog() error {
 		if err != nil {
 			return err
 		}
-		err = async.GlobalAsync.TaosExecWithoutResult(conn, "create database if not exists log")
+		err = async.GlobalAsync.TaosExecWithoutResult(conn, "create database if not exists log", 0)
 		if err != nil {
 			return err
 		}
 	}
-	err = async.GlobalAsync.TaosExecWithoutResult(conn, "use log")
+	err = async.GlobalAsync.TaosExecWithoutResult(conn, "use log", 0)
 	if err != nil {
 		return err
 	}
 	if !tableInitialized {
 		for i := 0; i < len(createList); i++ {
-			err = async.GlobalAsync.TaosExecWithoutResult(conn, createList[i])
+			err = async.GlobalAsync.TaosExecWithoutResult(conn, createList[i], 0)
 			if err != nil {
 				return err
 			}
@@ -324,7 +324,7 @@ func writeToTDLog() error {
 		builder.WriteString(InsertStatement)
 		for i := 0; i < len(inserts); i++ {
 			if builder.Len()+len(inserts[i]) >= common.MaxTaosSqlLen {
-				err = async.GlobalAsync.TaosExecWithoutResult(conn, builder.String())
+				err = async.GlobalAsync.TaosExecWithoutResult(conn, builder.String(), 0)
 				if err != nil {
 					return err
 				}
@@ -335,7 +335,7 @@ func writeToTDLog() error {
 			}
 		}
 		if builder.Len() > len(InsertStatement) {
-			err = async.GlobalAsync.TaosExecWithoutResult(conn, builder.String())
+			err = async.GlobalAsync.TaosExecWithoutResult(conn, builder.String(), 0)
 			if err != nil {
 				return err
 			}

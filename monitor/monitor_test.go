@@ -57,7 +57,7 @@ func TestMonitor(t *testing.T) {
 		return
 	}
 	total := machineMemory.Total
-	p, err := process.NewProcess(int32(os.Getpid()))
+	p, _ := process.NewProcess(int32(os.Getpid()))
 	processMemory, err := p.MemoryInfoWithContext(context.Background())
 	if err != nil {
 		t.Error(err)

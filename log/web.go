@@ -2,7 +2,6 @@ package log
 
 import (
 	"strconv"
-	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -12,22 +11,20 @@ import (
 
 func GinLog() gin.HandlerFunc {
 	logger := GetLogger("web")
-	id := uint32(0)
 
 	return func(c *gin.Context) {
 		if !config.Conf.Monitor.Disable {
 			RequestInFlight.Inc()
 		}
-		currentID := atomic.AddUint32(&id, 1)
 		startTime := time.Now()
-		c.Set("currentID", currentID)
 		c.Next()
+		reqID, _ := c.Get(config.ReqIDKey)
 		latencyTime := time.Since(startTime)
 		reqMethod := c.Request.Method
 		reqUri := c.Request.RequestURI
 		statusCode := c.Writer.Status()
 		clientIP := c.ClientIP()
-		logger.WithField("sessionID", currentID).Infof("| %3d | %13v | %15s | %s | %s ",
+		logger.WithField(config.ReqIDKey, reqID).Infof("| %3d | %13v | %15s | %s | %s ",
 			statusCode,
 			latencyTime,
 			clientIP,
@@ -37,7 +34,7 @@ func GinLog() gin.HandlerFunc {
 		if config.Conf.Log.EnableRecordHttpSql {
 			sql, exist := c.Get("sql")
 			if exist {
-				sqlLogger.Infof("%d '%s' '%s' '%s' %s", currentID, reqUri, reqMethod, clientIP, sql)
+				sqlLogger.Infof("%d '%s' '%s' '%s' %s", reqID, reqUri, reqMethod, clientIP, sql)
 			}
 		}
 		statusCodeStr := strconv.Itoa(statusCode)
@@ -68,8 +65,7 @@ func (r *recoverLog) Write(p []byte) (n int, err error) {
 func GinRecoverLog() gin.HandlerFunc {
 	logger := GetLogger("web")
 	return func(c *gin.Context) {
-		id := c.MustGet("currentID").(uint32)
-		writer := &recoverLog{logger: logger.WithField("id", id)}
+		writer := &recoverLog{logger: logger}
 		gin.RecoveryWithWriter(writer)(c)
 	}
 }

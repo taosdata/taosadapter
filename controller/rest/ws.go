@@ -17,12 +17,12 @@ import (
 	"github.com/taosdata/driver-go/v3/common/parser"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/async"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
-	"github.com/taosdata/taosadapter/v3/tools/web"
 )
 
 type Taos struct {
@@ -182,7 +182,7 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	s = log.GetLogNow(isDebug)
-	result, _ := async.GlobalAsync.TaosQuery(t.conn, req.SQL, handler)
+	result, _ := async.GlobalAsync.TaosQuery(t.conn, req.SQL, handler, int64(req.ReqID))
 	logger.Debugln("taos query cost ", log.GetLogDuration(isDebug, s))
 	code := wrapper.TaosError(result.Res)
 	if code != httperror.SUCCESS {
@@ -591,7 +591,7 @@ func (ctl *Restful) InitWS() {
 			var wsQuery WSQueryReq
 			err = json.Unmarshal(action.Args, &wsQuery)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal query args")
+				logger.WithError(err).WithField(config.ReqIDKey, wsQuery.ReqID).Errorln("unmarshal query args")
 				return
 			}
 			t := session.MustGet(TaosSessionKey)
@@ -600,7 +600,7 @@ func (ctl *Restful) InitWS() {
 			var wsFetch WSFetchReq
 			err = json.Unmarshal(action.Args, &wsFetch)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch args")
+				logger.WithError(err).WithField(config.ReqIDKey, wsFetch.ReqID).Errorln("unmarshal fetch args")
 				return
 			}
 			t := session.MustGet(TaosSessionKey)
@@ -609,7 +609,7 @@ func (ctl *Restful) InitWS() {
 			var fetchBlock WSFetchBlockReq
 			err = json.Unmarshal(action.Args, &fetchBlock)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch_block args")
+				logger.WithError(err).WithField(config.ReqIDKey, fetchBlock.ReqID).Errorln("unmarshal fetch_block args")
 				return
 			}
 			t := session.MustGet(TaosSessionKey)
@@ -618,7 +618,7 @@ func (ctl *Restful) InitWS() {
 			var fetchJson WSFreeResultReq
 			err = json.Unmarshal(action.Args, &fetchJson)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal fetch_json args")
+				logger.WithError(err).WithField(config.ReqIDKey, fetchJson.ReqID).Errorln("unmarshal fetch_json args")
 				return
 			}
 			t := session.MustGet(TaosSessionKey)
@@ -707,8 +707,7 @@ func (ctl *Restful) InitWS() {
 }
 
 func (ctl *Restful) ws(c *gin.Context) {
-	id := web.GetRequestID(c)
-	loggerWithID := logger.WithField("sessionID", id).WithField("wsType", "query")
+	loggerWithID := logger.WithField("wsType", "query")
 	_ = ctl.wsM.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": loggerWithID})
 }
 

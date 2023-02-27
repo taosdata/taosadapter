@@ -6,6 +6,7 @@ import (
 	"errors"
 	"unsafe"
 
+	"github.com/taosdata/driver-go/v3/common"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/httperror"
@@ -23,10 +24,10 @@ func NewAsync(handlerPool *HandlerPool) *Async {
 	return &Async{HandlerPool: handlerPool}
 }
 
-func (a *Async) TaosExec(taosConnect unsafe.Pointer, sql string, timeFormat wrapper.FormatTimeFunc) (*ExecResult, error) {
+func (a *Async) TaosExec(taosConnect unsafe.Pointer, sql string, timeFormat wrapper.FormatTimeFunc, reqID int64) (*ExecResult, error) {
 	handler := a.HandlerPool.Get()
 	defer a.HandlerPool.Put(handler)
-	result, err := a.TaosQuery(taosConnect, sql, handler)
+	result, err := a.TaosQuery(taosConnect, sql, handler, reqID)
 	defer func() {
 		if result != nil && result.Res != nil {
 			thread.Lock()
@@ -91,9 +92,12 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, sql string, timeFormat wrap
 	}
 }
 
-func (a *Async) TaosQuery(taosConnect unsafe.Pointer, sql string, handler *Handler) (*Result, error) {
+func (a *Async) TaosQuery(taosConnect unsafe.Pointer, sql string, handler *Handler, reqID int64) (*Result, error) {
+	if reqID == 0 {
+		reqID = common.GetReqID()
+	}
 	thread.Lock()
-	wrapper.TaosQueryA(taosConnect, sql, handler.Handler)
+	wrapper.TaosQueryAWithReqID(taosConnect, sql, handler.Handler, reqID)
 	thread.Unlock()
 	r := <-handler.Caller.QueryResult
 	return r, nil
@@ -122,10 +126,10 @@ type ExecResult struct {
 	Data         [][]driver.Value
 }
 
-func (a *Async) TaosExecWithoutResult(taosConnect unsafe.Pointer, sql string) error {
+func (a *Async) TaosExecWithoutResult(taosConnect unsafe.Pointer, sql string, reqID int64) error {
 	handler := a.HandlerPool.Get()
 	defer a.HandlerPool.Put(handler)
-	result, err := a.TaosQuery(taosConnect, sql, handler)
+	result, err := a.TaosQuery(taosConnect, sql, handler, reqID)
 	defer func() {
 		if result != nil && result.Res != nil {
 			thread.Lock()

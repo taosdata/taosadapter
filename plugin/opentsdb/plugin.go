@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/taosdata/driver-go/v3/common"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
@@ -75,9 +77,22 @@ func (p *Plugin) Stop() error {
 // @Failure 500 {string} string "internal server error"
 // @Router /opentsdb/v1/put/json/:db [post]
 func (p *Plugin) insertJson(c *gin.Context) {
+	var reqID uint64
+	var err error
+	if reqIDStr := c.Query(config.ReqIDKey); len(reqIDStr) > 0 {
+		if reqID, err = strconv.ParseUint(reqIDStr, 10, 64); err != nil {
+			p.errorResponse(c, http.StatusBadRequest,
+				fmt.Errorf("illegal param, req_id must be numeric %s", err.Error()))
+			return
+		}
+	}
+	if reqID == 0 {
+		reqID = uint64(common.GetReqID())
+	}
+	c.Set(config.ReqIDKey, reqID)
+
 	isDebug := log.IsDebug()
-	id := web.GetRequestID(c)
-	logger := logger.WithField("sessionID", id)
+	logger := logger.WithField(config.ReqIDKey, reqID)
 	db := c.Param("db")
 	if len(db) == 0 {
 		logger.Errorln("db required")
@@ -105,6 +120,7 @@ func (p *Plugin) insertJson(c *gin.Context) {
 			return
 		}
 	}
+
 	taosConn, err := commonpool.GetConnection(user, password)
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
@@ -122,7 +138,7 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		start = time.Now()
 	}
 	logger.Debug(start, "insert json payload", string(data))
-	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db, ttl)
+	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db, ttl, reqID)
 	logger.Debug("insert json payload cost:", time.Since(start))
 	if err != nil {
 		taosError, is := err.(*tErrors.TaosError)
@@ -148,8 +164,22 @@ func (p *Plugin) insertJson(c *gin.Context) {
 // @Failure 500 {string} string "internal server error"
 // @Router /opentsdb/v1/put/telnet/:db [post]
 func (p *Plugin) insertTelnet(c *gin.Context) {
-	id := web.GetRequestID(c)
-	logger := logger.WithField("sessionID", id)
+	var ttl int
+	var err error
+	var reqID uint64
+	if reqIDStr := c.Query(config.ReqIDKey); len(reqIDStr) > 0 {
+		if reqID, err = strconv.ParseUint(reqIDStr, 10, 64); err != nil {
+			p.errorResponse(c, http.StatusBadRequest,
+				fmt.Errorf("illegal param, req_id must be numeric %s", err.Error()))
+			return
+		}
+	}
+	if reqID == 0 {
+		reqID = uint64(common.GetReqID())
+	}
+	c.Set(config.ReqIDKey, reqID)
+
+	logger := logger.WithField(config.ReqIDKey, reqID)
 	isDebug := log.IsDebug()
 	db := c.Param("db")
 	if len(db) == 0 {
@@ -158,8 +188,6 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 		return
 	}
 
-	var ttl int
-	var err error
 	ttlStr := c.Query("ttl")
 	if len(ttlStr) > 0 {
 		ttl, err = strconv.Atoi(ttlStr)
@@ -213,7 +241,7 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 		start = time.Now()
 	}
 	logger.Debug(start, "insert telnet payload", lines)
-	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db, ttl)
+	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db, ttl, reqID)
 	logger.Debug("insert telnet payload cost:", time.Since(start))
 	if err != nil {
 		logger.WithError(err).Error("insert telnet payload error", lines)
