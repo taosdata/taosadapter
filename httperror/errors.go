@@ -4,7 +4,7 @@ const (
 	SUCCESS                      = 0x0
 	TSDB_CODE_RPC_AUTH_FAILURE   = 0x0003
 	HTTP_SERVER_OFFLINE          = 0x1100
-	HTTP_UNSUPPORT_URL           = 0x1101
+	HTTP_UNSUPPORTED_URL         = 0x1101
 	HTTP_INVALID_URL             = 0x1102
 	HTTP_NO_ENOUGH_MEMORY        = 0x1103
 	HTTP_REQUSET_TOO_BIG         = 0x1104
@@ -104,6 +104,8 @@ const (
 	TSC_INVALID_TABLE_NAME     = 0x0218
 	PAR_TABLE_NOT_EXIST        = 0x2603
 )
+
+// 401
 const (
 	TSDB_CODE_MND_USER_ALREADY_EXIST  = 0x0350
 	TSDB_CODE_MND_USER_NOT_EXIST      = 0x0351
@@ -115,10 +117,26 @@ const (
 	TSDB_CODE_MND_AUTH_FAILURE        = 0x0357
 )
 
+// 400
+const (
+	TSDB_CODE_TSC_SQL_SYNTAX_ERROR        = 0x0216
+	TSDB_CODE_TSC_LINE_SYNTAX_ERROR       = 0x021B
+	TSDB_CODE_PAR_SYNTAX_ERROR            = 0x2600
+	TSDB_CODE_TDB_TIMESTAMP_OUT_OF_RANGE  = 0x060B
+	TSDB_CODE_TSC_VALUE_OUT_OF_RANGE      = 0x0224
+	TSDB_CODE_PAR_INVALID_FILL_TIME_RANGE = 0x263B
+)
+
+// 502
+
+const (
+	RPC_NETWORK_UNAVAIL = 0x000B
+)
+
 var ErrorMsgMap = map[int]string{
 	TSDB_CODE_RPC_AUTH_FAILURE:   "Authentication failure",
 	HTTP_SERVER_OFFLINE:          "http server is not onlin",
-	HTTP_UNSUPPORT_URL:           "url is not support",
+	HTTP_UNSUPPORTED_URL:         "url is not support",
 	HTTP_INVALID_URL:             "invalid url format",
 	HTTP_NO_ENOUGH_MEMORY:        "no enough memory",
 	HTTP_REQUSET_TOO_BIG:         "request size is too big",
@@ -158,7 +176,7 @@ var ErrorMsgMap = map[int]string{
 	HTTP_GC_REQ_PARSE_ERROR:      "parse grafana json error",
 	HTTP_TG_DB_NOT_INPUT:         "database name can not be null",
 	HTTP_TG_DB_TOO_LONG:          "database name too long",
-	HTTP_TG_INVALID_JSON:         "invalid telegraf json fromat",
+	HTTP_TG_INVALID_JSON:         "invalid telegraf json format",
 	HTTP_TG_METRICS_NULL:         "metrics size is 0",
 	HTTP_TG_METRICS_SIZE:         "metrics size can not more than 1K",
 	HTTP_TG_METRIC_NULL:          "metric name not find",
@@ -190,7 +208,7 @@ var ErrorMsgMap = map[int]string{
 	HTTP_TG_STABLE_NOT_EXIST:     "stable not exist",
 	HTTP_OP_DB_NOT_INPUT:         "database name can not be null",
 	HTTP_OP_DB_TOO_LONG:          "database name too long",
-	HTTP_OP_INVALID_JSON:         "invalid opentsdb json fromat",
+	HTTP_OP_INVALID_JSON:         "invalid opentsdb json format",
 	HTTP_OP_METRICS_NULL:         "metrics size is 0",
 	HTTP_OP_METRICS_SIZE:         "metrics size can not more than 10K",
 	HTTP_OP_METRIC_NULL:          "metric name not find",

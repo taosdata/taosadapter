@@ -4,7 +4,6 @@ import (
 	"crypto/des"
 	"encoding/base64"
 	"errors"
-	"net/http"
 	"strings"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
-	"github.com/taosdata/taosadapter/v3/tools/web"
 )
 
 var authCache = cache.New(30*time.Minute, time.Hour)
@@ -102,7 +100,7 @@ const (
 func CheckAuth(c *gin.Context) {
 	auth := c.GetHeader("Authorization")
 	if len(auth) == 0 {
-		ErrorResponseWithStatus(c, http.StatusUnauthorized, httperror.HTTP_NO_AUTH_INFO)
+		UnAuthResponse(c, httperror.HTTP_NO_AUTH_INFO)
 		return
 	}
 	auth = strings.TrimSpace(auth)
@@ -116,11 +114,11 @@ func CheckAuth(c *gin.Context) {
 	if strings.HasPrefix(auth, "Basic") {
 		user, password, err := tools.DecodeBasic(auth[6:])
 		if err != nil {
-			ErrorResponseWithStatus(c, http.StatusUnauthorized, httperror.HTTP_INVALID_BASIC_AUTH)
+			UnAuthResponse(c, httperror.HTTP_INVALID_BASIC_AUTH)
 			return
 		}
 		if len(user) == 0 || len(password) == 0 {
-			ErrorResponseWithStatus(c, http.StatusUnauthorized, httperror.HTTP_INVALID_BASIC_AUTH)
+			UnAuthResponse(c, httperror.HTTP_INVALID_BASIC_AUTH)
 			return
 		}
 		authCache.SetDefault(auth, &authInfo{
@@ -132,11 +130,11 @@ func CheckAuth(c *gin.Context) {
 	} else if strings.HasPrefix(auth, "Taosd") {
 		user, password, err := DecodeDes(auth[6:])
 		if err != nil {
-			ErrorResponseWithStatus(c, http.StatusUnauthorized, httperror.HTTP_INVALID_TAOSD_AUTH)
+			UnAuthResponse(c, httperror.HTTP_INVALID_TAOSD_AUTH)
 			return
 		}
 		if len(user) == 0 || len(password) == 0 {
-			ErrorResponseWithStatus(c, http.StatusUnauthorized, httperror.HTTP_INVALID_TAOSD_AUTH)
+			UnAuthResponse(c, httperror.HTTP_INVALID_TAOSD_AUTH)
 			return
 		}
 		authCache.SetDefault(auth, &authInfo{
@@ -146,7 +144,7 @@ func CheckAuth(c *gin.Context) {
 		c.Set(UserKey, user)
 		c.Set(PasswordKey, password)
 	} else {
-		ErrorResponseWithStatus(c, http.StatusUnauthorized, httperror.HTTP_INVALID_AUTH_TYPE)
+		UnAuthResponse(c, httperror.HTTP_INVALID_AUTH_TYPE)
 		return
 	}
 }
@@ -154,51 +152,4 @@ func CheckAuth(c *gin.Context) {
 type Message struct {
 	Code int    `json:"code"`
 	Desc string `json:"desc"`
-}
-
-func ErrorResponse(c *gin.Context, code int) {
-	errStr := httperror.ErrorMsgMap[code]
-	if len(errStr) == 0 {
-		errStr = "unknown error"
-	}
-	c.AbortWithStatusJSON(http.StatusOK, &Message{
-		Code: code,
-		Desc: errStr,
-	})
-	web.SetTaosErrorCode(c, code)
-}
-
-func ErrorResponseWithStatus(c *gin.Context, status, code int) {
-	errStr := httperror.ErrorMsgMap[code]
-	if len(errStr) == 0 {
-		errStr = "unknown error"
-	}
-	c.AbortWithStatusJSON(status, &Message{
-		Code: code,
-		Desc: errStr,
-	})
-	web.SetTaosErrorCode(c, code)
-}
-
-const RPC_NETWORK_UNAVAIL = 0x000B
-
-func ErrorResponseWithMsg(c *gin.Context, code int, msg string) {
-	status := http.StatusOK
-	code = code & 0xffff
-	if code == RPC_NETWORK_UNAVAIL {
-		status = http.StatusBadGateway
-	}
-	c.AbortWithStatusJSON(status, &Message{
-		Code: code,
-		Desc: msg,
-	})
-	web.SetTaosErrorCode(c, code)
-}
-
-func ErrorResponseWithStatusMsg(c *gin.Context, httpCode int, code int, msg string) {
-	c.AbortWithStatusJSON(httpCode, &Message{
-		Code: code & 0xffff,
-		Desc: msg,
-	})
-	web.SetTaosErrorCode(c, code&0xffff)
 }

@@ -111,15 +111,14 @@ func (ctl *Restful) sql(c *gin.Context) {
 	if len(timeZone) != 0 {
 		location, err = time.LoadLocation(timeZone)
 		if err != nil {
-			ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff, err.Error())
+			BadRequestResponseWithMsg(c, 0xffff, err.Error())
 			return
 		}
 	}
 	var reqID int64
 	if reqIDStr := c.Query(config.ReqIDKey); len(reqIDStr) != 0 {
 		if reqID, err = strconv.ParseInt(reqIDStr, 10, 64); err != nil {
-			ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff,
-				fmt.Sprintf("illegal param, req_id must be numeric %s", err.Error()))
+			BadRequestResponseWithMsg(c, 0xffff, fmt.Sprintf("illegal param, req_id must be numeric %s", err.Error()))
 			return
 		}
 	}
@@ -160,18 +159,18 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID in
 	b, err := c.GetRawData()
 	if err != nil {
 		logger.WithError(err).Error("get request body error")
-		ErrorResponse(c, httperror.HTTP_INVALID_CONTENT_LENGTH)
+		BadRequestResponse(c, httperror.HTTP_INVALID_CONTENT_LENGTH)
 		return
 	}
 	if len(b) == 0 {
 		logger.Errorln("no msg got")
-		ErrorResponse(c, httperror.HTTP_NO_MSG_INPUT)
+		BadRequestResponse(c, httperror.HTTP_NO_MSG_INPUT)
 		return
 	}
 	sql := strings.TrimSpace(string(b))
 	if len(sql) == 0 {
 		logger.Errorln("no sql got")
-		ErrorResponse(c, httperror.HTTP_NO_SQL_INPUT)
+		BadRequestResponse(c, httperror.HTTP_NO_SQL_INPUT)
 		return
 	}
 	c.Set("sql", sql)
@@ -187,14 +186,10 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID in
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
 		if tError, is := err.(*tErrors.TaosError); is {
-			if isDbAuthFail(tError.Code) {
-				ErrorResponseWithStatusMsg(c, http.StatusUnauthorized, int(tError.Code), tError.ErrStr)
-				return
-			}
-			ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
+			TaosErrorResponse(c, int(tError.Code), tError.ErrStr)
 			return
 		}
-		ErrorResponseWithMsg(c, 0xffff, err.Error())
+		CommonErrorResponse(c, err.Error())
 		return
 	}
 	defer func() {
@@ -261,7 +256,8 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	code := wrapper.TaosError(res)
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosErrorStr(res)
-		ErrorResponseWithMsg(c, code, errStr)
+		logger.WithFields(logrus.Fields{"sql": sql, "error_code": code & 0xffff, "error_msg": errStr}).Error("")
+		TaosErrorResponse(c, code, errStr)
 		return
 	}
 	isUpdate := wrapper.TaosIsUpdateQuery(res)
@@ -296,9 +292,9 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	if err != nil {
 		tError, ok := err.(*tErrors.TaosError)
 		if ok {
-			ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
+			TaosErrorResponse(c, int(tError.Code), tError.ErrStr)
 		} else {
-			ErrorResponseWithMsg(c, 0xffff, err.Error())
+			CommonErrorResponse(c, err.Error())
 		}
 		return
 	}
@@ -438,20 +434,19 @@ const MAXSQLLength = 1024 * 1024 * 1
 func (ctl *Restful) upload(c *gin.Context) {
 	db := c.Query("db")
 	if len(db) == 0 {
-		ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff, "db required")
+		BadRequestResponseWithMsg(c, 0xffff, "db required")
 		return
 	}
 	table := c.Query("table")
 	if len(table) == 0 {
-		ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff, "table required")
+		BadRequestResponseWithMsg(c, 0xffff, "table required")
 		return
 	}
 	var reqID int64
 	var err error
 	if reqIDStr := c.Query(config.ReqIDKey); len(reqIDStr) != 0 {
 		if reqID, err = strconv.ParseInt(reqIDStr, 10, 64); err != nil {
-			ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff,
-				fmt.Sprintf("illegal param, req_id must be numeric %s", err.Error()))
+			BadRequestResponseWithMsg(c, 0xffff, fmt.Sprintf("illegal param, req_id must be numeric %s", err.Error()))
 			return
 		}
 	}
@@ -486,14 +481,10 @@ func (ctl *Restful) upload(c *gin.Context) {
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
 		if tError, is := err.(*tErrors.TaosError); is {
-			if isDbAuthFail(tError.Code) {
-				ErrorResponseWithStatusMsg(c, http.StatusUnauthorized, int(tError.Code), tError.ErrStr)
-				return
-			}
-			ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
+			TaosErrorResponse(c, int(tError.Code), tError.ErrStr)
 			return
 		}
-		ErrorResponseWithMsg(c, 0xffff, err.Error())
+		CommonErrorResponse(c, err.Error())
 		return
 	}
 	defer func() {
@@ -516,10 +507,10 @@ func (ctl *Restful) upload(c *gin.Context) {
 	if err != nil {
 		taosError, is := err.(*tErrors.TaosError)
 		if is {
-			ErrorResponseWithMsg(c, int(taosError.Code), taosError.ErrStr)
+			TaosErrorResponse(c, int(taosError.Code), taosError.ErrStr)
 			return
 		}
-		ErrorResponseWithMsg(c, 0xffff, err.Error())
+		CommonErrorResponse(c, err.Error())
 		return
 	}
 	columnCount := 0
@@ -539,7 +530,7 @@ func (ctl *Restful) upload(c *gin.Context) {
 	reader, err := c.Request.MultipartReader()
 	if err != nil {
 		logger.WithError(err).Error("get multi part reader error")
-		ErrorResponseWithMsg(c, 0xffff, err.Error())
+		CommonErrorResponse(c, err.Error())
 		return
 	}
 	rows := 0
@@ -554,7 +545,7 @@ func (ctl *Restful) upload(c *gin.Context) {
 				break
 			} else {
 				logger.WithError(err).Error("get next part error")
-				ErrorResponseWithMsg(c, 0xffff, err.Error())
+				CommonErrorResponse(c, err.Error())
 				return
 			}
 		}
@@ -572,7 +563,7 @@ func (ctl *Restful) upload(c *gin.Context) {
 			}
 			if len(record) < columnCount {
 				logger.Errorf("column count not enough got %d want %d", len(record), columnCount)
-				ErrorResponseWithMsg(c, 0xffff, "column count not enough")
+				CommonErrorResponse(c, "column count not enough")
 				return
 			}
 			colBuffer.WriteString("(")
@@ -601,10 +592,10 @@ func (ctl *Restful) upload(c *gin.Context) {
 				if err != nil {
 					taosError, is := err.(*tErrors.TaosError)
 					if is {
-						ErrorResponseWithMsg(c, int(taosError.Code), taosError.ErrStr)
+						TaosErrorResponse(c, int(taosError.Code), taosError.ErrStr)
 						return
 					}
-					ErrorResponseWithMsg(c, 0xffff, err.Error())
+					CommonErrorResponse(c, err.Error())
 					return
 				}
 				buffer.Reset()
@@ -622,10 +613,10 @@ func (ctl *Restful) upload(c *gin.Context) {
 		if err != nil {
 			taosError, is := err.(*tErrors.TaosError)
 			if is {
-				ErrorResponseWithMsg(c, int(taosError.Code), taosError.ErrStr)
+				TaosErrorResponse(c, int(taosError.Code), taosError.ErrStr)
 				return
 			}
-			ErrorResponseWithMsg(c, 0xffff, err.Error())
+			CommonErrorResponse(c, err.Error())
 			return
 		}
 	}
@@ -648,18 +639,18 @@ func (ctl *Restful) des(c *gin.Context) {
 	user := c.Param("user")
 	password := c.Param("password")
 	if len(user) == 0 || len(user) > 24 || len(password) == 0 || len(password) > 24 {
-		ErrorResponse(c, httperror.HTTP_GEN_TAOSD_TOKEN_ERR)
+		BadRequestResponse(c, httperror.HTTP_GEN_TAOSD_TOKEN_ERR)
 		return
 	}
 	conn, err := commonpool.GetConnection(user, password)
 	if err != nil {
-		ErrorResponse(c, httperror.TSDB_CODE_RPC_AUTH_FAILURE)
+		UnAuthResponse(c, httperror.TSDB_CODE_RPC_AUTH_FAILURE)
 		return
 	}
 	conn.Put()
 	token, err := EncodeDes(user, password)
 	if err != nil {
-		ErrorResponse(c, httperror.HTTP_GEN_TAOSD_TOKEN_ERR)
+		BadRequestResponse(c, httperror.HTTP_GEN_TAOSD_TOKEN_ERR)
 		return
 	}
 	c.JSON(http.StatusOK, &Message{
@@ -674,15 +665,4 @@ func (ctl *Restful) Close() {
 func init() {
 	r := &Restful{}
 	controller.AddController(r)
-}
-
-func isDbAuthFail(code int32) bool {
-	return code == httperror.TSDB_CODE_MND_USER_ALREADY_EXIST ||
-		code == httperror.TSDB_CODE_MND_USER_NOT_EXIST ||
-		code == httperror.TSDB_CODE_MND_INVALID_USER_FORMAT ||
-		code == httperror.TSDB_CODE_MND_INVALID_PASS_FORMAT ||
-		code == httperror.TSDB_CODE_MND_NO_USER_FROM_CONN ||
-		code == httperror.TSDB_CODE_MND_TOO_MANY_USERS ||
-		code == httperror.TSDB_CODE_MND_INVALID_ALTER_OPER ||
-		code == httperror.TSDB_CODE_MND_AUTH_FAILURE
 }

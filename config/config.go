@@ -12,15 +12,16 @@ import (
 )
 
 type Config struct {
-	Cors            CorsConfig
-	TaosConfigDir   string
-	Debug           bool
-	Port            int
-	LogLevel        string
-	RestfulRowLimit int
-	Log             Log
-	Pool            Pool
-	Monitor         Monitor
+	Cors                CorsConfig
+	TaosConfigDir       string
+	Debug               bool
+	Port                int
+	LogLevel            string
+	RestfulRowLimit     int
+	HttpCodeServerError bool
+	Log                 Log
+	Pool                Pool
+	Monitor             Monitor
 }
 
 var (
@@ -68,11 +69,12 @@ func Init() {
 		}
 	}
 	Conf = &Config{
-		Debug:           viper.GetBool("debug"),
-		Port:            viper.GetInt("port"),
-		LogLevel:        viper.GetString("logLevel"),
-		TaosConfigDir:   viper.GetString("taosConfigDir"),
-		RestfulRowLimit: viper.GetInt("restfulRowLimit"),
+		Debug:               viper.GetBool("debug"),
+		HttpCodeServerError: viper.GetBool("httpCodeServerError"),
+		Port:                viper.GetInt("port"),
+		LogLevel:            viper.GetString("logLevel"),
+		TaosConfigDir:       viper.GetString("taosConfigDir"),
+		RestfulRowLimit:     viper.GetInt("restfulRowLimit"),
 	}
 	Conf.Log.setValue()
 	Conf.Cors.setValue()
@@ -86,6 +88,10 @@ func init() {
 	viper.SetDefault("debug", true)
 	_ = viper.BindEnv("debug", "TAOS_ADAPTER_DEBUG")
 	pflag.Bool("debug", true, `enable debug mode. Env "TAOS_ADAPTER_DEBUG"`)
+
+	viper.SetDefault("httpCodeServerError", false)
+	_ = viper.BindEnv("httpCodeServerError", "TAOS_ADAPTER_HTTP_CODE_SERVER_ERROR")
+	pflag.Bool("httpCodeServerError", false, `Use a non-200 http status code when taosd returns an error. Env "TAOS_ADAPTER_HTTP_CODE_SERVER_ERROR"`)
 
 	viper.SetDefault("port", 6041)
 	_ = viper.BindEnv("port", "TAOS_ADAPTER_PORT")
