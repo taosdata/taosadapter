@@ -10,35 +10,23 @@ import (
 )
 
 func UnAuthResponse(c *gin.Context, code int) {
+	badResponse(c, http.StatusUnauthorized, code)
+}
+
+func BadRequestResponse(c *gin.Context, code int) {
+	badResponse(c, http.StatusBadRequest, code)
+}
+
+func badResponse(c *gin.Context, httpCode int, code int) {
 	errStr, exist := httperror.ErrorMsgMap[code]
 	if !exist {
 		errStr = "unknown error"
 	}
-	UnAuthResponseWithMsg(c, code, errStr)
-}
-
-func UnAuthResponseWithMsg(c *gin.Context, code int, msg string) {
-	c.AbortWithStatusJSON(http.StatusUnauthorized, &Message{
-		Code: code,
-		Desc: msg,
-	})
-	web.SetTaosErrorCode(c, code)
-}
-
-func BadRequestResponse(c *gin.Context, code int) {
-	errStr := httperror.ErrorMsgMap[code]
-	if len(errStr) == 0 {
-		errStr = "unknown error"
-	}
-	BadRequestResponseWithMsg(c, code, errStr)
+	errorResp(c, httpCode, code, errStr)
 }
 
 func BadRequestResponseWithMsg(c *gin.Context, code int, msg string) {
-	c.AbortWithStatusJSON(http.StatusBadRequest, &Message{
-		Code: code,
-		Desc: msg,
-	})
-	web.SetTaosErrorCode(c, code)
+	errorResp(c, http.StatusBadRequest, code, msg)
 }
 
 func getErrorHttpStatus(errCode int32) int {
@@ -76,18 +64,18 @@ var errorStatusMap = map[int32]int{
 func TaosErrorResponse(c *gin.Context, code int, msg string) {
 	code = code & 0xffff
 	httpCode := getErrorHttpStatus(int32(code))
+	errorResp(c, httpCode, code, msg)
+}
+
+func CommonErrorResponse(c *gin.Context, msg string) {
+	httpCode := getErrorHttpStatus(0xffff)
+	errorResp(c, httpCode, 0xffff, msg)
+}
+
+func errorResp(c *gin.Context, httpCode int, code int, msg string) {
 	c.AbortWithStatusJSON(httpCode, &Message{
 		Code: code,
 		Desc: msg,
 	})
 	web.SetTaosErrorCode(c, code)
-}
-
-func CommonErrorResponse(c *gin.Context, msg string) {
-	httpCode := getErrorHttpStatus(0xffff)
-	c.AbortWithStatusJSON(httpCode, &Message{
-		Code: 0xffff,
-		Desc: msg,
-	})
-	web.SetTaosErrorCode(c, 0xffff)
 }

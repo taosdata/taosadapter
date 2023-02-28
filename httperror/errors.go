@@ -4,7 +4,7 @@ const (
 	SUCCESS                      = 0x0
 	TSDB_CODE_RPC_AUTH_FAILURE   = 0x0003
 	HTTP_SERVER_OFFLINE          = 0x1100
-	HTTP_UNSUPPORTTED_URL        = 0x1101
+	HTTP_UNSUPPORTED_URL         = 0x1101
 	HTTP_INVALID_URL             = 0x1102
 	HTTP_NO_ENOUGH_MEMORY        = 0x1103
 	HTTP_REQUSET_TOO_BIG         = 0x1104
@@ -136,7 +136,7 @@ const (
 var ErrorMsgMap = map[int]string{
 	TSDB_CODE_RPC_AUTH_FAILURE:   "Authentication failure",
 	HTTP_SERVER_OFFLINE:          "http server is not onlin",
-	HTTP_UNSUPPORTTED_URL:        "url is not support",
+	HTTP_UNSUPPORTED_URL:         "url is not support",
 	HTTP_INVALID_URL:             "invalid url format",
 	HTTP_NO_ENOUGH_MEMORY:        "no enough memory",
 	HTTP_REQUSET_TOO_BIG:         "request size is too big",
