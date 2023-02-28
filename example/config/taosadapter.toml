@@ -2,6 +2,7 @@ debug = true
 taosConfigDir = ""
 port = 6041
 logLevel = "info"
+httpCodeServerError = false
 
 [cors]
 allowAllOrigins = true

@@ -16,11 +16,11 @@ func (*Restful) tableVgID(c *gin.Context) {
 	var tables []string
 	err := c.ShouldBindJSON(&tables)
 	if err != nil {
-		ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff, err.Error())
+		BadRequestResponseWithMsg(c, 0xffff, err.Error())
 		return
 	}
 	if len(db) == 0 || len(tables) == 0 {
-		ErrorResponseWithStatusMsg(c, http.StatusBadRequest, 0xffff, "illegal params")
+		BadRequestResponseWithMsg(c, 0xffff, "illegal params")
 		return
 	}
 
@@ -33,14 +33,10 @@ func (*Restful) tableVgID(c *gin.Context) {
 	if err != nil {
 		logger.WithError(err).Error("connect taosd error")
 		if tError, is := err.(*tErrors.TaosError); is {
-			if isDbAuthFail(tError.Code) {
-				ErrorResponseWithStatusMsg(c, http.StatusUnauthorized, int(tError.Code), tError.ErrStr)
-				return
-			}
-			ErrorResponseWithMsg(c, int(tError.Code), tError.ErrStr)
+			TaosErrorResponse(c, int(tError.Code), tError.ErrStr)
 			return
 		}
-		ErrorResponseWithMsg(c, 0xffff, err.Error())
+		CommonErrorResponse(c, err.Error())
 		return
 	}
 	defer func() {
@@ -57,7 +53,7 @@ func (*Restful) tableVgID(c *gin.Context) {
 	logger.Debugln("taos_get_tables_vgId cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != 0 {
-		ErrorResponseWithStatusMsg(c, http.StatusInternalServerError, code, wrapper.TaosErrorStr(nil))
+		TaosErrorResponse(c, code, wrapper.TaosErrorStr(nil))
 		return
 	}
 

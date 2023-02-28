@@ -403,7 +403,6 @@ func TestPrecision(t *testing.T) {
 }
 
 func TestTimeZone(t *testing.T) {
-
 	config.Conf.RestfulRowLimit = -1
 	now := time.Now().Unix()
 	nowT := time.Unix(now, 0)
@@ -454,4 +453,42 @@ func TestTimeZone(t *testing.T) {
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
+}
+
+func TestBadRequest(t *testing.T) {
+	config.Conf.RestfulRowLimit = -1
+	config.Conf.HttpCodeServerError = true
+	w := httptest.NewRecorder()
+	body := strings.NewReader("wrong sql")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	config.Conf.HttpCodeServerError = false
+	w = httptest.NewRecorder()
+	body = strings.NewReader("wrong sql")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestInternalError(t *testing.T) {
+	config.Conf.RestfulRowLimit = -1
+	config.Conf.HttpCodeServerError = true
+	w := httptest.NewRecorder()
+	body := strings.NewReader("CREATE MNODE ON DNODE 1")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	config.Conf.HttpCodeServerError = false
+	w = httptest.NewRecorder()
+	body = strings.NewReader("CREATE MNODE ON DNODE 1")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
 }
