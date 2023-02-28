@@ -4,7 +4,7 @@ const (
 	SUCCESS                      = 0x0
 	TSDB_CODE_RPC_AUTH_FAILURE   = 0x0003
 	HTTP_SERVER_OFFLINE          = 0x1100
-	HTTP_UNSUPPORT_URL           = 0x1101
+	HTTP_UNSUPPORTTED_URL        = 0x1101
 	HTTP_INVALID_URL             = 0x1102
 	HTTP_NO_ENOUGH_MEMORY        = 0x1103
 	HTTP_REQUSET_TOO_BIG         = 0x1104
@@ -136,7 +136,7 @@ const (
 var ErrorMsgMap = map[int]string{
 	TSDB_CODE_RPC_AUTH_FAILURE:   "Authentication failure",
 	HTTP_SERVER_OFFLINE:          "http server is not onlin",
-	HTTP_UNSUPPORT_URL:           "url is not support",
+	HTTP_UNSUPPORTTED_URL:        "url is not support",
 	HTTP_INVALID_URL:             "invalid url format",
 	HTTP_NO_ENOUGH_MEMORY:        "no enough memory",
 	HTTP_REQUSET_TOO_BIG:         "request size is too big",
@@ -176,7 +176,7 @@ var ErrorMsgMap = map[int]string{
 	HTTP_GC_REQ_PARSE_ERROR:      "parse grafana json error",
 	HTTP_TG_DB_NOT_INPUT:         "database name can not be null",
 	HTTP_TG_DB_TOO_LONG:          "database name too long",
-	HTTP_TG_INVALID_JSON:         "invalid telegraf json fromat",
+	HTTP_TG_INVALID_JSON:         "invalid telegraf json format",
 	HTTP_TG_METRICS_NULL:         "metrics size is 0",
 	HTTP_TG_METRICS_SIZE:         "metrics size can not more than 1K",
 	HTTP_TG_METRIC_NULL:          "metric name not find",
@@ -208,7 +208,7 @@ var ErrorMsgMap = map[int]string{
 	HTTP_TG_STABLE_NOT_EXIST:     "stable not exist",
 	HTTP_OP_DB_NOT_INPUT:         "database name can not be null",
 	HTTP_OP_DB_TOO_LONG:          "database name too long",
-	HTTP_OP_INVALID_JSON:         "invalid opentsdb json fromat",
+	HTTP_OP_INVALID_JSON:         "invalid opentsdb json format",
 	HTTP_OP_METRICS_NULL:         "metrics size is 0",
 	HTTP_OP_METRICS_SIZE:         "metrics size can not more than 10K",
 	HTTP_OP_METRIC_NULL:          "metric name not find",
