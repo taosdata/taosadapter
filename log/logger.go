@@ -234,7 +234,11 @@ func (t *TaosLogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		b.WriteByte(' ')
 		b.WriteString(k)
 		b.WriteByte('=')
-		b.WriteString(fmt.Sprintf("%v", v))
+		if k == config.ReqIDKey {
+			b.WriteString(fmt.Sprintf("0x%x", v))
+		} else {
+			b.WriteString(fmt.Sprintf("%v", v))
+		}
 	}
 	b.WriteByte('\n')
 	return b.Bytes(), nil
