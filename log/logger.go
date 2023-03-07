@@ -235,7 +235,7 @@ func (t *TaosLogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		b.WriteString(k)
 		b.WriteByte('=')
 		if k == config.ReqIDKey {
-			b.WriteString(fmt.Sprintf("%x", v))
+			b.WriteString(fmt.Sprintf("0x%x", v))
 		} else {
 			b.WriteString(fmt.Sprintf("%v", v))
 		}
