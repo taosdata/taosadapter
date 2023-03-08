@@ -113,7 +113,7 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 
 		switch schemaless.Protocol {
 		case wrapper.InfluxDBLineProtocol:
-			_, err = inserter.InsertInfluxdb(conn.TaosConnection, []byte(schemaless.Data), schemaless.DB,
+			err = inserter.InsertInfluxdb(conn.TaosConnection, []byte(schemaless.Data), schemaless.DB,
 				schemaless.Precision, schemaless.TTL, schemaless.ReqID)
 		case wrapper.OpenTSDBTelnetLineProtocol:
 			err = inserter.InsertOpentsdbTelnetBatch(conn.TaosConnection, strings.Split(schemaless.Data, "\n"),

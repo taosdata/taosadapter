@@ -5,10 +5,9 @@ import (
 
 	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/taosadapter/v3/schemaless/capi"
-	"github.com/taosdata/taosadapter/v3/schemaless/proto"
 )
 
-func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision string, ttl int, reqID uint64) (*proto.InfluxResult, error) {
+func InsertInfluxdb(taosConnect unsafe.Pointer, data []byte, db, precision string, ttl int, reqID uint64) error {
 	return capi.InsertInfluxdb(taosConnect, data, db, precision, ttl, getReqID(reqID))
 }
 

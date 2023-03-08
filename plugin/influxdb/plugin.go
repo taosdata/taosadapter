@@ -166,20 +166,15 @@ func (p *Influxdb) write(c *gin.Context) {
 		start = time.Now()
 	}
 	logger.WithTime(start).Debugln("start insert influxdb:", string(data))
-	result, err := inserter.InsertInfluxdb(conn, data, db, precision, ttl, reqID)
+	err = inserter.InsertInfluxdb(conn, data, db, precision, ttl, reqID)
 	logger.Debugln("finish insert influxdb cost:", time.Since(start))
 	if err != nil {
 		taosError, is := err.(*tErrors.TaosError)
 		if is {
 			web.SetTaosErrorCode(c, int(taosError.Code))
 		}
-		logger.WithField("result", result).WithError(err).Errorln("insert line error")
+		logger.WithError(err).Errorln("insert line error", string(data))
 		p.commonResponse(c, http.StatusInternalServerError, &message{Code: "internal error", Message: err.Error()})
-		return
-	}
-	if result.FailCount != 0 {
-		logger.WithField("result", result).Errorln("insert line inner error success:", result.SuccessCount, "fail:", result.FailCount, "errors:", strings.Join(result.ErrorList, ","))
-		p.commonResponse(c, http.StatusInternalServerError, &message{Code: "internal error", Message: strings.Join(result.ErrorList, ",")})
 		return
 	}
 

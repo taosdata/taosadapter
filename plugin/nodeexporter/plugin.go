@@ -5,14 +5,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 	"unsafe"
 
@@ -236,12 +234,10 @@ func (p *NodeExporter) requestSingle(conn unsafe.Pointer, req *Req) error {
 		if err != nil {
 			return err
 		}
-		result, err := inserter.InsertInfluxdb(conn, data, p.conf.DB, "ns", p.conf.TTL, 0)
+		err = inserter.InsertInfluxdb(conn, data, p.conf.DB, "ns", p.conf.TTL, 0)
 		if err != nil {
+			logger.WithError(err).Error("insert influxdb error", string(data))
 			return err
-		}
-		if result.FailCount != 0 {
-			return errors.New(strings.Join(result.ErrorList, ","))
 		}
 	}
 	return nil
