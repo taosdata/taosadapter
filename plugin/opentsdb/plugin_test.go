@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -40,10 +39,8 @@ func TestOpentsdb(t *testing.T) {
 	afC, err := af.NewConnector(conn)
 	assert.NoError(t, err)
 	defer afC.Close()
-	if runtime.GOOS == "windows" {
-		_, err = afC.Exec("create database if not exists test_plugin_opentsdb_http_json")
-		assert.NoError(t, err)
-	}
+	_, err = afC.Exec("create database if not exists test_plugin_opentsdb_http_json")
+	assert.NoError(t, err)
 	err = p.Init(router)
 	assert.NoError(t, err)
 	err = p.Start()

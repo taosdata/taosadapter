@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -39,10 +38,8 @@ func TestInfluxdb(t *testing.T) {
 	afC, err := af.NewConnector(conn)
 	assert.NoError(t, err)
 	defer afC.Close()
-	if runtime.GOOS == "windows" {
-		_, err = afC.Exec("create database if not exists test_plugin_influxdb")
-		assert.NoError(t, err)
-	}
+	_, err = afC.Exec("create database if not exists test_plugin_influxdb")
+	assert.NoError(t, err)
 	defer func() {
 		r := wrapper.TaosQuery(conn, "drop database if exists test_plugin_influxdb")
 		code := wrapper.TaosError(r)

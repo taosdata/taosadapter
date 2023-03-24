@@ -160,4 +160,4 @@ func (c *TMQHandlerPool) Put(handler *TMQHandler) {
 	}
 }
 
-var GlobalTMQHandlerPoll = NewHandlerPool(100)
+var GlobalTMQHandlerPoll = NewHandlerPool(10000)

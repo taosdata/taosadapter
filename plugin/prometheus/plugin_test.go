@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"testing"
 	"time"
 
@@ -29,12 +28,10 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	if runtime.GOOS == "windows" {
-		r := wrapper.TaosQuery(conn, "create database if not exists test_plugin_prometheus")
-		wrapper.TaosFreeResult(r)
-	}
+	r := wrapper.TaosQuery(conn, "create database if not exists test_plugin_prometheus")
+	wrapper.TaosFreeResult(r)
 	m.Run()
-	r := wrapper.TaosQuery(conn, "drop database if exists test_plugin_prometheus")
+	r = wrapper.TaosQuery(conn, "drop database if exists test_plugin_prometheus")
 	wrapper.TaosFreeResult(r)
 }
 

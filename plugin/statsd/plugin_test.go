@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"runtime"
 	"testing"
 	"time"
 
@@ -37,10 +36,8 @@ func TestStatsd(t *testing.T) {
 	afC, err := af.NewConnector(conn)
 	assert.NoError(t, err)
 	defer afC.Close()
-	if runtime.GOOS == "windows" {
-		_, err = afC.Exec("create database if not exists statsd")
-		assert.NoError(t, err)
-	}
+	_, err = afC.Exec("create database if not exists statsd")
+	assert.NoError(t, err)
 	err = p.Init(nil)
 	assert.NoError(t, err)
 	err = p.Start()

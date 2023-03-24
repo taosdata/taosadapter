@@ -5,7 +5,6 @@ import (
 	"database/sql/driver"
 	"math/rand"
 	"net"
-	"runtime"
 	"testing"
 	"time"
 
@@ -83,10 +82,8 @@ func TestCollectd(t *testing.T) {
 	}
 	time.Sleep(3 * time.Second)
 
-	if runtime.GOOS == "windows" {
-		_, err = afC.Exec("create database if not exists collectd")
-		assert.NoError(t, err)
-	}
+	_, err = afC.Exec("create database if not exists collectd")
+	assert.NoError(t, err)
 	defer func() {
 		r := wrapper.TaosQuery(conn, "drop database if exists collectd")
 		code := wrapper.TaosError(r)
