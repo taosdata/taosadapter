@@ -1,4 +1,4 @@
-name: GO_LINUX
+name: GO_MACOS
 
 on: [ push, pull_request ]
 
