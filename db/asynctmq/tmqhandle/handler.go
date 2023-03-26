@@ -1,0 +1,163 @@
+package tmqhandle
+
+import (
+	"container/list"
+	"sync"
+	"unsafe"
+
+	"github.com/taosdata/driver-go/v3/wrapper/cgo"
+)
+
+type FetchRawBlockResult struct {
+	Code      int
+	BlockSize int
+	Block     unsafe.Pointer
+}
+
+type NewConsumerResult struct {
+	Consumer unsafe.Pointer
+	ErrStr   string
+}
+
+type TMQCaller struct {
+	PollResult          chan unsafe.Pointer
+	FreeResult          chan struct{}
+	CommitResult        chan int32
+	FetchRawBlockResult chan *FetchRawBlockResult
+	NewConsumerResult   chan *NewConsumerResult
+	SubscribeResult     chan int32
+	UnsubscribeResult   chan int32
+	ConsumerCloseResult chan int32
+	GetRawResult        chan int32
+	GetJsonMetaResult   chan unsafe.Pointer
+}
+
+func NewTMQCaller() *TMQCaller {
+	return &TMQCaller{
+		PollResult:          make(chan unsafe.Pointer, 1),
+		FreeResult:          make(chan struct{}, 1),
+		CommitResult:        make(chan int32, 1),
+		FetchRawBlockResult: make(chan *FetchRawBlockResult, 1),
+		NewConsumerResult:   make(chan *NewConsumerResult, 1),
+		SubscribeResult:     make(chan int32, 1),
+		UnsubscribeResult:   make(chan int32, 1),
+		ConsumerCloseResult: make(chan int32, 1),
+		GetRawResult:        make(chan int32, 1),
+		GetJsonMetaResult:   make(chan unsafe.Pointer, 1),
+	}
+}
+
+func (c *TMQCaller) PollCall(res unsafe.Pointer) {
+	c.PollResult <- res
+}
+
+func (c *TMQCaller) FreeCall() {
+	c.FreeResult <- struct{}{}
+}
+
+func (c *TMQCaller) CommitCall(code int32) {
+	c.CommitResult <- code
+}
+
+func (c *TMQCaller) FetchRawBlockCall(code int, blockSize int, block unsafe.Pointer) {
+	c.FetchRawBlockResult <- &FetchRawBlockResult{
+		Code:      code,
+		BlockSize: blockSize,
+		Block:     block,
+	}
+}
+
+func (c *TMQCaller) NewConsumerCall(consumer unsafe.Pointer, errStr string) {
+	c.NewConsumerResult <- &NewConsumerResult{
+		Consumer: consumer,
+		ErrStr:   errStr,
+	}
+}
+
+func (c *TMQCaller) SubscribeCall(code int32) {
+	c.SubscribeResult <- code
+}
+
+func (c *TMQCaller) UnsubscribeCall(code int32) {
+	c.UnsubscribeResult <- code
+}
+
+func (c *TMQCaller) ConsumerCloseCall(code int32) {
+	c.ConsumerCloseResult <- code
+}
+
+func (c *TMQCaller) GetRawCall(code int32) {
+	c.GetRawResult <- code
+}
+
+func (c *TMQCaller) GetJsonMetaCall(meta unsafe.Pointer) {
+	c.GetJsonMetaResult <- meta
+}
+
+type poolReq struct {
+	idleHandler *TMQHandler
+}
+
+type TMQHandlerPool struct {
+	mu       sync.RWMutex
+	count    int
+	handlers chan *TMQHandler
+	reqList  *list.List
+}
+
+type TMQHandler struct {
+	Handler cgo.Handle
+	Caller  *TMQCaller
+}
+
+func NewHandlerPool(count int) *TMQHandlerPool {
+	c := &TMQHandlerPool{
+		count:    count,
+		handlers: make(chan *TMQHandler, count),
+		reqList:  list.New(),
+	}
+	for i := 0; i < count; i++ {
+		caller := NewTMQCaller()
+		c.handlers <- &TMQHandler{
+			Handler: cgo.NewHandle(caller),
+			Caller:  caller,
+		}
+	}
+	return c
+}
+
+func (c *TMQHandlerPool) Get() *TMQHandler {
+	for {
+		select {
+		case wrapConn := <-c.handlers:
+			return wrapConn
+		default:
+			c.mu.Lock()
+			req := make(chan poolReq, 1)
+			c.reqList.PushBack(req)
+			c.mu.Unlock()
+			ret := <-req
+			return ret.idleHandler
+		}
+	}
+}
+
+func (c *TMQHandlerPool) Put(handler *TMQHandler) {
+	c.mu.Lock()
+	e := c.reqList.Front()
+	if e != nil {
+		req := e.Value.(chan poolReq)
+		c.reqList.Remove(e)
+		req <- poolReq{
+			idleHandler: handler,
+		}
+		c.mu.Unlock()
+		return
+	} else {
+		c.handlers <- handler
+		c.mu.Unlock()
+		return
+	}
+}
+
+var GlobalTMQHandlerPoll = NewHandlerPool(10000)
