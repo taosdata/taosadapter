@@ -32,6 +32,7 @@ const (
 	TMQFetchRaw      = "fetch_raw"
 	TMQFetchJsonMeta = "fetch_json_meta"
 	TMQCommit        = "commit"
+	TMQUnsubscribe   = "unsubscribe"
 )
 
 //stmt
