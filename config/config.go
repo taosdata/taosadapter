@@ -22,6 +22,7 @@ type Config struct {
 	Log                 Log
 	Pool                Pool
 	Monitor             Monitor
+	TMQ                 TMQ
 }
 
 var (
@@ -80,6 +81,7 @@ func Init() {
 	Conf.Cors.setValue()
 	Conf.Pool.setValue()
 	Conf.Monitor.setValue()
+	Conf.TMQ.setValue()
 }
 
 // arg > file > env
@@ -113,6 +115,7 @@ func init() {
 	initCors()
 	initPool()
 	initMonitor()
+	initTMQ()
 	err := viper.BindPFlags(pflag.CommandLine)
 	if err != nil {
 		panic(err)

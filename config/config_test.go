@@ -68,6 +68,9 @@ func TestInit(t *testing.T) {
 					Password:                  "taosdata",
 					WriteInterval:             30 * time.Second,
 				},
+				TMQ: TMQ{
+					ReleaseIntervalMultiplierForAutocommit: 2,
+				},
 			}, Conf)
 			corsC := Conf.Cors.GetConfig()
 			assert.Equal(

@@ -347,13 +347,16 @@ func TestTMQ(t *testing.T) {
 			}
 		}
 	}()
-
 	init := &TMQSubscribeReq{
-		ReqID:    0,
-		User:     "root",
-		Password: "taosdata",
-		GroupID:  "test",
-		Topics:   []string{"test_tmq_ws_topic"},
+		ReqID:                0,
+		User:                 "root",
+		Password:             "taosdata",
+		GroupID:              "test",
+		Topics:               []string{"test_tmq_ws_topic"},
+		AutoCommit:           "true",
+		AutoCommitIntervalMS: "5000",
+		SnapshotEnable:       "true",
+		WithTableName:        "true",
 	}
 
 	b, _ := json.Marshal(init)
@@ -417,6 +420,7 @@ func TestMeta(t *testing.T) {
 		AfterFetchRawMeta
 		AfterFetchJsonMeta
 		AfterTMQCommit
+		AfterUnsubscribe
 		AfterVersion
 	)
 	messageID := uint64(0)
@@ -493,15 +497,22 @@ func TestMeta(t *testing.T) {
 			}
 		case AfterTMQPoll:
 			if pollCount == 5 {
-				status = AfterVersion
-				action, _ := json.Marshal(&WSAction{
-					Action: ClientVersion,
-					Args:   nil,
+				status = AfterUnsubscribe
+				b, _ := json.Marshal(&TMQUnsubscribeReq{
+					ReqID: 6,
 				})
+				action, _ := json.Marshal(&WSAction{
+					Action: TMQUnsubscribe,
+					Args:   b,
+				})
+				t.Log(string(action))
 				err = ws.WriteMessage(
 					websocket.TextMessage,
 					action,
 				)
+				if err != nil {
+					return err
+				}
 				return nil
 			}
 			pollCount += 1
@@ -669,6 +680,25 @@ func TestMeta(t *testing.T) {
 			if err != nil {
 				return err
 			}
+		case AfterUnsubscribe:
+			var d TMQUnsubscribeResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", TMQUnsubscribe, d.Code, d.Message)
+			}
+			status = AfterVersion
+			action, _ := json.Marshal(&WSAction{
+				Action: ClientVersion,
+				Args:   nil,
+			})
+			t.Log(string(action))
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
 		case AfterVersion:
 			var d WSVersionResp
 			err = json.Unmarshal(message, &d)
@@ -713,13 +743,16 @@ func TestMeta(t *testing.T) {
 			}
 		}
 	}()
-
 	init := &TMQSubscribeReq{
-		ReqID:    0,
-		User:     "root",
-		Password: "taosdata",
-		GroupID:  "test",
-		Topics:   []string{"test_tmq_meta_ws_topic"},
+		ReqID:                0,
+		User:                 "root",
+		Password:             "taosdata",
+		GroupID:              "test",
+		Topics:               []string{"test_tmq_meta_ws_topic"},
+		AutoCommit:           "true",
+		AutoCommitIntervalMS: "5000",
+		SnapshotEnable:       "true",
+		WithTableName:        "true",
 	}
 
 	b, _ := json.Marshal(init)
@@ -901,4 +934,930 @@ func writeRaw(t *testing.T, rawData []byte) {
 		return
 	}
 	<-finish
+}
+
+func TestTMQAutoCommit(t *testing.T) {
+	ts1 := time.Now()
+	ts2 := ts1.Add(time.Second)
+	ts3 := ts2.Add(time.Second)
+	w := httptest.NewRecorder()
+	body := strings.NewReader("create database if not exists test_ws_tmq_auto_commit")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("create table if not exists ct0 (ts timestamp, c1 int)")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_auto_commit", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("create table if not exists ct1 (ts timestamp, c1 int, c2 float)")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_auto_commit", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("create table if not exists ct2 (ts timestamp, c1 int, c2 float, c3 binary(10))")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_auto_commit", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("create topic if not exists test_tmq_ws_auto_commit_topic as DATABASE test_ws_tmq_auto_commit")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_auto_commit", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader(fmt.Sprintf(`insert into ct0 values('%s',1)`, ts1.Format(time.RFC3339Nano)))
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_auto_commit", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader(fmt.Sprintf(`insert into ct1 values('%s',1,2)`, ts2.Format(time.RFC3339Nano)))
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_auto_commit", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader(fmt.Sprintf(`insert into ct2 values('%s',1,2,'3')`, ts3.Format(time.RFC3339Nano)))
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_auto_commit", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/tmq", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer ws.Close()
+	const (
+		AfterTMQSubscribe = iota + 1
+		AfterTMQPoll
+		AfterTMQFetch
+		AfterTMQFetchBlock
+		AfterVersion
+	)
+	messageID := uint64(0)
+	status := 0
+	finish := make(chan struct{})
+	var tmpFetchResp *TMQFetchResp
+	pollCount := 0
+	expectError := false
+	testMessageHandler := func(messageType int, message []byte) error {
+		if messageType == websocket.BinaryMessage {
+			t.Log(messageType, message)
+		} else {
+			t.Log(messageType, string(message))
+		}
+		switch status {
+		case AfterTMQSubscribe:
+			var d TMQSubscribeResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", TMQSubscribe, d.Code, d.Message)
+			}
+			status = AfterTMQPoll
+			b, _ := json.Marshal(&TMQPollReq{
+				ReqID:        3,
+				BlockingTime: 500,
+			})
+			action, _ := json.Marshal(&WSAction{
+				Action: TMQPoll,
+				Args:   b,
+			})
+			t.Log(string(action))
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			if err != nil {
+				return err
+			}
+		case AfterTMQPoll:
+			if pollCount == 5 {
+				status = AfterVersion
+				action, _ := json.Marshal(&WSAction{
+					Action: ClientVersion,
+					Args:   nil,
+				})
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				return nil
+			}
+			pollCount += 1
+			var d TMQPollResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", TMQPoll, d.Code, d.Message)
+			}
+			if d.HaveMessage {
+				messageID = d.MessageID
+				status = AfterTMQFetch
+				b, _ := json.Marshal(&TMQFetchReq{
+					ReqID:     4,
+					MessageID: messageID,
+				})
+				action, _ := json.Marshal(&WSAction{
+					Action: TMQFetch,
+					Args:   b,
+				})
+				t.Log(string(action))
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				if err != nil {
+					return err
+				}
+			} else {
+				status = AfterTMQPoll
+				//fetch
+				b, _ := json.Marshal(&TMQPollReq{
+					ReqID:        3,
+					BlockingTime: 500,
+				})
+				action, _ := json.Marshal(&WSAction{
+					Action: TMQPoll,
+					Args:   b,
+				})
+				t.Log(string(action))
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				if err != nil {
+					return err
+				}
+			}
+		case AfterTMQFetch:
+			var d TMQFetchResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				if expectError {
+					assert.Equal(t, d.Message, "message is nil")
+					status = AfterVersion
+					action, _ := json.Marshal(&WSAction{
+						Action: ClientVersion,
+						Args:   nil,
+					})
+					err = ws.WriteMessage(
+						websocket.TextMessage,
+						action,
+					)
+					return nil
+				}
+				return fmt.Errorf("%s %d,%s", TMQFetch, d.Code, d.Message)
+			}
+
+			if d.Completed {
+				status = AfterTMQPoll
+				b, _ := json.Marshal(&TMQPollReq{
+					ReqID:        3,
+					BlockingTime: 500,
+				})
+				action, _ := json.Marshal(&WSAction{
+					Action: TMQPoll,
+					Args:   b,
+				})
+				t.Log(string(action))
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				if err != nil {
+					return err
+				}
+			} else {
+				tmpFetchResp = &d
+				status = AfterTMQFetchBlock
+				b, _ := json.Marshal(&TMQFetchBlockReq{
+					ReqID:     0,
+					MessageID: messageID,
+				})
+				action, _ := json.Marshal(&WSAction{
+					Action: TMQFetchBlock,
+					Args:   b,
+				})
+				t.Log(string(action))
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				if err != nil {
+					return err
+				}
+			}
+		case AfterTMQFetchBlock:
+			_, _, value := parseblock.ParseTmqBlock(message[8:], tmpFetchResp.FieldsTypes, tmpFetchResp.Rows, tmpFetchResp.Precision)
+			switch tmpFetchResp.TableName {
+			case "ct0":
+				assert.Equal(t, 1, len(value))
+				assert.Equal(t, ts1.UnixNano()/1e6, value[0][0].(time.Time).UnixNano()/1e6)
+				assert.Equal(t, int32(1), value[0][1])
+			case "ct1":
+				assert.Equal(t, 1, len(value))
+				assert.Equal(t, ts2.UnixNano()/1e6, value[0][0].(time.Time).UnixNano()/1e6)
+				assert.Equal(t, int32(1), value[0][1])
+				assert.Equal(t, float32(2), value[0][2])
+			case "ct2":
+				assert.Equal(t, 1, len(value))
+				assert.Equal(t, ts3.UnixNano()/1e6, value[0][0].(time.Time).UnixNano()/1e6)
+				assert.Equal(t, int32(1), value[0][1])
+				assert.Equal(t, float32(2), value[0][2])
+				assert.Equal(t, "3", value[0][3])
+			}
+			_ = value
+			status = AfterTMQFetch
+			b, _ := json.Marshal(&TMQFetchReq{
+				ReqID:     4,
+				MessageID: messageID,
+			})
+			action, _ := json.Marshal(&WSAction{
+				Action: TMQFetch,
+				Args:   b,
+			})
+			t.Log(string(action))
+			time.Sleep(3 * 500 * time.Millisecond)
+			expectError = true
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			if err != nil {
+				return err
+			}
+		case AfterVersion:
+			var d WSVersionResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", WSFetch, d.Code, d.Message)
+			}
+			assert.NotEmpty(t, d.Version)
+			t.Log("client version", d.Version)
+
+			finish <- struct{}{}
+			return nil
+		}
+		return nil
+	}
+	go func() {
+		for {
+			mt, message, err := ws.ReadMessage()
+			if err != nil {
+				if strings.Contains(err.Error(), "use of closed network connection") {
+					finish <- struct{}{}
+					return
+				}
+				t.Error(err)
+				finish <- struct{}{}
+				return
+			}
+			err = testMessageHandler(mt, message)
+			if err != nil {
+				if strings.Contains(err.Error(), "use of closed network connection") {
+					finish <- struct{}{}
+					return
+				}
+				if mt == websocket.BinaryMessage {
+					t.Error(err, message)
+				} else {
+					t.Error(err, string(message))
+				}
+				finish <- struct{}{}
+				return
+			}
+		}
+	}()
+	init := &TMQSubscribeReq{
+		ReqID:                0,
+		User:                 "root",
+		Password:             "taosdata",
+		GroupID:              "test",
+		Topics:               []string{"test_tmq_ws_auto_commit_topic"},
+		AutoCommit:           "true",
+		AutoCommitIntervalMS: "500",
+		SnapshotEnable:       "true",
+		WithTableName:        "true",
+	}
+
+	b, _ := json.Marshal(init)
+	action, _ := json.Marshal(&WSAction{
+		Action: TMQSubscribe,
+		Args:   b,
+	})
+	t.Log(string(action))
+	status = AfterTMQSubscribe
+	err = ws.WriteMessage(
+		websocket.TextMessage,
+		action,
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	<-finish
+	assert.Equal(t, true, expectError)
+	ws.Close()
+	time.Sleep(time.Second * 3)
+	w = httptest.NewRecorder()
+	body = strings.NewReader("drop topic if exists test_tmq_ws_auto_commit_topic")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	w = httptest.NewRecorder()
+	body = strings.NewReader("drop database if exists test_ws_tmq_auto_commit")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+}
+
+func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
+	ts1 := time.Now()
+	ts2 := ts1.Add(time.Second)
+	ts3 := ts2.Add(time.Second)
+	w := httptest.NewRecorder()
+	body := strings.NewReader("create database if not exists test_ws_tmq_unsubscribe")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("create table if not exists ct0 (ts timestamp, c1 int)")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("create table if not exists ct1 (ts timestamp, c1 int, c2 float)")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("create table if not exists ct2 (ts timestamp, c1 int, c2 float, c3 binary(10))")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("create topic if not exists test_tmq_ws_unsubscribe_topic as DATABASE test_ws_tmq_unsubscribe")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader(fmt.Sprintf(`insert into ct0 values('%s',1)`, ts1.Format(time.RFC3339Nano)))
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("create topic if not exists test_tmq_ws_unsubscribe2_topic as select * from ct0")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader(fmt.Sprintf(`insert into ct1 values('%s',1,2)`, ts2.Format(time.RFC3339Nano)))
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader(fmt.Sprintf(`insert into ct2 values('%s',1,2,'3')`, ts3.Format(time.RFC3339Nano)))
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/tmq", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer ws.Close()
+	const (
+		AfterTMQSubscribe = iota + 1
+		AfterTMQPoll
+		AfterTMQFetch
+		AfterTMQFetchBlock
+		AfterVersion
+		AfterUnsubscribe
+		AfterTMQSubscribe2
+		AfterTMQPoll2
+		AfterTMQFetch2
+		AfterTMQFetchBlock2
+	)
+	messageID := uint64(0)
+	status := 0
+	finish := make(chan struct{})
+	var tmpFetchResp *TMQFetchResp
+	pollCount := 0
+	testMessageHandler := func(messageType int, message []byte) error {
+		if messageType == websocket.BinaryMessage {
+			t.Log(messageType, message)
+		} else {
+			t.Log(messageType, string(message))
+		}
+		switch status {
+		case AfterTMQSubscribe:
+			var d TMQSubscribeResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", TMQSubscribe, d.Code, d.Message)
+			}
+			status = AfterTMQPoll
+			b, _ := json.Marshal(&TMQPollReq{
+				ReqID:        3,
+				BlockingTime: 500,
+			})
+			action, _ := json.Marshal(&WSAction{
+				Action: TMQPoll,
+				Args:   b,
+			})
+			t.Log(string(action))
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			if err != nil {
+				return err
+			}
+		case AfterTMQPoll:
+			if pollCount == 5 {
+				status = AfterUnsubscribe
+				b, _ := json.Marshal(&TMQUnsubscribeReq{
+					ReqID: 6,
+				})
+				action, _ := json.Marshal(&WSAction{
+					Action: TMQUnsubscribe,
+					Args:   b,
+				})
+				t.Log(string(action))
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				if err != nil {
+					return err
+				}
+				return nil
+			}
+			pollCount += 1
+			var d TMQPollResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", TMQPoll, d.Code, d.Message)
+			}
+			if d.HaveMessage {
+				messageID = d.MessageID
+				status = AfterTMQFetch
+				b, _ := json.Marshal(&TMQFetchReq{
+					ReqID:     4,
+					MessageID: messageID,
+				})
+				action, _ := json.Marshal(&WSAction{
+					Action: TMQFetch,
+					Args:   b,
+				})
+				t.Log(string(action))
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				if err != nil {
+					return err
+				}
+			} else {
+				status = AfterTMQPoll
+				//fetch
+				b, _ := json.Marshal(&TMQPollReq{
+					ReqID:        3,
+					BlockingTime: 500,
+				})
+				action, _ := json.Marshal(&WSAction{
+					Action: TMQPoll,
+					Args:   b,
+				})
+				t.Log(string(action))
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				if err != nil {
+					return err
+				}
+			}
+		case AfterTMQFetch:
+			var d TMQFetchResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", TMQFetch, d.Code, d.Message)
+			}
+
+			if d.Completed {
+				status = AfterTMQPoll
+				b, _ := json.Marshal(&TMQPollReq{
+					ReqID:        3,
+					BlockingTime: 500,
+				})
+				action, _ := json.Marshal(&WSAction{
+					Action: TMQPoll,
+					Args:   b,
+				})
+				t.Log(string(action))
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				if err != nil {
+					return err
+				}
+			} else {
+				tmpFetchResp = &d
+				status = AfterTMQFetchBlock
+				b, _ := json.Marshal(&TMQFetchBlockReq{
+					ReqID:     0,
+					MessageID: messageID,
+				})
+				action, _ := json.Marshal(&WSAction{
+					Action: TMQFetchBlock,
+					Args:   b,
+				})
+				t.Log(string(action))
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				if err != nil {
+					return err
+				}
+			}
+		case AfterTMQFetchBlock:
+			_, _, value := parseblock.ParseTmqBlock(message[8:], tmpFetchResp.FieldsTypes, tmpFetchResp.Rows, tmpFetchResp.Precision)
+			switch tmpFetchResp.TableName {
+			case "ct0":
+				assert.Equal(t, 1, len(value))
+				assert.Equal(t, ts1.UnixNano()/1e6, value[0][0].(time.Time).UnixNano()/1e6)
+				assert.Equal(t, int32(1), value[0][1])
+			case "ct1":
+				assert.Equal(t, 1, len(value))
+				assert.Equal(t, ts2.UnixNano()/1e6, value[0][0].(time.Time).UnixNano()/1e6)
+				assert.Equal(t, int32(1), value[0][1])
+				assert.Equal(t, float32(2), value[0][2])
+			case "ct2":
+				assert.Equal(t, 1, len(value))
+				assert.Equal(t, ts3.UnixNano()/1e6, value[0][0].(time.Time).UnixNano()/1e6)
+				assert.Equal(t, int32(1), value[0][1])
+				assert.Equal(t, float32(2), value[0][2])
+				assert.Equal(t, "3", value[0][3])
+			}
+			_ = value
+			status = AfterTMQFetch
+			b, _ := json.Marshal(&TMQFetchReq{
+				ReqID:     4,
+				MessageID: messageID,
+			})
+			action, _ := json.Marshal(&WSAction{
+				Action: TMQFetch,
+				Args:   b,
+			})
+			t.Log(string(action))
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			if err != nil {
+				return err
+			}
+		case AfterUnsubscribe:
+			pollCount = 0
+			var d TMQUnsubscribeResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", TMQUnsubscribe, d.Code, d.Message)
+			}
+			status = AfterTMQSubscribe2
+			b, _ := json.Marshal(&TMQSubscribeReq{
+				ReqID:  0,
+				Topics: []string{"test_tmq_ws_unsubscribe2_topic"},
+			})
+			action, _ := json.Marshal(&WSAction{
+				Action: TMQSubscribe,
+				Args:   b,
+			})
+			t.Log(string(action))
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+		case AfterTMQSubscribe2:
+			var d TMQSubscribeResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", TMQSubscribe, d.Code, d.Message)
+			}
+			status = AfterTMQPoll2
+			b, _ := json.Marshal(&TMQPollReq{
+				ReqID:        3,
+				BlockingTime: 500,
+			})
+			action, _ := json.Marshal(&WSAction{
+				Action: TMQPoll,
+				Args:   b,
+			})
+			t.Log(string(action))
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			if err != nil {
+				return err
+			}
+		case AfterTMQPoll2:
+			if pollCount == 5 {
+				status = AfterVersion
+				action, _ := json.Marshal(&WSAction{
+					Action: ClientVersion,
+					Args:   nil,
+				})
+				t.Log(string(action))
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				if err != nil {
+					return err
+				}
+				return nil
+			}
+			pollCount += 1
+			var d TMQPollResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", TMQPoll, d.Code, d.Message)
+			}
+			if d.HaveMessage {
+				messageID = d.MessageID
+				status = AfterTMQFetch2
+				b, _ := json.Marshal(&TMQFetchReq{
+					ReqID:     4,
+					MessageID: messageID,
+				})
+				action, _ := json.Marshal(&WSAction{
+					Action: TMQFetch,
+					Args:   b,
+				})
+				t.Log(string(action))
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				if err != nil {
+					return err
+				}
+			} else {
+				status = AfterTMQPoll2
+				//fetch
+				b, _ := json.Marshal(&TMQPollReq{
+					ReqID:        3,
+					BlockingTime: 500,
+				})
+				action, _ := json.Marshal(&WSAction{
+					Action: TMQPoll,
+					Args:   b,
+				})
+				t.Log(string(action))
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				if err != nil {
+					return err
+				}
+			}
+		case AfterTMQFetch2:
+			var d TMQFetchResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", TMQFetch, d.Code, d.Message)
+			}
+
+			if d.Completed {
+				status = AfterTMQPoll2
+				b, _ := json.Marshal(&TMQPollReq{
+					ReqID:        3,
+					BlockingTime: 500,
+				})
+				action, _ := json.Marshal(&WSAction{
+					Action: TMQPoll,
+					Args:   b,
+				})
+				t.Log(string(action))
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				if err != nil {
+					return err
+				}
+			} else {
+				tmpFetchResp = &d
+				status = AfterTMQFetchBlock2
+				b, _ := json.Marshal(&TMQFetchBlockReq{
+					ReqID:     0,
+					MessageID: messageID,
+				})
+				action, _ := json.Marshal(&WSAction{
+					Action: TMQFetchBlock,
+					Args:   b,
+				})
+				t.Log(string(action))
+				err = ws.WriteMessage(
+					websocket.TextMessage,
+					action,
+				)
+				if err != nil {
+					return err
+				}
+			}
+		case AfterTMQFetchBlock2:
+			_, _, value := parseblock.ParseTmqBlock(message[8:], tmpFetchResp.FieldsTypes, tmpFetchResp.Rows, tmpFetchResp.Precision)
+			assert.Equal(t, 1, len(value))
+			assert.Equal(t, ts1.UnixNano()/1e6, value[0][0].(time.Time).UnixNano()/1e6)
+			assert.Equal(t, int32(1), value[0][1])
+			status = AfterTMQFetch2
+			b, _ := json.Marshal(&TMQFetchReq{
+				ReqID:     4,
+				MessageID: messageID,
+			})
+			action, _ := json.Marshal(&WSAction{
+				Action: TMQFetch,
+				Args:   b,
+			})
+			t.Log(string(action))
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			if err != nil {
+				return err
+			}
+		case AfterVersion:
+			var d WSVersionResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", WSFetch, d.Code, d.Message)
+			}
+			assert.NotEmpty(t, d.Version)
+			t.Log("client version", d.Version)
+			finish <- struct{}{}
+			return nil
+		}
+		return nil
+	}
+	go func() {
+		for {
+			mt, message, err := ws.ReadMessage()
+			if err != nil {
+				if strings.Contains(err.Error(), "use of closed network connection") {
+					finish <- struct{}{}
+					return
+				}
+				t.Error(err)
+				finish <- struct{}{}
+				return
+			}
+			err = testMessageHandler(mt, message)
+			if err != nil {
+				if strings.Contains(err.Error(), "use of closed network connection") {
+					finish <- struct{}{}
+					return
+				}
+				if mt == websocket.BinaryMessage {
+					t.Error(err, message)
+				} else {
+					t.Error(err, string(message))
+				}
+				finish <- struct{}{}
+				return
+			}
+		}
+	}()
+	init := &TMQSubscribeReq{
+		ReqID:                0,
+		User:                 "root",
+		Password:             "taosdata",
+		GroupID:              "test",
+		Topics:               []string{"test_tmq_ws_unsubscribe_topic"},
+		AutoCommit:           "true",
+		AutoCommitIntervalMS: "500",
+		SnapshotEnable:       "true",
+		WithTableName:        "true",
+	}
+
+	b, _ := json.Marshal(init)
+	action, _ := json.Marshal(&WSAction{
+		Action: TMQSubscribe,
+		Args:   b,
+	})
+	t.Log(string(action))
+	status = AfterTMQSubscribe
+	err = ws.WriteMessage(
+		websocket.TextMessage,
+		action,
+	)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	<-finish
+	ws.Close()
+	time.Sleep(time.Second * 3)
+	w = httptest.NewRecorder()
+	body = strings.NewReader("drop topic if exists test_tmq_ws_unsubscribe_topic")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	w = httptest.NewRecorder()
+	body = strings.NewReader("drop topic if exists test_tmq_ws_unsubscribe2_topic")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	w = httptest.NewRecorder()
+	body = strings.NewReader("drop database if exists test_ws_tmq_unsubscribe")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
 }

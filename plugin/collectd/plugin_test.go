@@ -33,7 +33,8 @@ func TestCollectd(t *testing.T) {
 	defer afC.Close()
 	_, err = afC.Exec("drop database if exists collectd")
 	assert.NoError(t, err)
-
+	_, err = afC.Exec("create database if not exists collectd")
+	assert.NoError(t, err)
 	rand.Seed(time.Now().UnixNano())
 	p := &Plugin{}
 	config.Init()
@@ -82,8 +83,6 @@ func TestCollectd(t *testing.T) {
 	}
 	time.Sleep(3 * time.Second)
 
-	_, err = afC.Exec("create database if not exists collectd")
-	assert.NoError(t, err)
 	defer func() {
 		r := wrapper.TaosQuery(conn, "drop database if exists collectd")
 		code := wrapper.TaosError(r)

@@ -101,3 +101,6 @@ gatherDuration = "5s"
 
 [prometheus]
 enable = true
+
+[tmq]
+releaseIntervalMultiplierForAutocommit = 2
