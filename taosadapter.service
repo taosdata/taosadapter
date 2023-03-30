@@ -1,5 +1,5 @@
 [Unit]
-Description=TDengine taosAdapter service
+Description=adapter service
 After=network-online.target
 Wants=network-online.target
 #Before=taosd.service
