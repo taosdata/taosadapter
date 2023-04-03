@@ -138,7 +138,7 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		start = time.Now()
 	}
 	logger.Debug(start, "insert json payload", string(data))
-	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db, ttl, reqID)
+	rows, err := inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db, ttl, reqID)
 	logger.Debug("insert json payload cost:", time.Since(start))
 	if err != nil {
 		taosError, is := err.(*tErrors.TaosError)
@@ -149,7 +149,7 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		p.errorResponse(c, http.StatusInternalServerError, err)
 		return
 	}
-	p.successResponse(c)
+	p.successResponse(c, &message{Message: fmt.Sprintf("{rows: %d}", rows)})
 }
 
 // @Tags opentsdb
@@ -241,14 +241,14 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 		start = time.Now()
 	}
 	logger.Debug(start, "insert telnet payload", lines)
-	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db, ttl, reqID)
+	row, err := inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db, ttl, reqID)
 	logger.Debug("insert telnet payload cost:", time.Since(start))
 	if err != nil {
 		logger.WithError(err).Error("insert telnet payload error", lines)
 		p.errorResponse(c, http.StatusInternalServerError, err)
 		return
 	}
-	p.successResponse(c)
+	p.successResponse(c, &message{Message: fmt.Sprintf("{rows: %d}", row)})
 }
 
 type message struct {
@@ -263,8 +263,12 @@ func (p *Plugin) errorResponse(c *gin.Context, code int, err error) {
 	})
 }
 
-func (p *Plugin) successResponse(c *gin.Context) {
-	c.Status(http.StatusNoContent)
+func (p *Plugin) successResponse(c *gin.Context, msg *message) {
+	if msg != nil {
+		c.JSON(http.StatusOK, msg)
+	} else {
+		c.Status(http.StatusNoContent)
+	}
 }
 
 func init() {

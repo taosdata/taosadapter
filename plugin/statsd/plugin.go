@@ -132,7 +132,7 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metric telegraf.Me
 
 	start := time.Now()
 	logger.Debugln(start, "insert line", string(data))
-	err = inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns", p.conf.TTL, 0)
+	_, err = inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns", p.conf.TTL, 0)
 	logger.Debugln("insert line finish cost:", time.Since(start), string(data))
 	if err != nil {
 		logger.WithError(err).Errorln("insert lines error", string(data))

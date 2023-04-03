@@ -1,6 +1,7 @@
 package influxdb
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -166,7 +167,7 @@ func (p *Influxdb) write(c *gin.Context) {
 		start = time.Now()
 	}
 	logger.WithTime(start).Debugln("start insert influxdb:", string(data))
-	err = inserter.InsertInfluxdb(conn, data, db, precision, ttl, reqID)
+	rows, err := inserter.InsertInfluxdb(conn, data, db, precision, ttl, reqID)
 	logger.Debugln("finish insert influxdb cost:", time.Since(start))
 	if err != nil {
 		taosError, is := err.(*tErrors.TaosError)
@@ -178,7 +179,7 @@ func (p *Influxdb) write(c *gin.Context) {
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	p.commonResponse(c, http.StatusOK, &message{Code: "ok", Message: fmt.Sprintf("{rows: %d}", rows)})
 }
 
 type badRequest struct {

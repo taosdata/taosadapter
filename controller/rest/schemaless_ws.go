@@ -72,7 +72,7 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 
 		conn, err := commonpool.GetConnection(connReq.User, connReq.Password)
 		if err != nil {
-			logger.WithError(err).Errorln("unmarshal connect request args")
+			logger.WithError(err).Errorln("get connection error")
 			wsError(ctx, session, err, SchemalessConn, connReq.ReqID)
 			return
 		}
@@ -111,15 +111,16 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 		}
 		defer func() { _ = conn.Put() }()
 
+		var rows int32
 		switch schemaless.Protocol {
 		case wrapper.InfluxDBLineProtocol:
-			err = inserter.InsertInfluxdb(conn.TaosConnection, []byte(schemaless.Data), schemaless.DB,
+			rows, err = inserter.InsertInfluxdb(conn.TaosConnection, []byte(schemaless.Data), schemaless.DB,
 				schemaless.Precision, schemaless.TTL, schemaless.ReqID)
 		case wrapper.OpenTSDBTelnetLineProtocol:
-			err = inserter.InsertOpentsdbTelnetBatch(conn.TaosConnection, strings.Split(schemaless.Data, "\n"),
+			rows, err = inserter.InsertOpentsdbTelnetBatch(conn.TaosConnection, strings.Split(schemaless.Data, "\n"),
 				schemaless.DB, schemaless.TTL, schemaless.ReqID)
 		case wrapper.OpenTSDBJsonFormatProtocol:
-			err = inserter.InsertOpentsdbJson(conn.TaosConnection, []byte(schemaless.Data), schemaless.DB,
+			rows, err = inserter.InsertOpentsdbJson(conn.TaosConnection, []byte(schemaless.Data), schemaless.DB,
 				schemaless.TTL, schemaless.ReqID)
 		default:
 			err = unknownProtocolError
@@ -127,7 +128,7 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 		if err != nil {
 			wsError(ctx, session, err, SchemalessWrite, schemaless.ReqID)
 		}
-		resp := &schemalessWriteResp{Action: SchemalessWrite, ReqID: schemaless.ReqID, Timing: getDuration(ctx)}
+		resp := &schemalessWriteResp{Action: SchemalessWrite, ReqID: schemaless.ReqID, Rows: rows, Timing: getDuration(ctx)}
 		wsWriteJson(session, resp)
 	}
 }
@@ -167,5 +168,6 @@ type schemalessWriteReq struct {
 type schemalessWriteResp struct {
 	ReqID  uint64 `json:"req_id"`
 	Action string `json:"action"`
+	Rows   int32  `json:"rows"`
 	Timing int64  `json:"timing"`
 }

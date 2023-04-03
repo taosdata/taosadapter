@@ -11,21 +11,21 @@ import (
 	"github.com/taosdata/taosadapter/v3/thread"
 )
 
-func InsertOpentsdbJson(conn unsafe.Pointer, data []byte, db string, ttl int, reqID int64) error {
+func InsertOpentsdbJson(conn unsafe.Pointer, data []byte, db string, ttl int, reqID int64) (rows int32, err error) {
 	if len(data) == 0 {
-		return nil
+		return 0, nil
 	}
 	if err := tool.SelectDB(conn, db, reqID); err != nil {
-		return err
+		return 0, err
 	}
 
 	var result unsafe.Pointer
 	thread.Lock()
 	if ttl > 0 {
-		_, result = wrapper.TaosSchemalessInsertRawTTLWithReqID(conn, string(data), wrapper.OpenTSDBJsonFormatProtocol,
+		rows, result = wrapper.TaosSchemalessInsertRawTTLWithReqID(conn, string(data), wrapper.OpenTSDBJsonFormatProtocol,
 			"", ttl, getReqID(reqID))
 	} else {
-		_, result = wrapper.TaosSchemalessInsertRawWithReqID(conn, string(data), wrapper.OpenTSDBJsonFormatProtocol,
+		rows, result = wrapper.TaosSchemalessInsertRawWithReqID(conn, string(data), wrapper.OpenTSDBJsonFormatProtocol,
 			"", getReqID(reqID))
 	}
 	thread.Unlock()
@@ -36,12 +36,12 @@ func InsertOpentsdbJson(conn unsafe.Pointer, data []byte, db string, ttl int, re
 		thread.Unlock()
 	}()
 	if code := wrapper.TaosError(result); code != 0 {
-		return tErrors.NewError(code, wrapper.TaosErrorStr(result))
+		err = tErrors.NewError(code, wrapper.TaosErrorStr(result))
 	}
-	return nil
+	return
 }
 
-func InsertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string, ttl int, reqID int64) error {
+func InsertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string, ttl int, reqID int64) (rows int32, err error) {
 	trimData := make([]string, 0, len(data))
 	for i := 0; i < len(data); i++ {
 		if len(data[i]) == 0 {
@@ -50,19 +50,19 @@ func InsertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string, ttl int
 		trimData = append(trimData, strings.TrimPrefix(strings.TrimSpace(data[i]), "put "))
 	}
 	if len(trimData) == 0 {
-		return nil
+		return 0, nil
 	}
 	if err := tool.SelectDB(conn, db, reqID); err != nil {
-		return err
+		return 0, err
 	}
 
 	var result unsafe.Pointer
 	thread.Lock()
 	if ttl > 0 {
-		_, result = wrapper.TaosSchemalessInsertRawTTLWithReqID(conn, strings.Join(trimData, "\n"),
+		rows, result = wrapper.TaosSchemalessInsertRawTTLWithReqID(conn, strings.Join(trimData, "\n"),
 			wrapper.OpenTSDBTelnetLineProtocol, "", ttl, getReqID(reqID))
 	} else {
-		_, result = wrapper.TaosSchemalessInsertRawWithReqID(conn, strings.Join(trimData, "\n"),
+		rows, result = wrapper.TaosSchemalessInsertRawWithReqID(conn, strings.Join(trimData, "\n"),
 			wrapper.OpenTSDBTelnetLineProtocol, "", getReqID(reqID))
 	}
 	thread.Unlock()
@@ -74,9 +74,9 @@ func InsertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string, ttl int
 
 	code := wrapper.TaosError(result)
 	if code != 0 {
-		return tErrors.NewError(code, wrapper.TaosErrorStr(result))
+		err = tErrors.NewError(code, wrapper.TaosErrorStr(result))
 	}
-	return nil
+	return
 }
 
 func getReqID(id int64) int64 {

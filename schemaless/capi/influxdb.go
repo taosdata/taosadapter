@@ -11,13 +11,13 @@ import (
 	"github.com/taosdata/taosadapter/v3/thread"
 )
 
-func InsertInfluxdb(conn unsafe.Pointer, data []byte, db, precision string, ttl int, reqID int64) error {
+func InsertInfluxdb(conn unsafe.Pointer, data []byte, db, precision string, ttl int, reqID int64) (rows int32, err error) {
 	if reqID == 0 {
 		reqID = common.GetReqID()
 	}
-	err := tool.SelectDB(conn, db, reqID)
+	err = tool.SelectDB(conn, db, reqID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	d := strings.TrimSpace(string(data))
@@ -26,10 +26,10 @@ func InsertInfluxdb(conn unsafe.Pointer, data []byte, db, precision string, ttl 
 
 	thread.Lock()
 	if ttl > 0 {
-		_, result = wrapper.TaosSchemalessInsertRawTTLWithReqID(conn, d, wrapper.InfluxDBLineProtocol, precision, ttl,
+		rows, result = wrapper.TaosSchemalessInsertRawTTLWithReqID(conn, d, wrapper.InfluxDBLineProtocol, precision, ttl,
 			reqID)
 	} else {
-		_, result = wrapper.TaosSchemalessInsertRawWithReqID(conn, d, wrapper.InfluxDBLineProtocol, precision, reqID)
+		rows, result = wrapper.TaosSchemalessInsertRawWithReqID(conn, d, wrapper.InfluxDBLineProtocol, precision, reqID)
 	}
 	thread.Unlock()
 
@@ -40,7 +40,7 @@ func InsertInfluxdb(conn unsafe.Pointer, data []byte, db, precision string, ttl 
 	}()
 
 	if code := wrapper.TaosError(result); code != 0 {
-		return tErrors.NewError(code, wrapper.TaosErrorStr(result))
+		err = tErrors.NewError(code, wrapper.TaosErrorStr(result))
 	}
-	return nil
+	return
 }

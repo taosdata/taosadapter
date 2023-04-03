@@ -205,6 +205,7 @@ func init() {
 	logrus.SetBufferPool(bufferPool)
 	logger.SetFormatter(globalLogFormatter)
 	logger.SetOutput(os.Stdout)
+	logger.SetReportCaller(true)
 }
 
 func randomID() string {
@@ -231,6 +232,9 @@ func (t *TaosLogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	b.WriteString(entry.Message)
 	b.WriteByte('"')
 	for k, v := range entry.Data {
+		if k == config.ReqIDKey && v == nil {
+			continue
+		}
 		b.WriteByte(' ')
 		b.WriteString(k)
 		b.WriteByte('=')

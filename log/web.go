@@ -19,18 +19,15 @@ func GinLog() gin.HandlerFunc {
 		startTime := time.Now()
 		c.Next()
 		reqID, _ := c.Get(config.ReqIDKey)
+		if reqID != nil {
+			logger = logger.WithField(config.ReqIDKey, reqID)
+		}
 		latencyTime := time.Since(startTime)
 		reqMethod := c.Request.Method
 		reqUri := c.Request.RequestURI
 		statusCode := c.Writer.Status()
 		clientIP := c.ClientIP()
-		logger.WithField(config.ReqIDKey, reqID).Infof("| %3d | %13v | %15s | %s | %s ",
-			statusCode,
-			latencyTime,
-			clientIP,
-			reqMethod,
-			reqUri,
-		)
+		logger.Infof("| %3d | %13v | %15s | %s | %s ", statusCode, latencyTime, clientIP, reqMethod)
 		if config.Conf.Log.EnableRecordHttpSql {
 			sql, exist := c.Get("sql")
 			if exist {
