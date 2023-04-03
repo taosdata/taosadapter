@@ -27,7 +27,7 @@ func GinLog() gin.HandlerFunc {
 		reqUri := c.Request.RequestURI
 		statusCode := c.Writer.Status()
 		clientIP := c.ClientIP()
-		logger.Infof("| %3d | %13v | %15s | %s | %s ", statusCode, latencyTime, clientIP, reqMethod)
+		logger.Infof("| %3d | %13v | %15s | %s | %s ", statusCode, latencyTime, clientIP, reqMethod, reqUri)
 		if config.Conf.Log.EnableRecordHttpSql {
 			sql, exist := c.Get("sql")
 			if exist {
