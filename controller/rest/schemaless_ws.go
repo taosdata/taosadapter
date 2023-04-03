@@ -72,7 +72,7 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 
 		conn, err := commonpool.GetConnection(connReq.User, connReq.Password)
 		if err != nil {
-			logger.WithError(err).Errorln("unmarshal connect request args")
+			logger.WithError(err).Errorln("get connection error")
 			wsError(ctx, session, err, SchemalessConn, connReq.ReqID)
 			return
 		}
