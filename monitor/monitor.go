@@ -125,8 +125,8 @@ func AllPaused() bool {
 const (
 	CreateRequestTotalSql = "create table if not exists taosadapter_restful_http_total(ts timestamp,`count` bigint) tags (endpoint binary(45),status_code int, client_ip binary(40), request_method binary(15), request_uri binary(128))"
 	CreateRequestFailSql  = "create table if not exists taosadapter_restful_http_fail(ts timestamp,`count` bigint) tags (endpoint binary(45),status_code int, client_ip binary(40), request_method binary(15), request_uri binary(128))"
-	CreateRequestInFlight = "create table if not exists taosadapter_restful_http_request_in_flight(ts timestamp,`count` bigint) tags (endpoint binary(45))"
-	CreateRequestLatency  = "create table if not exists taosadapter_restful_http_request_latency(ts timestamp,quantile_1 double,quantile_2 double,quantile_5 double,quantile_9 double,quantile_99 double) tags (endpoint binary(45),request_method binary(15), request_uri binary(128))"
+	CreateRequestInFlight = "create table if not exists taosadapter_restful_http_in_flight(ts timestamp,`count` bigint) tags (endpoint binary(45))"
+	CreateRequestLatency  = "create table if not exists taosadapter_restful_http_latency(ts timestamp,quantile_1 double,quantile_2 double,quantile_5 double,quantile_9 double,quantile_99 double) tags (endpoint binary(45),request_method binary(15), request_uri binary(128))"
 	CreateSystemPercent   = "create table if not exists taosadapter_system(ts timestamp,cpu_percent double,mem_percent double) tags (endpoint binary(45))"
 	InsertStatement       = "insert into"
 )
@@ -252,7 +252,7 @@ func writeToTDLog() error {
 				value := m.GetGauge().GetValue()
 				if value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) {
 					subName := calculateTableName(nil)
-					inserts = append(inserts, fmt.Sprintf(" taosa_request_in_flight_%s using taosadapter_restful_http_request_in_flight tags('%s') values('%s',%d)", subName, identity, now, int(value)))
+					inserts = append(inserts, fmt.Sprintf(" taosa_request_in_flight_%s using taosadapter_restful_http_in_flight tags('%s') values('%s',%d)", subName, identity, now, int(value)))
 				}
 			}
 		case "taosadapter_restful_http_request_summary_milliseconds":
@@ -297,7 +297,7 @@ func writeToTDLog() error {
 					}
 				}
 				if !math.IsNaN(quantile1) {
-					inserts = append(inserts, fmt.Sprintf(" taosa_request_latency_%s using taosadapter_restful_http_request_latency tags('%s','%s','%s') values('%s',%f,%f,%f,%f,%f)", subName, identity, requestMethod, requestUri, now, quantile1, quantile2, quantile5, quantile9, quantile99))
+					inserts = append(inserts, fmt.Sprintf(" taosa_request_latency_%s using taosadapter_restful_http_latency tags('%s','%s','%s') values('%s',%f,%f,%f,%f,%f)", subName, identity, requestMethod, requestUri, now, quantile1, quantile2, quantile5, quantile9, quantile99))
 				}
 			}
 		case "taosadapter_system_cpu_percent":

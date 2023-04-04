@@ -230,7 +230,7 @@ func TestWriteLog(t *testing.T) {
 	checkTables := []string{
 		"taosadapter_restful_http_total",
 		"taosadapter_restful_http_fail",
-		"taosadapter_restful_http_request_latency",
+		"taosadapter_restful_http_latency",
 		"taosadapter_system",
 	}
 	for _, table := range checkTables {
