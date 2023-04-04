@@ -123,14 +123,14 @@ func (p *Plugin) insertJson(c *gin.Context) {
 
 	taosConn, err := commonpool.GetConnection(user, password)
 	if err != nil {
-		logger.WithError(err).Error("connect taosd error")
+		logger.WithError(err).Error("connect server error")
 		p.errorResponse(c, http.StatusInternalServerError, err)
 		return
 	}
 	defer func() {
 		putErr := taosConn.Put()
 		if putErr != nil {
-			logger.WithError(putErr).Errorln("taos connect pool put error")
+			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
 	var start time.Time
@@ -226,14 +226,14 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 	}
 	taosConn, err := commonpool.GetConnection(user, password)
 	if err != nil {
-		logger.WithError(err).Error("connect taosd error")
+		logger.WithError(err).Error("connect server error")
 		p.errorResponse(c, http.StatusInternalServerError, err)
 		return
 	}
 	defer func() {
 		putErr := taosConn.Put()
 		if putErr != nil {
-			logger.WithError(putErr).Errorln("taos connect pool put error")
+			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
 	var start time.Time

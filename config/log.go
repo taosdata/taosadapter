@@ -1,11 +1,13 @@
 package config
 
 import (
+	"fmt"
 	"runtime"
 	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"github.com/taosdata/taosadapter/v3/version"
 )
 
 type Log struct {
@@ -23,13 +25,13 @@ type Log struct {
 func initLog() {
 	switch runtime.GOOS {
 	case "windows":
-		viper.SetDefault("log.path", "C:\\TDengine\\log")
+		viper.SetDefault("log.path", fmt.Sprintf("C:\\%s\\log", version.CUS_NAME))
 		_ = viper.BindEnv("log.path", "TAOS_ADAPTER_LOG_PATH")
-		pflag.String("log.path", "C:\\TDengine\\log", `log path. Env "TAOS_ADAPTER_LOG_PATH"`)
+		pflag.String("log.path", fmt.Sprintf("C:\\%s\\log", version.CUS_NAME), `log path. Env "TAOS_ADAPTER_LOG_PATH"`)
 	default:
-		viper.SetDefault("log.path", "/var/log/taos")
+		viper.SetDefault("log.path", fmt.Sprintf("/var/log/%s", version.CUS_PROMPT))
 		_ = viper.BindEnv("log.path", "TAOS_ADAPTER_LOG_PATH")
-		pflag.String("log.path", "/var/log/taos", `log path. Env "TAOS_ADAPTER_LOG_PATH"`)
+		pflag.String("log.path", fmt.Sprintf("/var/log/%s", version.CUS_PROMPT), `log path. Env "TAOS_ADAPTER_LOG_PATH"`)
 	}
 
 	viper.SetDefault("log.rotationCount", 30)

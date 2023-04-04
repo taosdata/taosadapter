@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/plugin"
+	"github.com/taosdata/taosadapter/v3/version"
 )
 
 var logger = log.GetLogger("main")
@@ -61,9 +63,9 @@ func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin
 func Start(router *gin.Engine, startHttpServer func(server *http.Server)) {
 	prg := newProgram(router, startHttpServer)
 	svcConfig := &service.Config{
-		Name:        "taosadapter",
-		DisplayName: "taosadapter",
-		Description: "taosAdapter is a TDengine’s companion tool and is a bridge/adapter between TDengine cluster and application.",
+		Name:        fmt.Sprintf("%sadapter", version.CUS_PROMPT),
+		DisplayName: fmt.Sprintf("%sadapter", version.CUS_PROMPT),
+		Description: fmt.Sprintf("%sAdapter is a %s’s companion tool and is a bridge/adapter between %s cluster and application.", version.CUS_PROMPT, version.CUS_NAME, version.CUS_NAME),
 	}
 	s, err := service.New(prg, svcConfig)
 	if err != nil {

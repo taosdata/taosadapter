@@ -98,7 +98,7 @@ func (p *Plugin) Read(c *gin.Context) {
 	start = time.Now()
 	taosConn, err := commonpool.GetConnection(user, password)
 	if err != nil {
-		logger.WithError(err).Error("connect taosd error")
+		logger.WithError(err).Error("connect server error")
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -106,7 +106,7 @@ func (p *Plugin) Read(c *gin.Context) {
 	defer func() {
 		putErr := taosConn.Put()
 		if putErr != nil {
-			logger.WithError(putErr).Errorln("taos connect pool put error")
+			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
 	resp, err := processRead(taosConn.TaosConnection, &req, db)
@@ -181,7 +181,7 @@ func (p *Plugin) Write(c *gin.Context) {
 	start = time.Now()
 	taosConn, err := commonpool.GetConnection(user, password)
 	if err != nil {
-		logger.WithError(err).Error("connect taosd error")
+		logger.WithError(err).Error("connect server error")
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
@@ -189,7 +189,7 @@ func (p *Plugin) Write(c *gin.Context) {
 	defer func() {
 		putErr := taosConn.Put()
 		if putErr != nil {
-			logger.WithError(putErr).Errorln("taos connect pool put error")
+			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
 	err = processWrite(taosConn.TaosConnection, req, db, ttlI)
@@ -198,7 +198,7 @@ func (p *Plugin) Write(c *gin.Context) {
 		if is {
 			web.SetTaosErrorCode(c, int(taosError.Code))
 		}
-		logger.WithError(err).Error("connect taosd error")
+		logger.WithError(err).Error("connect server error")
 		_ = c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}

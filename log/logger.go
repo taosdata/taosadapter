@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/version"
 )
 
 var logger = logrus.New()
@@ -127,7 +128,7 @@ func ConfigLog() {
 			panic(err)
 		}
 		writer, err := rotatelogs.New(
-			path.Join(config.Conf.Log.Path, "taosadapter_%Y_%m_%d_%H_%M.log"),
+			path.Join(config.Conf.Log.Path, fmt.Sprintf("%sadapter_%%Y_%%m_%%d_%%H_%%M.log", version.CUS_PROMPT)),
 			rotatelogs.WithRotationCount(config.Conf.Log.RotationCount),
 			rotatelogs.WithRotationTime(config.Conf.Log.RotationTime),
 			rotatelogs.WithRotationSize(int64(config.Conf.Log.RotationSize)),
@@ -225,7 +226,9 @@ func (t *TaosLogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	b.WriteString(entry.Time.Format("01/02 15:04:05.000000"))
 	b.WriteByte(' ')
 	b.WriteString(ServerID)
-	b.WriteString(" TAOS_ADAPTER ")
+	b.WriteByte(' ')
+	b.WriteString(version.CUS_PROMPT)
+	b.WriteString("_ADAPTER ")
 	b.WriteString(entry.Level.String())
 	b.WriteString(` "`)
 	b.WriteString(entry.Message)

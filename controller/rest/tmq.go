@@ -563,7 +563,7 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 	errCode := rawBlock.Code
 	blockSize := rawBlock.BlockSize
 	block := rawBlock.Block
-	logger.Debugln("taos_fetch_raw_block cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("fetch_raw_block cost:", log.GetLogDuration(isDebug, s))
 	t.asyncLocker.Unlock()
 	if errCode != 0 {
 		errStr := wrapper.TMQErr2Str(int32(errCode))
@@ -588,7 +588,7 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 	resp.Rows = blockSize
 	s = log.GetLogNow(isDebug)
 	resp.FieldsCount = wrapper.TaosNumFields(message.cPointer)
-	logger.Debugln("taos_num_fields cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("num_fields cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	rowsHeader, _ := wrapper.ReadColumn(message.cPointer, resp.FieldsCount)
 	logger.Debugln("read column cost:", log.GetLogDuration(isDebug, s))
@@ -597,7 +597,7 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 	resp.FieldsLengths = rowsHeader.ColLength
 	s = log.GetLogNow(isDebug)
 	resp.Precision = wrapper.TaosResultPrecision(message.cPointer)
-	logger.Debugln("taos_result_precision cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("result_precision cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	if message.buffer == nil {
 		message.buffer = new(bytes.Buffer)
