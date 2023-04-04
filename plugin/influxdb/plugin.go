@@ -150,14 +150,14 @@ func (p *Influxdb) write(c *gin.Context) {
 	}
 	taosConn, err := commonpool.GetConnection(user, password)
 	if err != nil {
-		logger.WithError(err).Errorln("connect taosd error")
+		logger.WithError(err).Errorln("connect server error")
 		p.commonResponse(c, http.StatusInternalServerError, &message{Code: "internal error", Message: err.Error()})
 		return
 	}
 	defer func() {
 		putErr := taosConn.Put()
 		if putErr != nil {
-			logger.WithError(putErr).Errorln("taos connect pool put error")
+			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
 	conn := taosConn.TaosConnection

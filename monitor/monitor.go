@@ -107,7 +107,7 @@ func StartMonitor() {
 			for range ticker.C {
 				err := writeToTDLog()
 				if err != nil {
-					logger.WithError(err).Error("write to TDengine error")
+					logger.WithError(err).Error("write to server error")
 				}
 			}
 		}()

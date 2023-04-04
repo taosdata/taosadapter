@@ -120,13 +120,13 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metric telegraf.Me
 	}
 	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password)
 	if err != nil {
-		logger.WithError(err).Errorln("connect taosd error")
+		logger.WithError(err).Errorln("connect server error")
 		return
 	}
 	defer func() {
 		putErr := taosConn.Put()
 		if putErr != nil {
-			logger.WithError(putErr).Errorln("taos connect pool put error")
+			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
 

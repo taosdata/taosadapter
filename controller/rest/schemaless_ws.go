@@ -105,7 +105,7 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 		conn, err := commonpool.GetConnection(connInfo.User, connInfo.Password)
 		if err != nil {
 			logger.WithError(err).WithField(config.ReqIDKey, schemaless.ReqID).
-				Errorln("get taos connection error ")
+				Errorln("get connection error ")
 			wsError(ctx, session, err, SchemalessWrite, schemaless.ReqID)
 			return
 		}

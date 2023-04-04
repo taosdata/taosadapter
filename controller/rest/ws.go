@@ -127,7 +127,7 @@ func (t *Taos) connect(ctx context.Context, session *melody.Session, req *WSConn
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer t.Unlock()
 	if t.conn != nil {
-		wsErrorMsg(ctx, session, 0xffff, "taos duplicate connections", WSConnect, req.ReqID)
+		wsErrorMsg(ctx, session, 0xffff, "duplicate connections", WSConnect, req.ReqID)
 		return
 	}
 	s = log.GetLogNow(isDebug)
@@ -135,7 +135,7 @@ func (t *Taos) connect(ctx context.Context, session *melody.Session, req *WSConn
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	conn, err := wrapper.TaosConnect("", req.User, req.Password, req.DB, 0)
-	logger.Debugln("taos connect cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("connect cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if err != nil {
 		wsError(ctx, session, err, WSConnect, req.ReqID)
@@ -172,7 +172,7 @@ type WSQueryResult struct {
 
 func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryReq) {
 	if t.conn == nil {
-		wsErrorMsg(ctx, session, 0xffff, "taos not connected", WSQuery, req.ReqID)
+		wsErrorMsg(ctx, session, 0xffff, "server not connected", WSQuery, req.ReqID)
 		return
 	}
 	logger := getLogger(session).WithField("action", WSQuery)
@@ -183,37 +183,37 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	s = log.GetLogNow(isDebug)
 	result, _ := async.GlobalAsync.TaosQuery(t.conn, req.SQL, handler, int64(req.ReqID))
-	logger.Debugln("taos query cost ", log.GetLogDuration(isDebug, s))
+	logger.Debugln("query cost ", log.GetLogDuration(isDebug, s))
 	code := wrapper.TaosError(result.Res)
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosErrorStr(result.Res)
 		s = log.GetLogNow(isDebug)
 		thread.Lock()
-		logger.Debugln("taos free result get lock cost:", log.GetLogDuration(isDebug, s))
+		logger.Debugln("free result get lock cost:", log.GetLogDuration(isDebug, s))
 		s = log.GetLogNow(isDebug)
 		wrapper.TaosFreeResult(result.Res)
-		logger.Debugln("taos free result cost:", log.GetLogDuration(isDebug, s))
+		logger.Debugln("free result cost:", log.GetLogDuration(isDebug, s))
 		thread.Unlock()
 		wsErrorMsg(ctx, session, code, errStr, WSQuery, req.ReqID)
 		return
 	}
 	s = log.GetLogNow(isDebug)
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
-	logger.Debugln("taos_is_update_query cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("is_update_query cost:", log.GetLogDuration(isDebug, s))
 	queryResult := &WSQueryResult{Action: WSQuery, ReqID: req.ReqID}
 	if isUpdate {
 		var affectRows int
 		s = log.GetLogNow(isDebug)
 		affectRows = wrapper.TaosAffectedRows(result.Res)
-		logger.Debugln("taos_affected_rows cost:", log.GetLogDuration(isDebug, s))
+		logger.Debugln("affected_rows cost:", log.GetLogDuration(isDebug, s))
 		queryResult.IsUpdate = true
 		queryResult.AffectedRows = affectRows
 		s = log.GetLogNow(isDebug)
 		thread.Lock()
-		logger.Debugln("taos_free_result get lock cost:", log.GetLogDuration(isDebug, s))
+		logger.Debugln("free_result get lock cost:", log.GetLogDuration(isDebug, s))
 		s = log.GetLogNow(isDebug)
 		wrapper.TaosFreeResult(result.Res)
-		logger.Debugln("taos_free_result cost:", log.GetLogDuration(isDebug, s))
+		logger.Debugln("free_result cost:", log.GetLogDuration(isDebug, s))
 		thread.Unlock()
 		queryResult.Timing = getDuration(ctx)
 		wsWriteJson(session, queryResult)
@@ -221,7 +221,7 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 	} else {
 		s = log.GetLogNow(isDebug)
 		fieldsCount := wrapper.TaosNumFields(result.Res)
-		logger.Debugln("taos_num_fields cost:", log.GetLogDuration(isDebug, s))
+		logger.Debugln("num_fields cost:", log.GetLogDuration(isDebug, s))
 		queryResult.FieldsCount = fieldsCount
 		s = log.GetLogNow(isDebug)
 		rowsHeader, _ := wrapper.ReadColumn(result.Res, fieldsCount)
@@ -231,7 +231,7 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 		queryResult.FieldsTypes = rowsHeader.ColTypes
 		s = log.GetLogNow(isDebug)
 		precision := wrapper.TaosResultPrecision(result.Res)
-		logger.Debugln("taos_result_precision cost:", log.GetLogDuration(isDebug, s))
+		logger.Debugln("result_precision cost:", log.GetLogDuration(isDebug, s))
 		queryResult.Precision = precision
 		result := &Result{
 			TaosResult:  result.Res,
@@ -263,7 +263,7 @@ func (t *Taos) writeRaw(ctx context.Context, session *melody.Session, reqID, mes
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer t.Unlock()
 	if t.conn == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "taos not connected", WSWriteRaw, reqID, &messageID)
+		wsTMQErrorMsg(ctx, session, 0xffff, "server not connected", WSWriteRaw, reqID, &messageID)
 		return
 	}
 	meta := wrapper.BuildRawMeta(length, metaType, data)
@@ -273,7 +273,7 @@ func (t *Taos) writeRaw(ctx context.Context, session *melody.Session, reqID, mes
 	s = log.GetLogNow(isDebug)
 	errCode := wrapper.TMQWriteRaw(t.conn, meta)
 	thread.Unlock()
-	logger.Debugln("taos_write_raw_meta cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
 	if errCode != 0 {
 		errStr := wrapper.TaosErrorStr(nil)
 		wsErrorMsg(ctx, session, int(errCode)&0xffff, errStr, WSWriteRaw, reqID)
@@ -299,7 +299,7 @@ func (t *Taos) writeRawBlock(ctx context.Context, session *melody.Session, reqID
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer t.Unlock()
 	if t.conn == nil {
-		wsErrorMsg(ctx, session, 0xffff, "taos not connected", WSWriteRawBlock, reqID)
+		wsErrorMsg(ctx, session, 0xffff, "server not connected", WSWriteRawBlock, reqID)
 		return
 	}
 	s = log.GetLogNow(isDebug)
@@ -308,7 +308,7 @@ func (t *Taos) writeRawBlock(ctx context.Context, session *melody.Session, reqID
 	s = log.GetLogNow(isDebug)
 	errCode := wrapper.TaosWriteRawBlock(t.conn, numOfRows, rawBlock, tableName)
 	thread.Unlock()
-	logger.Debugln("taos_write_raw_meta cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
 	if errCode != 0 {
 		errStr := wrapper.TaosErrorStr(nil)
 		wsErrorMsg(ctx, session, errCode&0xffff, errStr, WSWriteRawBlock, reqID)
@@ -334,7 +334,7 @@ func (t *Taos) writeRawBlockWithFields(ctx context.Context, session *melody.Sess
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer t.Unlock()
 	if t.conn == nil {
-		wsErrorMsg(ctx, session, 0xffff, "taos not connected", WSWriteRawBlockWithFields, reqID)
+		wsErrorMsg(ctx, session, 0xffff, "server not connected", WSWriteRawBlockWithFields, reqID)
 		return
 	}
 	s = log.GetLogNow(isDebug)
@@ -343,7 +343,7 @@ func (t *Taos) writeRawBlockWithFields(ctx context.Context, session *melody.Sess
 	s = log.GetLogNow(isDebug)
 	errCode := wrapper.TaosWriteRawBlockWithFields(t.conn, numOfRows, rawBlock, tableName, fields, numFields)
 	thread.Unlock()
-	logger.Debugln("taos_write_raw_meta cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
 	if errCode != 0 {
 		errStr := wrapper.TaosErrorStr(nil)
 		wsErrorMsg(ctx, session, errCode&0xffff, errStr, WSWriteRawBlockWithFields, reqID)
@@ -372,7 +372,7 @@ type WSFetchResp struct {
 
 func (t *Taos) fetch(ctx context.Context, session *melody.Session, req *WSFetchReq) {
 	if t.conn == nil {
-		wsErrorMsg(ctx, session, 0xffff, "taos not connected", WSFetch, req.ReqID)
+		wsErrorMsg(ctx, session, 0xffff, "server not connected", WSFetch, req.ReqID)
 		return
 	}
 	logger := getLogger(session).WithField("action", WSFetch)
@@ -389,7 +389,7 @@ func (t *Taos) fetch(ctx context.Context, session *melody.Session, req *WSFetchR
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	s = log.GetLogNow(isDebug)
 	result, _ := async.GlobalAsync.TaosFetchRawBlockA(resultS.TaosResult, handler)
-	logger.Debugln("taos_fetch_raw_block_a cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("fetch_raw_block_a cost:", log.GetLogDuration(isDebug, s))
 	if result.N == 0 {
 		t.FreeResult(resultItem)
 		wsWriteJson(session, &WSFetchResp{
@@ -409,10 +409,10 @@ func (t *Taos) fetch(ctx context.Context, session *melody.Session, req *WSFetchR
 	}
 	s = log.GetLogNow(isDebug)
 	resultS.Lengths = wrapper.FetchLengths(resultS.TaosResult, resultS.FieldsCount)
-	logger.Debugln("taos_fetch_lengths cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("fetch_lengths cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	block := wrapper.TaosGetRawBlock(resultS.TaosResult)
-	logger.Debugln("taos_get_raw_block cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("get_raw_block cost:", log.GetLogDuration(isDebug, s))
 	resultS.Block = block
 	resultS.Size = result.N
 
@@ -433,7 +433,7 @@ type WSFetchBlockReq struct {
 
 func (t *Taos) fetchBlock(ctx context.Context, session *melody.Session, req *WSFetchBlockReq) {
 	if t.conn == nil {
-		wsErrorMsg(ctx, session, 0xffff, "taos not connected", WSFetchBlock, req.ReqID)
+		wsErrorMsg(ctx, session, 0xffff, "server not connected", WSFetchBlock, req.ReqID)
 		return
 	}
 	logger := getLogger(session).WithField("action", WSFetchBlock)

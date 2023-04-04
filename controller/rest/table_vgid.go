@@ -29,9 +29,9 @@ func (*Restful) tableVgID(c *gin.Context) {
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	taosConn, err := commonpool.GetConnection(user, password)
-	logger.Debugln("taos connect cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("connect cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		logger.WithError(err).Error("connect taosd error")
+		logger.WithError(err).Error("connect server error")
 		if tError, is := err.(*tErrors.TaosError); is {
 			TaosErrorResponse(c, int(tError.Code), tError.ErrStr)
 			return
@@ -42,7 +42,7 @@ func (*Restful) tableVgID(c *gin.Context) {
 	defer func() {
 		putErr := taosConn.Put()
 		if putErr != nil {
-			logger.WithError(putErr).Errorln("taos connect pool put error")
+			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
 	s = log.GetLogNow(isDebug)
@@ -50,7 +50,7 @@ func (*Restful) tableVgID(c *gin.Context) {
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	vgIDs, code := wrapper.TaosGetTablesVgID(taosConn.TaosConnection, db, tables)
-	logger.Debugln("taos_get_tables_vgId cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("get_tables_vgId cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != 0 {
 		TaosErrorResponse(c, code, wrapper.TaosErrorStr(nil))

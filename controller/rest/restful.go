@@ -181,10 +181,10 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID in
 	}
 	taosConnect, err := commonpool.GetConnection(user, password)
 	if isDebug {
-		logger.Debugln("taos connect cost:", time.Since(s))
+		logger.Debugln("connect server cost:", time.Since(s))
 	}
 	if err != nil {
-		logger.WithError(err).Error("connect taosd error")
+		logger.WithError(err).Error("connect server error")
 		if tError, is := err.(*tErrors.TaosError); is {
 			TaosErrorResponse(c, int(tError.Code), tError.ErrStr)
 			return
@@ -201,7 +201,7 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID in
 			panic(err)
 		}
 		if isDebug {
-			logger.Debugln("taos put connect cost:", time.Since(s))
+			logger.Debugln("put connect cost:", time.Since(s))
 		}
 	}()
 
@@ -214,7 +214,7 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID in
 		thread.Lock()
 		_ = wrapper.TaosSelectDB(taosConnect.TaosConnection, db)
 		thread.Unlock()
-		logger.Debugln("taos select db cost:", time.Since(s))
+		logger.Debugln("select db cost:", time.Since(s))
 	}
 	execute(c, logger, taosConnect.TaosConnection, sql, timeFunc, reqID)
 }
@@ -237,7 +237,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	}
 	result, _ := async.GlobalAsync.TaosQuery(taosConnect, sql, handler, reqID)
 	if isDebug {
-		logger.Debugln("taos query cost:", time.Since(s))
+		logger.Debugln("query cost:", time.Since(s))
 	}
 	defer func() {
 		if result != nil && result.Res != nil {
@@ -248,7 +248,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 			wrapper.TaosFreeResult(result.Res)
 			thread.Unlock()
 			if isDebug {
-				logger.Debugln("taos free result cost:", time.Since(s))
+				logger.Debugln("free result cost:", time.Since(s))
 			}
 		}
 	}()
@@ -342,7 +342,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 		}
 		result, _ = async.GlobalAsync.TaosFetchRawBlockA(res, handler)
 		if isDebug {
-			logger.Debugln("taos fetch_rows_a cost:", time.Since(s))
+			logger.Debugln("fetch_rows_a cost:", time.Since(s))
 		}
 		if result.N == 0 {
 			break
@@ -475,11 +475,11 @@ func (ctl *Restful) upload(c *gin.Context) {
 	s := log.GetLogNow(isDebug)
 	taosConnect, err := commonpool.GetConnection(user, password)
 	if isDebug {
-		logger.Debugln("taos connect cost:", log.GetLogDuration(isDebug, s))
+		logger.Debugln("connect cost:", log.GetLogDuration(isDebug, s))
 	}
 
 	if err != nil {
-		logger.WithError(err).Error("connect taosd error")
+		logger.WithError(err).Error("connect server error")
 		if tError, is := err.(*tErrors.TaosError); is {
 			TaosErrorResponse(c, int(tError.Code), tError.ErrStr)
 			return
@@ -496,7 +496,7 @@ func (ctl *Restful) upload(c *gin.Context) {
 			panic(err)
 		}
 		if isDebug {
-			logger.Debugln("taos put connect cost:", log.GetLogDuration(isDebug, s))
+			logger.Debugln("put connect cost:", log.GetLogDuration(isDebug, s))
 		}
 	}()
 	s = log.GetLogNow(isDebug)

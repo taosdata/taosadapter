@@ -21,14 +21,14 @@ func PrepareConnection() {
 			if code != 0 {
 				errStr := wrapper.TaosErrorStr(nil)
 				err := errors.NewError(code, errStr)
-				logger.WithError(err).Panic("set taos config file ", config.Conf.TaosConfigDir)
+				logger.WithError(err).Panic("set config file ", config.Conf.TaosConfigDir)
 			}
 		}
 		code := wrapper.TaosOptions(common.TSDB_OPTION_USE_ADAPTER, "true")
 		if code != 0 {
 			errStr := wrapper.TaosErrorStr(nil)
 			err := errors.NewError(code, errStr)
-			logger.WithError(err).Panic("set taos option TSDB_OPTION_USE_ADAPTER error")
+			logger.WithError(err).Panic("set option TSDB_OPTION_USE_ADAPTER error")
 		}
 	})
 	async.GlobalAsync = async.NewAsync(async.NewHandlerPool(10000))

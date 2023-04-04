@@ -31,32 +31,31 @@ var (
 
 func Init() {
 	viper.SetConfigType("toml")
-	viper.SetConfigName("taosadapter")
+	viper.SetConfigName(fmt.Sprintf("%sadapter", version.CUS_PROMPT))
 	var cp *string
 	switch runtime.GOOS {
 	case "windows":
-		viper.AddConfigPath("C:\\TDengine\\cfg")
-		cp = pflag.StringP("config", "c", "", "config path default C:\\TDengine\\cfg\\taosadapter.toml")
+		viper.AddConfigPath(fmt.Sprintf("C:\\%s\\cfg", version.CUS_NAME))
+		cp = pflag.StringP("config", "c", "", fmt.Sprintf("config path default C:\\%s\\cfg\\%sadapter.toml", version.CUS_NAME, version.CUS_PROMPT))
 	default:
-		viper.AddConfigPath("/etc/taos")
-		cp = pflag.StringP("config", "c", "", "config path default /etc/taos/taosadapter.toml")
+		viper.AddConfigPath(fmt.Sprintf("/etc/%s", version.CUS_PROMPT))
+		cp = pflag.StringP("config", "c", "", fmt.Sprintf("config path default /etc/%s/%sadapter.toml", version.CUS_PROMPT, version.CUS_PROMPT))
 	}
 	v := pflag.Bool("version", false, "Print the version and exit")
 	help := pflag.Bool("help", false, "Print this help message and exit")
 	pflag.Parse()
 	if *help {
-		fmt.Fprintf(os.Stderr, "Usage of taosadapter v%s-%s:\n", version.Version, version.CommitID)
+		fmt.Fprintf(os.Stderr, "Usage of %sadapter v%s-%s:\n", version.CUS_PROMPT, version.Version, version.CommitID)
 		pflag.PrintDefaults()
 		os.Exit(0)
 	}
 	if *v {
-		fmt.Printf("taosadapter v%s-%s\n", version.Version, version.CommitID)
+		fmt.Printf(" %sadapter v%s-%s\n", version.CUS_PROMPT, version.Version, version.CommitID)
 		os.Exit(0)
 	}
 	if *cp != "" {
 		viper.SetConfigFile(*cp)
 	}
-	viper.SetEnvPrefix("taosadapter")
 	err := viper.BindPFlags(pflag.CommandLine)
 	if err != nil {
 		panic(err)
@@ -93,7 +92,7 @@ func init() {
 
 	viper.SetDefault("httpCodeServerError", false)
 	_ = viper.BindEnv("httpCodeServerError", "TAOS_ADAPTER_HTTP_CODE_SERVER_ERROR")
-	pflag.Bool("httpCodeServerError", false, `Use a non-200 http status code when taosd returns an error. Env "TAOS_ADAPTER_HTTP_CODE_SERVER_ERROR"`)
+	pflag.Bool("httpCodeServerError", false, `Use a non-200 http status code when server returns an error. Env "TAOS_ADAPTER_HTTP_CODE_SERVER_ERROR"`)
 
 	viper.SetDefault("port", 6041)
 	_ = viper.BindEnv("port", "TAOS_ADAPTER_PORT")

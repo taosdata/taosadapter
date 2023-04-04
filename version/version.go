@@ -7,3 +7,7 @@ var Version = "0.1.0"
 var CommitID = "unknown"
 
 var TaosClientVersion = wrapper.TaosGetClientInfo()
+
+var CUS_NAME = "TDengine"
+
+var CUS_PROMPT = "taos"
