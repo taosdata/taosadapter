@@ -1,6 +1,7 @@
 package log
 
 import (
+	"net/url"
 	"strconv"
 	"time"
 
@@ -24,7 +25,7 @@ func GinLog() gin.HandlerFunc {
 		}
 		latencyTime := time.Since(startTime)
 		reqMethod := c.Request.Method
-		reqUri := c.Request.RequestURI
+		reqUri := url.QueryEscape(c.Request.RequestURI)
 		statusCode := c.Writer.Status()
 		clientIP := c.ClientIP()
 		logger.Infof("| %3d | %13v | %15s | %s | %s ", statusCode, latencyTime, clientIP, reqMethod, reqUri)
