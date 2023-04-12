@@ -1,5 +1,5 @@
-//go:build !windows
-// +build !windows
+//go:build windows
+// +build windows
 
 package asynctmq
 
@@ -8,11 +8,14 @@ package asynctmq
 #cgo linux LDFLAGS: -L/usr/lib -ltaos
 #cgo windows LDFLAGS: -LC:/TDengine/driver -ltaos
 #cgo darwin LDFLAGS: -L/usr/local/lib -ltaos
+
+
+#include <windows.h>
+#include <process.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <taos.h>
-#include <pthread.h>
 
 typedef enum {
     TAOSA_TMQ_POLL = 1,
@@ -27,14 +30,6 @@ typedef enum {
     TAOSA_TMQ_GET_JSON_META = 10,
 } TMQ_EVENT;
 
-typedef struct tmq_thread {
-    TMQ_EVENT event;
-    int shutdown;
-    void *task;
-    pthread_mutex_t lock;
-    pthread_cond_t notify;
-    pthread_t thread;
-} tmq_thread;
 
 typedef void (*adapter_tmq_poll_a_cb)(uintptr_t param, void *res);
 
@@ -124,14 +119,26 @@ typedef struct tmq_get_json_meta_task {
     uintptr_t param;
 } tmq_get_json_meta_task;
 
-void *worker(void *arg) {
+typedef struct tmq_thread {
+    TMQ_EVENT event;
+    int shutdown;
+    void *task;
+    CRITICAL_SECTION lock;
+    CONDITION_VARIABLE notify;
+    HANDLE thread;
+} tmq_thread;
+
+unsigned int worker(void *arg) {
     tmq_thread *thread_info = (tmq_thread *) arg;
     while (1) {
-        pthread_mutex_lock(&thread_info->lock);
-    	while (thread_info->task == NULL && !thread_info->shutdown) {
-        	pthread_cond_wait(&thread_info->notify, &thread_info->lock);
-    	}
-        if (thread_info->shutdown) break;
+        EnterCriticalSection(&thread_info->lock);
+        while (thread_info->task == NULL && !thread_info->shutdown) {
+            SleepConditionVariableCS(&thread_info->notify, &thread_info->lock, INFINITE);
+        }
+        if (thread_info->shutdown) {
+            LeaveCriticalSection(&thread_info->lock);
+            break;
+        }
         int need_free = 1;
         switch (thread_info->event) {
             case TAOSA_TMQ_FETCH_RAW_BLOCK: {
@@ -188,47 +195,48 @@ void *worker(void *arg) {
                 tmq_get_raw_task *task = (tmq_get_raw_task *) thread_info->task;
                 int32_t error_code = tmq_get_raw(task->res, task->raw);
                 task->cb(task->param, error_code);
-				break;
+                break;
             }
-            case TAOSA_TMQ_GET_JSON_META:{
+            case TAOSA_TMQ_GET_JSON_META: {
                 tmq_get_json_meta_task *task = (tmq_get_json_meta_task *) thread_info->task;
                 char *meta = tmq_get_json_meta(task->res);
-                task->cb(task->param,meta);
-				break;
+                task->cb(task->param, meta);
+                break;
             }
             default:
                 need_free = 0;
-				break;
+                break;
         }
         if (need_free) {
             free(thread_info->task);
             thread_info->task = NULL;
         }
-        pthread_mutex_unlock(&thread_info->lock);
+        LeaveCriticalSection(&thread_info->lock);
     }
-    pthread_mutex_unlock(&thread_info->lock);
+    LeaveCriticalSection(&thread_info->lock);
 
-    pthread_exit(NULL);
+    _endthreadex(0);
+	return 0;
 }
 
 tmq_thread *init_tmq_thread() {
-    tmq_thread *thread_info = (tmq_thread *) malloc(sizeof(tmq_thread));
+    tmq_thread *thread_info = (tmq_thread*) malloc(sizeof(tmq_thread));
     thread_info->event = 0;
     thread_info->shutdown = 0;
     thread_info->task = NULL;
-    pthread_mutex_init(&thread_info->lock, NULL);
-    pthread_cond_init(&thread_info->notify, NULL);
-    pthread_create(&thread_info->thread, NULL, worker, (void *) thread_info);
+    InitializeCriticalSection(&thread_info->lock);
+    InitializeConditionVariable(&thread_info->notify);
+    thread_info->thread = (HANDLE)_beginthreadex(NULL, 0, &worker, (void *)thread_info, 0, NULL);
     return thread_info;
 }
 
 void destroy_tmq_thread(tmq_thread *thread_info) {
     if (thread_info == NULL || thread_info->shutdown) return;
     thread_info->shutdown = 1;
-    pthread_cond_signal(&thread_info->notify);
-    pthread_join(thread_info->thread, NULL);
-    pthread_mutex_destroy(&thread_info->lock);
-    pthread_cond_destroy(&thread_info->notify);
+    WakeConditionVariable(&thread_info->notify);
+    WaitForSingleObject(thread_info->thread, INFINITE);
+	CloseHandle(thread_info->thread);
+    DeleteCriticalSection(&thread_info->lock);
     if (thread_info->task != NULL) free(thread_info->task);
     free(thread_info);
 }
@@ -240,11 +248,11 @@ adapter_tmq_poll_a(tmq_thread *thread_info, tmq_t *tmq, int64_t timeout, adapter
     task->timeout = timeout;
     task->cb = cb;
     task->param = param;
-    pthread_mutex_lock(&thread_info->lock);
+    EnterCriticalSection(&thread_info->lock);
     thread_info->event = TAOSA_TMQ_POLL;
     thread_info->task = task;
-    pthread_cond_signal(&thread_info->notify);
-    pthread_mutex_unlock(&thread_info->lock);
+    WakeConditionVariable(&thread_info->notify);
+    LeaveCriticalSection(&thread_info->lock);
 }
 
 void adapter_tmq_free_result_a(tmq_thread *thread_info, TAOS_RES *res, adapter_tmq_free_result_cb cb, uintptr_t param) {
@@ -252,12 +260,13 @@ void adapter_tmq_free_result_a(tmq_thread *thread_info, TAOS_RES *res, adapter_t
     task->res = res;
     task->cb = cb;
     task->param = param;
-    pthread_mutex_lock(&(thread_info->lock));
+    EnterCriticalSection(&thread_info->lock);
     thread_info->event = TAOSA_TMQ_FREE;
     thread_info->task = task;
-    pthread_cond_signal(&(thread_info->notify));
-    pthread_mutex_unlock(&(thread_info->lock));
+    WakeConditionVariable(&thread_info->notify);
+    LeaveCriticalSection(&thread_info->lock);
 }
+
 
 void
 adapter_tmq_commit_a(tmq_thread *thread_info, tmq_t *tmq, TAOS_RES *msg, adapter_tmq_commit_cb cb, uintptr_t param) {
@@ -266,24 +275,23 @@ adapter_tmq_commit_a(tmq_thread *thread_info, tmq_t *tmq, TAOS_RES *msg, adapter
     task->msg = msg;
     task->cb = cb;
     task->param = param;
-    pthread_mutex_lock(&(thread_info->lock));
+    EnterCriticalSection(&thread_info->lock);
     thread_info->event = TAOSA_TMQ_COMMIT;
     thread_info->task = task;
-    pthread_cond_signal(&(thread_info->notify));
-    pthread_mutex_unlock(&(thread_info->lock));
+    WakeConditionVariable(&thread_info->notify);
+    LeaveCriticalSection(&thread_info->lock);
 }
-
 void adapter_tmq_fetch_raw_block_a(tmq_thread *thread_info, TAOS_RES *res, adapter_tmq_fetch_raw_block_cb cb,
                                    uintptr_t param) {
     fetch_raw_block_task *task = (fetch_raw_block_task *) malloc(sizeof(fetch_raw_block_task));
     task->res = res;
     task->cb = cb;
     task->param = param;
-    pthread_mutex_lock(&(thread_info->lock));
+    EnterCriticalSection(&thread_info->lock);
     thread_info->event = TAOSA_TMQ_FETCH_RAW_BLOCK;
     thread_info->task = task;
-    pthread_cond_signal(&(thread_info->notify));
-    pthread_mutex_unlock(&(thread_info->lock));
+    WakeConditionVariable(&thread_info->notify);
+    LeaveCriticalSection(&thread_info->lock);
 }
 
 void adapter_tmq_new_consumer_a(tmq_thread *thread_info, tmq_conf_t *conf, char *errstr, int32_t errstrLen,
@@ -294,11 +302,13 @@ void adapter_tmq_new_consumer_a(tmq_thread *thread_info, tmq_conf_t *conf, char 
     task->errstrLen = errstrLen;
     task->cb = cb;
     task->param = param;
-    pthread_mutex_lock(&(thread_info->lock));
+
+    EnterCriticalSection(&thread_info->lock);
     thread_info->event = TAOSA_TMQ_NEW_CONSUMER;
     thread_info->task = task;
-    pthread_cond_signal(&(thread_info->notify));
-    pthread_mutex_unlock(&(thread_info->lock));
+    WakeConditionVariable(&thread_info->notify);
+    LeaveCriticalSection(&thread_info->lock);
+
 }
 
 
@@ -310,11 +320,12 @@ adapter_tmq_subscribe_a(tmq_thread *thread_info, tmq_t *tmq, tmq_list_t *topic_l
     task->topic_list = topic_list;
     task->cb = cb;
     task->param = param;
-    pthread_mutex_lock(&(thread_info->lock));
+
+    EnterCriticalSection(&thread_info->lock);
     thread_info->event = TAOSA_TMQ_SUBSCRIBE;
     thread_info->task = task;
-    pthread_cond_signal(&(thread_info->notify));
-    pthread_mutex_unlock(&(thread_info->lock));
+    WakeConditionVariable(&thread_info->notify);
+    LeaveCriticalSection(&thread_info->lock);
 }
 
 void adapter_tmq_unsubscribe_a(tmq_thread *thread_info, tmq_t *tmq, adapter_tmq_unsubscribe_cb cb, uintptr_t param) {
@@ -322,11 +333,12 @@ void adapter_tmq_unsubscribe_a(tmq_thread *thread_info, tmq_t *tmq, adapter_tmq_
     task->tmq = tmq;
     task->cb = cb;
     task->param = param;
-    pthread_mutex_lock(&(thread_info->lock));
+
+    EnterCriticalSection(&thread_info->lock);
     thread_info->event = TAOSA_TMQ_UNSUBSCRIBE;
     thread_info->task = task;
-    pthread_cond_signal(&(thread_info->notify));
-    pthread_mutex_unlock(&(thread_info->lock));
+    WakeConditionVariable(&thread_info->notify);
+    LeaveCriticalSection(&thread_info->lock);
 }
 
 void
@@ -335,36 +347,40 @@ adapter_tmq_consumer_close_a(tmq_thread *thread_info, tmq_t *tmq, adapter_tmq_co
     task->tmq = tmq;
     task->cb = cb;
     task->param = param;
-    pthread_mutex_lock(&(thread_info->lock));
+
+    EnterCriticalSection(&thread_info->lock);
     thread_info->event = TAOSA_TMQ_CONSUMER_CLOSE;
     thread_info->task = task;
-    pthread_cond_signal(&(thread_info->notify));
-    pthread_mutex_unlock(&(thread_info->lock));
+    WakeConditionVariable(&thread_info->notify);
+    LeaveCriticalSection(&thread_info->lock);
 }
 
-void adapter_tmq_get_raw_a(tmq_thread *thread_info, TAOS_RES *res, tmq_raw_data *raw, adapter_tmq_get_raw_cb cb, uintptr_t param) {
+void adapter_tmq_get_raw_a(tmq_thread *thread_info, TAOS_RES *res, tmq_raw_data *raw, adapter_tmq_get_raw_cb cb,
+                           uintptr_t param) {
     tmq_get_raw_task *task = (tmq_get_raw_task *) malloc(sizeof(tmq_get_raw_task));
     task->res = res;
     task->raw = raw;
     task->cb = cb;
     task->param = param;
-    pthread_mutex_lock(&(thread_info->lock));
+
+    EnterCriticalSection(&thread_info->lock);
     thread_info->event = TAOSA_TMQ_GET_RAW;
     thread_info->task = task;
-    pthread_cond_signal(&(thread_info->notify));
-    pthread_mutex_unlock(&(thread_info->lock));
+    WakeConditionVariable(&thread_info->notify);
+    LeaveCriticalSection(&thread_info->lock);
 }
 
-void adapter_tmq_get_json_meta_a(tmq_thread *thread_info, TAOS_RES *res, adapter_tmq_get_json_meta_cb cb, uintptr_t param) {
+void
+adapter_tmq_get_json_meta_a(tmq_thread *thread_info, TAOS_RES *res, adapter_tmq_get_json_meta_cb cb, uintptr_t param) {
     tmq_get_json_meta_task *task = (tmq_get_json_meta_task *) malloc(sizeof(tmq_get_json_meta_task));
     task->res = res;
     task->cb = cb;
     task->param = param;
-    pthread_mutex_lock(&(thread_info->lock));
+    EnterCriticalSection(&thread_info->lock);
     thread_info->event = TAOSA_TMQ_GET_JSON_META;
     thread_info->task = task;
-    pthread_cond_signal(&(thread_info->notify));
-    pthread_mutex_unlock(&(thread_info->lock));
+    WakeConditionVariable(&thread_info->notify);
+    LeaveCriticalSection(&thread_info->lock);
 }
 
 extern void AdapterTMQPollCallback(uintptr_t param, void *res);
@@ -421,12 +437,13 @@ void taosa_tmq_consumer_close_a_wrapper(tmq_thread *thread_info, tmq_t *tmq, uin
 }
 
 void taosa_tmq_get_raw_a_wrapper(tmq_thread *thread_info, TAOS_RES *res, tmq_raw_data *raw, uintptr_t param) {
-    adapter_tmq_get_raw_a(thread_info, res,raw, AdapterTMQGetRawCallback, param);
+    adapter_tmq_get_raw_a(thread_info, res, raw, AdapterTMQGetRawCallback, param);
 }
 
 void taosa_tmq_get_json_meta_a_wrapper(tmq_thread *thread_info, TAOS_RES *res, uintptr_t param) {
     adapter_tmq_get_json_meta_a(thread_info, res, AdapterTMQGetJsonMetaCallback, param);
 }
+
 */
 import "C"
 import (
