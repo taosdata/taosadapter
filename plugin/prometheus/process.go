@@ -34,11 +34,11 @@ var timeBufferPool pool.ByteBufferPool
 
 func processWrite(taosConn unsafe.Pointer, req *prompbWrite.WriteRequest, db string, ttl int) error {
 	start := time.Now()
-	err := tool.SelectDB(taosConn, db, 0)
+	err := tool.SchemalessSelectDB(taosConn, db, 0)
 	if err != nil {
 		return err
 	}
-	logger.Debug("processWrite SelectDB cost:", time.Since(start))
+	logger.Debug("processWrite SchemalessSelectDB cost:", time.Since(start))
 	start = time.Now()
 	bp := pool.BytesPoolGet()
 	defer pool.BytesPoolPut(bp)
@@ -143,7 +143,7 @@ func processRead(taosConn unsafe.Pointer, req *prompb.ReadRequest, db string) (r
 	thread.Lock()
 	wrapper.TaosSelectDB(taosConn, db)
 	thread.Unlock()
-	logger.Debug("processRead SelectDB cost:", time.Since(start))
+	logger.Debug("processRead SchemalessSelectDB cost:", time.Since(start))
 	resp = &prompb.ReadResponse{}
 	for i, query := range req.Queries {
 		start = time.Now()

@@ -15,7 +15,7 @@ func InsertInfluxdb(conn unsafe.Pointer, data []byte, db, precision string, ttl 
 	if reqID == 0 {
 		reqID = common.GetReqID()
 	}
-	err := tool.SelectDB(conn, db, reqID)
+	err := tool.SchemalessSelectDB(conn, db, reqID)
 	if err != nil {
 		return err
 	}

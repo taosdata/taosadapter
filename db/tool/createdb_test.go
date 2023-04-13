@@ -70,7 +70,7 @@ func TestCreateDBWithConnection(t *testing.T) {
 // @author: xftan
 // @date: 2021/12/14 15:12
 // @description:  test selectDB
-func Test_selectDB(t *testing.T) {
+func TestSchemalessSelectDB(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Error(err)
@@ -106,7 +106,7 @@ func Test_selectDB(t *testing.T) {
 				return
 			}
 			wrapper.TaosFreeResult(result)
-			if err := SelectDB(tt.args.taosConnect, tt.args.db, 0); (err != nil) != tt.wantErr {
+			if err := SchemalessSelectDB(tt.args.taosConnect, tt.args.db, 0); (err != nil) != tt.wantErr {
 				t.Errorf("selectDB() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			r := wrapper.TaosQuery(tt.args.taosConnect, fmt.Sprintf("drop database if exists %s", tt.args.db))

@@ -25,7 +25,7 @@ func CreateDBWithConnection(connection unsafe.Pointer, db string, reqID int64) e
 	return nil
 }
 
-func SelectDB(taosConnect unsafe.Pointer, db string, reqID int64) error {
+func SchemalessSelectDB(taosConnect unsafe.Pointer, db string, reqID int64) error {
 	err := async.GlobalAsync.TaosExecWithoutResult(taosConnect, "use "+db, reqID)
 	if err != nil {
 		e, is := err.(*errors.TaosError)
