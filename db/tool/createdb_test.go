@@ -5,6 +5,7 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
@@ -12,11 +13,18 @@ import (
 	"github.com/taosdata/taosadapter/v3/db"
 )
 
+func TestMain(m *testing.M) {
+	viper.Set("smlAutoCreateDB", true)
+	config.Init()
+	db.PrepareConnection()
+	m.Run()
+	viper.Set("smlAutoCreateDB", false)
+}
+
 // @author: xftan
 // @date: 2021/12/14 15:05
 // @description: test creat database with connection
 func TestCreateDBWithConnection(t *testing.T) {
-	config.Init()
 	db.PrepareConnection()
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {

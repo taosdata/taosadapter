@@ -38,6 +38,13 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 		}
 		wrapper.TaosFreeResult(r)
 	}()
+	r := wrapper.TaosQuery(conn, "create database if not exists test_capi")
+	code := wrapper.TaosError(r)
+	if code != 0 {
+		errStr := wrapper.TaosErrorStr(r)
+		t.Error(errors.NewError(code, errStr))
+	}
+	wrapper.TaosFreeResult(r)
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        string
@@ -142,6 +149,13 @@ func TestInsertOpentsdbJson(t *testing.T) {
 		}
 		wrapper.TaosFreeResult(r)
 	}()
+	r := wrapper.TaosQuery(conn, "create database if not exists test_capi")
+	code := wrapper.TaosError(r)
+	if code != 0 {
+		errStr := wrapper.TaosErrorStr(r)
+		t.Error(errors.NewError(code, errStr))
+	}
+	wrapper.TaosFreeResult(r)
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        []byte
@@ -242,6 +256,13 @@ func TestInsertOpentsdbTelnetBatch(t *testing.T) {
 		}
 		wrapper.TaosFreeResult(r)
 	}()
+	r := wrapper.TaosQuery(conn, "create database if not exists test_capi")
+	code := wrapper.TaosError(r)
+	if code != 0 {
+		errStr := wrapper.TaosErrorStr(r)
+		t.Error(errors.NewError(code, errStr))
+	}
+	wrapper.TaosFreeResult(r)
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        []string

@@ -25,6 +25,8 @@ import (
 // @description: test influxdb plugin
 func TestInfluxdb(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
+	viper.Set("smlAutoCreateDB", true)
+	defer viper.Set("smlAutoCreateDB", false)
 	config.Init()
 	viper.Set("influxdb.enable", true)
 	db.PrepareConnection()

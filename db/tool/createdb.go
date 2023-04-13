@@ -5,6 +5,7 @@ import (
 
 	"github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/async"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/thread"
@@ -28,7 +29,7 @@ func SelectDB(taosConnect unsafe.Pointer, db string, reqID int64) error {
 	err := async.GlobalAsync.TaosExecWithoutResult(taosConnect, "use "+db, reqID)
 	if err != nil {
 		e, is := err.(*errors.TaosError)
-		if is && e.Code == httperror.TSDB_CODE_MND_DB_NOT_EXIST {
+		if is && e.Code == httperror.TSDB_CODE_MND_DB_NOT_EXIST && config.Conf.SMLAutoCreateDB {
 			err := CreateDBWithConnection(taosConnect, db, reqID)
 			if err != nil {
 				return err

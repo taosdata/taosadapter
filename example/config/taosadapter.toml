@@ -3,6 +3,7 @@ taosConfigDir = ""
 port = 6041
 logLevel = "info"
 httpCodeServerError = false
+SMLAutoCreateDB = false
 
 [cors]
 allowAllOrigins = true
@@ -24,7 +25,7 @@ rotationTime = "24h"
 rotationSize = "1GB"
 enableRecordHttpSql = false
 sqlRotationCount = 2
-sqlRotationTime =  "24h"
+sqlRotationTime = "24h"
 sqlRotationSize = "1GB"
 
 [monitor]
