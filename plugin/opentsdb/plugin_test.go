@@ -25,6 +25,8 @@ import (
 // @description: test opentsdb test
 func TestOpentsdb(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
+	viper.Set("smlAutoCreateDB", true)
+	defer viper.Set("smlAutoCreateDB", false)
 	config.Init()
 	viper.Set("opentsdb.enable", true)
 	db.PrepareConnection()

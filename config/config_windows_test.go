@@ -40,6 +40,7 @@ func TestInit(t *testing.T) {
 				LogLevel:            "info",
 				RestfulRowLimit:     -1,
 				HttpCodeServerError: false,
+				SMLAutoCreateDB:     false,
 				Log: Log{
 					Path:                "C:\\TDengine\\log",
 					RotationCount:       30,

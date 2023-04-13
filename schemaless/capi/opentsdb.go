@@ -15,7 +15,7 @@ func InsertOpentsdbJson(conn unsafe.Pointer, data []byte, db string, ttl int, re
 	if len(data) == 0 {
 		return nil
 	}
-	if err := tool.SelectDB(conn, db, reqID); err != nil {
+	if err := tool.SchemalessSelectDB(conn, db, reqID); err != nil {
 		return err
 	}
 
@@ -52,7 +52,7 @@ func InsertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string, ttl int
 	if len(trimData) == 0 {
 		return nil
 	}
-	if err := tool.SelectDB(conn, db, reqID); err != nil {
+	if err := tool.SchemalessSelectDB(conn, db, reqID); err != nil {
 		return err
 	}
 

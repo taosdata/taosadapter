@@ -5,6 +5,7 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
@@ -12,11 +13,18 @@ import (
 	"github.com/taosdata/taosadapter/v3/db"
 )
 
+func TestMain(m *testing.M) {
+	viper.Set("smlAutoCreateDB", true)
+	config.Init()
+	db.PrepareConnection()
+	m.Run()
+	viper.Set("smlAutoCreateDB", false)
+}
+
 // @author: xftan
 // @date: 2021/12/14 15:05
 // @description: test creat database with connection
 func TestCreateDBWithConnection(t *testing.T) {
-	config.Init()
 	db.PrepareConnection()
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
@@ -62,7 +70,7 @@ func TestCreateDBWithConnection(t *testing.T) {
 // @author: xftan
 // @date: 2021/12/14 15:12
 // @description:  test selectDB
-func Test_selectDB(t *testing.T) {
+func TestSchemalessSelectDB(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Error(err)
@@ -98,7 +106,7 @@ func Test_selectDB(t *testing.T) {
 				return
 			}
 			wrapper.TaosFreeResult(result)
-			if err := SelectDB(tt.args.taosConnect, tt.args.db, 0); (err != nil) != tt.wantErr {
+			if err := SchemalessSelectDB(tt.args.taosConnect, tt.args.db, 0); (err != nil) != tt.wantErr {
 				t.Errorf("selectDB() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			r := wrapper.TaosQuery(tt.args.taosConnect, fmt.Sprintf("drop database if exists %s", tt.args.db))
