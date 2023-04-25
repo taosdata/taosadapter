@@ -835,7 +835,7 @@ func TestMeta(t *testing.T) {
 
 func writeRaw(t *testing.T, rawData []byte) {
 	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists test_ws_tmq_meta_target")
+	body := strings.NewReader("create database if not exists test_ws_tmq_meta_target WAL_RETENTION_PERIOD 86400")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
