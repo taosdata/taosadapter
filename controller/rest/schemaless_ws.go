@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -13,8 +14,6 @@ import (
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
-	"github.com/taosdata/taosadapter/v3/db/commonpool"
-	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/thread"
 )
 
@@ -23,6 +22,8 @@ func (ctl *Restful) InitSchemaless() {
 	ctl.schemaless.Config.MaxMessageSize = 4 * 1024 * 1024
 
 	ctl.schemaless.HandleConnect(func(session *melody.Session) {
+		var lock sync.Mutex
+		session.Set(taosSchemalessLockKey, &lock)
 	})
 
 	ctl.schemaless.HandleMessage(ctl.handleMessage)
@@ -33,7 +34,15 @@ func (ctl *Restful) InitSchemaless() {
 		if !ok {
 			return nil
 		}
-		_ = sessionConn.(*commonpool.Conn).Put()
+
+		lock := session.MustGet(taosSchemalessLockKey).(*sync.Mutex)
+		lock.Lock()
+		defer lock.Unlock()
+		sessionConn, ok = session.Get(taosSchemalessKey)
+		if !ok {
+			return nil
+		}
+		wrapper.TaosClose(sessionConn.(unsafe.Pointer))
 		return nil
 	})
 
@@ -50,7 +59,15 @@ func (ctl *Restful) InitSchemaless() {
 		if !ok {
 			return
 		}
-		_ = sessionConn.(*commonpool.Conn).Put()
+
+		lock := session.MustGet(taosSchemalessLockKey).(*sync.Mutex)
+		lock.Lock()
+		defer lock.Unlock()
+		sessionConn, ok = session.Get(taosSchemalessKey)
+		if !ok {
+			return
+		}
+		wrapper.TaosClose(sessionConn.(unsafe.Pointer))
 		return
 	})
 }
@@ -82,15 +99,11 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 			return
 		}
 
-		conn, err := commonpool.GetConnection(connReq.User, connReq.Password)
+		thread.Lock()
+		defer thread.Unlock()
+		conn, err := wrapper.TaosConnect("", connReq.User, connReq.Password, connReq.DB, 0)
 		if err != nil {
 			logger.WithError(err).Errorln("get connection error")
-			wsError(ctx, session, err, SchemalessConn, connReq.ReqID)
-			return
-		}
-
-		if err = tool.SchemalessSelectDB(conn.TaosConnection, connReq.DB, int64(connReq.ReqID)); err != nil {
-			logger.WithError(err).Errorln("chang database error")
 			wsError(ctx, session, err, SchemalessConn, connReq.ReqID)
 			return
 		}
@@ -115,7 +128,7 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 			wsError(ctx, session, unConnectedError, SchemalessWrite, schemaless.ReqID)
 			return
 		}
-		conn := sessionConn.(*commonpool.Conn)
+		conn := sessionConn.(unsafe.Pointer)
 
 		var result unsafe.Pointer
 		thread.Lock()
@@ -125,7 +138,7 @@ func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
 				wrapper.TaosFreeResult(result)
 			}
 		}()
-		_, result = wrapper.TaosSchemalessInsertRawTTLWithReqID(conn.TaosConnection, schemaless.Data, schemaless.Protocol,
+		_, result = wrapper.TaosSchemalessInsertRawTTLWithReqID(conn, schemaless.Data, schemaless.Protocol,
 			schemaless.Precision, schemaless.TTL, int64(schemaless.ReqID))
 		if code := wrapper.TaosError(result); code != 0 {
 			err = tErrors.NewError(code, wrapper.TaosErrorStr(result))
