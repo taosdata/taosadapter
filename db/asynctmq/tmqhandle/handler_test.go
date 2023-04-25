@@ -39,10 +39,11 @@ func TestTMQHandlerPool(t *testing.T) {
 		reqChans = append(reqChans, reqChan)
 		go func() {
 			handler := handlerPool.Get()
+			t.Log("GET")
 			reqChan <- poolReq{idleHandler: handler}
 		}()
 	}
-
+	time.Sleep(time.Second)
 	// Wait for pending requests to be processed
 	for _, ch := range reqChans {
 		req = <-ch
@@ -59,6 +60,7 @@ func TestTMQHandlerPool(t *testing.T) {
 		}
 
 		handlerPool.Put(handler)
+		t.Log("PUT")
 	}
 	handlerPool = NewHandlerPool(1)
 	handle := handlerPool.Get()
