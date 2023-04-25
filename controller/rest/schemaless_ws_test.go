@@ -31,7 +31,6 @@ func TestRestful_InitSchemaless(t *testing.T) {
 
 	cases := []struct {
 		name      string
-		db        string
 		protocol  int
 		precision string
 		data      string
@@ -40,7 +39,6 @@ func TestRestful_InitSchemaless(t *testing.T) {
 	}{
 		{
 			name:      "influxdb",
-			db:        "test_schemaless_ws",
 			protocol:  1,
 			precision: "ms",
 			data: "measurement,host=host1 field1=2i,field2=2.0 1577837300000\n" +
@@ -52,7 +50,6 @@ func TestRestful_InitSchemaless(t *testing.T) {
 		},
 		{
 			name:      "opentsdb_telnet",
-			db:        "test_schemaless_ws",
 			protocol:  2,
 			precision: "ms",
 			data: "meters.current 1648432611249 10.3 location=California.SanFrancisco group=2\n" +
@@ -68,7 +65,6 @@ func TestRestful_InitSchemaless(t *testing.T) {
 		},
 		{
 			name:      "opentsdb_json",
-			db:        "test_schemaless_ws",
 			protocol:  3,
 			precision: "ms",
 			data: "[{\"metric\": \"meters.current\", \"timestamp\": 1648432611249, \"value\": 10.3, \"tags\": " +
@@ -94,10 +90,12 @@ func TestRestful_InitSchemaless(t *testing.T) {
 		"args": map[string]string{
 			"user":     "root",
 			"password": "taosdata",
+			"db":       "test_schemaless_ws",
 		},
 	})
+
 	if err := ws.WriteMessage(websocket.BinaryMessage, j); err != nil {
-		t.Fatal("senc connect message error", err)
+		t.Fatal("send connect message error", err)
 	}
 
 	for _, c := range cases {
@@ -105,7 +103,6 @@ func TestRestful_InitSchemaless(t *testing.T) {
 			j, _ := json.Marshal(map[string]interface{}{
 				"action": "insert",
 				"args": map[string]interface{}{
-					"db":        c.db,
 					"protocol":  c.protocol,
 					"precision": c.precision,
 					"data":      c.data,
