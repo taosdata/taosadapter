@@ -602,13 +602,14 @@ func stmtParseTag(tags json.RawMessage, fields []*wrapper.StmtField) ([]driver.V
 	return data, nil
 }
 
-func blockConvert(block unsafe.Pointer, blockSize int, fields []*wrapper.StmtField) [][]driver.Value {
+func blockConvert(block unsafe.Pointer, blockSize int, fields []*wrapper.StmtField, fieldTypes []*types.ColumnType) [][]driver.Value {
 	colCount := len(fields)
 	r := make([][]driver.Value, colCount)
 	nullBitMapOffset := uintptr(parser.BitmapLen(blockSize))
 	lengthOffset := parser.RawBlockGetColumnLengthOffset(colCount)
 	pHeader := uintptr(block) + parser.RawBlockGetColDataOffset(colCount)
 	pStart := pHeader
+	length := 0
 	for column := 0; column < colCount; column++ {
 		r[column] = make([]driver.Value, blockSize)
 		colLength := *((*int32)(unsafe.Pointer(uintptr(block) + lengthOffset + uintptr(column)*parser.Int32Size)))
@@ -616,7 +617,12 @@ func blockConvert(block unsafe.Pointer, blockSize int, fields []*wrapper.StmtFie
 			convertF := rawConvertVarDataMap[fields[column].FieldType]
 			pStart = pHeader + uintptr(4*blockSize)
 			for row := 0; row < blockSize; row++ {
-				r[column][row] = convertF(pHeader, pStart, row)
+				r[column][row], length = convertF(pHeader, pStart, row)
+				if fieldTypes != nil {
+					if length > fieldTypes[column].MaxLen {
+						fieldTypes[column].MaxLen = length
+					}
+				}
 			}
 		} else {
 			convertF := rawConvertFuncMap[fields[column].FieldType]
@@ -636,7 +642,7 @@ func blockConvert(block unsafe.Pointer, blockSize int, fields []*wrapper.StmtFie
 
 type rawConvertFunc func(pStart uintptr, row int, arg ...interface{}) driver.Value
 
-type rawConvertVarDataFunc func(pHeader, pStart uintptr, row int) driver.Value
+type rawConvertVarDataFunc func(pHeader, pStart uintptr, row int) (driver.Value, int)
 
 var rawConvertFuncMap = map[int8]rawConvertFunc{
 	int8(common.TSDB_DATA_TYPE_BOOL):      rawConvertBool,
@@ -720,10 +726,10 @@ func rawConvertTime(pStart uintptr, row int, arg ...interface{}) driver.Value {
 	}
 }
 
-func rawConvertBinary(pHeader, pStart uintptr, row int) driver.Value {
+func rawConvertBinary(pHeader, pStart uintptr, row int) (driver.Value, int) {
 	offset := *((*int32)(unsafe.Pointer(pHeader + uintptr(row*4))))
 	if offset == -1 {
-		return nil
+		return nil, 0
 	}
 	currentRow := unsafe.Pointer(pStart + uintptr(offset))
 	clen := *((*int16)(currentRow))
@@ -734,13 +740,13 @@ func rawConvertBinary(pHeader, pStart uintptr, row int) driver.Value {
 	for index := int16(0); index < clen; index++ {
 		binaryVal[index] = *((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index))))
 	}
-	return types.TaosBinary(binaryVal)
+	return types.TaosBinary(binaryVal), int(clen)
 }
 
-func rawConvertNchar(pHeader, pStart uintptr, row int) driver.Value {
+func rawConvertNchar(pHeader, pStart uintptr, row int) (driver.Value, int) {
 	offset := *((*int32)(unsafe.Pointer(pHeader + uintptr(row*4))))
 	if offset == -1 {
-		return nil
+		return nil, 0
 	}
 	currentRow := unsafe.Pointer(pStart + uintptr(offset))
 	clen := *((*int16)(currentRow)) / 4
@@ -751,13 +757,13 @@ func rawConvertNchar(pHeader, pStart uintptr, row int) driver.Value {
 	for index := int16(0); index < clen; index++ {
 		binaryVal[index] = *((*rune)(unsafe.Pointer(uintptr(currentRow) + uintptr(index*4))))
 	}
-	return types.TaosNchar(binaryVal)
+	return types.TaosNchar(binaryVal), int(clen) * 4
 }
 
-func rawConvertJson(pHeader, pStart uintptr, row int) driver.Value {
+func rawConvertJson(pHeader, pStart uintptr, row int) (driver.Value, int) {
 	offset := *((*int32)(unsafe.Pointer(pHeader + uintptr(row*4))))
 	if offset == -1 {
-		return nil
+		return nil, 0
 	}
 	currentRow := unsafe.Pointer(pStart + uintptr(offset))
 	clen := *((*int16)(currentRow))
@@ -768,5 +774,5 @@ func rawConvertJson(pHeader, pStart uintptr, row int) driver.Value {
 	for index := int16(0); index < clen; index++ {
 		binaryVal[index] = *((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index))))
 	}
-	return types.TaosJson(binaryVal)
+	return types.TaosJson(binaryVal), int(clen)
 }
