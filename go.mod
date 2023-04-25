@@ -1,5 +1,7 @@
 module github.com/taosdata/taosadapter/v3
 
+replace github.com/taosdata/driver-go/v3 => ../driver-go
+
 go 1.17
 
 require (
@@ -21,7 +23,6 @@ require (
 	github.com/prometheus/client_model v0.3.0
 	github.com/prometheus/prometheus v1.8.2-0.20210430082741-2a4b8e12bbf2
 	github.com/shirou/gopsutil/v3 v3.22.11
-	github.com/silenceper/pool v1.0.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.14.0
