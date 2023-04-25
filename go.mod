@@ -1,7 +1,5 @@
 module github.com/taosdata/taosadapter/v3
 
-replace github.com/taosdata/driver-go/v3 => ../driver-go
-
 go 1.17
 
 require (
@@ -28,7 +26,7 @@ require (
 	github.com/spf13/viper v1.14.0
 	github.com/stretchr/testify v1.8.1
 	github.com/swaggo/swag v1.8.8
-	github.com/taosdata/driver-go/v3 v3.1.1-0.20230223094157-1e3d76461430
+	github.com/taosdata/driver-go/v3 v3.1.1-0.20230425014916-bdbcb4af3a9f
 	go.uber.org/automaxprocs v1.5.1
 )
 
