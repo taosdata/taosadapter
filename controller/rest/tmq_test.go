@@ -393,7 +393,7 @@ func TestTMQ(t *testing.T) {
 
 func TestMeta(t *testing.T) {
 	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists test_ws_tmq_meta")
+	body := strings.NewReader("create database if not exists test_ws_tmq_meta wal_retention_period 3600")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
