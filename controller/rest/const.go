@@ -60,6 +60,7 @@ const (
 )
 
 const taosSchemalessKey = "taos_schemaless"
+const taosSchemalessDBKey = "taos_schemaless_db"
 const (
 	SchemalessConn  = "conn"
 	SchemalessWrite = "insert"
