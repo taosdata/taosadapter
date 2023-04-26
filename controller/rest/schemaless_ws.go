@@ -18,6 +18,8 @@ import (
 )
 
 func (ctl *Restful) InitSchemaless() {
+	ss := &schemalessWs{restful: ctl}
+
 	ctl.schemaless = melody.New()
 	ctl.schemaless.Config.MaxMessageSize = 4 * 1024 * 1024
 
@@ -26,8 +28,8 @@ func (ctl *Restful) InitSchemaless() {
 		session.Set(taosSchemalessLockKey, &lock)
 	})
 
-	ctl.schemaless.HandleMessage(ctl.handleMessage)
-	ctl.schemaless.HandleMessageBinary(ctl.handleMessage)
+	ctl.schemaless.HandleMessage(ss.handleMessage)
+	ctl.schemaless.HandleMessageBinary(ss.handleMessage)
 
 	ctl.schemaless.HandleClose(func(session *melody.Session, i int, s string) error {
 		sessionConn, ok := session.Get(taosSchemalessKey)
@@ -72,12 +74,16 @@ func (ctl *Restful) InitSchemaless() {
 	})
 }
 
+type schemalessWs struct {
+	restful *Restful
+}
+
 var unConnectedError = errors.New("unconnected")
 var paramsError = errors.New("args error")
 
-func (ctl *Restful) handleMessage(session *melody.Session, bytes []byte) {
+func (ss *schemalessWs) handleMessage(session *melody.Session, bytes []byte) {
 	ctx := context.WithValue(context.Background(), StartTimeKey, time.Now().UnixNano())
-	if ctl.schemaless.IsClosed() {
+	if ss.restful.schemaless.IsClosed() {
 		return
 	}
 
