@@ -317,6 +317,9 @@ func (t *TaosStmt) setTags(ctx context.Context, session *melody.Session, req *St
 		wsStmtErrorMsg(ctx, session, code, errStr, STMTSetTags, req.ReqID, &req.StmtID)
 		return
 	}
+	defer func() {
+		wrapper.TaosStmtReclaimFields(stmt.stmt, tagFields)
+	}()
 	resp := &StmtSetTagsResp{
 		Action: STMTSetTags,
 		ReqID:  req.ReqID,
@@ -394,6 +397,9 @@ func (t *TaosStmt) bind(ctx context.Context, session *melody.Session, req *StmtB
 		wsStmtErrorMsg(ctx, session, code, errStr, STMTBind, req.ReqID, &req.StmtID)
 		return
 	}
+	defer func() {
+		wrapper.TaosStmtReclaimFields(stmt.stmt, colFields)
+	}()
 	resp := &StmtBindResp{
 		Action: STMTBind,
 		ReqID:  req.ReqID,
@@ -583,6 +589,9 @@ func (t *TaosStmt) setTagsBlock(ctx context.Context, session *melody.Session, re
 		wsStmtErrorMsg(ctx, session, code, errStr, STMTSetTags, reqID, &stmtID)
 		return
 	}
+	defer func() {
+		wrapper.TaosStmtReclaimFields(stmt.stmt, tagFields)
+	}()
 	resp := &StmtSetTagsResp{
 		Action: STMTSetTags,
 		ReqID:  reqID,
@@ -647,6 +656,9 @@ func (t *TaosStmt) bindBlock(ctx context.Context, session *melody.Session, reqID
 		wsStmtErrorMsg(ctx, session, code, errStr, STMTBind, reqID, &stmtID)
 		return
 	}
+	defer func() {
+		wrapper.TaosStmtReclaimFields(stmt.stmt, colFields)
+	}()
 	resp := &StmtBindResp{
 		Action: STMTBind,
 		ReqID:  reqID,
