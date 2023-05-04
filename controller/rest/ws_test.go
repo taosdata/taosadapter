@@ -22,7 +22,7 @@ import (
 func TestWebsocket(t *testing.T) {
 	now := time.Now().Local().UnixNano() / 1e6
 	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists test_ws")
+	body := strings.NewReader("create database if not exists test_ws WAL_RETENTION_PERIOD 86400")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -305,7 +305,7 @@ func TestWebsocket(t *testing.T) {
 func TestWriteBlock(t *testing.T) {
 	now := time.Now().Local().UnixNano() / 1e6
 	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists test_ws_write_block")
+	body := strings.NewReader("create database if not exists test_ws_write_block WAL_RETENTION_PERIOD 86400")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -791,7 +791,7 @@ func TestWriteBlock(t *testing.T) {
 func TestWriteBlockWithFields(t *testing.T) {
 	now := time.Now().Local().UnixNano() / 1e6
 	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists test_ws_write_block_with_fields")
+	body := strings.NewReader("create database if not exists test_ws_write_block_with_fields WAL_RETENTION_PERIOD 86400")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)

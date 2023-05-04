@@ -476,9 +476,6 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQPoll, req.ReqID, nil)
 		return
 	}
-	if req.BlockingTime > 1000 {
-		req.BlockingTime = 1000
-	}
 	t.asyncLocker.Lock()
 	asynctmq.TaosaTMQPollA(t.thread, t.consumer, req.BlockingTime, t.handler.Handler)
 	message := <-t.handler.Caller.PollResult

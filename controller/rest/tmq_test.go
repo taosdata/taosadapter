@@ -22,7 +22,7 @@ func TestTMQ(t *testing.T) {
 	ts2 := ts1.Add(time.Second)
 	ts3 := ts2.Add(time.Second)
 	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists test_ws_tmq wal_retention_period 3600")
+	body := strings.NewReader("create database if not exists test_ws_tmq WAL_RETENTION_PERIOD 86400")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -393,7 +393,7 @@ func TestTMQ(t *testing.T) {
 
 func TestMeta(t *testing.T) {
 	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists test_ws_tmq_meta wal_retention_period 3600")
+	body := strings.NewReader("create database if not exists test_ws_tmq_meta WAL_RETENTION_PERIOD 86400")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -835,7 +835,7 @@ func TestMeta(t *testing.T) {
 
 func writeRaw(t *testing.T, rawData []byte) {
 	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists test_ws_tmq_meta_target")
+	body := strings.NewReader("create database if not exists test_ws_tmq_meta_target WAL_RETENTION_PERIOD 86400")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -941,7 +941,7 @@ func TestTMQAutoCommit(t *testing.T) {
 	ts2 := ts1.Add(time.Second)
 	ts3 := ts2.Add(time.Second)
 	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists test_ws_tmq_auto_commit wal_retention_period 3600")
+	body := strings.NewReader("create database if not exists test_ws_tmq_auto_commit WAL_RETENTION_PERIOD 86400")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -1306,7 +1306,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 	ts2 := ts1.Add(time.Second)
 	ts3 := ts2.Add(time.Second)
 	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists test_ws_tmq_unsubscribe wal_retention_period 3600")
+	body := strings.NewReader("create database if not exists test_ws_tmq_unsubscribe WAL_RETENTION_PERIOD 86400")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
