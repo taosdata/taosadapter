@@ -122,14 +122,7 @@ func AllPaused() bool {
 	return atomic.LoadUint32(&pauseStatus) == PauseStatus
 }
 
-const (
-	CreateRequestTotalSql = "create table if not exists taosadapter_restful_http_total(ts timestamp,`count` bigint) tags (endpoint binary(45),status_code int, client_ip binary(40), request_method binary(15), request_uri binary(128))"
-	CreateRequestFailSql  = "create table if not exists taosadapter_restful_http_fail(ts timestamp,`count` bigint) tags (endpoint binary(45),status_code int, client_ip binary(40), request_method binary(15), request_uri binary(128))"
-	CreateRequestInFlight = "create table if not exists taosadapter_restful_http_in_flight(ts timestamp,`count` bigint) tags (endpoint binary(45))"
-	CreateRequestLatency  = "create table if not exists taosadapter_restful_http_latency(ts timestamp,quantile_1 double,quantile_2 double,quantile_5 double,quantile_9 double,quantile_99 double) tags (endpoint binary(45),request_method binary(15), request_uri binary(128))"
-	CreateSystemPercent   = "create table if not exists taosadapter_system(ts timestamp,cpu_percent double,mem_percent double) tags (endpoint binary(45))"
-	InsertStatement       = "insert into"
-)
+const InsertStatement = "insert into"
 
 const (
 	createRequestTotal    = "create stable if not exists `taosadapter_restful_http_request_total` (`_ts` timestamp, `gauge` double) tags (`client_ip` nchar(40), `endpoint` nchar(45), `request_method` nchar(16), `request_uri` nchar(128), `status_code` nchar(4))"
@@ -139,14 +132,6 @@ const (
 	createMemPercent      = "create stable if not exists `taosadapter_system_mem_percent` (`_ts` timestamp, `gauge` double) tags (`endpoint` nchar(45))"
 	createCpuPercent      = "create stable if not exists `taosadapter_system_cpu_percent` (`_ts` timestamp, `gauge` double) tags (`endpoint` nchar(45))"
 )
-
-var createList = []string{
-	CreateRequestTotalSql,
-	CreateRequestFailSql,
-	CreateRequestInFlight,
-	CreateRequestLatency,
-	CreateSystemPercent,
-}
 
 var insightTableList = []string{
 	createRequestTotal,
@@ -177,12 +162,6 @@ func writeToTDLog() error {
 		return err
 	}
 	if !tableInitialized {
-		for _, tb := range createList {
-			if err = async.GlobalAsync.TaosExecWithoutResult(conn, tb, 0); err != nil {
-				return err
-			}
-		}
-
 		for _, tb := range insightTableList {
 			if err = async.GlobalAsync.TaosExecWithoutResult(conn, tb, 0); err != nil {
 				return err
@@ -198,9 +177,6 @@ func writeToTDLog() error {
 
 	var inserts []string
 	now := time.Now().Format(time.RFC3339Nano)
-	cpuPercentValue := float64(0)
-	memPercentValue := float64(0)
-	receiveSystemValue := false
 	for i := 0; i < len(data); i++ {
 		tbName := data[i].GetName()
 		switch tbName {
@@ -233,7 +209,6 @@ func writeToTDLog() error {
 							requestUri = labels[j].GetValue()
 						}
 					}
-					inserts = append(inserts, fmt.Sprintf(" taosa_request_total_%s using taosadapter_restful_http_total tags('%s',%d,'%s','%s','%s') values('%s',%d)", subName, identity, statusCode, clientIP, requestMethod, requestUri, now, int(value)))
 					inserts = append(inserts, fmt.Sprintf(" taosa_http_request_total_%s using taosadapter_restful_http_request_total tags('%s','%s','%s','%s','%d') values('%s',%f)", subName, clientIP, identity, requestMethod, requestUri, statusCode, now, value))
 					log.TotalRequest.WithLabelValues(statusCodeStr, clientIP, requestMethod, requestUri).Sub(value)
 				}
@@ -268,7 +243,6 @@ func writeToTDLog() error {
 
 					}
 
-					inserts = append(inserts, fmt.Sprintf(" taosa_request_fail_%s using taosadapter_restful_http_fail tags('%s',%d,'%s','%s','%s') values('%s',%d)", subName, identity, statusCode, clientIP, requestMethod, requestUri, now, int(value)))
 					inserts = append(inserts, fmt.Sprintf(" taosa_http_request_fail_%s using taosadapter_restful_http_request_fail tags('%s','%s','%s','%s','%d') values('%s',%f)", subName, clientIP, identity, requestMethod, requestUri, statusCode, now, value))
 					log.FailRequest.WithLabelValues(statusCodeStr, clientIP, requestMethod, requestUri).Sub(value)
 				}
@@ -279,7 +253,6 @@ func writeToTDLog() error {
 				value := m.GetGauge().GetValue()
 				if value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) {
 					subName := calculateTableName(nil)
-					inserts = append(inserts, fmt.Sprintf(" taosa_request_in_flight_%s using taosadapter_restful_http_in_flight tags('%s') values('%s',%d)", subName, identity, now, int(value)))
 					inserts = append(inserts, fmt.Sprintf(" taosa_http_request_in_flight_%s using taosadapter_restful_http_request_in_flight tags('%s') values('%s',%f)", subName, identity, now, value))
 				}
 			}
@@ -325,29 +298,20 @@ func writeToTDLog() error {
 					}
 				}
 				if !math.IsNaN(quantile1) {
-					inserts = append(inserts, fmt.Sprintf(" taosa_request_latency_%s using taosadapter_restful_http_latency tags('%s','%s','%s') values('%s',%f,%f,%f,%f,%f)", subName, identity, requestMethod, requestUri, now, quantile1, quantile2, quantile5, quantile9, quantile99))
 					inserts = append(inserts, fmt.Sprintf(" taosa_request_summary_%s using taosadapter_restful_http_request_summary_milliseconds tags('%s','%s','%s') values('%s',%f,%f,%f,%f,%f,%d,%f)", subName, identity, requestMethod, requestUri, now, quantile1, quantile2, quantile5, quantile9, quantile99, m.GetSummary().GetSampleCount(), m.GetSummary().GetSampleSum()))
 				}
 			}
 		case "taosadapter_system_cpu_percent":
 			metric := data[i].GetMetric()
 			m := metric[len(metric)-1]
-			cpuPercentValue = m.GetGauge().GetValue()
-			receiveSystemValue = true
 
-			inserts = append(inserts, fmt.Sprintf(" taos_system_cup_%s using taosadapter_system_cpu_percent tags('%s') values('%s',%f)", calculateTableName(m.GetLabel()), identity, now, cpuPercentValue))
+			inserts = append(inserts, fmt.Sprintf(" taos_system_cup_%s using taosadapter_system_cpu_percent tags('%s') values('%s',%f)", calculateTableName(m.GetLabel()), identity, now, m.GetGauge().GetValue()))
 		case "taosadapter_system_mem_percent":
 			metric := data[i].GetMetric()
 			m := metric[len(metric)-1]
-			memPercentValue = m.GetGauge().GetValue()
-			receiveSystemValue = true
 
-			inserts = append(inserts, fmt.Sprintf(" taos_system_mem_%s using taosadapter_system_mem_percent tags('%s') values('%s',%f)", calculateTableName(m.GetLabel()), identity, now, memPercentValue))
+			inserts = append(inserts, fmt.Sprintf(" taos_system_mem_%s using taosadapter_system_mem_percent tags('%s') values('%s',%f)", calculateTableName(m.GetLabel()), identity, now, m.GetGauge().GetValue()))
 		}
-	}
-	if receiveSystemValue {
-		subName := calculateTableName(nil)
-		inserts = append(inserts, fmt.Sprintf(" taosa_system_%s using taosadapter_system tags('%s') values('%s',%f,%f)", subName, identity, now, cpuPercentValue, memPercentValue))
 	}
 	defer builder.Reset()
 	if len(inserts) > 0 {
