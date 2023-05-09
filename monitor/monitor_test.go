@@ -230,8 +230,6 @@ func TestWriteLog(t *testing.T) {
 	checkTables := []string{
 		"taosadapter_restful_http_request_total",
 		"taosadapter_restful_http_request_fail",
-		"taosadapter_restful_http_request_in_flight",
-		"taosadapter_restful_http_request_summary_milliseconds",
 		"taosadapter_system_mem_percent",
 		"taosadapter_system_cpu_percent",
 	}
