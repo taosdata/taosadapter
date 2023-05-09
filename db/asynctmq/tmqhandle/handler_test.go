@@ -1,6 +1,7 @@
 package tmqhandle
 
 import (
+	"context"
 	"testing"
 	"time"
 	"unsafe"
@@ -11,7 +12,6 @@ import (
 func TestTMQHandlerPool(t *testing.T) {
 	poolSize := 10
 	handlerPool := NewHandlerPool(poolSize)
-	req := poolReq{}
 
 	// Test Get() and Put()
 	for i := 0; i < poolSize; i++ {
@@ -33,32 +33,28 @@ func TestTMQHandlerPool(t *testing.T) {
 	}
 
 	// Test Pending requests
-	var reqChans []chan poolReq
-	for i := 0; i < poolSize+1; i++ {
-		reqChan := make(chan poolReq, 1)
-		reqChans = append(reqChans, reqChan)
-		go func() {
-			handler := handlerPool.Get()
-			reqChan <- poolReq{idleHandler: handler}
-		}()
+	l := make([]*TMQHandler, poolSize)
+	for i := 0; i < poolSize; i++ {
+		l[i] = handlerPool.Get()
 	}
-
-	// Wait for pending requests to be processed
-	for _, ch := range reqChans {
-		req = <-ch
-		if req.idleHandler == nil {
-			t.Error("Pending request failed, got idle handler is nil")
-		}
-
-		handler := req.idleHandler
-		caller := handler.Caller
-		pollRes := unsafe.Pointer(&struct{}{})
-		caller.PollCall(pollRes)
-		if <-caller.PollResult != pollRes {
-			t.Errorf("PollCall failed")
-		}
-
-		handlerPool.Put(handler)
+	finish := make(chan struct{})
+	go func() {
+		h := handlerPool.Get()
+		handlerPool.Put(h)
+		finish <- struct{}{}
+	}()
+	time.Sleep(time.Second)
+	handlerPool.Put(l[0])
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		t.Error("wait for get handler timeout")
+	case <-finish:
+		cancel()
+	}
+	for i := 1; i < poolSize; i++ {
+		handlerPool.Put(l[i])
 	}
 	handlerPool = NewHandlerPool(1)
 	handle := handlerPool.Get()

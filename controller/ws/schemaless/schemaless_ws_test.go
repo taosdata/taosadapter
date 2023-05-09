@@ -1,4 +1,4 @@
-package rest
+package schemaless
 
 import (
 	"encoding/json"
@@ -6,9 +6,32 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/spf13/viper"
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/controller"
+	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
+	"github.com/taosdata/taosadapter/v3/db"
 )
+
+var router *gin.Engine
+
+func TestMain(m *testing.M) {
+	viper.Set("pool.maxConnect", 10000)
+	viper.Set("pool.maxIdle", 10000)
+	viper.Set("logLevel", "debug")
+	config.Init()
+	db.PrepareConnection()
+	gin.SetMode(gin.ReleaseMode)
+	router = gin.New()
+	controllers := controller.GetControllers()
+	for _, webController := range controllers {
+		webController.Init(router)
+	}
+	m.Run()
+}
 
 func TestRestful_InitSchemaless(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
@@ -21,9 +44,6 @@ func TestRestful_InitSchemaless(t *testing.T) {
 	defer func() {
 		wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "drop database if exists test_schemaless_ws"))
 	}()
-
-	useDbRes := wrapper.TaosQuery(conn, "use test_schemaless_ws")
-	defer wrapper.TaosFreeResult(useDbRes)
 
 	s := httptest.NewServer(router)
 	defer s.Close()
@@ -94,7 +114,7 @@ func TestRestful_InitSchemaless(t *testing.T) {
 		},
 	})
 
-	if err := ws.WriteMessage(websocket.BinaryMessage, j); err != nil {
+	if err := ws.WriteMessage(websocket.TextMessage, j); err != nil {
 		t.Fatal("send connect message error", err)
 	}
 
@@ -109,14 +129,14 @@ func TestRestful_InitSchemaless(t *testing.T) {
 					"ttl":       c.ttl,
 				},
 			})
-			if err := ws.WriteMessage(websocket.BinaryMessage, j); err != nil {
+			if err := ws.WriteMessage(websocket.TextMessage, j); err != nil {
 				t.Fatal(c.name, err)
 			}
 			_, msg, err := ws.ReadMessage()
 			if err != nil {
 				t.Fatal(c.name, err)
 			}
-			var resp WSErrorResp
+			var resp wstool.WSErrorResp
 			_ = json.Unmarshal(msg, &resp)
 			if resp.Code != 0 {
 				t.Fatal(c.name, string(msg))

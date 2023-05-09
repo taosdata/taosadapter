@@ -1,4 +1,4 @@
-package rest
+package tmq
 
 import (
 	"database/sql/driver"
@@ -10,12 +10,37 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/driver-go/v3/common/tmq"
+	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/controller"
+	_ "github.com/taosdata/taosadapter/v3/controller/rest"
+	"github.com/taosdata/taosadapter/v3/controller/ws/query"
+	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
+	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 )
+
+var router *gin.Engine
+
+func TestMain(m *testing.M) {
+	viper.Set("pool.maxConnect", 10000)
+	viper.Set("pool.maxIdle", 10000)
+	viper.Set("logLevel", "debug")
+	config.Init()
+	db.PrepareConnection()
+	gin.SetMode(gin.ReleaseMode)
+	router = gin.New()
+	controllers := controller.GetControllers()
+	for _, webController := range controllers {
+		webController.Init(router)
+	}
+	m.Run()
+}
 
 func TestTMQ(t *testing.T) {
 	ts1 := time.Now()
@@ -119,7 +144,7 @@ func TestTMQ(t *testing.T) {
 				ReqID:        3,
 				BlockingTime: 500,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: TMQPoll,
 				Args:   b,
 			})
@@ -134,8 +159,8 @@ func TestTMQ(t *testing.T) {
 		case AfterTMQPoll:
 			if pollCount == 5 {
 				status = AfterVersion
-				action, _ := json.Marshal(&WSAction{
-					Action: ClientVersion,
+				action, _ := json.Marshal(&wstool.WSAction{
+					Action: wstool.ClientVersion,
 					Args:   nil,
 				})
 				err = ws.WriteMessage(
@@ -160,7 +185,7 @@ func TestTMQ(t *testing.T) {
 					ReqID:     4,
 					MessageID: messageID,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQFetch,
 					Args:   b,
 				})
@@ -179,7 +204,7 @@ func TestTMQ(t *testing.T) {
 					ReqID:        3,
 					BlockingTime: 500,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQPoll,
 					Args:   b,
 				})
@@ -208,7 +233,7 @@ func TestTMQ(t *testing.T) {
 					ReqID:     3,
 					MessageID: messageID,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQCommit,
 					Args:   b,
 				})
@@ -227,7 +252,7 @@ func TestTMQ(t *testing.T) {
 					ReqID:     0,
 					MessageID: messageID,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQFetchBlock,
 					Args:   b,
 				})
@@ -265,7 +290,7 @@ func TestTMQ(t *testing.T) {
 				ReqID:     4,
 				MessageID: messageID,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: TMQFetch,
 				Args:   b,
 			})
@@ -291,7 +316,7 @@ func TestTMQ(t *testing.T) {
 				ReqID:        3,
 				BlockingTime: 500,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: TMQPoll,
 				Args:   b,
 			})
@@ -304,13 +329,13 @@ func TestTMQ(t *testing.T) {
 				return err
 			}
 		case AfterVersion:
-			var d WSVersionResp
+			var d wstool.WSVersionResp
 			err = json.Unmarshal(message, &d)
 			if err != nil {
 				return err
 			}
 			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", WSFetch, d.Code, d.Message)
+				return fmt.Errorf("%s %d,%s", TMQFetch, d.Code, d.Message)
 			}
 			assert.NotEmpty(t, d.Version)
 			t.Log("client version", d.Version)
@@ -360,7 +385,7 @@ func TestTMQ(t *testing.T) {
 	}
 
 	b, _ := json.Marshal(init)
-	action, _ := json.Marshal(&WSAction{
+	action, _ := json.Marshal(&wstool.WSAction{
 		Action: TMQSubscribe,
 		Args:   b,
 	})
@@ -483,7 +508,7 @@ func TestMeta(t *testing.T) {
 				ReqID:        3,
 				BlockingTime: 500,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: TMQPoll,
 				Args:   b,
 			})
@@ -501,7 +526,7 @@ func TestMeta(t *testing.T) {
 				b, _ := json.Marshal(&TMQUnsubscribeReq{
 					ReqID: 6,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQUnsubscribe,
 					Args:   b,
 				})
@@ -531,7 +556,7 @@ func TestMeta(t *testing.T) {
 					ReqID:     4,
 					MessageID: messageID,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQFetchJsonMeta,
 					Args:   b,
 				})
@@ -550,7 +575,7 @@ func TestMeta(t *testing.T) {
 					ReqID:        3,
 					BlockingTime: 500,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQPoll,
 					Args:   b,
 				})
@@ -581,7 +606,7 @@ func TestMeta(t *testing.T) {
 				ReqID:     3,
 				MessageID: messageID,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: TMQFetchRaw,
 				Args:   b,
 			})
@@ -604,7 +629,7 @@ func TestMeta(t *testing.T) {
 			req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 			router.ServeHTTP(w, req)
 			assert.Equal(t, 200, w.Code)
-			var resp TDEngineRestfulResp
+			var resp wstool.TDEngineRestfulResp
 			err = jsoniter.Unmarshal(w.Body.Bytes(), &resp)
 			assert.NoError(t, err)
 			assert.Equal(t, [][]driver.Value{
@@ -642,7 +667,7 @@ func TestMeta(t *testing.T) {
 				ReqID:     3,
 				MessageID: messageID,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: TMQCommit,
 				Args:   b,
 			})
@@ -668,7 +693,7 @@ func TestMeta(t *testing.T) {
 				ReqID:        3,
 				BlockingTime: 500,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: TMQPoll,
 				Args:   b,
 			})
@@ -690,8 +715,8 @@ func TestMeta(t *testing.T) {
 				return fmt.Errorf("%s %d,%s", TMQUnsubscribe, d.Code, d.Message)
 			}
 			status = AfterVersion
-			action, _ := json.Marshal(&WSAction{
-				Action: ClientVersion,
+			action, _ := json.Marshal(&wstool.WSAction{
+				Action: wstool.ClientVersion,
 				Args:   nil,
 			})
 			t.Log(string(action))
@@ -700,13 +725,13 @@ func TestMeta(t *testing.T) {
 				action,
 			)
 		case AfterVersion:
-			var d WSVersionResp
+			var d wstool.WSVersionResp
 			err = json.Unmarshal(message, &d)
 			if err != nil {
 				return err
 			}
 			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", WSFetch, d.Code, d.Message)
+				return fmt.Errorf("%s %d,%s", TMQFetch, d.Code, d.Message)
 			}
 			assert.NotEmpty(t, d.Version)
 			t.Log("client version", d.Version)
@@ -756,7 +781,7 @@ func TestMeta(t *testing.T) {
 	}
 
 	b, _ := json.Marshal(init)
-	action, _ := json.Marshal(&WSAction{
+	action, _ := json.Marshal(&wstool.WSAction{
 		Action: TMQSubscribe,
 		Args:   b,
 	})
@@ -779,7 +804,7 @@ func TestMeta(t *testing.T) {
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
-	var resp TDEngineRestfulResp
+	var resp wstool.TDEngineRestfulResp
 	err = jsoniter.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 	assert.Equal(t, [][]driver.Value{
@@ -861,13 +886,13 @@ func writeRaw(t *testing.T, rawData []byte) {
 		//json
 		switch status {
 		case AfterConnect:
-			var d WSConnectResp
+			var d query.WSConnectResp
 			err = json.Unmarshal(message, &d)
 			if err != nil {
 				return err
 			}
 			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", WSConnect, d.Code, d.Message)
+				return fmt.Errorf("%s %d,%s", query.WSConnect, d.Code, d.Message)
 			}
 			//query
 			status = AfterWriteRaw
@@ -876,13 +901,13 @@ func writeRaw(t *testing.T, rawData []byte) {
 				return err
 			}
 		case AfterWriteRaw:
-			var d WSWriteMetaResp
+			var d query.WSWriteMetaResp
 			err = json.Unmarshal(message, &d)
 			if err != nil {
 				return err
 			}
 			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", WSQuery, d.Code, d.Message)
+				return fmt.Errorf("%s %d,%s", query.WSQuery, d.Code, d.Message)
 			}
 			finish <- struct{}{}
 		}
@@ -912,7 +937,7 @@ func writeRaw(t *testing.T, rawData []byte) {
 		}
 	}()
 
-	connect := &WSConnectReq{
+	connect := &query.WSConnectReq{
 		ReqID:    0,
 		User:     "root",
 		Password: "taosdata",
@@ -920,8 +945,8 @@ func writeRaw(t *testing.T, rawData []byte) {
 	}
 
 	b, _ := json.Marshal(connect)
-	action, _ := json.Marshal(&WSAction{
-		Action: WSConnect,
+	action, _ := json.Marshal(&wstool.WSAction{
+		Action: query.WSConnect,
 		Args:   b,
 	})
 	status = AfterConnect
@@ -1038,7 +1063,7 @@ func TestTMQAutoCommit(t *testing.T) {
 				ReqID:        3,
 				BlockingTime: 500,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: TMQPoll,
 				Args:   b,
 			})
@@ -1053,8 +1078,8 @@ func TestTMQAutoCommit(t *testing.T) {
 		case AfterTMQPoll:
 			if pollCount == 5 {
 				status = AfterVersion
-				action, _ := json.Marshal(&WSAction{
-					Action: ClientVersion,
+				action, _ := json.Marshal(&wstool.WSAction{
+					Action: wstool.ClientVersion,
 					Args:   nil,
 				})
 				err = ws.WriteMessage(
@@ -1079,7 +1104,7 @@ func TestTMQAutoCommit(t *testing.T) {
 					ReqID:     4,
 					MessageID: messageID,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQFetch,
 					Args:   b,
 				})
@@ -1098,7 +1123,7 @@ func TestTMQAutoCommit(t *testing.T) {
 					ReqID:        3,
 					BlockingTime: 500,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQPoll,
 					Args:   b,
 				})
@@ -1121,8 +1146,8 @@ func TestTMQAutoCommit(t *testing.T) {
 				if expectError {
 					assert.Equal(t, d.Message, "message is nil")
 					status = AfterVersion
-					action, _ := json.Marshal(&WSAction{
-						Action: ClientVersion,
+					action, _ := json.Marshal(&wstool.WSAction{
+						Action: wstool.ClientVersion,
 						Args:   nil,
 					})
 					err = ws.WriteMessage(
@@ -1140,7 +1165,7 @@ func TestTMQAutoCommit(t *testing.T) {
 					ReqID:        3,
 					BlockingTime: 500,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQPoll,
 					Args:   b,
 				})
@@ -1159,7 +1184,7 @@ func TestTMQAutoCommit(t *testing.T) {
 					ReqID:     0,
 					MessageID: messageID,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQFetchBlock,
 					Args:   b,
 				})
@@ -1197,7 +1222,7 @@ func TestTMQAutoCommit(t *testing.T) {
 				ReqID:     4,
 				MessageID: messageID,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: TMQFetch,
 				Args:   b,
 			})
@@ -1212,13 +1237,13 @@ func TestTMQAutoCommit(t *testing.T) {
 				return err
 			}
 		case AfterVersion:
-			var d WSVersionResp
+			var d wstool.WSVersionResp
 			err = json.Unmarshal(message, &d)
 			if err != nil {
 				return err
 			}
 			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", WSFetch, d.Code, d.Message)
+				return fmt.Errorf("%s %d,%s", TMQFetch, d.Code, d.Message)
 			}
 			assert.NotEmpty(t, d.Version)
 			t.Log("client version", d.Version)
@@ -1269,7 +1294,7 @@ func TestTMQAutoCommit(t *testing.T) {
 	}
 
 	b, _ := json.Marshal(init)
-	action, _ := json.Marshal(&WSAction{
+	action, _ := json.Marshal(&wstool.WSAction{
 		Action: TMQSubscribe,
 		Args:   b,
 	})
@@ -1414,7 +1439,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 				ReqID:        3,
 				BlockingTime: 500,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: TMQPoll,
 				Args:   b,
 			})
@@ -1432,7 +1457,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 				b, _ := json.Marshal(&TMQUnsubscribeReq{
 					ReqID: 6,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQUnsubscribe,
 					Args:   b,
 				})
@@ -1462,7 +1487,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 					ReqID:     4,
 					MessageID: messageID,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQFetch,
 					Args:   b,
 				})
@@ -1481,7 +1506,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 					ReqID:        3,
 					BlockingTime: 500,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQPoll,
 					Args:   b,
 				})
@@ -1510,7 +1535,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 					ReqID:        3,
 					BlockingTime: 500,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQPoll,
 					Args:   b,
 				})
@@ -1529,7 +1554,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 					ReqID:     0,
 					MessageID: messageID,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQFetchBlock,
 					Args:   b,
 				})
@@ -1567,7 +1592,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 				ReqID:     4,
 				MessageID: messageID,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: TMQFetch,
 				Args:   b,
 			})
@@ -1594,7 +1619,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 				ReqID:  0,
 				Topics: []string{"test_tmq_ws_unsubscribe2_topic"},
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: TMQSubscribe,
 				Args:   b,
 			})
@@ -1617,7 +1642,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 				ReqID:        3,
 				BlockingTime: 500,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: TMQPoll,
 				Args:   b,
 			})
@@ -1632,8 +1657,8 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 		case AfterTMQPoll2:
 			if pollCount == 5 {
 				status = AfterVersion
-				action, _ := json.Marshal(&WSAction{
-					Action: ClientVersion,
+				action, _ := json.Marshal(&wstool.WSAction{
+					Action: wstool.ClientVersion,
 					Args:   nil,
 				})
 				t.Log(string(action))
@@ -1666,7 +1691,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 					ReqID:     4,
 					MessageID: messageID,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQFetch,
 					Args:   b,
 				})
@@ -1685,7 +1710,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 					ReqID:        3,
 					BlockingTime: 500,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQPoll,
 					Args:   b,
 				})
@@ -1714,7 +1739,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 					ReqID:        3,
 					BlockingTime: 500,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQPoll,
 					Args:   b,
 				})
@@ -1733,7 +1758,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 					ReqID:     0,
 					MessageID: messageID,
 				})
-				action, _ := json.Marshal(&WSAction{
+				action, _ := json.Marshal(&wstool.WSAction{
 					Action: TMQFetchBlock,
 					Args:   b,
 				})
@@ -1756,7 +1781,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 				ReqID:     4,
 				MessageID: messageID,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: TMQFetch,
 				Args:   b,
 			})
@@ -1769,13 +1794,13 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 				return err
 			}
 		case AfterVersion:
-			var d WSVersionResp
+			var d wstool.WSVersionResp
 			err = json.Unmarshal(message, &d)
 			if err != nil {
 				return err
 			}
 			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", WSFetch, d.Code, d.Message)
+				return fmt.Errorf("%s %d,%s", TMQFetch, d.Code, d.Message)
 			}
 			assert.NotEmpty(t, d.Version)
 			t.Log("client version", d.Version)
@@ -1825,7 +1850,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 	}
 
 	b, _ := json.Marshal(init)
-	action, _ := json.Marshal(&WSAction{
+	action, _ := json.Marshal(&wstool.WSAction{
 		Action: TMQSubscribe,
 		Args:   b,
 	})

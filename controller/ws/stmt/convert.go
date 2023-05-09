@@ -1,4 +1,4 @@
-package rest
+package stmt
 
 import (
 	"database/sql/driver"

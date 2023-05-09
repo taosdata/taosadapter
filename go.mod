@@ -21,13 +21,12 @@ require (
 	github.com/prometheus/client_model v0.3.0
 	github.com/prometheus/prometheus v1.8.2-0.20210430082741-2a4b8e12bbf2
 	github.com/shirou/gopsutil/v3 v3.22.11
-	github.com/silenceper/pool v1.0.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.14.0
 	github.com/stretchr/testify v1.8.1
 	github.com/swaggo/swag v1.8.8
-	github.com/taosdata/driver-go/v3 v3.1.1-0.20230427094808-ba2c7d3a0f37
+	github.com/taosdata/driver-go/v3 v3.3.2-0.20230508054905-8df5ec31af33
 	go.uber.org/automaxprocs v1.5.1
 )
 

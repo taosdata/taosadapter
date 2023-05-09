@@ -1,4 +1,4 @@
-package rest
+package tmq
 
 import (
 	"bytes"
@@ -21,12 +21,165 @@ import (
 	"github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/controller"
+	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/asynctmq"
 	"github.com/taosdata/taosadapter/v3/db/asynctmq/tmqhandle"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 )
+
+type TMQController struct {
+	tmqM *melody.Melody
+}
+
+func NewTMQController() *TMQController {
+	tmqM := melody.New()
+	tmqM.Config.MaxMessageSize = 4 * 1024 * 1024
+
+	tmqM.HandleConnect(func(session *melody.Session) {
+		logger := session.MustGet("logger").(*logrus.Entry)
+		logger.Debugln("ws connect")
+		session.Set(TaosTMQKey, NewTaosTMQ())
+	})
+
+	tmqM.HandleMessage(func(session *melody.Session, data []byte) {
+		if tmqM.IsClosed() {
+			return
+		}
+		ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
+		logger := session.MustGet("logger").(*logrus.Entry)
+		logger.Debugln("get ws message data:", string(data))
+		var action wstool.WSAction
+		err := json.Unmarshal(data, &action)
+		if err != nil {
+			logger.WithError(err).Errorln("unmarshal ws request")
+			return
+		}
+		switch action.Action {
+		case wstool.ClientVersion:
+			session.Write(wstool.VersionResp)
+		case TMQSubscribe:
+			var req TMQSubscribeReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal subscribe args")
+				return
+			}
+			t := session.MustGet(TaosTMQKey)
+			t.(*TMQ).subscribe(ctx, session, &req)
+		case TMQPoll:
+			var req TMQPollReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal pool args")
+				return
+			}
+			t := session.MustGet(TaosTMQKey)
+			t.(*TMQ).poll(ctx, session, &req)
+		case TMQFetch:
+			var req TMQFetchReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch args")
+				return
+			}
+			t := session.MustGet(TaosTMQKey)
+			t.(*TMQ).fetch(ctx, session, &req)
+		case TMQFetchBlock:
+			var req TMQFetchBlockReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch block args")
+				return
+			}
+			t := session.MustGet(TaosTMQKey)
+			t.(*TMQ).fetchBlock(ctx, session, &req)
+		case TMQCommit:
+			var req TMQCommitReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal commit args")
+				return
+			}
+			t := session.MustGet(TaosTMQKey)
+			t.(*TMQ).commit(ctx, session, &req)
+		case TMQFetchJsonMeta:
+			var req TMQFetchJsonMetaReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch json meta args")
+				return
+			}
+			t := session.MustGet(TaosTMQKey)
+			t.(*TMQ).fetchJsonMeta(ctx, session, &req)
+		case TMQFetchRaw:
+			var req TMQFetchRawMetaReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch raw meta args")
+				return
+			}
+			t := session.MustGet(TaosTMQKey)
+			t.(*TMQ).fetchRawMeta(ctx, session, &req)
+		case TMQUnsubscribe:
+			var req TMQUnsubscribeReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal unsubscribe args")
+				return
+			}
+			t := session.MustGet(TaosTMQKey)
+			t.(*TMQ).unsubscribe(ctx, session, &req)
+		default:
+			logger.WithError(err).Errorln("unknown action: " + action.Action)
+			return
+		}
+	})
+	tmqM.HandleClose(func(session *melody.Session, i int, s string) error {
+		//message := melody.FormatCloseMessage(i, "")
+		//session.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
+		logger := session.MustGet("logger").(*logrus.Entry)
+		logger.Debugln("ws close", i, s)
+		t, exist := session.Get(TaosTMQKey)
+		if exist && t != nil {
+			t.(*TMQ).Close(logger)
+		}
+		return nil
+	})
+
+	tmqM.HandleError(func(session *melody.Session, err error) {
+		logger := session.MustGet("logger").(*logrus.Entry)
+		_, is := err.(*websocket.CloseError)
+		if is {
+			logger.WithError(err).Debugln("ws close in error")
+		} else {
+			logger.WithError(err).Errorln("ws error")
+		}
+		t, exist := session.Get(TaosTMQKey)
+		if exist && t != nil {
+			t.(*TMQ).Close(logger)
+		}
+	})
+
+	tmqM.HandleDisconnect(func(session *melody.Session) {
+		logger := session.MustGet("logger").(*logrus.Entry)
+		logger.Debugln("ws disconnect")
+		t, exist := session.Get(TaosTMQKey)
+		if exist && t != nil {
+			t.(*TMQ).Close(logger)
+		}
+	})
+	return &TMQController{tmqM: tmqM}
+}
+
+func (s *TMQController) Init(ctl gin.IRouter) {
+	ctl.GET("rest/tmq", func(c *gin.Context) {
+		logger := log.GetLogger("ws").WithField("wsType", "tmq")
+		_ = s.tmqM.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": logger})
+	})
+}
 
 type TMQ struct {
 	Session                *melody.Session
@@ -154,7 +307,7 @@ type TMQSubscribeResp struct {
 }
 
 func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSubscribeReq) {
-	logger := getLogger(session).WithField("action", TMQSubscribe).WithField(config.ReqIDKey, req.ReqID)
+	logger := wstool.GetLogger(session).WithField("action", TMQSubscribe).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.Lock()
@@ -196,10 +349,10 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 				return
 			}
 			t.unsubscribed = false
-			wsWriteJson(session, &TMQSubscribeResp{
+			wstool.WSWriteJson(session, &TMQSubscribeResp{
 				Action: TMQSubscribe,
 				ReqID:  req.ReqID,
-				Timing: getDuration(ctx),
+				Timing: wstool.GetDuration(ctx),
 			})
 			return
 		} else {
@@ -380,10 +533,10 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		}()
 	}
 	t.consumer = cPointer
-	wsWriteJson(session, &TMQSubscribeResp{
+	wstool.WSWriteJson(session, &TMQSubscribeResp{
 		Action: TMQSubscribe,
 		ReqID:  req.ReqID,
-		Timing: getDuration(ctx),
+		Timing: wstool.GetDuration(ctx),
 	})
 }
 
@@ -405,7 +558,7 @@ func (t *TMQ) commit(ctx context.Context, session *melody.Session, req *TMQCommi
 		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQCommit, req.ReqID, nil)
 		return
 	}
-	logger := getLogger(session).WithField("action", TMQCommit).WithField(config.ReqIDKey, req.ReqID)
+	logger := wstool.GetLogger(session).WithField("action", TMQCommit).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.listLocker.Lock()
@@ -418,8 +571,8 @@ func (t *TMQ) commit(ctx context.Context, session *melody.Session, req *TMQCommi
 	messageItem := t.getMessage(req.MessageID)
 	if messageItem == nil {
 		t.listLocker.Unlock()
-		resp.Timing = getDuration(ctx)
-		wsWriteJson(session, resp)
+		resp.Timing = wstool.GetDuration(ctx)
+		wstool.WSWriteJson(session, resp)
 		return
 	}
 	message := messageItem.Value.(*TMQMessage)
@@ -448,8 +601,8 @@ func (t *TMQ) commit(ctx context.Context, session *melody.Session, req *TMQCommi
 		next = item.Next()
 	}
 	t.listLocker.Unlock()
-	resp.Timing = getDuration(ctx)
-	wsWriteJson(session, resp)
+	resp.Timing = wstool.GetDuration(ctx)
+	wstool.WSWriteJson(session, resp)
 }
 
 type TMQPollReq struct {
@@ -502,8 +655,8 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 			return
 		}
 	}
-	resp.Timing = getDuration(ctx)
-	wsWriteJson(session, resp)
+	resp.Timing = wstool.GetDuration(ctx)
+	wstool.WSWriteJson(session, resp)
 }
 
 type TMQFetchReq struct {
@@ -532,7 +685,7 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQFetch, req.ReqID, &req.MessageID)
 		return
 	}
-	logger := getLogger(session).WithField("action", WSFetch).WithField(config.ReqIDKey, req.ReqID)
+	logger := wstool.GetLogger(session).WithField("action", TMQFetch).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.listLocker.RLock()
@@ -576,7 +729,7 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 	if blockSize == 0 {
 		message.Unlock()
 		resp.Completed = true
-		wsWriteJson(session, resp)
+		wstool.WSWriteJson(session, resp)
 		return
 	}
 	s = log.GetLogNow(isDebug)
@@ -603,16 +756,16 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 	}
 	blockLength := int(parser.RawBlockGetLength(block))
 	message.buffer.Grow(blockLength + 24)
-	writeUint64(message.buffer, 0)
-	writeUint64(message.buffer, req.ReqID)
-	writeUint64(message.buffer, req.MessageID)
+	wstool.WriteUint64(message.buffer, 0)
+	wstool.WriteUint64(message.buffer, req.ReqID)
+	wstool.WriteUint64(message.buffer, req.MessageID)
 	for offset := 0; offset < blockLength; offset++ {
 		message.buffer.WriteByte(*((*byte)(unsafe.Pointer(uintptr(block) + uintptr(offset)))))
 	}
 	message.Unlock()
-	resp.Timing = getDuration(ctx)
+	resp.Timing = wstool.GetDuration(ctx)
 	logger.Debugln("handle data cost:", log.GetLogDuration(isDebug, s))
-	wsWriteJson(session, resp)
+	wstool.WSWriteJson(session, resp)
 }
 
 type TMQFetchBlockReq struct {
@@ -625,7 +778,7 @@ func (t *TMQ) fetchBlock(ctx context.Context, session *melody.Session, req *TMQF
 		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQFetchBlock, req.ReqID, &req.MessageID)
 		return
 	}
-	logger := getLogger(session).WithField("action", TMQFetchBlock).WithField(config.ReqIDKey, req.ReqID)
+	logger := wstool.GetLogger(session).WithField("action", TMQFetchBlock).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.listLocker.RLock()
@@ -650,7 +803,7 @@ func (t *TMQ) fetchBlock(ctx context.Context, session *melody.Session, req *TMQF
 	s = log.GetLogNow(isDebug)
 	b := message.buffer.Bytes()
 	message.Unlock()
-	binary.LittleEndian.PutUint64(b, uint64(getDuration(ctx)))
+	binary.LittleEndian.PutUint64(b, uint64(wstool.GetDuration(ctx)))
 	logger.Debugln("handle data cost:", log.GetLogDuration(isDebug, s))
 	session.WriteBinary(b)
 }
@@ -665,7 +818,7 @@ func (t *TMQ) fetchRawMeta(ctx context.Context, session *melody.Session, req *TM
 		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQFetchRaw, req.ReqID, &req.MessageID)
 		return
 	}
-	logger := getLogger(session).WithField("action", TMQFetchRaw).WithField(config.ReqIDKey, req.ReqID)
+	logger := wstool.GetLogger(session).WithField("action", TMQFetchRaw).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.listLocker.RLock()
@@ -702,12 +855,12 @@ func (t *TMQ) fetchRawMeta(ctx context.Context, session *melody.Session, req *TM
 		message.buffer.Reset()
 	}
 	message.buffer.Grow(int(length) + 38)
-	writeUint64(message.buffer, uint64(getDuration(ctx)))
-	writeUint64(message.buffer, req.ReqID)
-	writeUint64(message.buffer, req.MessageID)
-	writeUint64(message.buffer, TMQRawMessage)
-	writeUint32(message.buffer, length)
-	writeUint16(message.buffer, metaType)
+	wstool.WriteUint64(message.buffer, uint64(wstool.GetDuration(ctx)))
+	wstool.WriteUint64(message.buffer, req.ReqID)
+	wstool.WriteUint64(message.buffer, req.MessageID)
+	wstool.WriteUint64(message.buffer, TMQRawMessage)
+	wstool.WriteUint32(message.buffer, length)
+	wstool.WriteUint16(message.buffer, metaType)
 	for offset := 0; offset < int(length); offset++ {
 		message.buffer.WriteByte(*((*byte)(unsafe.Pointer(uintptr(data) + uintptr(offset)))))
 	}
@@ -738,7 +891,7 @@ func (t *TMQ) fetchJsonMeta(ctx context.Context, session *melody.Session, req *T
 		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQFetchJsonMeta, req.ReqID, &req.MessageID)
 		return
 	}
-	logger := getLogger(session).WithField("action", TMQFetchJsonMeta).WithField(config.ReqIDKey, req.ReqID)
+	logger := wstool.GetLogger(session).WithField("action", TMQFetchJsonMeta).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.listLocker.RLock()
@@ -791,8 +944,8 @@ func (t *TMQ) fetchJsonMeta(ctx context.Context, session *melody.Session, req *T
 	wrapper.TMQFreeJsonMeta(jsonMeta)
 	logger.Debugln("tmq_free_json_meta cost:", log.GetLogDuration(isDebug, s))
 	message.Unlock()
-	resp.Timing = getDuration(ctx)
-	wsWriteJson(session, resp)
+	resp.Timing = wstool.GetDuration(ctx)
+	wstool.WSWriteJson(session, resp)
 }
 
 type TMQUnsubscribeReq struct {
@@ -808,7 +961,7 @@ type TMQUnsubscribeResp struct {
 }
 
 func (t *TMQ) unsubscribe(ctx context.Context, session *melody.Session, req *TMQUnsubscribeReq) {
-	logger := getLogger(session).WithField("action", TMQUnsubscribe).WithField(config.ReqIDKey, req.ReqID)
+	logger := wstool.GetLogger(session).WithField("action", TMQUnsubscribe).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.Lock()
@@ -831,10 +984,10 @@ func (t *TMQ) unsubscribe(ctx context.Context, session *melody.Session, req *TMQ
 	t.cleanupMessages()
 	t.unsubscribed = true
 	atomic.StoreUint64(&t.messageIndex, 0)
-	wsWriteJson(session, &TMQUnsubscribeResp{
+	wstool.WSWriteJson(session, &TMQUnsubscribeResp{
 		Action: TMQUnsubscribe,
 		ReqID:  req.ReqID,
-		Timing: getDuration(ctx),
+		Timing: wstool.GetDuration(ctx),
 	})
 }
 
@@ -926,150 +1079,6 @@ func (t *TMQ) autoRelease() {
 	t.ticker.Reset(100 * time.Millisecond)
 }
 
-func (ctl *Restful) InitTMQ() {
-	ctl.tmqM = melody.New()
-	ctl.tmqM.Config.MaxMessageSize = 4 * 1024 * 1024
-
-	ctl.tmqM.HandleConnect(func(session *melody.Session) {
-		logger := session.MustGet("logger").(*logrus.Entry)
-		logger.Debugln("ws connect")
-		session.Set(TaosTMQKey, NewTaosTMQ())
-	})
-
-	ctl.tmqM.HandleMessage(func(session *melody.Session, data []byte) {
-		if ctl.tmqM.IsClosed() {
-			return
-		}
-		ctx := context.WithValue(context.Background(), StartTimeKey, time.Now().UnixNano())
-		logger := session.MustGet("logger").(*logrus.Entry)
-		logger.Debugln("get ws message data:", string(data))
-		var action WSAction
-		err := json.Unmarshal(data, &action)
-		if err != nil {
-			logger.WithError(err).Errorln("unmarshal ws request")
-			return
-		}
-		switch action.Action {
-		case ClientVersion:
-			session.Write(ctl.wsVersionResp)
-		case TMQSubscribe:
-			var req TMQSubscribeReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal subscribe args")
-				return
-			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).subscribe(ctx, session, &req)
-		case TMQPoll:
-			var req TMQPollReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal pool args")
-				return
-			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).poll(ctx, session, &req)
-		case TMQFetch:
-			var req TMQFetchReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch args")
-				return
-			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).fetch(ctx, session, &req)
-		case TMQFetchBlock:
-			var req TMQFetchBlockReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch block args")
-				return
-			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).fetchBlock(ctx, session, &req)
-		case TMQCommit:
-			var req TMQCommitReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal commit args")
-				return
-			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).commit(ctx, session, &req)
-		case TMQFetchJsonMeta:
-			var req TMQFetchJsonMetaReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch json meta args")
-				return
-			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).fetchJsonMeta(ctx, session, &req)
-		case TMQFetchRaw:
-			var req TMQFetchRawMetaReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch raw meta args")
-				return
-			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).fetchRawMeta(ctx, session, &req)
-		case TMQUnsubscribe:
-			var req TMQUnsubscribeReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal unsubscribe args")
-				return
-			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).unsubscribe(ctx, session, &req)
-		default:
-			logger.WithError(err).Errorln("unknown action: " + action.Action)
-			return
-		}
-	})
-	ctl.tmqM.HandleClose(func(session *melody.Session, i int, s string) error {
-		//message := melody.FormatCloseMessage(i, "")
-		//session.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
-		logger := session.MustGet("logger").(*logrus.Entry)
-		logger.Debugln("ws close", i, s)
-		t, exist := session.Get(TaosTMQKey)
-		if exist && t != nil {
-			t.(*TMQ).Close(logger)
-		}
-		return nil
-	})
-
-	ctl.tmqM.HandleError(func(session *melody.Session, err error) {
-		logger := session.MustGet("logger").(*logrus.Entry)
-		_, is := err.(*websocket.CloseError)
-		if is {
-			logger.WithError(err).Debugln("ws close in error")
-		} else {
-			logger.WithError(err).Errorln("ws error")
-		}
-		t, exist := session.Get(TaosTMQKey)
-		if exist && t != nil {
-			t.(*TMQ).Close(logger)
-		}
-	})
-
-	ctl.tmqM.HandleDisconnect(func(session *melody.Session) {
-		logger := session.MustGet("logger").(*logrus.Entry)
-		logger.Debugln("ws disconnect")
-		t, exist := session.Get(TaosTMQKey)
-		if exist && t != nil {
-			t.(*TMQ).Close(logger)
-		}
-	})
-}
-
-func (ctl *Restful) tmq(c *gin.Context) {
-	loggerWithID := logger.WithField("wsType", "tmq")
-	_ = ctl.tmqM.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": loggerWithID})
-}
-
 type WSTMQErrorResp struct {
 	Code      int     `json:"code"`
 	Message   string  `json:"message"`
@@ -1085,7 +1094,7 @@ func wsTMQErrorMsg(ctx context.Context, session *melody.Session, code int, messa
 		Message:   message,
 		Action:    action,
 		ReqID:     reqID,
-		Timing:    getDuration(ctx),
+		Timing:    wstool.GetDuration(ctx),
 		MessageID: messageID,
 	})
 	session.Write(b)
@@ -1111,4 +1120,6 @@ func init() {
 	tmqMessagePool.New = func() interface{} {
 		return &TMQMessage{}
 	}
+	c := NewTMQController()
+	controller.AddController(c)
 }
