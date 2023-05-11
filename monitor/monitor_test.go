@@ -228,10 +228,10 @@ func TestWriteLog(t *testing.T) {
 	}
 	time.Sleep(config.Conf.Monitor.WriteInterval * 2)
 	checkTables := []string{
-		"taosadapter_restful_http_total",
-		"taosadapter_restful_http_fail",
-		"taosadapter_restful_http_latency",
-		"taosadapter_system",
+		"taosadapter_restful_http_request_total",
+		"taosadapter_restful_http_request_fail",
+		"taosadapter_system_mem_percent",
+		"taosadapter_system_cpu_percent",
 	}
 	for _, table := range checkTables {
 		w := httptest.NewRecorder()
