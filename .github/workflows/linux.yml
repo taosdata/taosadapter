@@ -4,7 +4,7 @@ on: [ push, pull_request ]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
         go: [ '1.17', '1.19' ]
@@ -26,8 +26,9 @@ jobs:
           cd TDengine
           mkdir debug
           cd debug
+          sudo apt-get install libgflags-dev
           cmake .. -DBUILD_HTTP=true -DBUILD_JDBC=false -DBUILD_TOOLS=false -DBUILD_TEST=off
-          make -j 32
+          make
           sudo make install
 
       - name: Set up Go
