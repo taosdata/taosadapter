@@ -132,6 +132,24 @@ func NewTMQController() *TMQController {
 			}
 			t := session.MustGet(TaosTMQKey)
 			t.(*TMQ).unsubscribe(ctx, session, &req)
+		case TMQGetTopicAssignment:
+			var req TMQGetTopicAssignmentReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal unsubscribe args")
+				return
+			}
+			t := session.MustGet(TaosTMQKey)
+			t.(*TMQ).assignment(ctx, session, &req)
+		case TMQSeek:
+			var req TMQOffsetSeekReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal unsubscribe args")
+				return
+			}
+			t := session.MustGet(TaosTMQKey)
+			t.(*TMQ).offsetSeek(ctx, session, &req)
 		default:
 			logger.WithError(err).Errorln("unknown action: " + action.Action)
 			return
@@ -968,7 +986,7 @@ func (t *TMQ) unsubscribe(ctx context.Context, session *melody.Session, req *TMQ
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer t.Unlock()
 	if t.consumer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQFetchRaw, req.ReqID, nil)
+		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQUnsubscribe, req.ReqID, nil)
 		return
 	}
 	t.asyncLocker.Lock()
@@ -986,6 +1004,92 @@ func (t *TMQ) unsubscribe(ctx context.Context, session *melody.Session, req *TMQ
 	atomic.StoreUint64(&t.messageIndex, 0)
 	wstool.WSWriteJson(session, &TMQUnsubscribeResp{
 		Action: TMQUnsubscribe,
+		ReqID:  req.ReqID,
+		Timing: wstool.GetDuration(ctx),
+	})
+}
+
+type TMQGetTopicAssignmentReq struct {
+	ReqID uint64 `json:"req_id"`
+	Topic string `json:"topic"`
+}
+
+type TMQGetTopicAssignmentResp struct {
+	Code       int                     `json:"code"`
+	Message    string                  `json:"message"`
+	Action     string                  `json:"action"`
+	ReqID      uint64                  `json:"req_id"`
+	Timing     int64                   `json:"timing"`
+	Assignment []*tmqhandle.Assignment `json:"assignment"`
+}
+
+func (t *TMQ) assignment(ctx context.Context, session *melody.Session, req *TMQGetTopicAssignmentReq) {
+	if t.consumer == nil {
+		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQGetTopicAssignment, req.ReqID, nil)
+		return
+	}
+	logger := wstool.GetLogger(session).WithField("action", TMQGetTopicAssignment).WithField(config.ReqIDKey, req.ReqID)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	logger.Debugln("get_topic_assignment get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQGetTopicAssignmentA(t.thread, t.consumer, req.Topic, t.handler.Handler)
+	result := <-t.handler.Caller.GetTopicAssignmentResult
+	t.asyncLocker.Unlock()
+	logger.Debugln("get_topic_assignment cost:", log.GetLogDuration(isDebug, s))
+	if result.Code != 0 {
+		errStr := wrapper.TMQErr2Str(result.Code)
+		logger.WithError(errors.NewError(int(result.Code), errStr)).Error("tmq assignment")
+		wsTMQErrorMsg(ctx, session, int(result.Code), errStr, TMQGetTopicAssignment, req.ReqID, nil)
+		return
+	}
+	wstool.WSWriteJson(session, TMQGetTopicAssignmentResp{
+		Action:     TMQGetTopicAssignment,
+		ReqID:      req.ReqID,
+		Timing:     wstool.GetDuration(ctx),
+		Assignment: result.Assignment,
+	})
+}
+
+type TMQOffsetSeekReq struct {
+	ReqID    uint64 `json:"req_id"`
+	Topic    string `json:"topic"`
+	VgroupID int32  `json:"vgroup_id"`
+	Offset   int64  `json:"offset"`
+}
+
+type TMQOffsetSeekResp struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Action  string `json:"action"`
+	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
+}
+
+func (t *TMQ) offsetSeek(ctx context.Context, session *melody.Session, req *TMQOffsetSeekReq) {
+	if t.consumer == nil {
+		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQSeek, req.ReqID, nil)
+		return
+	}
+	logger := wstool.GetLogger(session).WithField("action", TMQSeek).WithField(config.ReqIDKey, req.ReqID)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	logger.Debugln("offset_seek get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQOffsetSeekA(t.thread, t.consumer, req.Topic, req.VgroupID, req.Offset, t.handler.Handler)
+	errCode := <-t.handler.Caller.OffsetSeekResult
+	t.asyncLocker.Unlock()
+	logger.Debugln("offset_seek cost:", log.GetLogDuration(isDebug, s))
+	if errCode != 0 {
+		errStr := wrapper.TMQErr2Str(errCode)
+		logger.WithError(errors.NewError(int(errCode), errStr)).Error("tmq offset seek")
+		wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSeek, req.ReqID, nil)
+		return
+	}
+	wstool.WSWriteJson(session, TMQOffsetSeekResp{
+		Action: TMQSeek,
 		ReqID:  req.ReqID,
 		Timing: wstool.GetDuration(ctx),
 	})

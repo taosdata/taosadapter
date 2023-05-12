@@ -85,3 +85,29 @@ func AdapterTMQGetJsonMetaCallback(handle C.uintptr_t, meta *C.char) {
 	caller := h.Value().(*tmqhandle.TMQCaller)
 	caller.GetJsonMetaCall(unsafe.Pointer(meta))
 }
+
+//export AdapterTMQGetTopicAssignmentCallback
+func AdapterTMQGetTopicAssignmentCallback(handle C.uintptr_t, topicName unsafe.Pointer, errorCode int32, assignment unsafe.Pointer, numOfAssignment int32) {
+	C.free(topicName)
+	h := cgo.Handle(handle)
+	caller := h.Value().(*tmqhandle.TMQCaller)
+	result := make([]*tmqhandle.Assignment, numOfAssignment)
+	for i := 0; i < int(numOfAssignment); i++ {
+		item := *(*C.tmq_topic_assignment)(unsafe.Pointer(uintptr(assignment) + uintptr(C.sizeof_struct_tmq_topic_assignment*C.int(i))))
+		result[i] = &tmqhandle.Assignment{
+			VGroupID: int32(item.vgId),
+			Offset:   int64(item.currentOffset),
+			Begin:    int64(item.begin),
+			End:      int64(item.end),
+		}
+	}
+	caller.GetTopicAssignment(errorCode, result)
+}
+
+//export AdapterTMQOffsetSeekCallback
+func AdapterTMQOffsetSeekCallback(handle C.uintptr_t, topicName unsafe.Pointer, errorCode int32) {
+	C.free(topicName)
+	h := cgo.Handle(handle)
+	caller := h.Value().(*tmqhandle.TMQCaller)
+	caller.OffsetSeekCall(errorCode)
+}

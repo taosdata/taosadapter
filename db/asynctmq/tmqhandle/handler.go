@@ -1,5 +1,6 @@
 package tmqhandle
 
+import "C"
 import (
 	"container/list"
 	"sync"
@@ -19,31 +20,40 @@ type NewConsumerResult struct {
 	ErrStr   string
 }
 
+type GetTopicAssignmentResult struct {
+	Code       int32
+	Assignment []*Assignment
+}
+
 type TMQCaller struct {
-	PollResult          chan unsafe.Pointer
-	FreeResult          chan struct{}
-	CommitResult        chan int32
-	FetchRawBlockResult chan *FetchRawBlockResult
-	NewConsumerResult   chan *NewConsumerResult
-	SubscribeResult     chan int32
-	UnsubscribeResult   chan int32
-	ConsumerCloseResult chan int32
-	GetRawResult        chan int32
-	GetJsonMetaResult   chan unsafe.Pointer
+	PollResult               chan unsafe.Pointer
+	FreeResult               chan struct{}
+	CommitResult             chan int32
+	SubscribeResult          chan int32
+	UnsubscribeResult        chan int32
+	ConsumerCloseResult      chan int32
+	GetRawResult             chan int32
+	OffsetSeekResult         chan int32
+	FetchRawBlockResult      chan *FetchRawBlockResult
+	NewConsumerResult        chan *NewConsumerResult
+	GetJsonMetaResult        chan unsafe.Pointer
+	GetTopicAssignmentResult chan *GetTopicAssignmentResult
 }
 
 func NewTMQCaller() *TMQCaller {
 	return &TMQCaller{
-		PollResult:          make(chan unsafe.Pointer, 1),
-		FreeResult:          make(chan struct{}, 1),
-		CommitResult:        make(chan int32, 1),
-		FetchRawBlockResult: make(chan *FetchRawBlockResult, 1),
-		NewConsumerResult:   make(chan *NewConsumerResult, 1),
-		SubscribeResult:     make(chan int32, 1),
-		UnsubscribeResult:   make(chan int32, 1),
-		ConsumerCloseResult: make(chan int32, 1),
-		GetRawResult:        make(chan int32, 1),
-		GetJsonMetaResult:   make(chan unsafe.Pointer, 1),
+		PollResult:               make(chan unsafe.Pointer, 1),
+		FreeResult:               make(chan struct{}, 1),
+		CommitResult:             make(chan int32, 1),
+		SubscribeResult:          make(chan int32, 1),
+		UnsubscribeResult:        make(chan int32, 1),
+		ConsumerCloseResult:      make(chan int32, 1),
+		GetRawResult:             make(chan int32, 1),
+		OffsetSeekResult:         make(chan int32, 1),
+		FetchRawBlockResult:      make(chan *FetchRawBlockResult, 1),
+		NewConsumerResult:        make(chan *NewConsumerResult, 1),
+		GetJsonMetaResult:        make(chan unsafe.Pointer, 1),
+		GetTopicAssignmentResult: make(chan *GetTopicAssignmentResult, 1),
 	}
 }
 
@@ -92,6 +102,23 @@ func (c *TMQCaller) GetRawCall(code int32) {
 
 func (c *TMQCaller) GetJsonMetaCall(meta unsafe.Pointer) {
 	c.GetJsonMetaResult <- meta
+}
+
+func (c *TMQCaller) GetTopicAssignment(code int32, assignment []*Assignment) {
+	if code != 0 {
+		c.GetTopicAssignmentResult <- &GetTopicAssignmentResult{
+			Code: code,
+		}
+		return
+	}
+	c.GetTopicAssignmentResult <- &GetTopicAssignmentResult{
+		Code:       0,
+		Assignment: assignment,
+	}
+}
+
+func (c *TMQCaller) OffsetSeekCall(code int32) {
+	c.OffsetSeekResult <- code
 }
 
 type poolReq struct {
@@ -161,3 +188,10 @@ func (c *TMQHandlerPool) Put(handler *TMQHandler) {
 }
 
 var GlobalTMQHandlerPoll = NewHandlerPool(10000)
+
+type Assignment struct {
+	VGroupID int32 `json:"vgroup_id"`
+	Offset   int64 `json:"offset"`
+	Begin    int64 `json:"begin"`
+	End      int64 `json:"end"`
+}
