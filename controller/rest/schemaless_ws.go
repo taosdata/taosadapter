@@ -45,6 +45,7 @@ func (ctl *Restful) InitSchemaless() {
 			return nil
 		}
 		wrapper.TaosClose(sessionConn.(unsafe.Pointer))
+		session.Keys.Delete(taosSchemalessKey)
 		return nil
 	})
 
@@ -70,6 +71,7 @@ func (ctl *Restful) InitSchemaless() {
 			return
 		}
 		wrapper.TaosClose(sessionConn.(unsafe.Pointer))
+		session.Keys.Delete(taosSchemalessKey)
 		return
 	})
 }
