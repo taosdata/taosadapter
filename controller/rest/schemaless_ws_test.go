@@ -94,7 +94,7 @@ func TestRestful_InitSchemaless(t *testing.T) {
 		},
 	})
 
-	if err := ws.WriteMessage(websocket.BinaryMessage, j); err != nil {
+	if err := ws.WriteMessage(websocket.TextMessage, j); err != nil {
 		t.Fatal("send connect message error", err)
 	}
 
@@ -109,7 +109,7 @@ func TestRestful_InitSchemaless(t *testing.T) {
 					"ttl":       c.ttl,
 				},
 			})
-			if err := ws.WriteMessage(websocket.BinaryMessage, j); err != nil {
+			if err := ws.WriteMessage(websocket.TextMessage, j); err != nil {
 				t.Fatal(c.name, err)
 			}
 			_, msg, err := ws.ReadMessage()
