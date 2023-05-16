@@ -194,9 +194,11 @@ type schemalessWriteReq struct {
 }
 
 type schemalessResp struct {
-	ReqID  uint64 `json:"req_id"`
-	Action string `json:"action"`
-	Timing int64  `json:"timing"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	ReqID   uint64 `json:"req_id"`
+	Action  string `json:"action"`
+	Timing  int64  `json:"timing"`
 }
 
 func (t *TaosSchemaless) insert(ctx context.Context, session *melody.Session, req schemalessWriteReq) {
