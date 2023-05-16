@@ -2220,7 +2220,7 @@ func TestTMQSeek(t *testing.T) {
 	//poll after seek
 	{
 		rowCount := 0
-		for i := 0; i < insertCount; i++ {
+		for i := 0; i < tryPollCount; i++ {
 			req := TMQPollReq{
 				ReqID:        1,
 				BlockingTime: 500,
