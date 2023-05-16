@@ -1899,7 +1899,7 @@ func TestTMQSeek(t *testing.T) {
 		fmt.Sprintf(`insert into ct2 values('%s',1,2,'3')`, ts3.Format(time.RFC3339Nano)),
 	}
 	insertCount := len(insertSql)
-	tryPollCount := 2 * insertCount
+	tryPollCount := 3 * insertCount
 	topic := "test_tmq_ws_seek_topic"
 	dbName := "test_ws_tmq_seek"
 	w := httptest.NewRecorder()
