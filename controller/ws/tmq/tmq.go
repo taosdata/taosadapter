@@ -640,6 +640,7 @@ type TMQPollResp struct {
 	VgroupID    int32  `json:"vgroup_id"`
 	MessageType int32  `json:"message_type"`
 	MessageID   uint64 `json:"message_id"`
+	Offset      int64  `json:"offset"`
 }
 
 func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq) {
@@ -668,6 +669,7 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 			resp.VgroupID = wrapper.TMQGetVgroupID(message)
 			resp.MessageID = m.index
 			resp.MessageType = messageType
+			resp.Offset = wrapper.TMQGetVgroupOffset(message)
 		} else {
 			wsTMQErrorMsg(ctx, session, 0xffff, "unavailable tmq type:"+strconv.Itoa(int(messageType)), TMQPoll, req.ReqID, nil)
 			return

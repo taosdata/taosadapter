@@ -2022,6 +2022,9 @@ func TestTMQSeek(t *testing.T) {
 	{
 		rowCount := 0
 		for i := 0; i < tryPollCount; i++ {
+			if rowCount >= insertCount {
+				break
+			}
 			req := TMQPollReq{
 				ReqID:        1,
 				BlockingTime: 500,
@@ -2221,6 +2224,9 @@ func TestTMQSeek(t *testing.T) {
 	{
 		rowCount := 0
 		for i := 0; i < tryPollCount; i++ {
+			if rowCount >= insertCount {
+				break
+			}
 			req := TMQPollReq{
 				ReqID:        1,
 				BlockingTime: 500,
@@ -2352,7 +2358,7 @@ func TestTMQSeek(t *testing.T) {
 		assert.Equal(t, 0, resp.Code)
 		assert.Equal(t, vgroups, len(resp.Assignment))
 		for i := 0; i < vgroups; i++ {
-			assert.Equal(t, resp.Assignment[i].Offset, resp.Assignment[i].End)
+			assert.Equal(t, resp.Assignment[i].End, resp.Assignment[i].Offset)
 			assert.Equal(t, int64(0), resp.Assignment[i].Begin)
 		}
 	}
