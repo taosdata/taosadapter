@@ -17,6 +17,7 @@ jobs:
           ref: '3.0'
 
       - name: Get latest commit ID
+        id: get_commit_id
         run: |
           cd TDengine
           COMMIT_ID=$(git rev-parse HEAD)

@@ -17,6 +17,7 @@ jobs:
           ref: '3.0'
 
       - name: Get latest commit ID
+        id: get_commit_id
         run: |
           cd TDengine
           COMMIT_ID=$(git rev-parse HEAD)
@@ -96,7 +97,7 @@ jobs:
         run: cd ./taosadapter && go build
 
   test_go_test:
-    runs-on: ubuntu-20.04
+    runs-on: macos-latest
     needs: build
     strategy:
       matrix:
