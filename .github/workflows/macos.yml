@@ -1,10 +1,13 @@
 name: GO_MACOS
 
 on: [ push, pull_request ]
+
 jobs:
   build:
     runs-on: macos-latest
     name: Build
+    outputs:
+      commit_id: ${{ steps.get_commit_id.outputs.commit_id }}
     steps:
       - name: checkout TDengine
         uses: actions/checkout@v3
@@ -54,7 +57,7 @@ jobs:
           cp ./taosd /usr/local/bin
           cp ./libtaos.3.9.9.9.dylib /usr/local/lib
           ln -sf /usr/local/lib/libtaos.3.9.9.9.dylib /usr/local/lib/libtaos.1.dylib
-          ln -sf /usr/local/lib/libtaos.dylib.1 /usr/local/lib/libtaos.dylib
+          ln -sf /usr/local/lib/libtaos.1.dylib /usr/local/lib/libtaos.dylib
           cp ./taos.h /usr/local/include
           EOF
           tar -zcvf server.tar.gz ./release
@@ -74,7 +77,7 @@ jobs:
           cache-name: td-mac
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ steps.get_commit_id.outputs.commit_id }}
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
             ${{ runner.os }}-td-${{ env.cache-name }}-
       - name: install
@@ -94,7 +97,7 @@ jobs:
 
   test_go_test:
     runs-on: ubuntu-20.04
-    needs: test_build
+    needs: build
     strategy:
       matrix:
         go: [ '1.17', '1.19' ]
@@ -107,7 +110,7 @@ jobs:
           cache-name: td-mac
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ steps.get_commit_id.outputs.commit_id }}
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
             ${{ runner.os }}-td-${{ env.cache-name }}-
       - name: install

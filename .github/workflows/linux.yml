@@ -6,6 +6,8 @@ jobs:
   build:
     runs-on: ubuntu-20.04
     name: Build
+    outputs:
+      commit_id: ${{ steps.get_commit_id.outputs.commit_id }}
     steps:
       - name: checkout TDengine
         uses: actions/checkout@v3
@@ -24,7 +26,7 @@ jobs:
         id: cache-server
         uses: actions/cache@v3
         env:
-          cache-name: td-mac
+          cache-name: td-linux
         with:
           path: server.tar.gz
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ steps.get_commit_id.outputs.commit_id }}
@@ -72,16 +74,16 @@ jobs:
         id: cache-server
         uses: actions/cache@v3
         env:
-          cache-name: td-mac
+          cache-name: td-linux
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ steps.get_commit_id.outputs.commit_id }}
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
             ${{ runner.os }}-td-${{ env.cache-name }}-
       - name: install
         run: |
           tar -zxvf server.tar.gz
-          cd release && sudo sh install.shh
+          cd release && sudo sh install.sh
       - name: checkout
         uses: actions/checkout@v3
         with:
@@ -95,7 +97,7 @@ jobs:
 
   test_go_test:
     runs-on: ubuntu-20.04
-    needs: test_build
+    needs: build
     strategy:
       matrix:
         go: [ '1.17', '1.19' ]
@@ -105,10 +107,10 @@ jobs:
         id: cache-server
         uses: actions/cache@v3
         env:
-          cache-name: td-mac
+          cache-name: td-linux
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ steps.get_commit_id.outputs.commit_id }}
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
             ${{ runner.os }}-td-${{ env.cache-name }}-
       - name: install
