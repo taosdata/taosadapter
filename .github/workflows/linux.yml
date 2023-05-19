@@ -20,7 +20,7 @@ jobs:
         id: get_commit_id
         run: |
           cd TDengine
-          echo "commit_id=$(git rev-parse HEA)" >> $GITHUB_OUTPUT
+          echo "commit_id=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
       - name: Cache server
         id: cache-server
