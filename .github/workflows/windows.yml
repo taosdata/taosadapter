@@ -16,7 +16,6 @@ jobs:
       - name: Get latest commit ID
         id: get_commit_id
         run: |
-          cd TDengine
           COMMIT_ID=$(git rev-parse HEAD)
           echo "commit_id=$(git rev-parse HEA)" >> $GITHUB_OUTPUT
 
