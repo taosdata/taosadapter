@@ -26,7 +26,7 @@ jobs:
         env:
           cache-name: td-win
         with:
-          path: server.tar.gz
+          path: C:/TDengine
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ steps.get_commit_id.outputs.commit_id }}
 
 
@@ -45,12 +45,6 @@ jobs:
           cmake .. -G "NMake Makefiles JOM" -DBUILD_HTTP=true -DBUILD_JDBC=false -DBUILD_TOOLS=false -DBUILD_TEST=off
           jom.exe 
           jom.exe install
-
-      - name: Upload TDengine
-        uses: actions/upload-artifact@v3
-        with:
-          name: TDengine
-          path: C:/TDengine
 
   test:
     needs: build
