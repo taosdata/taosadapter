@@ -16,8 +16,7 @@ jobs:
       - name: get_commit_id
         id: get_commit_id
         run: |
-          git rev-parse HEAD > commit_id.txt
-          echo "commit_id=$(cat commit_id.txt)" >> $GITHUB_ENV
+          echo "::set-output name=commit_id::$(git rev-parse HEAD)"
 
       - name: Cache server
         id: cache-server
@@ -42,7 +41,8 @@ jobs:
           mkdir debug
           cd debug
           cmake .. -G "NMake Makefiles JOM" -DBUILD_HTTP=true -DBUILD_JDBC=false -DBUILD_TOOLS=false -DBUILD_TEST=off
-          jom.exe -j 32 install
+          jom.exe 
+          jom.exe install
 
       - name: Upload TDengine
         uses: actions/upload-artifact@v3
