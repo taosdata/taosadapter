@@ -6,6 +6,8 @@ jobs:
   build:
     runs-on: windows-2022
     name: build TDengine
+    outputs:
+      commit_id: ${{ steps.get_commit_id.outputs.commit_id }}
     steps:
       - name: checkout TDengine
         uses: actions/checkout@v3
@@ -65,7 +67,7 @@ jobs:
           cache-name: td-win
         with:
           path: C:/TDengine
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ steps.get_commit_id.outputs.commit_id }}
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ needs.build.outputs.commit_id }}
 
 #      - name: copy TDengine
 #        shell: cmd
