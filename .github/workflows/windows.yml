@@ -18,7 +18,7 @@ jobs:
       - name: get_commit_id
         id: get_commit_id
         run: |
-          echo "commit_id=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          echo "::set-output name=commit_id::$(git rev-parse HEAD)"
 
       - name: Cache server
         id: cache-server
