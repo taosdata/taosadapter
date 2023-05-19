@@ -76,6 +76,9 @@ jobs:
         with:
           path: server.tar.gz
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ needs.build.outputs.commit_id }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+
       - name: install
         run: |
           tar -zxvf server.tar.gz
@@ -107,6 +110,9 @@ jobs:
         with:
           path: server.tar.gz
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ needs.build.outputs.commit_id }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+
       - name: install
         run: |
           tar -zxvf server.tar.gz

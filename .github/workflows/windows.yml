@@ -68,7 +68,8 @@ jobs:
         with:
           path: C:/TDengine
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ needs.build.outputs.commit_id }}
-
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
 #      - name: copy TDengine
 #        shell: cmd
 #        run: cp -r TDengine C:/
