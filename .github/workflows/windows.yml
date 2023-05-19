@@ -13,11 +13,11 @@ jobs:
           repository: 'taosdata/TDengine'
           ref: '3.0'
 
-      - name: Get latest commit ID
+      - name: get_commit_id
         id: get_commit_id
         run: |
-          COMMIT_ID=$(git rev-parse HEAD)
-          echo "commit_id=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          git rev-parse HEAD > commit_id.txt
+          echo "commit_id=$(cat commit_id.txt)" >> $GITHUB_ENV
 
       - name: Cache server
         id: cache-server
