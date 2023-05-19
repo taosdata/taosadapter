@@ -16,12 +16,11 @@ jobs:
           path: 'TDengine'
           ref: '3.0'
 
-      - name: Get latest commit ID
+      - name: get_commit_id
         id: get_commit_id
         run: |
           cd TDengine
-          COMMIT_ID=$(git rev-parse HEAD)
-          echo $COMMIT_ID
+          echo "commit_id=$(git rev-parse HEA)" >> $GITHUB_OUTPUT
 
       - name: Cache server
         id: cache-server
@@ -31,8 +30,6 @@ jobs:
         with:
           path: server.tar.gz
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ steps.get_commit_id.outputs.commit_id }}
-          restore-keys: |
-            ${{ runner.os }}-td-${{ env.cache-name }}-
 
       - name: install TDengine
         if: ${{ steps.cache-server.outputs.cache-hit != 'true' }}
@@ -79,8 +76,6 @@ jobs:
         with:
           path: server.tar.gz
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ needs.build.outputs.commit_id }}
-          restore-keys: |
-            ${{ runner.os }}-td-${{ env.cache-name }}-
       - name: install
         run: |
           tar -zxvf server.tar.gz
@@ -112,8 +107,6 @@ jobs:
         with:
           path: server.tar.gz
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ needs.build.outputs.commit_id }}
-          restore-keys: |
-            ${{ runner.os }}-td-${{ env.cache-name }}-
       - name: install
         run: |
           tar -zxvf server.tar.gz

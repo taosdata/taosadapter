@@ -1,6 +1,6 @@
 name: Go_WINDOWS
 
-on: [ pull_request ]
+on: [ push,pull_request ]
 
 jobs:
   build:
@@ -12,6 +12,24 @@ jobs:
         with:
           repository: 'taosdata/TDengine'
           ref: '3.0'
+
+      - name: Get latest commit ID
+        id: get_commit_id
+        run: |
+          cd TDengine
+          COMMIT_ID=$(git rev-parse HEAD)
+          echo "commit_id=$(git rev-parse HEA)" >> $GITHUB_OUTPUT
+
+      - name: Cache server
+        id: cache-server
+        uses: actions/cache@v3
+        env:
+          cache-name: td-mac
+        with:
+          path: server.tar.gz
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ steps.get_commit_id.outputs.commit_id }}
+
+
       - name: install jom
         shell: powershell
         run: |
@@ -41,15 +59,18 @@ jobs:
         go: [ '1.19' ]
     name: Go ${{ matrix.go }}
     steps:
-      - name: Download TDengine
-        uses: actions/download-artifact@v3
+      - name: Cache server
+        id: cache-server
+        uses: actions/cache@v3
+        env:
+          cache-name: td-win
         with:
-          name: TDengine
-          path: TDengine
+          path: C:/TDengine
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ steps.get_commit_id.outputs.commit_id }}
 
-      - name: copy TDengine
-        shell: cmd
-        run: cp -r TDengine C:/
+#      - name: copy TDengine
+#        shell: cmd
+#        run: cp -r TDengine C:/
 
       - name: checkout
         uses: actions/checkout@v3
