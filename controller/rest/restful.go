@@ -2,7 +2,6 @@ package rest
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,7 +11,6 @@ import (
 	"unsafe"
 
 	"github.com/gin-gonic/gin"
-	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/common/parser"
@@ -29,43 +27,23 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/csv"
 	"github.com/taosdata/taosadapter/v3/tools/ctools"
 	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
+	"github.com/taosdata/taosadapter/v3/tools/layout"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
-	"github.com/taosdata/taosadapter/v3/version"
-)
-
-const (
-	LayoutMillSecond  = "2006-01-02T15:04:05.000Z07:00"
-	LayoutMicroSecond = "2006-01-02T15:04:05.000000Z07:00"
-	LayoutNanoSecond  = "2006-01-02T15:04:05.000000000Z07:00"
 )
 
 var logger = log.GetLogger("restful")
 
 type Restful struct {
-	wsM            *melody.Melody
-	stmtM          *melody.Melody
-	tmqM           *melody.Melody
-	schemaless     *melody.Melody
 	uploadReplacer *strings.Replacer
-	wsVersionResp  []byte
 }
 
 func (ctl *Restful) Init(r gin.IRouter) {
-	resp := WSVersionResp{
-		Action:  ClientVersion,
-		Version: version.TaosClientVersion,
-	}
 	ctl.uploadReplacer = strings.NewReplacer(
 		"\\", "\\\\",
 		"'", "\\'",
 		"(", "\\(",
 		")", "\\)",
 	)
-	ctl.wsVersionResp, _ = json.Marshal(resp)
-	ctl.InitWS()
-	ctl.InitStmt()
-	ctl.InitTMQ()
-	ctl.InitSchemaless()
 	api := r.Group("rest")
 	api.Use(func(c *gin.Context) {
 		if monitor.AllPaused() {
@@ -77,11 +55,7 @@ func (ctl *Restful) Init(r gin.IRouter) {
 	api.POST("sql/:db", CheckAuth, ctl.sql)
 	api.POST("sql/:db/vgid", CheckAuth, ctl.tableVgID)
 	api.GET("login/:user/:password", ctl.des)
-	api.GET("ws", ctl.ws)
-	api.GET("stmt", ctl.stmt)
-	api.GET("tmq", ctl.tmq)
 	api.POST("upload", CheckAuth, ctl.upload)
-	api.GET("schemaless", ctl.schemalessWs)
 }
 
 type TDEngineRestfulRespDoc struct {
@@ -132,11 +106,11 @@ func (ctl *Restful) sql(c *gin.Context) {
 		timeBuffer = timeBuffer[:0]
 		switch precision {
 		case common.PrecisionMilliSecond: // milli-second
-			timeBuffer = time.Unix(0, ts*1e6).In(location).AppendFormat(timeBuffer, LayoutMillSecond)
+			timeBuffer = time.Unix(0, ts*1e6).In(location).AppendFormat(timeBuffer, layout.LayoutMillSecond)
 		case common.PrecisionMicroSecond: // micro-second
-			timeBuffer = time.Unix(0, ts*1e3).In(location).AppendFormat(timeBuffer, LayoutMicroSecond)
+			timeBuffer = time.Unix(0, ts*1e3).In(location).AppendFormat(timeBuffer, layout.LayoutMicroSecond)
 		case common.PrecisionNanoSecond: // nano-second
-			timeBuffer = time.Unix(0, ts).In(location).AppendFormat(timeBuffer, LayoutNanoSecond)
+			timeBuffer = time.Unix(0, ts).In(location).AppendFormat(timeBuffer, layout.LayoutNanoSecond)
 		default:
 			panic("unknown precision")
 		}

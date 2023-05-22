@@ -1,4 +1,4 @@
-package rest
+package stmt
 
 import (
 	"bytes"
@@ -12,9 +12,34 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/controller"
+	_ "github.com/taosdata/taosadapter/v3/controller/rest"
+	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
+	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/tools/layout"
 )
+
+var router *gin.Engine
+
+func TestMain(m *testing.M) {
+	viper.Set("pool.maxConnect", 10000)
+	viper.Set("pool.maxIdle", 10000)
+	viper.Set("logLevel", "debug")
+	config.Init()
+	db.PrepareConnection()
+	gin.SetMode(gin.ReleaseMode)
+	router = gin.New()
+	controllers := controller.GetControllers()
+	for _, webController := range controllers {
+		webController.Init(router)
+	}
+	m.Run()
+}
 
 func TestSTMT(t *testing.T) {
 	now := time.Now()
@@ -76,7 +101,7 @@ func TestSTMT(t *testing.T) {
 		t.Log(messageType, string(message))
 		switch status {
 		case AfterConnect:
-			var d WSConnectResp
+			var d StmtConnectResp
 			err = json.Unmarshal(message, &d)
 			if err != nil {
 				return err
@@ -89,7 +114,7 @@ func TestSTMT(t *testing.T) {
 			b, _ := json.Marshal(&StmtInitReq{
 				ReqID: 2,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTInit,
 				Args:   b,
 			})
@@ -118,7 +143,7 @@ func TestSTMT(t *testing.T) {
 				StmtID: stmtID,
 				SQL:    "insert into ? using test_ws_stmt.st tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTPrepare,
 				Args:   b,
 			})
@@ -145,7 +170,7 @@ func TestSTMT(t *testing.T) {
 				StmtID: stmtID,
 				Name:   "test_ws_stmt.ct1",
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTSetTableName,
 				Args:   b,
 			})
@@ -175,7 +200,7 @@ func TestSTMT(t *testing.T) {
 				// {"a":"b"}
 				Tags: json.RawMessage(`["{\"a\":\"b\"}"]`),
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTSetTags,
 				Args:   b,
 			})
@@ -275,7 +300,7 @@ func TestSTMT(t *testing.T) {
 				StmtID:  stmtID,
 				Columns: c,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTBind,
 				Args:   b,
 			})
@@ -301,7 +326,7 @@ func TestSTMT(t *testing.T) {
 				ReqID:  6,
 				StmtID: stmtID,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTAddBatch,
 				Args:   b,
 			})
@@ -327,7 +352,7 @@ func TestSTMT(t *testing.T) {
 				ReqID:  7,
 				StmtID: stmtID,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTExec,
 				Args:   b,
 			})
@@ -352,7 +377,7 @@ func TestSTMT(t *testing.T) {
 				ReqID:  8,
 				StmtID: stmtID,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTClose,
 				Args:   b,
 			})
@@ -401,7 +426,7 @@ func TestSTMT(t *testing.T) {
 	}
 
 	b, _ := json.Marshal(connect)
-	action, _ := json.Marshal(&WSAction{
+	action, _ := json.Marshal(&wstool.WSAction{
 		Action: STMTConnect,
 		Args:   b,
 	})
@@ -424,7 +449,7 @@ func TestSTMT(t *testing.T) {
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
-	resultBody := fmt.Sprintf(`{"code":0,"column_meta":[["ts","TIMESTAMP",8],["c1","BOOL",1],["c2","TINYINT",1],["c3","SMALLINT",2],["c4","INT",4],["c5","BIGINT",8],["c6","TINYINT UNSIGNED",1],["c7","SMALLINT UNSIGNED",2],["c8","INT UNSIGNED",4],["c9","BIGINT UNSIGNED",8],["c10","FLOAT",4],["c11","DOUBLE",8],["c12","VARCHAR",20],["c13","NCHAR",20],["info","JSON",4095]],"data":[["%s",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar",{"a":"b"}],["%s",false,22,33,44,55,66,77,88,99,1010,1111,"binary2","nchar2",{"a":"b"}],["%s",null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":"b"}]],"rows":3}`, now.UTC().Format(LayoutNanoSecond), now.Add(time.Second).UTC().Format(LayoutNanoSecond), now.Add(time.Second*2).UTC().Format(LayoutNanoSecond))
+	resultBody := fmt.Sprintf(`{"code":0,"column_meta":[["ts","TIMESTAMP",8],["c1","BOOL",1],["c2","TINYINT",1],["c3","SMALLINT",2],["c4","INT",4],["c5","BIGINT",8],["c6","TINYINT UNSIGNED",1],["c7","SMALLINT UNSIGNED",2],["c8","INT UNSIGNED",4],["c9","BIGINT UNSIGNED",8],["c10","FLOAT",4],["c11","DOUBLE",8],["c12","VARCHAR",20],["c13","NCHAR",20],["info","JSON",4095]],"data":[["%s",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar",{"a":"b"}],["%s",false,22,33,44,55,66,77,88,99,1010,1111,"binary2","nchar2",{"a":"b"}],["%s",null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":"b"}]],"rows":3}`, now.UTC().Format(layout.LayoutNanoSecond), now.Add(time.Second).UTC().Format(layout.LayoutNanoSecond), now.Add(time.Second*2).UTC().Format(layout.LayoutNanoSecond))
 	assert.Equal(t, resultBody, w.Body.String())
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop database if exists test_ws_stmt")
@@ -529,7 +554,7 @@ func TestBlock(t *testing.T) {
 		//json
 		switch status {
 		case AfterConnect:
-			var d WSConnectResp
+			var d StmtConnectResp
 			err = json.Unmarshal(message, &d)
 			if err != nil {
 				return err
@@ -542,7 +567,7 @@ func TestBlock(t *testing.T) {
 			b, _ := json.Marshal(&StmtInitReq{
 				ReqID: 2,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTInit,
 				Args:   b,
 			})
@@ -571,7 +596,7 @@ func TestBlock(t *testing.T) {
 				StmtID: stmtID,
 				SQL:    "insert into ? using test_ws_stmt.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTPrepare,
 				Args:   b,
 			})
@@ -598,7 +623,7 @@ func TestBlock(t *testing.T) {
 				StmtID: stmtID,
 				Name:   "test_ws_stmt.ctb",
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTSetTableName,
 				Args:   b,
 			})
@@ -625,7 +650,7 @@ func TestBlock(t *testing.T) {
 				StmtID: stmtID,
 				Tags:   json.RawMessage(`["{\"a\":\"b\"}"]`),
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTSetTags,
 				Args:   b,
 			})
@@ -651,9 +676,9 @@ func TestBlock(t *testing.T) {
 			action := uint64(2)
 
 			block := &bytes.Buffer{}
-			writeUint64(block, reqID)
-			writeUint64(block, stmtID)
-			writeUint64(block, action)
+			wstool.WriteUint64(block, reqID)
+			wstool.WriteUint64(block, stmtID)
+			wstool.WriteUint64(block, action)
 			block.Write(rawBlock)
 			blockData := block.Bytes()
 			t.Log(blockData)
@@ -678,7 +703,7 @@ func TestBlock(t *testing.T) {
 				ReqID:  6,
 				StmtID: stmtID,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTAddBatch,
 				Args:   b,
 			})
@@ -704,7 +729,7 @@ func TestBlock(t *testing.T) {
 				ReqID:  7,
 				StmtID: stmtID,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTExec,
 				Args:   b,
 			})
@@ -726,8 +751,8 @@ func TestBlock(t *testing.T) {
 				return fmt.Errorf("%s %d,%s", STMTExec, d.Code, d.Message)
 			}
 			status = AfterVersion
-			action, _ := json.Marshal(&WSAction{
-				Action: ClientVersion,
+			action, _ := json.Marshal(&wstool.WSAction{
+				Action: wstool.ClientVersion,
 				Args:   nil,
 			})
 			err = ws.WriteMessage(
@@ -736,13 +761,13 @@ func TestBlock(t *testing.T) {
 			)
 			return nil
 		case AfterVersion:
-			var d WSVersionResp
+			var d wstool.WSVersionResp
 			err = json.Unmarshal(message, &d)
 			if err != nil {
 				return err
 			}
 			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", ClientVersion, d.Code, d.Message)
+				return fmt.Errorf("%s %d,%s", wstool.ClientVersion, d.Code, d.Message)
 			}
 			assert.NotEmpty(t, d.Version)
 			t.Log("client version", d.Version)
@@ -751,7 +776,7 @@ func TestBlock(t *testing.T) {
 				ReqID:  8,
 				StmtID: stmtID,
 			})
-			action, _ := json.Marshal(&WSAction{
+			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTClose,
 				Args:   b,
 			})
@@ -801,7 +826,7 @@ func TestBlock(t *testing.T) {
 	}
 
 	b, _ := json.Marshal(connect)
-	action, _ := json.Marshal(&WSAction{
+	action, _ := json.Marshal(&wstool.WSAction{
 		Action: STMTConnect,
 		Args:   b,
 	})
@@ -823,7 +848,7 @@ func TestBlock(t *testing.T) {
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
-	resultBody := fmt.Sprintf(`{"code":0,"column_meta":[["ts","TIMESTAMP",8],["c1","BOOL",1],["c2","TINYINT",1],["c3","SMALLINT",2],["c4","INT",4],["c5","BIGINT",8],["c6","TINYINT UNSIGNED",1],["c7","SMALLINT UNSIGNED",2],["c8","INT UNSIGNED",4],["c9","BIGINT UNSIGNED",8],["c10","FLOAT",4],["c11","DOUBLE",8],["c12","VARCHAR",20],["c13","NCHAR",20],["info","JSON",4095]],"data":[["%s",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar",{"a":"b"}],["%s",false,22,33,44,55,66,77,88,99,1010,1111,"binary2","nchar2",{"a":"b"}],["%s",null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":"b"}]],"rows":3}`, now.UTC().Format(LayoutNanoSecond), now.Add(time.Second).UTC().Format(LayoutNanoSecond), now.Add(time.Second*2).UTC().Format(LayoutNanoSecond))
+	resultBody := fmt.Sprintf(`{"code":0,"column_meta":[["ts","TIMESTAMP",8],["c1","BOOL",1],["c2","TINYINT",1],["c3","SMALLINT",2],["c4","INT",4],["c5","BIGINT",8],["c6","TINYINT UNSIGNED",1],["c7","SMALLINT UNSIGNED",2],["c8","INT UNSIGNED",4],["c9","BIGINT UNSIGNED",8],["c10","FLOAT",4],["c11","DOUBLE",8],["c12","VARCHAR",20],["c13","NCHAR",20],["info","JSON",4095]],"data":[["%s",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar",{"a":"b"}],["%s",false,22,33,44,55,66,77,88,99,1010,1111,"binary2","nchar2",{"a":"b"}],["%s",null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":"b"}]],"rows":3}`, now.UTC().Format(layout.LayoutNanoSecond), now.Add(time.Second).UTC().Format(layout.LayoutNanoSecond), now.Add(time.Second*2).UTC().Format(layout.LayoutNanoSecond))
 	assert.Equal(t, resultBody, w.Body.String())
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop database if exists test_ws_stmt")

@@ -1,4 +1,4 @@
-package rest
+package schemaless
 
 import (
 	"context"
@@ -14,56 +14,48 @@ import (
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/controller"
+	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
 )
 
-//type SchemalessController struct {
-//	schemaless *melody.Melody
-//}
-
-type TaosSchemaless struct {
-	conn   unsafe.Pointer
-	closed bool
-	sync.Mutex
+type SchemalessController struct {
+	schemaless *melody.Melody
 }
 
-func NewTaosSchemaless() *TaosSchemaless {
-	return &TaosSchemaless{}
-}
+func NewSchemalessController() *SchemalessController {
+	schemaless := melody.New()
+	schemaless.Config.MaxMessageSize = 4 * 1024 * 1024
 
-func (ctl *Restful) InitSchemaless() {
-	ctl.schemaless = melody.New()
-	ctl.schemaless.Config.MaxMessageSize = 4 * 1024 * 1024
-
-	ctl.schemaless.HandleConnect(func(session *melody.Session) {
+	schemaless.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws connect")
 		session.Set(taosSchemalessKey, NewTaosSchemaless())
 	})
 
-	ctl.schemaless.HandleMessage(func(session *melody.Session, bytes []byte) {
-		if ctl.schemaless.IsClosed() {
+	schemaless.HandleMessage(func(session *melody.Session, bytes []byte) {
+		if schemaless.IsClosed() {
 			return
 		}
-		ctx := context.WithValue(context.Background(), StartTimeKey, time.Now().UnixNano())
+		ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("get ws message data:", string(bytes))
-		var action WSAction
+		var action wstool.WSAction
 		err := json.Unmarshal(bytes, &action)
 		if err != nil {
 			logger.WithError(err).Errorln("unmarshal ws request")
-			wsError(ctx, session, err, action.Action, 0)
+			wstool.WSError(ctx, session, err, action.Action, 0)
 			return
 		}
 		switch action.Action {
-		case ClientVersion:
-			session.Write(ctl.wsVersionResp)
+		case wstool.ClientVersion:
+			session.Write(wstool.VersionResp)
 		case SchemalessConn:
 			var req schemalessConnReq
 			if err = json.Unmarshal(action.Args, &req); err != nil {
 				logger.WithError(err).Errorln("unmarshal connect request args")
-				wsError(ctx, session, err, SchemalessConn, req.ReqID)
+				wstool.WSError(ctx, session, err, SchemalessConn, req.ReqID)
 				return
 			}
 			t := session.MustGet(taosSchemalessKey)
@@ -73,7 +65,7 @@ func (ctl *Restful) InitSchemaless() {
 			if err = json.Unmarshal(action.Args, &req); err != nil {
 				logger.WithError(err).WithField(config.ReqIDKey, req.ReqID).
 					Errorln("unmarshal req write request args")
-				wsError(ctx, session, err, SchemalessWrite, req.ReqID)
+				wstool.WSError(ctx, session, err, SchemalessWrite, req.ReqID)
 				return
 			}
 			t := session.MustGet(taosSchemalessKey)
@@ -81,7 +73,7 @@ func (ctl *Restful) InitSchemaless() {
 		}
 	})
 
-	ctl.schemaless.HandleClose(func(session *melody.Session, i int, s string) error {
+	schemaless.HandleClose(func(session *melody.Session, i int, s string) error {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws close", i, s)
 		t, exist := session.Get(taosSchemalessKey)
@@ -91,7 +83,7 @@ func (ctl *Restful) InitSchemaless() {
 		return nil
 	})
 
-	ctl.schemaless.HandleError(func(session *melody.Session, err error) {
+	schemaless.HandleError(func(session *melody.Session, err error) {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		_, is := err.(*websocket.CloseError)
 		if is {
@@ -105,7 +97,7 @@ func (ctl *Restful) InitSchemaless() {
 		}
 	})
 
-	ctl.schemaless.HandleDisconnect(func(session *melody.Session) {
+	schemaless.HandleDisconnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws disconnect")
 		t, exist := session.Get(taosSchemalessKey)
@@ -113,6 +105,24 @@ func (ctl *Restful) InitSchemaless() {
 			t.(*TaosSchemaless).close()
 		}
 	})
+	return &SchemalessController{schemaless: schemaless}
+}
+
+func (s *SchemalessController) Init(ctl gin.IRouter) {
+	ctl.GET("rest/schemaless", func(c *gin.Context) {
+		logger := log.GetLogger("ws").WithField("wsType", "schemaless")
+		_ = s.schemaless.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": logger})
+	})
+}
+
+type TaosSchemaless struct {
+	conn   unsafe.Pointer
+	closed bool
+	sync.Mutex
+}
+
+func NewTaosSchemaless() *TaosSchemaless {
+	return &TaosSchemaless{}
 }
 
 func (t *TaosSchemaless) close() {
@@ -128,15 +138,6 @@ func (t *TaosSchemaless) close() {
 		thread.Unlock()
 		t.conn = nil
 	}
-}
-
-// schemalessWs
-// @Tags websocket
-// @Param Authorization header string true "authorization token"
-// @Router /schemaless?db=test&precision=ms
-func (ctl *Restful) schemalessWs(c *gin.Context) {
-	loggerWithID := logger.WithField("wsType", "schemaless")
-	_ = ctl.schemaless.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": loggerWithID})
 }
 
 type schemalessConnReq struct {
@@ -155,7 +156,7 @@ type schemalessConnResp struct {
 }
 
 func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, req schemalessConnReq) {
-	logger := getLogger(session).WithField("action", SchemalessConn).WithField(config.ReqIDKey, req.ReqID)
+	logger := wstool.GetLogger(session).WithField("action", SchemalessConn).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.Lock()
@@ -173,14 +174,14 @@ func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, r
 	logger.Debugln("connect cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if err != nil {
-		wsError(ctx, session, err, SchemalessConn, req.ReqID)
+		wstool.WSError(ctx, session, err, SchemalessConn, req.ReqID)
 		return
 	}
 	t.conn = conn
-	wsWriteJson(session, &schemalessConnResp{
+	wstool.WSWriteJson(session, &schemalessConnResp{
 		Action: SchemalessConn,
 		ReqID:  req.ReqID,
-		Timing: getDuration(ctx),
+		Timing: wstool.GetDuration(ctx),
 	})
 }
 
@@ -193,9 +194,11 @@ type schemalessWriteReq struct {
 }
 
 type schemalessResp struct {
-	ReqID  uint64 `json:"req_id"`
-	Action string `json:"action"`
-	Timing int64  `json:"timing"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	ReqID   uint64 `json:"req_id"`
+	Action  string `json:"action"`
+	Timing  int64  `json:"timing"`
 }
 
 func (t *TaosSchemaless) insert(ctx context.Context, session *melody.Session, req schemalessWriteReq) {
@@ -207,7 +210,7 @@ func (t *TaosSchemaless) insert(ctx context.Context, session *melody.Session, re
 		wsSchemalessErrorMsg(ctx, session, 0xffff, "server not connected", SchemalessWrite, req.ReqID)
 		return
 	}
-	logger := getLogger(session).WithField("action", SchemalessWrite).WithField(config.ReqIDKey, req.ReqID)
+	logger := wstool.GetLogger(session).WithField("action", SchemalessWrite).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	var result unsafe.Pointer
 	s := log.GetLogNow(isDebug)
@@ -234,11 +237,11 @@ func (t *TaosSchemaless) insert(ctx context.Context, session *melody.Session, re
 		err = tErrors.NewError(code, wrapper.TaosErrorStr(result))
 	}
 	if err != nil {
-		wsError(ctx, session, err, SchemalessWrite, req.ReqID)
+		wstool.WSError(ctx, session, err, SchemalessWrite, req.ReqID)
 		return
 	}
-	resp := &schemalessResp{Action: SchemalessWrite, ReqID: req.ReqID, Timing: getDuration(ctx)}
-	wsWriteJson(session, resp)
+	resp := &schemalessResp{Action: SchemalessWrite, ReqID: req.ReqID, Timing: wstool.GetDuration(ctx)}
+	wstool.WSWriteJson(session, resp)
 }
 
 type WSSchemalessErrorResp struct {
@@ -255,7 +258,12 @@ func wsSchemalessErrorMsg(ctx context.Context, session *melody.Session, code int
 		Message: message,
 		Action:  action,
 		ReqID:   reqID,
-		Timing:  getDuration(ctx),
+		Timing:  wstool.GetDuration(ctx),
 	})
 	session.Write(b)
+}
+
+func init() {
+	c := NewSchemalessController()
+	controller.AddController(c)
 }

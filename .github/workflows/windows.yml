@@ -1,17 +1,35 @@
 name: Go_WINDOWS
 
-on: [ pull_request ]
+on: [ push,pull_request ]
 
 jobs:
   build:
     runs-on: windows-2022
     name: build TDengine
+    outputs:
+      commit_id: ${{ steps.get_commit_id.outputs.commit_id }}
     steps:
       - name: checkout TDengine
         uses: actions/checkout@v3
         with:
           repository: 'taosdata/TDengine'
-          ref: 'main'
+          ref: '3.0'
+
+      - name: get_commit_id
+        id: get_commit_id
+        run: |
+          echo "::set-output name=commit_id::$(git rev-parse HEAD)"
+
+      - name: Cache server
+        id: cache-server
+        uses: actions/cache@v3
+        env:
+          cache-name: td-win
+        with:
+          path: C:/TDengine
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ steps.get_commit_id.outputs.commit_id }}
+
+
       - name: install jom
         shell: powershell
         run: |
@@ -25,13 +43,8 @@ jobs:
           mkdir debug
           cd debug
           cmake .. -G "NMake Makefiles JOM" -DBUILD_HTTP=true -DBUILD_JDBC=false -DBUILD_TOOLS=false -DBUILD_TEST=off
-          jom.exe -j 32 install
-
-      - name: Upload TDengine
-        uses: actions/upload-artifact@v3
-        with:
-          name: TDengine
-          path: C:/TDengine
+          jom.exe 
+          jom.exe install
 
   test:
     needs: build
@@ -41,15 +54,19 @@ jobs:
         go: [ '1.19' ]
     name: Go ${{ matrix.go }}
     steps:
-      - name: Download TDengine
-        uses: actions/download-artifact@v3
+      - name: Cache server
+        id: cache-server
+        uses: actions/cache@v3
+        env:
+          cache-name: td-win
         with:
-          name: TDengine
-          path: TDengine
-
-      - name: copy TDengine
-        shell: cmd
-        run: cp -r TDengine C:/
+          path: C:/TDengine
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ needs.build.outputs.commit_id }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+#      - name: copy TDengine
+#        shell: cmd
+#        run: cp -r TDengine C:/
 
       - name: checkout
         uses: actions/checkout@v3
