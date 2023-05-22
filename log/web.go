@@ -19,7 +19,6 @@ func GinLog() gin.HandlerFunc {
 		}
 		startTime := time.Now()
 		c.Next()
-		reqID, _ := c.Get(config.ReqIDKey)
 		latencyTime := time.Since(startTime)
 		reqMethod := c.Request.Method
 		reqUri := url.QueryEscape(c.Request.RequestURI)
