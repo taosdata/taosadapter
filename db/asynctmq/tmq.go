@@ -228,7 +228,7 @@ void *worker(void *arg) {
                     task->cb(task->param, task->topic_name, 0, pAssign, numOfAssign);
                 }
                 if (pAssign != NULL) {
-                    free(pAssign);
+                    tmq_free_assignment(pAssign);
                 }
                 break;
             }
