@@ -1,6 +1,16 @@
 name: Go_WINDOWS
 
-on: [ push,pull_request ]
+on:
+  pull_request:
+    branches:
+      - 'main'
+      - '3.0'
+  workflow_dispatch:
+    inputs:
+      tbBranch:
+        description: 'TDengine branch'
+        required: true
+        type: string
 
 jobs:
   build:
@@ -9,26 +19,40 @@ jobs:
     outputs:
       commit_id: ${{ steps.get_commit_id.outputs.commit_id }}
     steps:
-      - name: checkout TDengine
+      - name: checkout TDengine by pr
+        if: github.event_name == 'pull_request'
         uses: actions/checkout@v3
         with:
           repository: 'taosdata/TDengine'
-          ref: '3.0'
+          ref: ${{ github.base_ref }}
+
+      - name: checkout TDengine manually
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v3
+        with:
+          repository: 'taosdata/TDengine'
+          ref: ${{ inputs.tbBranch }}
 
       - name: get_commit_id
         id: get_commit_id
         run: |
           echo "::set-output name=commit_id::$(git rev-parse HEAD)"
 
-      - name: Cache server
-        id: cache-server
+      - name: Cache server by pr
+        if: github.event_name == 'pull_request'
+        id: cache-server-pr
         uses: actions/cache@v3
-        env:
-          cache-name: td-win
         with:
           path: C:/TDengine
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ steps.get_commit_id.outputs.commit_id }}
+          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ steps.get_commit_id.outputs.commit_id }}
 
+      - name: Cache server manually
+        if: github.event_name == 'workflow_dispatch'
+        id: cache-server-manually
+        uses: actions/cache@v3
+        with:
+          path: C:/TDengine
+          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ steps.get_commit_id.outputs.commit_id }}
 
       - name: install jom
         shell: powershell
@@ -46,7 +70,7 @@ jobs:
           jom.exe 
           jom.exe install
 
-  test:
+  test_build:
     needs: build
     runs-on: windows-2022
     strategy:
@@ -54,39 +78,72 @@ jobs:
         go: [ '1.19' ]
     name: Go ${{ matrix.go }}
     steps:
-      - name: Cache server
-        id: cache-server
+      - name: get cache server by pr
+        if: github.event_name == 'pull_request'
+        id: get-cache-server-pr
         uses: actions/cache@v3
-        env:
-          cache-name: td-win
         with:
           path: C:/TDengine
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ needs.build.outputs.commit_id }}
+          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ env.cache-name }}-
-#      - name: copy TDengine
-#        shell: cmd
-#        run: cp -r TDengine C:/
+            ${{ runner.os }}-build-${{ github.base_ref }}-
+
+      - name: cache server manually
+        if: github.event_name == 'workflow_dispatch'
+        id: get-cache-server-manually
+        uses: actions/cache@v3
+        with:
+          path: C:/TDengine
+          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ inputs.tbBranch }}-
 
       - name: checkout
         uses: actions/checkout@v3
 
-      - name: Set up Go
-        uses: actions/setup-go@v2
+      - uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go }}
-
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~\AppData\Local\go-build
-            ~\go\pkg\mod
-          key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          cache-dependency-path: go.sum
 
       - name: build taosadapter
         run: go build
+
+  test_go:
+    needs: build
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        go: [ '1.19' ]
+    name: Go ${{ matrix.go }}
+    steps:
+      - name: get cache server by pr
+        if: github.event_name == 'pull_request'
+        id: get-cache-server-pr
+        uses: actions/cache@v3
+        with:
+          path: C:/TDengine
+          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ github.base_ref }}-
+
+      - name: cache server manually
+        if: github.event_name == 'workflow_dispatch'
+        id: get-cache-server-manually
+        uses: actions/cache@v3
+        with:
+          path: C:/TDengine
+          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ inputs.tbBranch }}-
+
+      - name: checkout
+        uses: actions/checkout@v3
+
+      - uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go }}
+          cache-dependency-path: go.sum
 
       - name: run TDengine and test
         shell: cmd
