@@ -1,60 +1,198 @@
 name: GO_MACOS
 
-on: [ push, pull_request ]
+on:
+  pull_request:
+    branches:
+      - 'main'
+      - '3.0'
+  workflow_dispatch:
+    inputs:
+      tbBranch:
+        description: 'TDengine branch'
+        required: true
+        type: string
 
 jobs:
   build:
     runs-on: macos-latest
-    strategy:
-      matrix:
-        go: [ '1.17', '1.19' ]
-    name: Go ${{ matrix.go }}
+    name: Build
+    outputs:
+      commit_id: ${{ steps.get_commit_id.outputs.commit_id }}
     steps:
-      - name: checkout
-        uses: actions/checkout@v3
-        with:
-          path: 'taosadapter'
-      - name: checkout TDengine
+      - name: checkout TDengine by pr
+        if: github.event_name == 'pull_request'
         uses: actions/checkout@v3
         with:
           repository: 'taosdata/TDengine'
           path: 'TDengine'
-          ref: 'main'
+          ref: ${{ github.base_ref }}
+
+      - name: checkout TDengine manually
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v3
+        with:
+          repository: 'taosdata/TDengine'
+          path: 'TDengine'
+          ref: ${{ inputs.tbBranch }}
+
+      - name: get_commit_id
+        id: get_commit_id
+        run: |
+          cd TDengine
+          echo "commit_id=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Cache server by pr
+        if: github.event_name == 'pull_request'
+        id: cache-server-pr
+        uses: actions/cache@v3
+        with:
+          path: server.tar.gz
+          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ steps.get_commit_id.outputs.commit_id }}
+
+      - name: Cache server manually
+        if: github.event_name == 'workflow_dispatch'
+        id: cache-server-manually
+        uses: actions/cache@v3
+        with:
+          path: server.tar.gz
+          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ steps.get_commit_id.outputs.commit_id }}
+
+      - name: prepare install
+        if: ${{ steps.cache-server.outputs.cache-hit != 'true' }}
+        run: brew install geos
 
       - name: install TDengine
+        if: ${{ steps.cache-server.outputs.cache-hit != 'true' }}
         run: |
           cd TDengine
           mkdir debug
           cd debug
-          cmake .. -DBUILD_HTTP=true -DBUILD_JDBC=false -DBUILD_TOOLS=false -DBUILD_TEST=off
-          make -j 32
-          sudo make install
+          cmake .. -DBUILD_JDBC=false -DBUILD_TEST=off -DVERNUMBER=3.9.9.9
+          make -j 4
 
-      - name: Set up Go
-        uses: actions/setup-go@v2
+      - name: package
+        if: ${{ steps.cache-server.outputs.cache-hit != 'true' }}
+        run: |
+          mkdir -p ./release
+          cp ./TDengine/debug/build/bin/taos ./release/
+          cp ./TDengine/debug/build/bin/taosd ./release/
+          cp ./TDengine/debug/build/lib/libtaos.3.9.9.9.dylib ./release/
+          cp ./TDengine/include/client/taos.h ./release/
+          cat >./release/install.sh<<EOF 
+          chmod +x ./taos
+          chmod +x ./taosd
+          cp ./taos /usr/local/bin
+          cp ./taosd /usr/local/bin
+          cp ./libtaos.3.9.9.9.dylib /usr/local/lib
+          ln -sf /usr/local/lib/libtaos.3.9.9.9.dylib /usr/local/lib/libtaos.1.dylib
+          ln -sf /usr/local/lib/libtaos.1.dylib /usr/local/lib/libtaos.dylib
+          cp ./taos.h /usr/local/include
+          EOF
+          tar -zcvf server.tar.gz ./release
+
+  test_build:
+    runs-on: macos-latest
+    needs: build
+    strategy:
+      matrix:
+        go: [ '1.17', '1.19' ]
+    name: Build taosAdapter ${{ matrix.go }}
+    steps:
+      - name: get cache server by pr
+        if: github.event_name == 'pull_request'
+        id: get-cache-server-pr
+        uses: actions/cache@v3
+        with:
+          path: server.tar.gz
+          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ github.base_ref }}-
+
+      - name: get cache server manually
+        if: github.event_name == 'workflow_dispatch'
+        id: get-cache-server-manually
+        uses: actions/cache@v3
+        with:
+          path: server.tar.gz
+          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ inputs.tbBranch }}-
+
+      - name: prepare install
+        run: brew install geos
+
+      - name: install
+        run: |
+          tar -zxvf server.tar.gz
+          cd release && sudo sh install.sh
+
+      - name: checkout
+        uses: actions/checkout@v3
+        with:
+          path: 'taosadapter'
+
+      - uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go }}
+          cache-dependency-path: taosadapter/go.sum
 
-      - uses: actions/cache@v3
+      - name: build taosAdapter
+        run: cd ./taosadapter && go build
+
+  test_go_test:
+    runs-on: macos-latest
+    needs: build
+    strategy:
+      matrix:
+        go: [ '1.17', '1.19' ]
+    name: test taosAdapter ${{ matrix.go }}
+    steps:
+      - name: get cache server by pr
+        if: github.event_name == 'pull_request'
+        id: get-cache-server-pr
+        uses: actions/cache@v3
         with:
-          path: |
-            ~/Library/Caches/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ matrix.go }}-${{ hashFiles('taosadapter/go.sum') }}
+          path: server.tar.gz
+          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-go-${{ matrix.go }}-
+            ${{ runner.os }}-build-${{ github.base_ref }}-
 
-      - name: shell
+      - name: get cache server manually
+        if: github.event_name == 'workflow_dispatch'
+        id: get-cache-server-manually
+        uses: actions/cache@v3
+        with:
+          path: server.tar.gz
+          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ inputs.tbBranch }}-
+
+      - name: prepare install
+        run: brew install geos
+
+      - name: install
+        run: |
+          tar -zxvf server.tar.gz
+          cd release && sudo sh install.sh
+
+      - name: checkout
+        uses: actions/checkout@v3
+        with:
+          path: 'taosadapter'
+
+      - uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go }}
+          cache-dependency-path: taosadapter/go.sum
+
+      - name: start shell
         run: |
           cat >start.sh<<EOF
           ulimit -n 65535 && TAOS_SUPPORT_VNODES=256 taosd
           EOF
 
-      - name: taosd
+      - name: start taosd
         run: nohup sudo sh ./start.sh &
 
-      - name: build taosadapter
-        run: cd ./taosadapter && go build
-
-      - name: Test
+      - name: test
         run: cd ./taosadapter && go test -v --count=1 ./...
