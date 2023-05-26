@@ -19,19 +19,19 @@ jobs:
     outputs:
       commit_id: ${{ steps.get_commit_id.outputs.commit_id }}
     steps:
-      - - name: checkout TDengine by pr
-          if: github.event_name == 'pull_request'
-          uses: actions/checkout@v3
-          with:
-            repository: 'taosdata/TDengine'
-            ref: ${{ github.base_ref }}
+      - name: checkout TDengine by pr
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v3
+        with:
+          repository: 'taosdata/TDengine'
+          ref: ${{ github.base_ref }}
 
-        - name: checkout TDengine manually
-          if: github.event_name == 'workflow_dispatch'
-          uses: actions/checkout@v3
-          with:
-            repository: 'taosdata/TDengine'
-            ref: ${{ inputs.tbBranch }}
+      - name: checkout TDengine manually
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v3
+        with:
+          repository: 'taosdata/TDengine'
+          ref: ${{ inputs.tbBranch }}
 
       - name: get_commit_id
         id: get_commit_id
