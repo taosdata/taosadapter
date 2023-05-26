@@ -14,7 +14,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-11
+    runs-on: macos-latest
     name: Build
     outputs:
       commit_id: ${{ steps.get_commit_id.outputs.commit_id }}
@@ -59,7 +59,7 @@ jobs:
 
       - name: prepare install
         if: ${{ steps.cache-server.outputs.cache-hit != 'true' }}
-        run: brew install geos
+        run: brew install argp-standalone pkgconfig geos
 
       - name: install TDengine
         if: ${{ steps.cache-server.outputs.cache-hit != 'true' }}
@@ -91,7 +91,7 @@ jobs:
           tar -zcvf server.tar.gz ./release
 
   test_build:
-    runs-on: macos-11
+    runs-on: macos-latest
     needs: build
     strategy:
       matrix:
@@ -140,7 +140,7 @@ jobs:
         run: cd ./taosadapter && go build
 
   test_go_test:
-    runs-on: macos-11
+    runs-on: macos-latest
     needs: build
     strategy:
       matrix:
