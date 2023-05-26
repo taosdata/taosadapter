@@ -14,7 +14,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-11
     name: Build
     outputs:
       commit_id: ${{ steps.get_commit_id.outputs.commit_id }}
@@ -91,7 +91,7 @@ jobs:
           tar -zcvf server.tar.gz ./release
 
   test_build:
-    runs-on: macos-latest
+    runs-on: macos-11
     needs: build
     strategy:
       matrix:
@@ -140,7 +140,7 @@ jobs:
         run: cd ./taosadapter && go build
 
   test_go_test:
-    runs-on: macos-latest
+    runs-on: macos-11
     needs: build
     strategy:
       matrix:
