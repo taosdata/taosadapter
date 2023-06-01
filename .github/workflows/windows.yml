@@ -55,11 +55,17 @@ jobs:
           key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ steps.get_commit_id.outputs.commit_id }}
 
       - name: install jom
+        if: >
+          (github.event_name == 'workflow_dispatch' && steps.cache-server-manually.outputs.cache-hit != 'true') ||
+          (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true')
         shell: powershell
         run: |
           Start-BitsTransfer -Source http://download.qt.io/official_releases/jom/jom.zip
           7z x jom.zip
       - name: install TDengine
+        if: >
+          (github.event_name == 'workflow_dispatch' && steps.cache-server-manually.outputs.cache-hit != 'true') ||
+          (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true')
         shell: cmd
         run: |
           set PATH=%PATH%;%cd%
