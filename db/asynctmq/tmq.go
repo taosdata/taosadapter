@@ -25,6 +25,8 @@ typedef enum {
     TAOSA_TMQ_CONSUMER_CLOSE = 8,
     TAOSA_TMQ_GET_RAW = 9,
     TAOSA_TMQ_GET_JSON_META = 10,
+    TAOSA_TMQ_GET_TOPIC_ASSIGNMENT = 11,
+    TAOSA_TMQ_OFFSET_SEEK = 12,
 } TMQ_EVENT;
 
 typedef struct tmq_thread {
@@ -56,6 +58,10 @@ typedef void(*adapter_tmq_get_raw_cb)(uintptr_t param, int32_t errcode);
 
 typedef void(*adapter_tmq_get_json_meta_cb)(uintptr_t param, char *meta);
 
+typedef void(*adapter_tmq_get_topic_assignment_cb)(uintptr_t param, char *topic_name, int32_t errcode, tmq_topic_assignment *assignment,
+                                                   int32_t numOfAssignment);
+
+typedef void(*adapter_tmq_offset_seek_cb)(uintptr_t param, char *topic_name, int32_t code);
 
 typedef struct poll_task {
     tmq_t *tmq;
@@ -110,7 +116,6 @@ typedef struct consumer_close_task {
     uintptr_t param;
 } consumer_close_task;
 
-
 typedef struct tmq_get_raw_task {
     TAOS_RES *res;
     tmq_raw_data *raw;
@@ -124,13 +129,29 @@ typedef struct tmq_get_json_meta_task {
     uintptr_t param;
 } tmq_get_json_meta_task;
 
+typedef struct tmq_get_topic_assignment_task {
+    tmq_t *tmq;
+    char *topic_name;
+    adapter_tmq_get_topic_assignment_cb cb;
+    uintptr_t param;
+} tmq_get_topic_assignment_task;
+
+typedef struct tmq_offset_seek_task {
+    tmq_t *tmq;
+    char *topic_name;
+    int32_t vgId;
+    int64_t offset;
+    adapter_tmq_offset_seek_cb cb;
+    uintptr_t param;
+} tmq_offset_seek_task;
+
 void *worker(void *arg) {
     tmq_thread *thread_info = (tmq_thread *) arg;
     while (1) {
         pthread_mutex_lock(&thread_info->lock);
-    	while (thread_info->task == NULL && !thread_info->shutdown) {
-        	pthread_cond_wait(&thread_info->notify, &thread_info->lock);
-    	}
+        while (thread_info->task == NULL && !thread_info->shutdown) {
+            pthread_cond_wait(&thread_info->notify, &thread_info->lock);
+        }
         if (thread_info->shutdown) break;
         int need_free = 1;
         switch (thread_info->event) {
@@ -188,17 +209,38 @@ void *worker(void *arg) {
                 tmq_get_raw_task *task = (tmq_get_raw_task *) thread_info->task;
                 int32_t error_code = tmq_get_raw(task->res, task->raw);
                 task->cb(task->param, error_code);
-				break;
+                break;
             }
-            case TAOSA_TMQ_GET_JSON_META:{
+            case TAOSA_TMQ_GET_JSON_META: {
                 tmq_get_json_meta_task *task = (tmq_get_json_meta_task *) thread_info->task;
                 char *meta = tmq_get_json_meta(task->res);
-                task->cb(task->param,meta);
-				break;
+                task->cb(task->param, meta);
+                break;
+            }
+            case TAOSA_TMQ_GET_TOPIC_ASSIGNMENT: {
+                tmq_get_topic_assignment_task *task = (tmq_get_topic_assignment_task *) thread_info->task;
+                tmq_topic_assignment *pAssign = NULL;
+                int32_t numOfAssign = 0;
+                int32_t code = tmq_get_topic_assignment(task->tmq, task->topic_name, &pAssign, &numOfAssign);
+                if (code != 0) {
+                    task->cb(task->param, task->topic_name, code, NULL, 0);
+                } else {
+                    task->cb(task->param, task->topic_name, 0, pAssign, numOfAssign);
+                }
+                if (pAssign != NULL) {
+                    tmq_free_assignment(pAssign);
+                }
+                break;
+            }
+            case TAOSA_TMQ_OFFSET_SEEK: {
+                tmq_offset_seek_task *task = (tmq_offset_seek_task *) thread_info->task;
+                int32_t error_code = tmq_offset_seek(task->tmq, task->topic_name, task->vgId, task->offset);
+                task->cb(task->param, task->topic_name, error_code);
+                break;
             }
             default:
                 need_free = 0;
-				break;
+                break;
         }
         if (need_free) {
             free(thread_info->task);
@@ -342,7 +384,8 @@ adapter_tmq_consumer_close_a(tmq_thread *thread_info, tmq_t *tmq, adapter_tmq_co
     pthread_mutex_unlock(&(thread_info->lock));
 }
 
-void adapter_tmq_get_raw_a(tmq_thread *thread_info, TAOS_RES *res, tmq_raw_data *raw, adapter_tmq_get_raw_cb cb, uintptr_t param) {
+void adapter_tmq_get_raw_a(tmq_thread *thread_info, TAOS_RES *res, tmq_raw_data *raw, adapter_tmq_get_raw_cb cb,
+                           uintptr_t param) {
     tmq_get_raw_task *task = (tmq_get_raw_task *) malloc(sizeof(tmq_get_raw_task));
     task->res = res;
     task->raw = raw;
@@ -355,13 +398,46 @@ void adapter_tmq_get_raw_a(tmq_thread *thread_info, TAOS_RES *res, tmq_raw_data 
     pthread_mutex_unlock(&(thread_info->lock));
 }
 
-void adapter_tmq_get_json_meta_a(tmq_thread *thread_info, TAOS_RES *res, adapter_tmq_get_json_meta_cb cb, uintptr_t param) {
+void
+adapter_tmq_get_json_meta_a(tmq_thread *thread_info, TAOS_RES *res, adapter_tmq_get_json_meta_cb cb, uintptr_t param) {
     tmq_get_json_meta_task *task = (tmq_get_json_meta_task *) malloc(sizeof(tmq_get_json_meta_task));
     task->res = res;
     task->cb = cb;
     task->param = param;
     pthread_mutex_lock(&(thread_info->lock));
     thread_info->event = TAOSA_TMQ_GET_JSON_META;
+    thread_info->task = task;
+    pthread_cond_signal(&(thread_info->notify));
+    pthread_mutex_unlock(&(thread_info->lock));
+}
+
+void adapter_tmq_get_topic_assignment_a(tmq_thread *thread_info, tmq_t *tmq, char *topic_name,
+                                        adapter_tmq_get_topic_assignment_cb cb, uintptr_t param) {
+    tmq_get_topic_assignment_task *task = (tmq_get_topic_assignment_task *) malloc(
+            sizeof(tmq_get_topic_assignment_task));
+    task->tmq = tmq;
+    task->topic_name = topic_name;
+    task->cb = cb;
+    task->param = param;
+    pthread_mutex_lock(&(thread_info->lock));
+    thread_info->event = TAOSA_TMQ_GET_TOPIC_ASSIGNMENT;
+    thread_info->task = task;
+    pthread_cond_signal(&(thread_info->notify));
+    pthread_mutex_unlock(&(thread_info->lock));
+}
+
+void
+adapter_tmq_offset_seek_a(tmq_thread *thread_info, tmq_t *tmq, char *topic_name, int32_t vgId, int64_t offset,
+                          adapter_tmq_offset_seek_cb cb, uintptr_t param) {
+    tmq_offset_seek_task *task = (tmq_offset_seek_task *) malloc(sizeof(tmq_offset_seek_task));
+    task->tmq = tmq;
+    task->topic_name = topic_name;
+    task->vgId = vgId;
+    task->offset = offset;
+    task->cb = cb;
+    task->param = param;
+    pthread_mutex_lock(&(thread_info->lock));
+    thread_info->event = TAOSA_TMQ_OFFSET_SEEK;
     thread_info->task = task;
     pthread_cond_signal(&(thread_info->notify));
     pthread_mutex_unlock(&(thread_info->lock));
@@ -386,6 +462,11 @@ extern void AdapterTMQConsumerCloseCallback(uintptr_t param, int32_t errcode);
 extern void AdapterTMQGetRawCallback(uintptr_t param, int32_t errcode);
 
 extern void AdapterTMQGetJsonMetaCallback(uintptr_t param, char *meta);
+
+extern void AdapterTMQGetTopicAssignmentCallback(uintptr_t param, char *topic_name, int32_t errcode, tmq_topic_assignment *assignment,
+                                                 int32_t numOfAssignment);
+
+extern void AdapterTMQOffsetSeekCallback(uintptr_t param, char *topic_name, int32_t errcode);
 
 void taosa_tmq_poll_a_wrapper(tmq_thread *thread_info, tmq_t *tmq, int64_t timeout, uintptr_t param) {
     return adapter_tmq_poll_a(thread_info, tmq, timeout, AdapterTMQPollCallback, param);
@@ -421,11 +502,20 @@ void taosa_tmq_consumer_close_a_wrapper(tmq_thread *thread_info, tmq_t *tmq, uin
 }
 
 void taosa_tmq_get_raw_a_wrapper(tmq_thread *thread_info, TAOS_RES *res, tmq_raw_data *raw, uintptr_t param) {
-    adapter_tmq_get_raw_a(thread_info, res,raw, AdapterTMQGetRawCallback, param);
+    adapter_tmq_get_raw_a(thread_info, res, raw, AdapterTMQGetRawCallback, param);
 }
 
 void taosa_tmq_get_json_meta_a_wrapper(tmq_thread *thread_info, TAOS_RES *res, uintptr_t param) {
     adapter_tmq_get_json_meta_a(thread_info, res, AdapterTMQGetJsonMetaCallback, param);
+}
+
+void taosa_tmq_get_topic_assignment_a_wrapper(tmq_thread *thread_info, tmq_t *tmq, char *topic_name, uintptr_t param) {
+    adapter_tmq_get_topic_assignment_a(thread_info, tmq, topic_name, AdapterTMQGetTopicAssignmentCallback, param);
+}
+
+void taosa_tmq_offset_seek_a_wrapper(tmq_thread *thread_info, tmq_t *tmq, char *topic_name, int32_t vgId,
+                                     int64_t offset, uintptr_t param) {
+    adapter_tmq_offset_seek_a(thread_info, tmq, topic_name, vgId, offset, AdapterTMQOffsetSeekCallback, param);
 }
 */
 import "C"
@@ -502,4 +592,16 @@ func TaosaTMQGetRawA(tmqThread unsafe.Pointer, res unsafe.Pointer, rawData unsaf
 // TaosaTMQGetJsonMetaA void taosa_tmq_get_json_meta_a_wrapper(tmq_thread *thread_info, TAOS_RES *res, uintptr_t param) {
 func TaosaTMQGetJsonMetaA(tmqThread unsafe.Pointer, res unsafe.Pointer, caller cgo.Handle) {
 	C.taosa_tmq_get_json_meta_a_wrapper((*C.tmq_thread)(tmqThread), res, C.uintptr_t(caller))
+}
+
+// TaosaTMQGetTopicAssignmentA void taosa_tmq_get_topic_assignment_a_wrapper(tmq_thread *thread_info, tmq_t *tmq, char *topic_name, uintptr_t param) {
+func TaosaTMQGetTopicAssignmentA(tmqThread, tmq unsafe.Pointer, topic string, caller cgo.Handle) {
+	topicName := C.CString(topic)
+	C.taosa_tmq_get_topic_assignment_a_wrapper((*C.tmq_thread)(tmqThread), (*C.tmq_t)(tmq), topicName, C.uintptr_t(caller))
+}
+
+// TaosaTMQOffsetSeekA void taosa_tmq_offset_seek_a_wrapper(tmq_thread *thread_info, tmq_t *tmq, char *topic_name, int32_t vgId, int64_t offset, uintptr_t param) {
+func TaosaTMQOffsetSeekA(tmqThread, tmq unsafe.Pointer, topic string, vgID int32, offset int64, caller cgo.Handle) {
+	topicName := C.CString(topic)
+	C.taosa_tmq_offset_seek_a_wrapper((*C.tmq_thread)(tmqThread), (*C.tmq_t)(tmq), topicName, C.int32_t(vgID), C.int64_t(offset), C.uintptr_t(caller))
 }

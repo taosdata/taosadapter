@@ -1,104 +1,139 @@
 package commonpool
 
 import (
+	"context"
 	"runtime"
-	"strconv"
-	"strings"
 	"sync"
 	"unsafe"
 
-	"github.com/silenceper/pool"
+	"github.com/sirupsen/logrus"
+	"github.com/taosdata/driver-go/v3/common"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/driver-go/v3/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/httperror"
+	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/tools/connectpool"
 )
 
 type ConnectorPool struct {
-	user     string
-	password string
-	pool     pool.Pool
+	notifyChan chan int32
+	user       string
+	password   string
+	pool       *connectpool.ConnectPool
+	logger     *logrus.Entry
+	once       sync.Once
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
 func NewConnectorPool(user, password string) (*ConnectorPool, error) {
-	a := &ConnectorPool{user: user, password: password}
+	cp := &ConnectorPool{
+		user:       user,
+		password:   password,
+		notifyChan: make(chan int32, 1),
+		logger:     log.GetLogger("connect_pool").WithField("user", user),
+	}
 	maxConnect := config.Conf.Pool.MaxConnect
-	maxIdle := config.Conf.Pool.MaxIdle
 	if maxConnect == 0 {
 		maxConnect = runtime.GOMAXPROCS(0) * 2
-		maxIdle = maxConnect
 	}
-	poolConfig := &pool.Config{
-		InitialCap:  1,
-		MaxCap:      maxConnect,
-		MaxIdle:     maxIdle,
-		Factory:     a.factory,
-		Close:       a.close,
-		IdleTimeout: config.Conf.Pool.IdleTimeout,
+	poolConfig := &connectpool.Config{
+		InitialCap: 1,
+		MaxCap:     maxConnect,
+		Factory:    cp.factory,
+		Close:      cp.close,
 	}
-	p, err := pool.NewChannelPool(poolConfig)
+	p, err := connectpool.NewConnectPool(poolConfig)
 
 	if err != nil {
-		errStr := err.Error()
-		if strings.HasPrefix(errStr, "factory is not able to fill the pool: [0x") {
-			splitIndex := strings.IndexByte(errStr, ']')
-			if splitIndex == -1 {
-				return nil, err
-			}
-			code, parseErr := strconv.ParseInt(errStr[39:splitIndex], 0, 32)
-			if parseErr != nil {
-				return nil, err
-			}
-			msg := errStr[splitIndex+2:]
-			return nil, tErrors.NewError(int(code), msg)
-		}
 		return nil, err
 	}
-	a.pool = p
-	return a, nil
+	cp.pool = p
+	v, _ := p.Get()
+	cp.ctx, cp.cancel = context.WithCancel(context.Background())
+	errCode := wrapper.TaosSetNotifyCB(v, cgo.NewHandle(cp.notifyChan), common.TAOS_NOTIFY_PASSVER)
+	if errCode != 0 {
+		errStr := wrapper.TaosErrorStr(nil)
+		p.Put(v)
+		p.Release()
+		return nil, tErrors.NewError(int(errCode), errStr)
+	}
+	p.Put(v)
+	go func() {
+		select {
+		case <-cp.notifyChan:
+			connectionLocker.Lock()
+			defer connectionLocker.Unlock()
+			cp.Release()
+			return
+		case <-cp.ctx.Done():
+			return
+		}
+	}()
+
+	return cp, nil
 }
 
-func (a *ConnectorPool) factory() (interface{}, error) {
+func (cp *ConnectorPool) factory() (unsafe.Pointer, error) {
 	thread.Lock()
 	defer thread.Unlock()
-	return wrapper.TaosConnect("", a.user, a.password, "", 0)
+	return wrapper.TaosConnect("", cp.user, cp.password, "", 0)
 }
 
-func (a *ConnectorPool) close(v interface{}) error {
+func (cp *ConnectorPool) close(v unsafe.Pointer) error {
 	if v != nil {
 		thread.Lock()
 		defer thread.Unlock()
-		wrapper.TaosClose(v.(unsafe.Pointer))
+		wrapper.TaosClose(v)
 	}
 	return nil
 }
 
-func (a *ConnectorPool) Get() (unsafe.Pointer, error) {
-	v, err := a.pool.Get()
+var AuthFailureError = tErrors.NewError(httperror.TSDB_CODE_MND_AUTH_FAILURE, "Authentication failure")
+
+func (cp *ConnectorPool) Get() (unsafe.Pointer, error) {
+	v, err := cp.pool.Get()
 	if err != nil {
+		if err == connectpool.ErrClosed {
+			cp.logger.Warn("connect poll closed return Authentication failure")
+			return nil, AuthFailureError
+		}
 		return nil, err
 	}
-	return v.(unsafe.Pointer), nil
+	return v, nil
 }
 
-func (a *ConnectorPool) Put(c unsafe.Pointer) error {
+func (cp *ConnectorPool) Put(c unsafe.Pointer) error {
 	wrapper.TaosResetCurrentDB(c)
-	return a.pool.Put(c)
+	return cp.pool.Put(c)
 }
 
-func (a *ConnectorPool) Close(c unsafe.Pointer) error {
-	return a.pool.Close(c)
+func (cp *ConnectorPool) Close(c unsafe.Pointer) error {
+	return cp.pool.Close(c)
 }
 
-func (a *ConnectorPool) Release() {
-	a.pool.Release()
+func (cp *ConnectorPool) verifyPassword(password string) bool {
+	return password == cp.password
 }
 
-func (a *ConnectorPool) verifyPassword(password string) bool {
-	return password == a.password
+func (cp *ConnectorPool) Release() {
+	cp.once.Do(func() {
+		cp.cancel()
+		v, exist := connectionMap.Load(cp.user)
+		if exist && v == cp {
+			connectionMap.Delete(cp.user)
+		}
+		close(cp.notifyChan)
+		cp.pool.Release()
+		cp.logger.Warnln("connector released")
+	})
 }
 
 var connectionMap = sync.Map{}
+var connectionLocker sync.Mutex
 
 type Conn struct {
 	TaosConnection unsafe.Pointer
@@ -113,30 +148,43 @@ func GetConnection(user, password string) (*Conn, error) {
 	p, exist := connectionMap.Load(user)
 	if exist {
 		connectionPool := p.(*ConnectorPool)
-		if !connectionPool.verifyPassword(password) {
+		if connectionPool.verifyPassword(password) {
+			return getConnectDirect(connectionPool)
+		} else {
+			return getConnectionSafe(user, password)
+		}
+	} else {
+		return getConnectionSafe(user, password)
+	}
+}
+
+func getConnectDirect(connectionPool *ConnectorPool) (*Conn, error) {
+	c, err := connectionPool.Get()
+	if err != nil {
+		return nil, err
+	}
+	return &Conn{
+		TaosConnection: c,
+		pool:           connectionPool,
+	}, nil
+}
+
+func getConnectionSafe(user, password string) (*Conn, error) {
+	connectionLocker.Lock()
+	defer connectionLocker.Unlock()
+	p, exist := connectionMap.Load(user)
+	if exist {
+		connectionPool := p.(*ConnectorPool)
+		if connectionPool.verifyPassword(password) {
+			return getConnectDirect(connectionPool)
+		} else {
 			newPool, err := NewConnectorPool(user, password)
 			if err != nil {
 				return nil, err
 			}
 			connectionPool.Release()
 			connectionMap.Store(user, newPool)
-			c, err := newPool.Get()
-			if err != nil {
-				return nil, err
-			}
-			return &Conn{
-				TaosConnection: c,
-				pool:           newPool,
-			}, nil
-		} else {
-			c, err := connectionPool.Get()
-			if err != nil {
-				return nil, err
-			}
-			return &Conn{
-				TaosConnection: c,
-				pool:           connectionPool,
-			}, nil
+			return getConnectDirect(newPool)
 		}
 	} else {
 		newPool, err := NewConnectorPool(user, password)
@@ -144,13 +192,6 @@ func GetConnection(user, password string) (*Conn, error) {
 			return nil, err
 		}
 		connectionMap.Store(user, newPool)
-		c, err := newPool.Get()
-		if err != nil {
-			return nil, err
-		}
-		return &Conn{
-			TaosConnection: c,
-			pool:           newPool,
-		}, nil
+		return getConnectDirect(newPool)
 	}
 }

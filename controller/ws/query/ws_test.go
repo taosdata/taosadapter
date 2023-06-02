@@ -1,4 +1,4 @@
-package rest
+package query
 
 import (
 	"bytes"
@@ -11,10 +11,34 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/controller"
+	_ "github.com/taosdata/taosadapter/v3/controller/rest"
+	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
+	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 )
+
+var router *gin.Engine
+
+func TestMain(m *testing.M) {
+	viper.Set("pool.maxConnect", 10000)
+	viper.Set("pool.maxIdle", 10000)
+	viper.Set("logLevel", "debug")
+	config.Init()
+	db.PrepareConnection()
+	gin.SetMode(gin.ReleaseMode)
+	router = gin.New()
+	controllers := controller.GetControllers()
+	for _, webController := range controllers {
+		webController.Init(router)
+	}
+	m.Run()
+}
 
 // @author: xftan
 // @date: 2022/2/22 14:42
@@ -141,7 +165,7 @@ func TestWebsocket(t *testing.T) {
 			if d.Completed {
 				status = AfterVersion
 				action, _ := json.Marshal(&WSAction{
-					Action: ClientVersion,
+					Action: wstool.ClientVersion,
 					Args:   nil,
 				})
 				err = ws.WriteMessage(
@@ -424,7 +448,7 @@ func TestWriteBlock(t *testing.T) {
 			if d.Completed {
 				status = AfterVersion
 				action, _ := json.Marshal(&WSAction{
-					Action: ClientVersion,
+					Action: wstool.ClientVersion,
 					Args:   nil,
 				})
 				err = ws.WriteMessage(
@@ -454,15 +478,15 @@ func TestWriteBlock(t *testing.T) {
 			//block
 			buffer := &bytes.Buffer{}
 			// req id
-			writeUint64(buffer, 300)
+			wstool.WriteUint64(buffer, 300)
 			// message id
-			writeUint64(buffer, 400)
+			wstool.WriteUint64(buffer, 400)
 			// action
-			writeUint64(buffer, RawBlockMessage)
+			wstool.WriteUint64(buffer, RawBlockMessage)
 			// rows
-			writeUint32(buffer, uint32(rows))
+			wstool.WriteUint32(buffer, uint32(rows))
 			// table name length
-			writeUint16(buffer, uint16(2))
+			wstool.WriteUint16(buffer, uint16(2))
 			// table name
 			buffer.WriteString("t2")
 			// raw block
@@ -634,7 +658,7 @@ func TestWriteBlock(t *testing.T) {
 			if d.Completed {
 				status = AfterVersion
 				action, _ := json.Marshal(&WSAction{
-					Action: ClientVersion,
+					Action: wstool.ClientVersion,
 					Args:   nil,
 				})
 				err = ws.WriteMessage(
@@ -910,7 +934,7 @@ func TestWriteBlockWithFields(t *testing.T) {
 			if d.Completed {
 				status = AfterVersion
 				action, _ := json.Marshal(&WSAction{
-					Action: ClientVersion,
+					Action: wstool.ClientVersion,
 					Args:   nil,
 				})
 				err = ws.WriteMessage(
@@ -940,15 +964,15 @@ func TestWriteBlockWithFields(t *testing.T) {
 			//block
 			buffer := &bytes.Buffer{}
 			// req id
-			writeUint64(buffer, 300)
+			wstool.WriteUint64(buffer, 300)
 			// message id
-			writeUint64(buffer, 400)
+			wstool.WriteUint64(buffer, 400)
 			// action
-			writeUint64(buffer, RawBlockMessageWithFields)
+			wstool.WriteUint64(buffer, RawBlockMessageWithFields)
 			// rows
-			writeUint32(buffer, uint32(rows))
+			wstool.WriteUint32(buffer, uint32(rows))
 			// table name length
-			writeUint16(buffer, uint16(2))
+			wstool.WriteUint16(buffer, uint16(2))
 			// table name
 			buffer.WriteString("t2")
 			// raw block
@@ -1148,7 +1172,7 @@ func TestWriteBlockWithFields(t *testing.T) {
 			if d.Completed {
 				status = AfterVersion
 				action, _ := json.Marshal(&WSAction{
-					Action: ClientVersion,
+					Action: wstool.ClientVersion,
 					Args:   nil,
 				})
 				err = ws.WriteMessage(

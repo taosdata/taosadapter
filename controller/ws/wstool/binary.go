@@ -1,8 +1,8 @@
-package rest
+package wstool
 
 import "bytes"
 
-func writeUint64(buffer *bytes.Buffer, v uint64) {
+func WriteUint64(buffer *bytes.Buffer, v uint64) {
 	buffer.WriteByte(byte(v))
 	buffer.WriteByte(byte(v >> 8))
 	buffer.WriteByte(byte(v >> 16))
@@ -13,14 +13,14 @@ func writeUint64(buffer *bytes.Buffer, v uint64) {
 	buffer.WriteByte(byte(v >> 56))
 }
 
-func writeUint32(buffer *bytes.Buffer, v uint32) {
+func WriteUint32(buffer *bytes.Buffer, v uint32) {
 	buffer.WriteByte(byte(v))
 	buffer.WriteByte(byte(v >> 8))
 	buffer.WriteByte(byte(v >> 16))
 	buffer.WriteByte(byte(v >> 24))
 }
 
-func writeUint16(buffer *bytes.Buffer, v uint16) {
+func WriteUint16(buffer *bytes.Buffer, v uint16) {
 	buffer.WriteByte(byte(v))
 	buffer.WriteByte(byte(v >> 8))
 }
