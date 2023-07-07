@@ -219,14 +219,14 @@ func TestUpload(t *testing.T) {
 2022-08-30 11:52:40.549,123,123.123000000,
 `
 	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists test_upload")
+	body := strings.NewReader("create database if not exists `test_Upload`")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
 	w = httptest.NewRecorder()
-	body = strings.NewReader("create table if not exists test_upload.t2(ts timestamp,n1 int,n2 double,n3 binary(30))")
+	body = strings.NewReader("create table if not exists `test_Upload`.`T2`(ts timestamp,n1 int,n2 double,n3 binary(30))")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -246,14 +246,14 @@ func TestUpload(t *testing.T) {
 		fmt.Println(err)
 		return
 	}
-	req, _ = http.NewRequest(http.MethodPost, "/rest/upload?db=test_upload&table=t2&batch=10", payload)
+	req, _ = http.NewRequest(http.MethodPost, "/rest/upload?db=test_Upload&table=T2&batch=10", payload)
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
 	w = httptest.NewRecorder()
-	body = strings.NewReader("select n1,n2,n3 from test_upload.t2")
+	body = strings.NewReader("select n1,n2,n3 from `test_Upload`.`T2`")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -275,7 +275,7 @@ func TestUpload(t *testing.T) {
 	result.Data[5][2] = nil
 
 	w = httptest.NewRecorder()
-	body = strings.NewReader(`drop database if exists test_upload`)
+	body = strings.NewReader("drop database if exists `test_Upload`")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
