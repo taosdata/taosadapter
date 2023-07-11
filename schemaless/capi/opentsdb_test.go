@@ -6,6 +6,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/spf13/viper"
 	"github.com/taosdata/driver-go/v2/wrapper"
 	"github.com/taosdata/taosadapter/config"
 	"github.com/taosdata/taosadapter/db"
@@ -13,6 +14,8 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	viper.Set("smlAutoCreateDB", true)
+	defer viper.Set("smlAutoCreateDB", false)
 	config.Init()
 	db.PrepareConnection()
 	m.Run()

@@ -17,6 +17,7 @@ type Config struct {
 	Port            int
 	LogLevel        string
 	RestfulRowLimit int
+	SMLAutoCreateDB bool
 	SSl             SSl
 	Log             Log
 	Pool            Pool
@@ -66,6 +67,7 @@ func Init() {
 		LogLevel:        viper.GetString("logLevel"),
 		TaosConfigDir:   viper.GetString("taosConfigDir"),
 		RestfulRowLimit: viper.GetInt("restfulRowLimit"),
+		SMLAutoCreateDB: viper.GetBool("smlAutoCreateDB"),
 	}
 	Conf.Log.setValue()
 	Conf.Cors.setValue()
@@ -96,6 +98,10 @@ func init() {
 	viper.SetDefault("restfulRowLimit", -1)
 	_ = viper.BindEnv("restfulRowLimit", "TAOS_ADAPTER_RESTFUL_ROW_LIMIT")
 	pflag.Int("restfulRowLimit", -1, `restful returns the maximum number of rows (-1 means no limit). Env "TAOS_ADAPTER_RESTFUL_ROW_LIMIT"`)
+
+	viper.SetDefault("smlAutoCreateDB", false)
+	_ = viper.BindEnv("smlAutoCreateDB", "TAOS_ADAPTER_SML_AUTO_CREATE_DB")
+	pflag.Bool("smlAutoCreateDB", false, `Whether to automatically create db when writing with schemaless. Env "TAOS_ADAPTER_SML_AUTO_CREATE_DB"`)
 
 	initLog()
 	initSSL()

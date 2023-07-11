@@ -37,6 +37,7 @@ func TestInit(t *testing.T) {
 				LogLevel:        "info",
 				SSl:             SSl{Enable: false, CertFile: "", KeyFile: ""},
 				RestfulRowLimit: -1,
+				SMLAutoCreateDB: false,
 				Log: Log{
 					Path:                "/var/log/taos",
 					RotationCount:       30,
