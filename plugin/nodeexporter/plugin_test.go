@@ -36,6 +36,8 @@ test_metric{label="value"} 1.0 1490802350000
 // @date: 2021/12/14 15:08
 // @description: test node-exporter plugin
 func TestNodeExporter_Gather(t *testing.T) {
+	viper.Set("smlAutoCreateDB", true)
+	defer viper.Set("smlAutoCreateDB", false)
 	config.Init()
 	db.PrepareConnection()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

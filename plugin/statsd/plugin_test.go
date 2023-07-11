@@ -22,6 +22,8 @@ import (
 func TestStatsd(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	p := &Plugin{}
+	viper.Set("smlAutoCreateDB", true)
+	defer viper.Set("smlAutoCreateDB", false)
 	config.Init()
 	db.PrepareConnection()
 	viper.Set("statsd.gatherInterval", time.Millisecond)

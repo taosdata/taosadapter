@@ -23,6 +23,8 @@ import (
 func TestPlugin(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	p := &opentsdbtelnet.Plugin{}
+	viper.Set("smlAutoCreateDB", true)
+	defer viper.Set("smlAutoCreateDB", false)
 	config.Init()
 	db.PrepareConnection()
 	viper.Set("opentsdb_telnet.enable", true)

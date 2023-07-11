@@ -20,6 +20,8 @@ import (
 
 func TestMain(m *testing.M) {
 	rand.Seed(time.Now().UnixNano())
+	viper.Set("smlAutoCreateDB", true)
+	defer viper.Set("smlAutoCreateDB", false)
 	config.Init()
 	viper.Set("prometheus.enable", true)
 	db.PrepareConnection()

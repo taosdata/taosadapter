@@ -5,6 +5,7 @@ import (
 
 	"github.com/taosdata/driver-go/v2/errors"
 	"github.com/taosdata/driver-go/v2/wrapper"
+	"github.com/taosdata/taosadapter/config"
 	"github.com/taosdata/taosadapter/db/async"
 	"github.com/taosdata/taosadapter/httperror"
 	"github.com/taosdata/taosadapter/thread"
@@ -29,7 +30,7 @@ func SelectDB(taosConnect unsafe.Pointer, db string) error {
 	code := wrapper.TaosSelectDB(taosConnect, db)
 	thread.Unlock()
 	if code != httperror.SUCCESS {
-		if int32(code)&0xffff == errors.TSC_DB_NOT_SELECTED || int32(code)&0xffff == errors.MND_INVALID_DB {
+		if config.Conf.SMLAutoCreateDB && (int32(code)&0xffff == errors.TSC_DB_NOT_SELECTED || int32(code)&0xffff == errors.MND_INVALID_DB) {
 			err := CreateDBWithConnection(taosConnect, db)
 			if err != nil {
 				return err
