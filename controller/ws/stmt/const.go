@@ -11,6 +11,8 @@ const (
 	STMTAddBatch     = "add_batch"
 	STMTExec         = "exec"
 	STMTClose        = "close"
+	STMTGetTagFields = "get_tag_fields"
+	STMTGetColFields = "get_col_fields"
 )
 const (
 	SetTagsMessage = 1
