@@ -100,3 +100,46 @@ func TestConnectorPool_Close(t *testing.T) {
 	assert.NoError(t, err)
 	pool.Release()
 }
+
+func TestChangePassword(t *testing.T) {
+	c, err := GetConnection("root", "taosdata")
+	assert.NoError(t, err)
+
+	result := wrapper.TaosQuery(c.TaosConnection, "drop user test")
+	assert.NotNil(t, result)
+	wrapper.TaosFreeResult(result)
+
+	result = wrapper.TaosQuery(c.TaosConnection, "create user test pass 'test'")
+	assert.NotNil(t, result)
+	errNo := wrapper.TaosError(result)
+	assert.Equal(t, 0, errNo)
+	wrapper.TaosFreeResult(result)
+
+	defer func() {
+		r := wrapper.TaosQuery(c.TaosConnection, "drop user test")
+		wrapper.TaosFreeResult(r)
+	}()
+
+	conn, err := GetConnection("test", "test")
+	assert.NoError(t, err)
+
+	result = wrapper.TaosQuery(conn.TaosConnection, "show databases")
+	errNo = wrapper.TaosError(result)
+	wrapper.TaosFreeResult(result)
+	assert.Equal(t, 0, errNo)
+
+	result = wrapper.TaosQuery(c.TaosConnection, "alter user test pass 'test2'")
+	assert.NotNil(t, result)
+	errNo = wrapper.TaosError(result)
+	assert.Equal(t, 0, errNo)
+	wrapper.TaosFreeResult(result)
+
+	conn3, err := GetConnection("test", "test2")
+	assert.NoError(t, err)
+	assert.NotNil(t, conn3)
+	result2 := wrapper.TaosQuery(conn3.TaosConnection, "show databases")
+	errNo = wrapper.TaosError(result2)
+	wrapper.TaosFreeResult(result2)
+	assert.Equal(t, 0, errNo)
+	conn3.Put()
+}

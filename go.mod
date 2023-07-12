@@ -30,7 +30,6 @@ require (
 	github.com/prometheus/prometheus v1.8.2-0.20200911110723-e83ef207b6c2
 	github.com/shirou/gopsutil/v3 v3.22.11
 	github.com/shopspring/decimal v1.2.0 // indirect
-	github.com/silenceper/pool v1.0.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/smartystreets/assertions v1.0.1 // indirect
 	github.com/spf13/pflag v1.0.5
@@ -39,5 +38,6 @@ require (
 	github.com/swaggo/swag v1.7.6
 	github.com/taosdata/driver-go/v2 v2.0.6
 	go.uber.org/automaxprocs v1.5.1
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	gonum.org/v1/gonum v0.8.2 // indirect
 )
