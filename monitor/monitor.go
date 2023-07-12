@@ -154,10 +154,10 @@ func writeToTDLog() error {
 		if err != nil {
 			return err
 		}
-		err = async.GlobalAsync.TaosExecWithoutResult(conn, "create database if not exists log")
-		if err != nil {
-			return err
-		}
+		//err = async.GlobalAsync.TaosExecWithoutResult(conn, "create database if not exists log")
+		//if err != nil {
+		//	return err
+		//}
 	}
 	err = async.GlobalAsync.TaosExecWithoutResult(conn, "use log")
 	if err != nil {
