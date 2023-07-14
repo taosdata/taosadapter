@@ -9,14 +9,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/driver-go/v3/common"
+	stmtCommon "github.com/taosdata/driver-go/v3/common/stmt"
 	"github.com/taosdata/driver-go/v3/types"
-	"github.com/taosdata/driver-go/v3/wrapper"
 )
 
 func Test_stmtConvert(t *testing.T) {
 	type args struct {
 		src        [][]driver.Value
-		fields     []*wrapper.StmtField
+		fields     []*stmtCommon.StmtField
 		fieldTypes []*types.ColumnType
 	}
 	tests := []struct {
@@ -31,7 +31,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "bool_null",
 			args: args{
 				src: [][]driver.Value{{nil}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BOOL,
 					},
@@ -54,7 +54,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "bool_err",
 			args: args{
 				src: [][]driver.Value{{[]int{123}}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BOOL,
 					},
@@ -77,7 +77,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "bool_bool_true",
 			args: args{
 				src: [][]driver.Value{{true}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BOOL,
 					},
@@ -100,7 +100,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "bool_bool_false",
 			args: args{
 				src: [][]driver.Value{{false}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BOOL,
 					},
@@ -123,7 +123,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "bool_float_false",
 			args: args{
 				src: [][]driver.Value{{float32(0)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BOOL,
 					},
@@ -146,7 +146,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "bool_float_true",
 			args: args{
 				src: [][]driver.Value{{float32(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BOOL,
 					},
@@ -169,7 +169,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "bool_int_false",
 			args: args{
 				src: [][]driver.Value{{int32(0)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BOOL,
 					},
@@ -192,7 +192,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "bool_int_true",
 			args: args{
 				src: [][]driver.Value{{int32(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BOOL,
 					},
@@ -215,7 +215,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "bool_uint_false",
 			args: args{
 				src: [][]driver.Value{{uint32(0)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BOOL,
 					},
@@ -238,7 +238,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "bool_uint_true",
 			args: args{
 				src: [][]driver.Value{{uint32(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BOOL,
 					},
@@ -261,7 +261,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "bool_string_false",
 			args: args{
 				src: [][]driver.Value{{"false"}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BOOL,
 					},
@@ -284,7 +284,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "bool_string_true",
 			args: args{
 				src: [][]driver.Value{{"true"}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BOOL,
 					},
@@ -308,7 +308,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "tiny_nil",
 			args: args{
 				src: [][]driver.Value{{nil}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TINYINT,
 					},
@@ -331,7 +331,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "tiny_err",
 			args: args{
 				src: [][]driver.Value{{[]int{123}}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TINYINT,
 					},
@@ -354,7 +354,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "tiny_bool_1",
 			args: args{
 				src: [][]driver.Value{{true}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TINYINT,
 					},
@@ -377,7 +377,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "tiny_bool_0",
 			args: args{
 				src: [][]driver.Value{{false}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TINYINT,
 					},
@@ -400,7 +400,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "tiny_float_1",
 			args: args{
 				src: [][]driver.Value{{float32(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TINYINT,
 					},
@@ -423,7 +423,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "tiny_int_1",
 			args: args{
 				src: [][]driver.Value{{int(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TINYINT,
 					},
@@ -446,7 +446,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "tiny_uint_1",
 			args: args{
 				src: [][]driver.Value{{uint(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TINYINT,
 					},
@@ -469,7 +469,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "tiny_string_1",
 			args: args{
 				src: [][]driver.Value{{"1"}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TINYINT,
 					},
@@ -493,7 +493,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "small_nil",
 			args: args{
 				src: [][]driver.Value{{nil}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_SMALLINT,
 					},
@@ -516,7 +516,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "small_err",
 			args: args{
 				src: [][]driver.Value{{[]int{123}}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_SMALLINT,
 					},
@@ -539,7 +539,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "small_bool_1",
 			args: args{
 				src: [][]driver.Value{{true}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_SMALLINT,
 					},
@@ -562,7 +562,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "small_bool_0",
 			args: args{
 				src: [][]driver.Value{{false}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_SMALLINT,
 					},
@@ -585,7 +585,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "small_float_1",
 			args: args{
 				src: [][]driver.Value{{float32(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_SMALLINT,
 					},
@@ -608,7 +608,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "small_int_1",
 			args: args{
 				src: [][]driver.Value{{int(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_SMALLINT,
 					},
@@ -631,7 +631,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "small_uint_1",
 			args: args{
 				src: [][]driver.Value{{uint(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_SMALLINT,
 					},
@@ -654,7 +654,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "small_string_1",
 			args: args{
 				src: [][]driver.Value{{"1"}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_SMALLINT,
 					},
@@ -678,7 +678,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "int_nil",
 			args: args{
 				src: [][]driver.Value{{nil}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_INT,
 					},
@@ -701,7 +701,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "int_err",
 			args: args{
 				src: [][]driver.Value{{[]int{123}}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_INT,
 					},
@@ -724,7 +724,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "int_bool_1",
 			args: args{
 				src: [][]driver.Value{{true}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_INT,
 					},
@@ -747,7 +747,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "int_bool_0",
 			args: args{
 				src: [][]driver.Value{{false}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_INT,
 					},
@@ -770,7 +770,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "int_float_1",
 			args: args{
 				src: [][]driver.Value{{float32(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_INT,
 					},
@@ -793,7 +793,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "int_int_1",
 			args: args{
 				src: [][]driver.Value{{int(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_INT,
 					},
@@ -816,7 +816,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "int_uint_1",
 			args: args{
 				src: [][]driver.Value{{uint(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_INT,
 					},
@@ -839,7 +839,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "int_string_1",
 			args: args{
 				src: [][]driver.Value{{"1"}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_INT,
 					},
@@ -863,7 +863,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "big_nil",
 			args: args{
 				src: [][]driver.Value{{nil}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BIGINT,
 					},
@@ -886,7 +886,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "big_err",
 			args: args{
 				src: [][]driver.Value{{[]int{123}}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BIGINT,
 					},
@@ -909,7 +909,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "big_bool_1",
 			args: args{
 				src: [][]driver.Value{{true}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BIGINT,
 					},
@@ -932,7 +932,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "big_bool_0",
 			args: args{
 				src: [][]driver.Value{{false}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BIGINT,
 					},
@@ -955,7 +955,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "big_float_1",
 			args: args{
 				src: [][]driver.Value{{float32(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BIGINT,
 					},
@@ -978,7 +978,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "big_int_1",
 			args: args{
 				src: [][]driver.Value{{int(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BIGINT,
 					},
@@ -1001,7 +1001,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "big_uint_1",
 			args: args{
 				src: [][]driver.Value{{uint(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BIGINT,
 					},
@@ -1024,7 +1024,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "big_string_1",
 			args: args{
 				src: [][]driver.Value{{"1"}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BIGINT,
 					},
@@ -1049,7 +1049,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "utiny_nil",
 			args: args{
 				src: [][]driver.Value{{nil}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UTINYINT,
 					},
@@ -1072,7 +1072,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "utiny_err",
 			args: args{
 				src: [][]driver.Value{{[]int{123}}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UTINYINT,
 					},
@@ -1095,7 +1095,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "utiny_bool_1",
 			args: args{
 				src: [][]driver.Value{{true}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UTINYINT,
 					},
@@ -1118,7 +1118,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "utiny_bool_0",
 			args: args{
 				src: [][]driver.Value{{false}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UTINYINT,
 					},
@@ -1141,7 +1141,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "utiny_float_1",
 			args: args{
 				src: [][]driver.Value{{float32(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UTINYINT,
 					},
@@ -1164,7 +1164,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "utiny_int_1",
 			args: args{
 				src: [][]driver.Value{{int(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UTINYINT,
 					},
@@ -1187,7 +1187,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "utiny_uint_1",
 			args: args{
 				src: [][]driver.Value{{uint(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UTINYINT,
 					},
@@ -1210,7 +1210,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "utiny_string_1",
 			args: args{
 				src: [][]driver.Value{{"1"}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UTINYINT,
 					},
@@ -1234,7 +1234,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "usmall_nil",
 			args: args{
 				src: [][]driver.Value{{nil}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_USMALLINT,
 					},
@@ -1257,7 +1257,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "usmall_err",
 			args: args{
 				src: [][]driver.Value{{[]int{123}}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_USMALLINT,
 					},
@@ -1280,7 +1280,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "usmall_bool_1",
 			args: args{
 				src: [][]driver.Value{{true}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_USMALLINT,
 					},
@@ -1303,7 +1303,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "usmall_bool_0",
 			args: args{
 				src: [][]driver.Value{{false}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_USMALLINT,
 					},
@@ -1326,7 +1326,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "usmall_float_1",
 			args: args{
 				src: [][]driver.Value{{float32(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_USMALLINT,
 					},
@@ -1349,7 +1349,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "usmall_int_1",
 			args: args{
 				src: [][]driver.Value{{int(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_USMALLINT,
 					},
@@ -1372,7 +1372,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "usmall_uint_1",
 			args: args{
 				src: [][]driver.Value{{uint(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_USMALLINT,
 					},
@@ -1395,7 +1395,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "usmall_string_1",
 			args: args{
 				src: [][]driver.Value{{"1"}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_USMALLINT,
 					},
@@ -1419,7 +1419,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "uint_nil",
 			args: args{
 				src: [][]driver.Value{{nil}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UINT,
 					},
@@ -1442,7 +1442,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "uint_err",
 			args: args{
 				src: [][]driver.Value{{[]int{123}}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UINT,
 					},
@@ -1465,7 +1465,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "uint_bool_1",
 			args: args{
 				src: [][]driver.Value{{true}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UINT,
 					},
@@ -1488,7 +1488,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "uint_bool_0",
 			args: args{
 				src: [][]driver.Value{{false}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UINT,
 					},
@@ -1511,7 +1511,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "uint_float_1",
 			args: args{
 				src: [][]driver.Value{{float32(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UINT,
 					},
@@ -1534,7 +1534,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "uint_int_1",
 			args: args{
 				src: [][]driver.Value{{int(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UINT,
 					},
@@ -1557,7 +1557,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "uint_uint_1",
 			args: args{
 				src: [][]driver.Value{{uint(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UINT,
 					},
@@ -1580,7 +1580,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "uint_string_1",
 			args: args{
 				src: [][]driver.Value{{"1"}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UINT,
 					},
@@ -1604,7 +1604,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "ubig_nil",
 			args: args{
 				src: [][]driver.Value{{nil}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UBIGINT,
 					},
@@ -1627,7 +1627,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "ubig_err",
 			args: args{
 				src: [][]driver.Value{{[]int{123}}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UBIGINT,
 					},
@@ -1650,7 +1650,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "ubig_bool_1",
 			args: args{
 				src: [][]driver.Value{{true}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UBIGINT,
 					},
@@ -1673,7 +1673,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "ubig_bool_0",
 			args: args{
 				src: [][]driver.Value{{false}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UBIGINT,
 					},
@@ -1696,7 +1696,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "ubig_float_1",
 			args: args{
 				src: [][]driver.Value{{float32(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UBIGINT,
 					},
@@ -1719,7 +1719,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "ubig_int_1",
 			args: args{
 				src: [][]driver.Value{{int(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UBIGINT,
 					},
@@ -1742,7 +1742,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "ubig_uint_1",
 			args: args{
 				src: [][]driver.Value{{uint(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UBIGINT,
 					},
@@ -1765,7 +1765,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "ubig_string_1",
 			args: args{
 				src: [][]driver.Value{{"1"}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_UBIGINT,
 					},
@@ -1789,7 +1789,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "float_nil",
 			args: args{
 				src: [][]driver.Value{{nil}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_FLOAT,
 					},
@@ -1812,7 +1812,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "float_err",
 			args: args{
 				src: [][]driver.Value{{[]int{123}}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_FLOAT,
 					},
@@ -1835,7 +1835,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "float_bool_1",
 			args: args{
 				src: [][]driver.Value{{true}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_FLOAT,
 					},
@@ -1858,7 +1858,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "float_bool_0",
 			args: args{
 				src: [][]driver.Value{{false}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_FLOAT,
 					},
@@ -1881,7 +1881,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "float_float_1",
 			args: args{
 				src: [][]driver.Value{{float32(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_FLOAT,
 					},
@@ -1904,7 +1904,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "float_int_1",
 			args: args{
 				src: [][]driver.Value{{int(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_FLOAT,
 					},
@@ -1927,7 +1927,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "float_uint_1",
 			args: args{
 				src: [][]driver.Value{{uint(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_FLOAT,
 					},
@@ -1950,7 +1950,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "float_string_1",
 			args: args{
 				src: [][]driver.Value{{"1"}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_FLOAT,
 					},
@@ -1974,7 +1974,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "double_nil",
 			args: args{
 				src: [][]driver.Value{{nil}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_DOUBLE,
 					},
@@ -1997,7 +1997,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "double_err",
 			args: args{
 				src: [][]driver.Value{{[]int{123}}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_DOUBLE,
 					},
@@ -2020,7 +2020,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "double_bool_1",
 			args: args{
 				src: [][]driver.Value{{true}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_DOUBLE,
 					},
@@ -2043,7 +2043,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "double_bool_0",
 			args: args{
 				src: [][]driver.Value{{false}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_DOUBLE,
 					},
@@ -2066,7 +2066,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "double_float_1",
 			args: args{
 				src: [][]driver.Value{{float32(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_DOUBLE,
 					},
@@ -2089,7 +2089,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "double_int_1",
 			args: args{
 				src: [][]driver.Value{{int(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_DOUBLE,
 					},
@@ -2112,7 +2112,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "double_uint_1",
 			args: args{
 				src: [][]driver.Value{{uint(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_DOUBLE,
 					},
@@ -2135,7 +2135,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "double_string_1",
 			args: args{
 				src: [][]driver.Value{{"1"}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_DOUBLE,
 					},
@@ -2159,7 +2159,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "binary_nil",
 			args: args{
 				src: [][]driver.Value{{nil}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BINARY,
 					},
@@ -2182,7 +2182,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "double_err",
 			args: args{
 				src: [][]driver.Value{{[]int{123}}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BINARY,
 					},
@@ -2205,7 +2205,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "binary_string_chinese",
 			args: args{
 				src: [][]driver.Value{{"中文"}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BINARY,
 					},
@@ -2229,7 +2229,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "binary_bytes_chinese",
 			args: args{
 				src: [][]driver.Value{{[]byte("中文")}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_BINARY,
 					},
@@ -2254,7 +2254,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "nchar_nil",
 			args: args{
 				src: [][]driver.Value{{nil}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_NCHAR,
 					},
@@ -2277,7 +2277,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "double_err",
 			args: args{
 				src: [][]driver.Value{{[]int{123}}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_NCHAR,
 					},
@@ -2300,7 +2300,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "nchar_string_chinese",
 			args: args{
 				src: [][]driver.Value{{"中文"}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_NCHAR,
 					},
@@ -2324,7 +2324,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "nchar_bytes_chinese",
 			args: args{
 				src: [][]driver.Value{{[]byte("中文")}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_NCHAR,
 					},
@@ -2349,7 +2349,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "ts_nil",
 			args: args{
 				src: [][]driver.Value{{nil}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TIMESTAMP,
 					},
@@ -2372,7 +2372,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "ts_err",
 			args: args{
 				src: [][]driver.Value{{[]int{123}}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TIMESTAMP,
 					},
@@ -2395,7 +2395,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "ts_float_1",
 			args: args{
 				src: [][]driver.Value{{float32(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TIMESTAMP,
 						Precision: common.PrecisionMilliSecond,
@@ -2422,7 +2422,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "ts_int_1",
 			args: args{
 				src: [][]driver.Value{{int32(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TIMESTAMP,
 						Precision: common.PrecisionMilliSecond,
@@ -2449,7 +2449,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "ts_uint_1",
 			args: args{
 				src: [][]driver.Value{{uint32(1)}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TIMESTAMP,
 						Precision: common.PrecisionMilliSecond,
@@ -2476,7 +2476,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "ts_string_1",
 			args: args{
 				src: [][]driver.Value{{"1970-01-01T00:00:00.001Z"}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TIMESTAMP,
 						Precision: common.PrecisionMilliSecond,
@@ -2503,7 +2503,7 @@ func Test_stmtConvert(t *testing.T) {
 			name: "ts_ts_1",
 			args: args{
 				src: [][]driver.Value{{time.Unix(0, 1e6).UTC()}},
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TIMESTAMP,
 						Precision: common.PrecisionMilliSecond,
@@ -2547,7 +2547,7 @@ func Test_stmtConvert(t *testing.T) {
 func Test_stmtParseColumn(t *testing.T) {
 	type args struct {
 		columns    json.RawMessage
-		fields     []*wrapper.StmtField
+		fields     []*stmtCommon.StmtField
 		fieldTypes []*types.ColumnType
 	}
 	tests := []struct {
@@ -2560,7 +2560,7 @@ func Test_stmtParseColumn(t *testing.T) {
 			name: "all",
 			args: args{
 				columns: json.RawMessage("[[null,null],[true,false],[1,11],[2,22],[3,33],[4,44],[5,55],[6,66],[7,77],[8,88],[9,99],[10,1010],[\"b\",\"bb\"],[\"n\",\"nn\"],[1,\"2022-08-09T02:35:20Z\"]]"),
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{FieldType: common.TSDB_DATA_TYPE_BOOL},
 					{FieldType: common.TSDB_DATA_TYPE_BOOL},
 					{FieldType: common.TSDB_DATA_TYPE_TINYINT},
@@ -2629,7 +2629,7 @@ func Test_stmtParseColumn(t *testing.T) {
 func Test_stmtParseTag(t *testing.T) {
 	type args struct {
 		tags   json.RawMessage
-		fields []*wrapper.StmtField
+		fields []*stmtCommon.StmtField
 	}
 	tests := []struct {
 		name    string
@@ -2641,7 +2641,7 @@ func Test_stmtParseTag(t *testing.T) {
 			name: "all",
 			args: args{
 				tags: json.RawMessage(`[null,true,1,2,3,4,5,6,7,8,9,10,"b","n","2022-08-09T02:35:20Z","{\"a\":\"b\"}"]`),
-				fields: []*wrapper.StmtField{
+				fields: []*stmtCommon.StmtField{
 					{FieldType: common.TSDB_DATA_TYPE_BOOL},
 					{FieldType: common.TSDB_DATA_TYPE_BOOL},
 					{FieldType: common.TSDB_DATA_TYPE_TINYINT},

@@ -93,6 +93,8 @@ func TestSTMT(t *testing.T) {
 		AfterBind
 		AfterAddBatch
 		AfterExec
+		AfterGetTagFields
+		AfterGetColFields
 	)
 	status := 0
 	finish := make(chan struct{})
@@ -191,7 +193,58 @@ func TestSTMT(t *testing.T) {
 			if d.Code != 0 {
 				return fmt.Errorf("%s %d,%s", STMTSetTableName, d.Code, d.Message)
 			}
-
+			status = AfterGetTagFields
+			b, _ := json.Marshal(&StmtGetTagFieldsReq{
+				ReqID:  5,
+				StmtID: stmtID,
+			})
+			action, _ := json.Marshal(&wstool.WSAction{
+				Action: STMTGetTagFields,
+				Args:   b,
+			})
+			t.Log(string(action))
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			if err != nil {
+				return err
+			}
+		case AfterGetTagFields:
+			var d StmtGetTagFieldsResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", STMTGetTagFields, d.Code, d.Message)
+			}
+			status = AfterGetColFields
+			b, _ := json.Marshal(&StmtGetColFieldsReq{
+				ReqID:  5,
+				StmtID: stmtID,
+			})
+			action, _ := json.Marshal(&wstool.WSAction{
+				Action: STMTGetColFields,
+				Args:   b,
+			})
+			t.Log(string(action))
+			err = ws.WriteMessage(
+				websocket.TextMessage,
+				action,
+			)
+			if err != nil {
+				return err
+			}
+		case AfterGetColFields:
+			var d StmtGetColFieldsResp
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				return err
+			}
+			if d.Code != 0 {
+				return fmt.Errorf("%s %d,%s", STMTGetColFields, d.Code, d.Message)
+			}
 			status = AfterSetTags
 
 			b, _ := json.Marshal(&StmtSetTagsReq{

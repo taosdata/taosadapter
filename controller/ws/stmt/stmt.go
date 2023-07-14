@@ -17,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/common/parser"
+	stmtCommon "github.com/taosdata/driver-go/v3/common/stmt"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/types"
 	"github.com/taosdata/driver-go/v3/wrapper"
@@ -139,6 +140,24 @@ func NewSTMTController() *STMTController {
 			}
 			t := session.MustGet(TaosStmtKey)
 			t.(*TaosStmt).close(ctx, session, &req)
+		case STMTGetColFields:
+			var req StmtGetColFieldsReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithError(err).Errorln("unmarshal get_col_fields args")
+				return
+			}
+			t := session.MustGet(TaosStmtKey)
+			t.(*TaosStmt).getColFields(ctx, session, &req)
+		case STMTGetTagFields:
+			var req StmtGetTagFieldsReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithError(err).Errorln("unmarshal get_tag_fields args")
+				return
+			}
+			t := session.MustGet(TaosStmtKey)
+			t.(*TaosStmt).getTagFields(ctx, session, &req)
 		default:
 			logger.WithError(err).Errorln("unknown action: " + action.Action)
 			return
@@ -546,6 +565,126 @@ func (t *TaosStmt) setTags(ctx context.Context, session *melody.Session, req *St
 		wsStmtErrorMsg(ctx, session, code, errStr, STMTSetTags, req.ReqID, &req.StmtID)
 		return
 	}
+	resp.Timing = wstool.GetDuration(ctx)
+	wstool.WSWriteJson(session, resp)
+}
+
+type StmtGetTagFieldsReq struct {
+	ReqID  uint64 `json:"req_id"`
+	StmtID uint64 `json:"stmt_id"`
+}
+
+type StmtGetTagFieldsResp struct {
+	Code    int                     `json:"code"`
+	Message string                  `json:"message"`
+	Action  string                  `json:"action"`
+	ReqID   uint64                  `json:"req_id"`
+	Timing  int64                   `json:"timing"`
+	StmtID  uint64                  `json:"stmt_id"`
+	Fields  []*stmtCommon.StmtField `json:"fields"`
+}
+
+func (t *TaosStmt) getTagFields(ctx context.Context, session *melody.Session, req *StmtGetTagFieldsReq) {
+	if t.conn == nil {
+		wsStmtErrorMsg(ctx, session, 0xffff, "server not connected", STMTGetTagFields, req.ReqID, &req.StmtID)
+		return
+	}
+	stmtItem := t.getStmtItem(req.StmtID)
+	if stmtItem == nil {
+		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", STMTGetTagFields, req.ReqID, &req.StmtID)
+		return
+	}
+	stmt := stmtItem.Value.(*StmtItem)
+	logger := wstool.GetLogger(session).WithField("action", STMTGetTagFields)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
+	thread.Lock()
+	logger.Debugln("stmt_get_tag_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	code, tagNums, tagFields := wrapper.TaosStmtGetTagFields(stmt.stmt)
+	logger.Debugln("stmt_get_tag_fields cost:", log.GetLogDuration(isDebug, s))
+	thread.Unlock()
+	if code != httperror.SUCCESS {
+		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
+		wsStmtErrorMsg(ctx, session, code, errStr, STMTGetTagFields, req.ReqID, &req.StmtID)
+		return
+	}
+	defer func() {
+		wrapper.TaosStmtReclaimFields(stmt.stmt, tagFields)
+	}()
+	resp := &StmtGetTagFieldsResp{
+		Action: STMTGetTagFields,
+		ReqID:  req.ReqID,
+		StmtID: req.StmtID,
+	}
+	if tagNums == 0 {
+		wstool.WSWriteJson(session, resp)
+		return
+	}
+	s = log.GetLogNow(isDebug)
+	fields := wrapper.StmtParseFields(tagNums, tagFields)
+	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
+	resp.Fields = fields
+	resp.Timing = wstool.GetDuration(ctx)
+	wstool.WSWriteJson(session, resp)
+}
+
+type StmtGetColFieldsReq struct {
+	ReqID  uint64 `json:"req_id"`
+	StmtID uint64 `json:"stmt_id"`
+}
+
+type StmtGetColFieldsResp struct {
+	Code    int                     `json:"code"`
+	Message string                  `json:"message"`
+	Action  string                  `json:"action"`
+	ReqID   uint64                  `json:"req_id"`
+	Timing  int64                   `json:"timing"`
+	StmtID  uint64                  `json:"stmt_id"`
+	Fields  []*stmtCommon.StmtField `json:"fields"`
+}
+
+func (t *TaosStmt) getColFields(ctx context.Context, session *melody.Session, req *StmtGetColFieldsReq) {
+	if t.conn == nil {
+		wsStmtErrorMsg(ctx, session, 0xffff, "server not connected", STMTGetColFields, req.ReqID, &req.StmtID)
+		return
+	}
+	stmtItem := t.getStmtItem(req.StmtID)
+	if stmtItem == nil {
+		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", STMTGetColFields, req.ReqID, &req.StmtID)
+		return
+	}
+	stmt := stmtItem.Value.(*StmtItem)
+	logger := wstool.GetLogger(session).WithField("action", STMTGetColFields)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
+	thread.Lock()
+	logger.Debugln("stmt_get_col_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	code, colNums, colFields := wrapper.TaosStmtGetColFields(stmt.stmt)
+	logger.Debugln("stmt_get_col_fields cost:", log.GetLogDuration(isDebug, s))
+	thread.Unlock()
+	if code != httperror.SUCCESS {
+		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
+		wsStmtErrorMsg(ctx, session, code, errStr, STMTGetColFields, req.ReqID, &req.StmtID)
+		return
+	}
+	defer func() {
+		wrapper.TaosStmtReclaimFields(stmt.stmt, colFields)
+	}()
+	resp := &StmtGetColFieldsResp{
+		Action: STMTGetColFields,
+		ReqID:  req.ReqID,
+		StmtID: req.StmtID,
+	}
+	if colNums == 0 {
+		wstool.WSWriteJson(session, resp)
+		return
+	}
+	s = log.GetLogNow(isDebug)
+	fields := wrapper.StmtParseFields(colNums, colFields)
+	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
+	resp.Fields = fields
 	resp.Timing = wstool.GetDuration(ctx)
 	wstool.WSWriteJson(session, resp)
 }
