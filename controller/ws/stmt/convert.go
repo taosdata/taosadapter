@@ -13,13 +13,13 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/common/parser"
+	stmtCommon "github.com/taosdata/driver-go/v3/common/stmt"
 	"github.com/taosdata/driver-go/v3/types"
-	"github.com/taosdata/driver-go/v3/wrapper"
 )
 
 var jsonI = jsoniter.ConfigCompatibleWithStandardLibrary
 
-func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes []*types.ColumnType) error {
+func stmtConvert(src [][]driver.Value, fields []*stmtCommon.StmtField, fieldTypes []*types.ColumnType) error {
 	for column := 0; column < len(src); column++ {
 		switch fields[column].FieldType {
 		case common.TSDB_DATA_TYPE_NULL:
@@ -444,7 +444,7 @@ func stmtConvert(src [][]driver.Value, fields []*wrapper.StmtField, fieldTypes [
 	return nil
 }
 
-func stmtParseColumn(columns json.RawMessage, fields []*wrapper.StmtField, fieldTypes []*types.ColumnType) ([][]driver.Value, error) {
+func stmtParseColumn(columns json.RawMessage, fields []*stmtCommon.StmtField, fieldTypes []*types.ColumnType) ([][]driver.Value, error) {
 	var err error
 	iter := jsonI.BorrowIterator(columns)
 	defer jsonI.ReturnIterator(iter)
@@ -533,7 +533,7 @@ func stmtParseColumn(columns json.RawMessage, fields []*wrapper.StmtField, field
 	return data, nil
 }
 
-func stmtParseTag(tags json.RawMessage, fields []*wrapper.StmtField) ([]driver.Value, error) {
+func stmtParseTag(tags json.RawMessage, fields []*stmtCommon.StmtField) ([]driver.Value, error) {
 	var err error
 	iter := jsonI.BorrowIterator(tags)
 	defer jsonI.ReturnIterator(iter)
@@ -602,7 +602,7 @@ func stmtParseTag(tags json.RawMessage, fields []*wrapper.StmtField) ([]driver.V
 	return data, nil
 }
 
-func blockConvert(block unsafe.Pointer, blockSize int, fields []*wrapper.StmtField, fieldTypes []*types.ColumnType) [][]driver.Value {
+func blockConvert(block unsafe.Pointer, blockSize int, fields []*stmtCommon.StmtField, fieldTypes []*types.ColumnType) [][]driver.Value {
 	colCount := len(fields)
 	r := make([][]driver.Value, colCount)
 	nullBitMapOffset := uintptr(parser.BitmapLen(blockSize))

@@ -13,7 +13,7 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/huskar-t/file-rotatelogs/v2 v2.4.1
 	github.com/huskar-t/melody v0.0.0-20220722113213-5f82fb933d2a
-	github.com/influxdata/telegraf v1.23.4 // 1.17能够支持的最高版本
+	github.com/influxdata/telegraf v1.23.4
 	github.com/json-iterator/go v1.1.12
 	github.com/kardianos/service v1.2.2
 	github.com/patrickmn/go-cache v2.1.0+incompatible
@@ -26,7 +26,7 @@ require (
 	github.com/spf13/viper v1.14.0
 	github.com/stretchr/testify v1.8.1
 	github.com/swaggo/swag v1.8.8
-	github.com/taosdata/driver-go/v3 v3.3.2-0.20230522062125-8d28eea9dd7f
+	github.com/taosdata/driver-go/v3 v3.5.1-0.20230711025600-4eda45a707fa
 	go.uber.org/automaxprocs v1.5.1
 )
 

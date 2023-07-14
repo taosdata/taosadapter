@@ -202,7 +202,7 @@ type schemalessResp struct {
 }
 
 func (t *TaosSchemaless) insert(ctx context.Context, session *melody.Session, req schemalessWriteReq) {
-	if req.Protocol == 0 || len(req.Precision) == 0 {
+	if req.Protocol == 0 {
 		wsSchemalessErrorMsg(ctx, session, 0xffff, "args error", SchemalessWrite, req.ReqID)
 		return
 	}
