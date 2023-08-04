@@ -133,8 +133,21 @@ func (ctl *Restful) sqlt(c *gin.Context) {
 func (ctl *Restful) sqlutc(c *gin.Context) {
 	db := c.Param("db")
 	DoQuery(c, db, func(builder *jsonbuilder.Stream, ts int64, precision int) {
-		builder.WriteString(common.TimestampConvertToTime(ts, precision).Format(time.RFC3339Nano))
+		builder.WriteString(TimestampConvertToTimeUtc(ts, precision).Format(time.RFC3339Nano))
 	})
+}
+
+func TimestampConvertToTimeUtc(timestamp int64, precision int) time.Time {
+	switch precision {
+	case common.PrecisionMilliSecond: // milli-second
+		return time.Unix(0, timestamp*1e6).UTC()
+	case common.PrecisionMicroSecond: // micro-second
+		return time.Unix(0, timestamp*1e3).UTC()
+	case common.PrecisionNanoSecond: // nano-second
+		return time.Unix(0, timestamp).UTC()
+	default:
+		panic("unknown precision")
+	}
 }
 
 type TDEngineRestfulResp struct {
