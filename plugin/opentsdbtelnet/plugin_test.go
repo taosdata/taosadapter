@@ -65,7 +65,7 @@ func TestPlugin(t *testing.T) {
 		wrapper.TaosFreeResult(r)
 	}()
 
-	r, err := afC.Query("select last(_value) from opentsdb_telnet.`sys.if.bytes.out`")
+	r, err := afC.Query("select last(_value) from opentsdb_telnet.`sys_if_bytes_out`")
 	if err != nil {
 		t.Error(err)
 		return
@@ -79,7 +79,7 @@ func TestPlugin(t *testing.T) {
 	}
 
 	rows, err := afC.Query("select `ttl` from information_schema.ins_tables " +
-		" where db_name='opentsdb_telnet' and stable_name='sys.if.bytes.out'")
+		" where db_name='opentsdb_telnet' and stable_name='sys_if_bytes_out'")
 	if err != nil {
 		t.Error(err)
 		return

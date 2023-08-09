@@ -26,7 +26,7 @@ type SchemalessController struct {
 
 func NewSchemalessController() *SchemalessController {
 	schemaless := melody.New()
-	schemaless.Config.MaxMessageSize = 4 * 1024 * 1024
+	schemaless.Config.MaxMessageSize = 0
 
 	schemaless.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
