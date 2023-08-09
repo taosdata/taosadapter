@@ -36,7 +36,7 @@ type TMQController struct {
 
 func NewTMQController() *TMQController {
 	tmqM := melody.New()
-	tmqM.Config.MaxMessageSize = 4 * 1024 * 1024
+	tmqM.Config.MaxMessageSize = 0
 
 	tmqM.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)

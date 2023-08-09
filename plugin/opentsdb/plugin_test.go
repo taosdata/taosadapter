@@ -89,7 +89,7 @@ func TestOpentsdb(t *testing.T) {
 		wrapper.TaosFreeResult(r)
 	}()
 
-	r, err := afC.Query("select last(_value) from test_plugin_opentsdb_http_json.`sys.cpu.nice`")
+	r, err := afC.Query("select last(_value) from test_plugin_opentsdb_http_json.`sys_cpu_nice`")
 	if err != nil {
 		t.Error(err)
 		return
@@ -116,7 +116,7 @@ func TestOpentsdb(t *testing.T) {
 	}
 
 	rows, err := afC.Query("select `ttl` from information_schema.ins_tables " +
-		" where db_name='test_plugin_opentsdb_http_json' and stable_name='sys.cpu.nice'")
+		" where db_name='test_plugin_opentsdb_http_json' and stable_name='sys_cpu_nice'")
 	if err != nil {
 		t.Error(err)
 		return

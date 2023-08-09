@@ -35,7 +35,7 @@ type STMTController struct {
 
 func NewSTMTController() *STMTController {
 	stmtM := melody.New()
-	stmtM.Config.MaxMessageSize = 4 * 1024 * 1024
+	stmtM.Config.MaxMessageSize = 0
 
 	stmtM.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)

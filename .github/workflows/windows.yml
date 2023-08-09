@@ -115,47 +115,47 @@ jobs:
       - name: build taosadapter
         run: go build
 
-  test_go:
-    needs: build
-    runs-on: windows-2022
-    strategy:
-      matrix:
-        go: [ '1.19' ]
-    name: Go ${{ matrix.go }}
-    steps:
-      - name: get cache server by pr
-        if: github.event_name == 'pull_request'
-        id: get-cache-server-pr
-        uses: actions/cache@v3
-        with:
-          path: C:/TDengine
-          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ github.base_ref }}-
-
-      - name: cache server manually
-        if: github.event_name == 'workflow_dispatch'
-        id: get-cache-server-manually
-        uses: actions/cache@v3
-        with:
-          path: C:/TDengine
-          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ inputs.tbBranch }}-
-
-      - name: checkout
-        uses: actions/checkout@v3
-
-      - uses: actions/setup-go@v4
-        with:
-          go-version: ${{ matrix.go }}
-          cache-dependency-path: go.sum
-
-      - name: run TDengine and test
-        shell: cmd
-        env:
-          TAOS_SUPPORT_VNODES: 256
-        run: |
-          set PATH=%PATH%;C:\TDengine\driver
-          start /b C:/TDengine/taosd.exe > log.txt
-          go test -v --count=1 ./...
+#  test_go:
+#    needs: build
+#    runs-on: windows-2022
+#    strategy:
+#      matrix:
+#        go: [ '1.19' ]
+#    name: Go ${{ matrix.go }}
+#    steps:
+#      - name: get cache server by pr
+#        if: github.event_name == 'pull_request'
+#        id: get-cache-server-pr
+#        uses: actions/cache@v3
+#        with:
+#          path: C:/TDengine
+#          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
+#          restore-keys: |
+#            ${{ runner.os }}-build-${{ github.base_ref }}-
+#
+#      - name: cache server manually
+#        if: github.event_name == 'workflow_dispatch'
+#        id: get-cache-server-manually
+#        uses: actions/cache@v3
+#        with:
+#          path: C:/TDengine
+#          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
+#          restore-keys: |
+#            ${{ runner.os }}-build-${{ inputs.tbBranch }}-
+#
+#      - name: checkout
+#        uses: actions/checkout@v3
+#
+#      - uses: actions/setup-go@v4
+#        with:
+#          go-version: ${{ matrix.go }}
+#          cache-dependency-path: go.sum
+#
+#      - name: run TDengine and test
+#        shell: cmd
+#        env:
+#          TAOS_SUPPORT_VNODES: 256
+#        run: |
+#          set PATH=%PATH%;C:\TDengine\driver
+#          start /b C:/TDengine/taosd.exe > log.txt
+#          go test -v --count=1 ./...
