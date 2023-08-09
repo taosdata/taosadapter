@@ -32,7 +32,7 @@ type QueryController struct {
 
 func NewQueryController() *QueryController {
 	queryM := melody.New()
-	queryM.Config.MaxMessageSize = 4 * 1024 * 1024
+	queryM.Config.MaxMessageSize = 0
 
 	queryM.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
