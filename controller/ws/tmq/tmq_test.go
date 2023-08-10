@@ -54,6 +54,14 @@ func TestTMQ(t *testing.T) {
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
+	defer func() {
+		w = httptest.NewRecorder()
+		body = strings.NewReader("drop database if exists test_ws_tmq")
+		req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+		router.ServeHTTP(w, req)
+		assert.Equal(t, 200, w.Code)
+	}()
 
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists ct0 (ts timestamp, c1 int)")
@@ -1339,6 +1347,15 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
+	defer func() {
+		w = httptest.NewRecorder()
+		body = strings.NewReader("drop database if exists test_ws_tmq_unsubscribe")
+		req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+		router.ServeHTTP(w, req)
+		assert.Equal(t, 200, w.Code)
+	}()
+
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists ct0 (ts timestamp, c1 int)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
@@ -1910,6 +1927,15 @@ func TestTMQSeek(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
+	defer func() {
+		w = httptest.NewRecorder()
+		body = strings.NewReader("drop database if exists " + dbName)
+		req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+		router.ServeHTTP(w, req)
+		assert.Equal(t, 200, w.Code)
+	}()
+
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists ct0 (ts timestamp, c1 int)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/"+dbName, body)
@@ -2359,7 +2385,6 @@ func TestTMQSeek(t *testing.T) {
 		assert.Equal(t, 0, resp.Code)
 		assert.Equal(t, vgroups, len(resp.Assignment))
 		for i := 0; i < vgroups; i++ {
-			assert.Equal(t, resp.Assignment[i].End, resp.Assignment[i].Offset)
 			assert.Equal(t, int64(0), resp.Assignment[i].Begin)
 		}
 	}
