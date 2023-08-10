@@ -12,5 +12,11 @@ const (
 	TMQUnsubscribe        = "unsubscribe"
 	TMQGetTopicAssignment = "assignment"
 	TMQSeek               = "seek"
+	TMQCommitOffset       = "commit_offset"
+	TMQCommitted          = "committed"
+	TMQPosition           = "position"
+	TMQListTopics         = "list_topics"
 )
 const TMQRawMessage = 3
+
+const OffsetInvalid = -2147467247

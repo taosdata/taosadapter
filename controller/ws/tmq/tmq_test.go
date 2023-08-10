@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -2376,4 +2377,167 @@ func TestTMQSeek(t *testing.T) {
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
+}
+
+func doHttpSql(sql string) (code int, message string) {
+	w := httptest.NewRecorder()
+	body := strings.NewReader(sql)
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	b, _ := io.ReadAll(w.Body)
+	var res WSTMQErrorResp
+	_ = json.Unmarshal(b, &res)
+	return res.Code, res.Message
+}
+
+func doWebSocket(ws *websocket.Conn, action string, arg []byte) (resp []byte, err error) {
+	a, _ := json.Marshal(&wstool.WSAction{Action: action, Args: arg})
+	err = ws.WriteMessage(websocket.TextMessage, a)
+	if err != nil {
+		return nil, err
+	}
+	_, message, err := ws.ReadMessage()
+	return message, err
+}
+
+func before(t *testing.T, dbName string, topic string) {
+	doHttpSql(fmt.Sprintf("drop topic if exists %s", topic))
+	doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
+	code, message := doHttpSql(fmt.Sprintf("create database if not exists %s WAL_RETENTION_PERIOD 86400", dbName))
+	assert.Equal(t, 0, code, message)
+
+	code, message = doHttpSql(fmt.Sprintf("create table if not exists %s.ct0 (ts timestamp, c1 int)", dbName))
+	assert.Equal(t, 0, code, message)
+
+	code, message = doHttpSql(fmt.Sprintf("create table if not exists %s.ct1 (ts timestamp, c1 int, c2 float)", dbName))
+	assert.Equal(t, 0, code, message)
+
+	code, message = doHttpSql(fmt.Sprintf("create table if not exists %s.ct2 (ts timestamp, c1 int, c2 float, c3 binary(10))", dbName))
+	assert.Equal(t, 0, code, message)
+
+	code, message = doHttpSql(fmt.Sprintf("insert into %s.ct0 values (now, 1)", dbName))
+	assert.Equal(t, 0, code, message)
+	code, message = doHttpSql(fmt.Sprintf("insert into %s.ct1 values (now, 1, 2)", dbName))
+	assert.Equal(t, 0, code, message)
+	code, message = doHttpSql(fmt.Sprintf("insert into %s.ct2 values (now, 1, 2, '3')", dbName))
+	assert.Equal(t, 0, code, message)
+
+	code, message = doHttpSql(fmt.Sprintf("create topic if not exists %s as database %s", topic, dbName))
+	assert.Equal(t, 0, code, message)
+}
+
+func after(ws *websocket.Conn, dbName string, topic string) {
+	b, _ := json.Marshal(TMQUnsubscribeReq{ReqID: 0})
+	_, _ = doWebSocket(ws, TMQUnsubscribe, b)
+
+	doHttpSql(fmt.Sprintf("drop topic if exists %s", topic))
+	doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
+}
+
+func TestTMQ_CommitOffset(t *testing.T) {
+	dbName := "test_ws_tmq_commit_offset"
+	topic := "test_ws_tmq_commit_offset_topic"
+
+	before(t, dbName, topic)
+
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/tmq", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	defer after(ws, dbName, topic)
+
+	// subscribe
+	b, _ := json.Marshal(TMQSubscribeReq{User: "root", Password: "taosdata", DB: dbName, GroupID: "test", Topics: []string{topic}, AutoCommit: "false"})
+	msg, err := doWebSocket(ws, TMQSubscribe, b)
+	assert.NoError(t, err)
+	var subscribeResp TMQSubscribeResp
+	err = json.Unmarshal(msg, &subscribeResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
+
+	// poll
+	b, _ = json.Marshal(TMQPollReq{ReqID: 0, BlockingTime: 500})
+	msg, err = doWebSocket(ws, TMQPoll, b)
+	assert.NoError(t, err)
+	var pollResp TMQPollResp
+	err = json.Unmarshal(msg, &pollResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, pollResp.Code, pollResp.Message)
+
+	//commit offset
+	b, _ = json.Marshal(TMQCommitOffsetReq{ReqID: 0, Topic: topic, VgID: pollResp.VgroupID, Offset: pollResp.Offset})
+	msg, err = doWebSocket(ws, TMQCommitOffset, b)
+	assert.NoError(t, err)
+	var commitOffsetResp TMQCommitOffsetResp
+	err = json.Unmarshal(msg, &commitOffsetResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, commitOffsetResp.Code, commitOffsetResp.Message)
+
+	// committed
+	b, _ = json.Marshal(TMQCommittedReq{ReqID: 0, TopicVgroupIDs: []TopicVgroupID{{Topic: topic, VgroupID: pollResp.VgroupID}}})
+	msg, err = doWebSocket(ws, TMQCommitted, b)
+	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var committedResp TMQCommittedResp
+	err = json.Unmarshal(msg, &committedResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, committedResp.Code, committedResp.Message)
+	assert.Equal(t, 1, len(committedResp.Committed))
+	assert.Equal(t, true, committedResp.Committed[0] > 0)
+
+	// position
+	b, _ = json.Marshal(TMQPositionReq{ReqID: 0, TopicVgroupIDs: []TopicVgroupID{{Topic: topic, VgroupID: pollResp.VgroupID}}})
+	msg, err = doWebSocket(ws, TMQPosition, b)
+	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var positionResp TMQPositionResp
+	err = json.Unmarshal(msg, &positionResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, positionResp.Code, positionResp.Message)
+	assert.Equal(t, 1, len(positionResp.Position))
+	assert.Equal(t, true, positionResp.Position[0] > 0)
+}
+
+func TestTMQ_ListTopics(t *testing.T) {
+	dbName := "test_ws_tmq_list_topics"
+	topic := "test_ws_tmq_list_topics"
+
+	before(t, dbName, topic)
+
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/tmq", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	defer after(ws, dbName, topic)
+
+	// subscribe
+	b, _ := json.Marshal(TMQSubscribeReq{User: "root", Password: "taosdata", DB: dbName, GroupID: "test", Topics: []string{topic}, AutoCommit: "false"})
+	msg, err := doWebSocket(ws, TMQSubscribe, b)
+	assert.NoError(t, err)
+	var subscribeResp TMQSubscribeResp
+	err = json.Unmarshal(msg, &subscribeResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
+
+	b, _ = json.Marshal(TMQListTopicsReq{ReqID: 0})
+	msg, err = doWebSocket(ws, TMQListTopics, b)
+	assert.NoError(t, err)
+	var listTopicResp TMQListTopicsResp
+	err = json.Unmarshal(msg, &listTopicResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, listTopicResp.Code, listTopicResp.Message)
+	assert.Equal(t, []string{topic}, listTopicResp.Topics)
 }

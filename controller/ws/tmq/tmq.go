@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -150,6 +151,38 @@ func NewTMQController() *TMQController {
 			}
 			t := session.MustGet(TaosTMQKey)
 			t.(*TMQ).offsetSeek(ctx, session, &req)
+		case TMQCommitOffset:
+			var req TMQCommitOffsetReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal commit_offset args")
+				return
+			}
+			session.MustGet(TaosTMQKey).(*TMQ).commitOffset(ctx, session, &req)
+		case TMQCommitted:
+			var req TMQCommittedReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal committed args")
+				return
+			}
+			session.MustGet(TaosTMQKey).(*TMQ).committed(ctx, session, &req)
+		case TMQPosition:
+			var req TMQPositionReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal position args")
+				return
+			}
+			session.MustGet(TaosTMQKey).(*TMQ).position(ctx, session, &req)
+		case TMQListTopics:
+			var req TMQListTopicsReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal list topics args")
+				return
+			}
+			session.MustGet(TaosTMQKey).(*TMQ).listTopics(ctx, session, &req)
 		default:
 			logger.WithError(err).Errorln("unknown action: " + action.Action)
 			return
@@ -216,6 +249,7 @@ type TMQ struct {
 	nextTime               time.Time
 	ticker                 *time.Timer
 	sync.Mutex
+	topicPartitions map[TopicPartition]uint64
 }
 
 func NewTaosTMQ() *TMQ {
@@ -226,6 +260,7 @@ func NewTaosTMQ() *TMQ {
 		isAutoCommit:           true,
 		messageTimeoutInterval: 5000 * time.Millisecond * time.Duration(config.Conf.TMQ.ReleaseIntervalMultiplierForAutocommit),
 		closeCh:                make(chan struct{}),
+		topicPartitions:        make(map[TopicPartition]uint64, 1024),
 	}
 }
 
@@ -236,6 +271,10 @@ type TMQMessage struct {
 	messageType int32
 	timeout     time.Time
 	sync.Mutex
+
+	topic  string
+	vgID   int32
+	offset int64
 }
 
 var tmqMessagePool sync.Pool
@@ -250,6 +289,10 @@ func TMQMessagePut(m *TMQMessage) {
 
 func (t *TMQ) cleanupMessage(m *TMQMessage) {
 	m.Lock()
+	defer m.Unlock()
+
+	t.cleanTopicPartitionByMessage(m)
+
 	if m.cPointer != nil {
 		t.asyncLocker.Lock()
 		asynctmq.TaosaTMQFreeResultA(t.thread, m.cPointer, t.handler.Handler)
@@ -264,7 +307,7 @@ func (t *TMQ) cleanupMessage(m *TMQMessage) {
 	m.timeout = zeroTime
 	m.index = 0
 	m.messageType = 0
-	m.Unlock()
+
 	TMQMessagePut(m)
 }
 
@@ -273,6 +316,9 @@ func (t *TMQ) addMessage(message *TMQMessage) {
 	message.index = index
 	t.listLocker.Lock()
 	t.messages.PushBack(message)
+
+	t.addTopicPartitionByMessage(message)
+
 	if t.isAutoCommit {
 		message.timeout = time.Now().Add(t.messageTimeoutInterval)
 	}
@@ -280,7 +326,6 @@ func (t *TMQ) addMessage(message *TMQMessage) {
 }
 
 func (t *TMQ) getMessage(index uint64) *list.Element {
-
 	root := t.messages.Front()
 	if root == nil {
 		return nil
@@ -299,6 +344,33 @@ func (t *TMQ) getMessage(index uint64) *list.Element {
 		}
 		item = item.Next()
 	}
+}
+
+func (t *TMQ) addTopicPartitionByMessage(message *TMQMessage) {
+	tp := TopicPartition{Topic: message.topic, VgID: message.vgID, Offset: message.offset}
+	t.addTopicPartition(tp, message.index)
+}
+
+func (t *TMQ) addTopicPartition(tp TopicPartition, messageID uint64) {
+	t.topicPartitions[tp] = messageID
+}
+
+func (t *TMQ) getMessageByTopicPartition(tp TopicPartition) *TMQMessage {
+	idx, ok := t.topicPartitions[tp]
+	if !ok {
+		return nil
+	}
+
+	return t.getMessage(idx).Value.(*TMQMessage)
+}
+
+func (t *TMQ) cleanTopicPartition(tp TopicPartition) {
+	delete(t.topicPartitions, tp)
+}
+
+func (t *TMQ) cleanTopicPartitionByMessage(message *TMQMessage) {
+	tp := TopicPartition{Topic: message.topic, VgID: message.vgID, Offset: message.offset}
+	delete(t.topicPartitions, tp)
 }
 
 type TMQSubscribeReq struct {
@@ -610,7 +682,8 @@ func (t *TMQ) commit(ctx context.Context, session *melody.Session, req *TMQCommi
 	item := t.messages.Front()
 	next := item.Next()
 	for {
-		t.cleanupMessage(item.Value.(*TMQMessage))
+		msg := item.Value.(*TMQMessage)
+		t.cleanupMessage(msg)
 		t.messages.Remove(item)
 		if item == messageItem {
 			break
@@ -662,14 +735,17 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 			m := TMQMessagePoolGet()
 			m.cPointer = message
 			m.messageType = messageType
+			m.topic = wrapper.TMQGetTopicName(message)
+			m.vgID = wrapper.TMQGetVgroupID(message)
+			m.offset = wrapper.TMQGetVgroupOffset(message)
 			t.addMessage(m)
 			resp.HaveMessage = true
-			resp.Topic = wrapper.TMQGetTopicName(message)
+			resp.Topic = m.topic
 			resp.Database = wrapper.TMQGetDBName(message)
-			resp.VgroupID = wrapper.TMQGetVgroupID(message)
+			resp.VgroupID = m.vgID
 			resp.MessageID = m.index
 			resp.MessageType = messageType
-			resp.Offset = wrapper.TMQGetVgroupOffset(message)
+			resp.Offset = m.offset
 		} else {
 			wsTMQErrorMsg(ctx, session, 0xffff, "unavailable tmq type:"+strconv.Itoa(int(messageType)), TMQPoll, req.ReqID, nil)
 			return
@@ -1228,4 +1304,292 @@ func init() {
 	}
 	c := NewTMQController()
 	controller.AddController(c)
+}
+
+type TopicPartition struct {
+	Topic  string `json:"topic"`
+	VgID   int32  `json:"vg_id"`
+	Offset int64  `json:"offset"`
+}
+
+type TMQCommitOffsetReq struct {
+	ReqID  uint64 `json:"req_id"`
+	Topic  string `json:"topic"`
+	VgID   int32  `json:"vg_id"`
+	Offset int64  `json:"offset"`
+}
+
+type TMQCommitOffsetResp struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Action  string `json:"action"`
+	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
+	Topic   string `json:"topic"`
+	VgID    int32  `json:"vg_id"`
+	Offset  int64  `json:"offset"`
+}
+
+func (t *TMQ) commitOffset(ctx context.Context, session *melody.Session, req *TMQCommitOffsetReq) {
+	if t.consumer == nil {
+		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQCommitOffset, req.ReqID, nil)
+		return
+	}
+	logger := wstool.GetLogger(session).WithField("action", TMQCommitOffset).WithField(config.ReqIDKey, req.ReqID)
+	logger.Debugln("tmq commit offset get thread lock cost:",
+		log.GetLogDuration(log.IsDebug(), log.GetLogNow(log.IsDebug())))
+
+	t.asyncLocker.Lock()
+	asynctmq.TaosaTMQCommitOffset(t.thread, t.consumer, req.Topic, req.VgID, req.Offset, t.handler.Handler)
+	code := <-t.handler.Caller.CommitResult
+	t.asyncLocker.Unlock()
+	if code != 0 {
+		errMsg := wrapper.TMQErr2Str(code)
+		logger.WithError(errors.NewError(int(code), errMsg)).Error("tmq commit offset")
+		wsTMQErrorMsg(ctx, session, int(code), errMsg, TMQCommitOffset, req.ReqID, nil)
+		return
+	}
+	// clean message
+	tp := TopicPartition{Topic: req.Topic, VgID: req.VgID, Offset: req.Offset}
+	message := t.getMessageByTopicPartition(tp)
+	if message != nil {
+		t.cleanupMessage(message)
+	}
+
+	wstool.WSWriteJson(session, TMQCommitOffsetResp{
+		Action: TMQCommitOffset,
+		ReqID:  req.ReqID,
+		Timing: wstool.GetDuration(ctx),
+		Topic:  req.Topic,
+		VgID:   req.VgID,
+		Offset: req.Offset,
+	})
+}
+
+type TMQCommittedReq struct {
+	ReqID          uint64          `json:"req_id"`
+	TopicVgroupIDs []TopicVgroupID `json:"topic_vgroup_ids"`
+}
+
+type TMQCommittedResp struct {
+	Code      int     `json:"code"`
+	Message   string  `json:"message"`
+	Action    string  `json:"action"`
+	ReqID     uint64  `json:"req_id"`
+	Timing    int64   `json:"timing"`
+	Committed []int64 `json:"committed"`
+}
+
+func (t *TMQ) committed(ctx context.Context, session *melody.Session, req *TMQCommittedReq) {
+	if t.consumer == nil {
+		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQCommitted, req.ReqID, nil)
+		return
+	}
+	logger := wstool.GetLogger(session).WithField("action", TMQCommitted).WithField(config.ReqIDKey, req.ReqID)
+	s := log.GetLogNow(log.IsDebug())
+	logger.Debugln("tmq committed get thread lock cost:", log.GetLogDuration(log.IsDebug(), s))
+
+	var waitGroup sync.WaitGroup
+	errCh := make(chan error, len(req.TopicVgroupIDs))
+	topicVgIDCh := make(chan Offset, len(req.TopicVgroupIDs))
+
+	for i, topicVgID := range req.TopicVgroupIDs {
+		waitGroup.Add(1)
+		go func(idx int, topic string, vgroupID int32, wait *sync.WaitGroup) {
+			defer wait.Done()
+
+			t.asyncLocker.Lock()
+			asynctmq.TaosaTMQCommitted(t.thread, t.consumer, topic, vgroupID, t.handler.Handler)
+			res := <-t.handler.Caller.CommittedResult
+			t.asyncLocker.Unlock()
+			if res < 0 && res != OffsetInvalid {
+				errCh <- errors.NewError(int(res), wrapper.TMQErr2Str(int32(res)))
+			} else {
+				topicVgIDCh <- Offset{idx: idx, offset: res}
+			}
+		}(i, topicVgID.Topic, topicVgID.VgroupID, &waitGroup)
+	}
+
+	go func() {
+		waitGroup.Wait()
+		close(errCh)
+		close(topicVgIDCh)
+	}()
+
+	for err := range errCh {
+		if err != nil {
+			logger.WithError(err).Error("tmq get committed")
+			taosErr := err.(*errors.TaosError)
+			wsTMQErrorMsg(ctx, session, int(taosErr.Code), taosErr.ErrStr, TMQCommitted, req.ReqID, nil)
+			return
+		}
+	}
+
+	topicVgIDOffsets := make(Offsets, 0, len(req.TopicVgroupIDs))
+	for topicVgID := range topicVgIDCh {
+		topicVgIDOffsets = append(topicVgIDOffsets, topicVgID)
+	}
+
+	logger.Debugln("tmq get committed cost:", log.GetLogDuration(log.IsDebug(), s))
+
+	sort.Sort(topicVgIDOffsets)
+	offsets := make([]int64, 0, len(topicVgIDOffsets))
+	for _, offset := range topicVgIDOffsets {
+		offsets = append(offsets, offset.offset)
+	}
+
+	wstool.WSWriteJson(session, TMQCommittedResp{
+		Action:    TMQPosition,
+		ReqID:     req.ReqID,
+		Timing:    wstool.GetDuration(ctx),
+		Committed: offsets,
+	})
+}
+
+type TopicVgroupID struct {
+	Topic    string `json:"topic"`
+	VgroupID int32  `json:"vgroup_id"`
+}
+
+type Offset struct {
+	idx    int
+	offset int64
+}
+
+type Offsets []Offset
+
+func (t Offsets) Len() int {
+	return len(t)
+}
+
+func (t Offsets) Less(i, j int) bool {
+	return t[i].idx < t[j].idx
+}
+
+func (t Offsets) Swap(i, j int) {
+	t[i], t[j] = t[j], t[i]
+}
+
+type TMQPositionReq struct {
+	ReqID          uint64          `json:"req_id"`
+	TopicVgroupIDs []TopicVgroupID `json:"topic_vgroup_ids"`
+}
+
+type TMQPositionResp struct {
+	Code     int     `json:"code"`
+	Message  string  `json:"message"`
+	Action   string  `json:"action"`
+	ReqID    uint64  `json:"req_id"`
+	Timing   int64   `json:"timing"`
+	Position []int64 `json:"position"`
+}
+
+func (t *TMQ) position(ctx context.Context, session *melody.Session, req *TMQPositionReq) {
+	if t.consumer == nil {
+		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQPosition, req.ReqID, nil)
+		return
+	}
+	logger := wstool.GetLogger(session).WithField("action", TMQPosition).WithField(config.ReqIDKey, req.ReqID)
+	s := log.GetLogNow(log.IsDebug())
+
+	logger.Debugln("tmq get position get thread lock cost:", log.GetLogDuration(log.IsDebug(), s))
+
+	var waitGroup sync.WaitGroup
+	errCh := make(chan error, len(req.TopicVgroupIDs))
+	topicVgIDCh := make(chan Offset, len(req.TopicVgroupIDs))
+
+	for i, topicVgID := range req.TopicVgroupIDs {
+		waitGroup.Add(1)
+		go func(idx int, topic string, vgroupID int32, wait *sync.WaitGroup) {
+			defer wait.Done()
+
+			t.asyncLocker.Lock()
+			asynctmq.TaosaTMQPosition(t.thread, t.consumer, topic, vgroupID, t.handler.Handler)
+			res := <-t.handler.Caller.PositionResult
+			t.asyncLocker.Unlock()
+			if res < 0 && res != OffsetInvalid {
+				errCh <- errors.NewError(int(res), wrapper.TMQErr2Str(int32(res)))
+			} else {
+				topicVgIDCh <- Offset{idx: idx, offset: res}
+			}
+		}(i, topicVgID.Topic, topicVgID.VgroupID, &waitGroup)
+	}
+
+	go func() {
+		waitGroup.Wait()
+		close(errCh)
+		close(topicVgIDCh)
+	}()
+
+	for err := range errCh {
+		if err != nil {
+			logger.WithError(err).Error("tmq get position")
+			taosErr := err.(*errors.TaosError)
+			wsTMQErrorMsg(ctx, session, int(taosErr.Code), taosErr.ErrStr, TMQPosition, req.ReqID, nil)
+			return
+		}
+	}
+
+	topicVgIDOffsets := make(Offsets, 0, len(req.TopicVgroupIDs))
+	for topicVgID := range topicVgIDCh {
+		topicVgIDOffsets = append(topicVgIDOffsets, topicVgID)
+	}
+
+	logger.Debugln("tmq get position cost:", log.GetLogDuration(log.IsDebug(), s))
+
+	sort.Sort(topicVgIDOffsets)
+	positions := make([]int64, 0, len(topicVgIDOffsets))
+	for _, offset := range topicVgIDOffsets {
+		positions = append(positions, offset.offset)
+	}
+
+	wstool.WSWriteJson(session, TMQPositionResp{
+		Action:   TMQPosition,
+		ReqID:    req.ReqID,
+		Timing:   wstool.GetDuration(ctx),
+		Position: positions,
+	})
+}
+
+type TMQListTopicsReq struct {
+	ReqID uint64 `json:"req_id"`
+}
+
+type TMQListTopicsResp struct {
+	Code    int      `json:"code"`
+	Message string   `json:"message"`
+	Action  string   `json:"action"`
+	ReqID   uint64   `json:"req_id"`
+	Timing  int64    `json:"timing"`
+	Topics  []string `json:"topics"`
+}
+
+func (t *TMQ) listTopics(ctx context.Context, session *melody.Session, req *TMQListTopicsReq) {
+	if t.consumer == nil {
+		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQListTopics, req.ReqID, nil)
+		return
+	}
+	logger := wstool.GetLogger(session).WithField("action", TMQListTopics).WithField(config.ReqIDKey, req.ReqID)
+	s := log.GetLogNow(log.IsDebug())
+	t.asyncLocker.Lock()
+	logger.Debugln("tmq list topic get thread lock cost:", log.GetLogDuration(log.IsDebug(), s))
+
+	code, topicsPointer := wrapper.TMQSubscription(t.consumer)
+	defer wrapper.TMQListDestroy(topicsPointer)
+	topics := wrapper.TMQListToCArray(topicsPointer, int(wrapper.TMQListGetSize(topicsPointer)))
+
+	t.asyncLocker.Unlock()
+	logger.Debugln("tmq list topic cost:", log.GetLogDuration(log.IsDebug(), s))
+	if code != 0 {
+		errStr := wrapper.TMQErr2Str(code)
+		logger.WithError(errors.NewError(int(code), errStr)).Error("tmq list topic")
+		wsTMQErrorMsg(ctx, session, int(code), errStr, TMQListTopics, req.ReqID, nil)
+		return
+	}
+	wstool.WSWriteJson(session, TMQListTopicsResp{
+		Action: TMQListTopics,
+		ReqID:  req.ReqID,
+		Timing: wstool.GetDuration(ctx),
+		Topics: topics,
+	})
 }
