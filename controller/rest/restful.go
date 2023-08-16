@@ -33,6 +33,8 @@ import (
 
 var logger = log.GetLogger("restful")
 
+const StartTimeKey = "st"
+
 type Restful struct {
 	uploadReplacer *strings.Replacer
 }
@@ -51,11 +53,18 @@ func (ctl *Restful) Init(r gin.IRouter) {
 			return
 		}
 	})
-	api.POST("sql", CheckAuth, ctl.sql)
-	api.POST("sql/:db", CheckAuth, ctl.sql)
+	api.POST("sql", setStartTime, CheckAuth, ctl.sql)
+	api.POST("sql/:db", setStartTime, CheckAuth, ctl.sql)
 	api.POST("sql/:db/vgid", CheckAuth, ctl.tableVgID)
 	api.GET("login/:user/:password", ctl.des)
 	api.POST("upload", CheckAuth, ctl.upload)
+}
+
+func setStartTime(c *gin.Context) {
+	timing := c.Query("timing")
+	if timing == "true" {
+		c.Set(StartTimeKey, time.Now().UnixNano())
+	}
 }
 
 type TDEngineRestfulRespDoc struct {
@@ -194,14 +203,18 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID in
 }
 
 var (
-	ExecHeader = []byte(`{"code":0,"column_meta":[["affected_rows","INT",4]],"data":[[`)
-	ExecEnd    = []byte(`]],"rows":1}`)
-	Query2     = []byte(`{"code":0,"column_meta":[`)
-	Query3     = []byte(`],"data":[`)
-	Query4     = []byte(`],"rows":`)
+	ExecHeader        = []byte(`{"cod e":0,"column_meta":[["affected_rows","INT",4]],"data":[[`)
+	ExecEnd           = []byte(`]],"rows":1}`)
+	ExecEndWithTiming = []byte(`]],"rows":1,"timing":`)
+	Query2            = []byte(`{"code":0,"column_meta":[`)
+	Query3            = []byte(`],"data":[`)
+	Query4            = []byte(`],"rows":`)
+	Timing            = []byte(`,"timing":`)
 )
 
 func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, sql string, timeFormat ctools.FormatTimeFunc, reqID int64) {
+	st, calculateTiming := c.Get(StartTimeKey)
+	flushTiming := int64(0)
 	isDebug := log.IsDebug()
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
@@ -249,11 +262,27 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 		if err != nil {
 			return
 		}
-		_, err = w.Write(ExecEnd)
-		if err != nil {
-			return
+		if calculateTiming {
+			_, err = w.Write(ExecEndWithTiming)
+			if err != nil {
+				return
+			}
+			_, err = w.Write([]byte(strconv.FormatInt(time.Now().UnixNano()-st.(int64), 10)))
+			if err != nil {
+				return
+			}
+			_, err = w.Write([]byte{'}'})
+			if err != nil {
+				return
+			}
+			w.Flush()
+		} else {
+			_, err = w.Write(ExecEnd)
+			if err != nil {
+				return
+			}
+			w.Flush()
 		}
-		w.Flush()
 		return
 	} else {
 		if monitor.QueryPaused() {
@@ -274,10 +303,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	}
 	builder := jsonbuilder.BorrowStream(w)
 	defer jsonbuilder.ReturnStream(builder)
-	_, err = w.Write(Query2)
-	if err != nil {
-		return
-	}
+	builder.WritePure(Query2)
 	for i := 0; i < fieldsCount; i++ {
 		builder.WriteArrayStart()
 		builder.WriteString(rowsHeader.ColNames[i])
@@ -290,25 +316,21 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 			builder.WriteMore()
 		}
 	}
-	err = builder.Flush()
+	var tmpFlushTiming int64
+	// // try flushing after parsing meta
+	tmpFlushTiming, err = tryFlush(w, builder, calculateTiming)
 	if err != nil {
 		return
 	}
+	tmpFlushTiming += tmpFlushTiming
 	total := 0
-	_, err = w.Write(Query3)
-	if err != nil {
-		return
-	}
+	builder.WritePure(Query3)
 	precision := wrapper.TaosResultPrecision(res)
 	fetched := false
 	pHeaderList := make([]uintptr, fieldsCount)
 	pStartList := make([]uintptr, fieldsCount)
 	for {
 		if config.Conf.RestfulRowLimit > -1 && total == config.Conf.RestfulRowLimit {
-			err = builder.Flush()
-			if err != nil {
-				return
-			}
 			break
 		}
 		if isDebug {
@@ -354,27 +376,21 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 
 			for row := 0; row < result.N; row++ {
 				builder.WriteArrayStart()
-				err = builder.Flush()
-				if err != nil {
-					return
-				}
 				for column := 0; column < fieldsCount; column++ {
 					ctools.JsonWriteRawBlock(builder, rowsHeader.ColTypes[column], pHeaderList[column], pStartList[column], row, precision, timeFormat)
 					if column != fieldsCount-1 {
 						builder.WriteMore()
-						err = builder.Flush()
-						if err != nil {
-							return
-						}
 					}
 				}
-				builder.WriteArrayEnd()
-				err = builder.Flush()
+				// try flushing after parsing a row of data
+				tmpFlushTiming, err = tryFlush(w, builder, calculateTiming)
 				if err != nil {
 					return
 				}
-				if w.Size() > 16352 {
-					w.Flush()
+				flushTiming += tmpFlushTiming
+				builder.WriteArrayEnd()
+				if err != nil {
+					return
 				}
 				total += 1
 				if config.Conf.RestfulRowLimit > -1 && total == config.Conf.RestfulRowLimit {
@@ -383,24 +399,43 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 				if row != result.N-1 {
 					builder.WriteMore()
 				}
-				err = builder.Flush()
-				if err != nil {
-					return
-				}
 			}
 		}
 	}
-	_, err = w.Write(Query4)
-	if err != nil {
-		return
-	}
+	builder.WritePure(Query4)
 	builder.WriteInt(total)
+	if calculateTiming {
+		builder.WritePure(Timing)
+		builder.WriteInt64(time.Now().UnixNano() - st.(int64) - flushTiming)
+	}
 	builder.WriteObjectEnd()
-	err = builder.Flush()
+	forceFlush(w, builder)
+}
+
+func tryFlush(w gin.ResponseWriter, builder *jsonbuilder.Stream, calculateTiming bool) (int64, error) {
+	if builder.Buffered() > 16352 {
+		err := builder.Flush()
+		if err != nil {
+			return 0, err
+		}
+		var s time.Time
+		if calculateTiming {
+			s = time.Now()
+			w.Flush()
+			return time.Now().Sub(s).Nanoseconds(), nil
+		}
+		w.Flush()
+	}
+	return 0, nil
+}
+
+func forceFlush(w gin.ResponseWriter, builder *jsonbuilder.Stream) error {
+	err := builder.Flush()
 	if err != nil {
-		return
+		return err
 	}
 	w.Flush()
+	return nil
 }
 
 const MAXSQLLength = 1024 * 1024 * 1
