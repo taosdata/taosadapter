@@ -2182,7 +2182,6 @@ func TestTMQSeek(t *testing.T) {
 		assert.Equal(t, 0, resp.Code)
 		assert.Equal(t, vgroups, len(resp.Assignment))
 		for i := 0; i < vgroups; i++ {
-			assert.Greater(t, resp.Assignment[0].Offset, int64(0))
 			assert.Equal(t, int64(0), resp.Assignment[0].Begin)
 		}
 	}

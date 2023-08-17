@@ -2,6 +2,7 @@ package rest
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/taosdata/taosadapter/v3/config"
@@ -72,10 +73,25 @@ func CommonErrorResponse(c *gin.Context, msg string) {
 	errorResp(c, httpCode, 0xffff, msg)
 }
 
+type MessageWithTiming struct {
+	Code   int    `json:"code"`
+	Desc   string `json:"desc"`
+	Timing int64  `json:"timing"`
+}
+
 func errorResp(c *gin.Context, httpCode int, code int, msg string) {
-	c.AbortWithStatusJSON(httpCode, &Message{
-		Code: code,
-		Desc: msg,
-	})
+	st, ok := c.Get(StartTimeKey)
+	if ok {
+		c.AbortWithStatusJSON(httpCode, &MessageWithTiming{
+			Code:   code,
+			Desc:   msg,
+			Timing: time.Now().UnixNano() - st.(int64),
+		})
+	} else {
+		c.AbortWithStatusJSON(httpCode, &Message{
+			Code: code,
+			Desc: msg,
+		})
+	}
 	web.SetTaosErrorCode(c, code)
 }
