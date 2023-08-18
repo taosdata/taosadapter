@@ -117,7 +117,15 @@ func TestRestful_InitSchemaless(t *testing.T) {
 	if err := ws.WriteMessage(websocket.TextMessage, j); err != nil {
 		t.Fatal("send connect message error", err)
 	}
-
+	_, msg, err := ws.ReadMessage()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resp wstool.WSErrorResp
+	_ = json.Unmarshal(msg, &resp)
+	if resp.Code != 0 {
+		t.Fatal(resp)
+	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			j, _ := json.Marshal(map[string]interface{}{
