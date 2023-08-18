@@ -47,149 +47,156 @@ func NewSTMTController() *STMTController {
 		if stmtM.IsClosed() {
 			return
 		}
-		ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
-		logger := session.MustGet("logger").(*logrus.Entry)
-		logger.Debugln("get ws message data:", string(data))
-		var action wstool.WSAction
-		err := json.Unmarshal(data, &action)
-		if err != nil {
-			logger.WithError(err).Errorln("unmarshal ws request")
-			return
-		}
-		switch action.Action {
-		case wstool.ClientVersion:
-			session.Write(wstool.VersionResp)
-		case STMTConnect:
-			var req StmtConnectReq
-			err = json.Unmarshal(action.Args, &req)
+		go func() {
+			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
+			logger := session.MustGet("logger").(*logrus.Entry)
+			logger.Debugln("get ws message data:", string(data))
+			var action wstool.WSAction
+			err := json.Unmarshal(data, &action)
 			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal connect request args")
+				logger.WithError(err).Errorln("unmarshal ws request")
 				return
 			}
-			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).connect(ctx, session, &req)
-		case STMTInit:
-			var req StmtInitReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal init args")
+			switch action.Action {
+			case wstool.ClientVersion:
+				session.Write(wstool.VersionResp)
+			case STMTConnect:
+				var req StmtConnectReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal connect request args")
+					return
+				}
+				t := session.MustGet(TaosStmtKey)
+				t.(*TaosStmt).connect(ctx, session, &req)
+			case STMTInit:
+				var req StmtInitReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal init args")
+					return
+				}
+				t := session.MustGet(TaosStmtKey)
+				t.(*TaosStmt).init(ctx, session, &req)
+			case STMTPrepare:
+				var req StmtPrepareReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal prepare args")
+					return
+				}
+				t := session.MustGet(TaosStmtKey)
+				t.(*TaosStmt).prepare(ctx, session, &req)
+			case STMTSetTableName:
+				var req StmtSetTableNameReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal set table name args")
+					return
+				}
+				t := session.MustGet(TaosStmtKey)
+				t.(*TaosStmt).setTableName(ctx, session, &req)
+			case STMTSetTags:
+				var req StmtSetTagsReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal set tags args")
+					return
+				}
+				t := session.MustGet(TaosStmtKey)
+				t.(*TaosStmt).setTags(ctx, session, &req)
+			case STMTBind:
+				var req StmtBindReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal bind args")
+					return
+				}
+				t := session.MustGet(TaosStmtKey)
+				t.(*TaosStmt).bind(ctx, session, &req)
+			case STMTAddBatch:
+				var req StmtAddBatchReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithError(err).Errorln("unmarshal add batch args")
+					return
+				}
+				t := session.MustGet(TaosStmtKey)
+				t.(*TaosStmt).addBatch(ctx, session, &req)
+			case STMTExec:
+				var req StmtExecReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithError(err).Errorln("unmarshal exec args")
+					return
+				}
+				t := session.MustGet(TaosStmtKey)
+				t.(*TaosStmt).exec(ctx, session, &req)
+			case STMTClose:
+				var req StmtClose
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithError(err).Errorln("unmarshal close args")
+					return
+				}
+				t := session.MustGet(TaosStmtKey)
+				t.(*TaosStmt).close(ctx, session, &req)
+			case STMTGetColFields:
+				var req StmtGetColFieldsReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithError(err).Errorln("unmarshal get_col_fields args")
+					return
+				}
+				t := session.MustGet(TaosStmtKey)
+				t.(*TaosStmt).getColFields(ctx, session, &req)
+			case STMTGetTagFields:
+				var req StmtGetTagFieldsReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithError(err).Errorln("unmarshal get_tag_fields args")
+					return
+				}
+				t := session.MustGet(TaosStmtKey)
+				t.(*TaosStmt).getTagFields(ctx, session, &req)
+			default:
+				logger.WithError(err).Errorln("unknown action: " + action.Action)
 				return
 			}
-			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).init(ctx, session, &req)
-		case STMTPrepare:
-			var req StmtPrepareReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal prepare args")
-				return
-			}
-			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).prepare(ctx, session, &req)
-		case STMTSetTableName:
-			var req StmtSetTableNameReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal set table name args")
-				return
-			}
-			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).setTableName(ctx, session, &req)
-		case STMTSetTags:
-			var req StmtSetTagsReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal set tags args")
-				return
-			}
-			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).setTags(ctx, session, &req)
-		case STMTBind:
-			var req StmtBindReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal bind args")
-				return
-			}
-			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).bind(ctx, session, &req)
-		case STMTAddBatch:
-			var req StmtAddBatchReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithError(err).Errorln("unmarshal add batch args")
-				return
-			}
-			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).addBatch(ctx, session, &req)
-		case STMTExec:
-			var req StmtExecReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithError(err).Errorln("unmarshal exec args")
-				return
-			}
-			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).exec(ctx, session, &req)
-		case STMTClose:
-			var req StmtClose
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithError(err).Errorln("unmarshal close args")
-				return
-			}
-			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).close(ctx, session, &req)
-		case STMTGetColFields:
-			var req StmtGetColFieldsReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithError(err).Errorln("unmarshal get_col_fields args")
-				return
-			}
-			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).getColFields(ctx, session, &req)
-		case STMTGetTagFields:
-			var req StmtGetTagFieldsReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithError(err).Errorln("unmarshal get_tag_fields args")
-				return
-			}
-			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).getTagFields(ctx, session, &req)
-		default:
-			logger.WithError(err).Errorln("unknown action: " + action.Action)
-			return
-		}
+		}()
 	})
 
 	stmtM.HandleMessageBinary(func(session *melody.Session, data []byte) {
-		ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
-		//p0 uin64 代表 req_id
-		//p0+8 uint64 代表 stmt_id
-		//p0+16 uint64 代表 操作类型(1 (set tag) 2 (bind))
-		//p0+24 raw block
-		p0 := *(*uintptr)(unsafe.Pointer(&data))
-		reqID := *(*uint64)(unsafe.Pointer(p0))
-		stmtID := *(*uint64)(unsafe.Pointer(p0 + uintptr(8)))
-		action := *(*uint64)(unsafe.Pointer(p0 + uintptr(16)))
-		block := unsafe.Pointer(p0 + uintptr(24))
-		columns := parser.RawBlockGetNumOfCols(block)
-		rows := parser.RawBlockGetNumOfRows(block)
 		if stmtM.IsClosed() {
 			return
 		}
-		logger := session.MustGet("logger").(*logrus.Entry)
-		logger.Debugln("get ws stmt block message data:", data)
-		switch action {
-		case BindMessage:
-			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).bindBlock(ctx, session, reqID, stmtID, int(rows), int(columns), block)
-		case SetTagsMessage:
-			t := session.MustGet(TaosStmtKey)
-			t.(*TaosStmt).setTagsBlock(ctx, session, reqID, stmtID, int(rows), int(columns), block)
-		}
+		go func() {
+			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
+			//p0 uin64  req_id
+			//p0+8 uint64  stmt_id
+			//p0+16 uint64 (1 (set tag) 2 (bind))
+			//p0+24 raw block
+			p0 := *(*uintptr)(unsafe.Pointer(&data))
+			reqID := *(*uint64)(unsafe.Pointer(p0))
+			stmtID := *(*uint64)(unsafe.Pointer(p0 + uintptr(8)))
+			action := *(*uint64)(unsafe.Pointer(p0 + uintptr(16)))
+			block := unsafe.Pointer(p0 + uintptr(24))
+			columns := parser.RawBlockGetNumOfCols(block)
+			rows := parser.RawBlockGetNumOfRows(block)
+			if stmtM.IsClosed() {
+				return
+			}
+			logger := session.MustGet("logger").(*logrus.Entry)
+			logger.Debugln("get ws stmt block message data:", data)
+			switch action {
+			case BindMessage:
+				t := session.MustGet(TaosStmtKey)
+				t.(*TaosStmt).bindBlock(ctx, session, reqID, stmtID, int(rows), int(columns), block)
+			case SetTagsMessage:
+				t := session.MustGet(TaosStmtKey)
+				t.(*TaosStmt).setTagsBlock(ctx, session, reqID, stmtID, int(rows), int(columns), block)
+			}
+		}()
 	})
 
 	stmtM.HandleClose(func(session *melody.Session, i int, s string) error {
