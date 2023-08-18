@@ -42,7 +42,7 @@ func TestRestful_InitSchemaless(t *testing.T) {
 	wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "drop database if exists test_schemaless_ws"))
 	wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "create database if not exists test_schemaless_ws"))
 	defer func() {
-		//wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "drop database if exists test_schemaless_ws"))
+		wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "drop database if exists test_schemaless_ws"))
 	}()
 
 	s := httptest.NewServer(router)
