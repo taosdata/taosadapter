@@ -42,7 +42,7 @@ func TestRestful_InitSchemaless(t *testing.T) {
 	wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "drop database if exists test_schemaless_ws"))
 	wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "create database if not exists test_schemaless_ws"))
 	defer func() {
-		wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "drop database if exists test_schemaless_ws"))
+		//wrapper.TaosFreeResult(wrapper.TaosQuery(conn, "drop database if exists test_schemaless_ws"))
 	}()
 
 	s := httptest.NewServer(router)
@@ -87,13 +87,44 @@ func TestRestful_InitSchemaless(t *testing.T) {
 			name:      "opentsdb_json",
 			protocol:  3,
 			precision: "ms",
-			data: "[{\"metric\": \"meters.current\", \"timestamp\": 1648432611249, \"value\": 10.3, \"tags\": " +
-				"{\"location\": \"California.SanFrancisco\", \"groupid\": 2 } }, {\"metric\": \"meters.voltage\", " +
-				"\"timestamp\": 1648432611249, \"value\": 219, \"tags\": {\"location\": \"California.LosAngeles\", " +
-				"\"groupid\": 1 } }, {\"metric\": \"meters.current\", \"timestamp\": 1648432611250, \"value\": 12.6, " +
-				"\"tags\": {\"location\": \"California.SanFrancisco\", \"groupid\": 2 } }, {\"metric\": \"meters.voltage\", " +
-				"\"timestamp\": 1648432611250, \"value\": 221, \"tags\": {\"location\": \"California.LosAngeles\", " +
-				"\"groupid\": 1 } }]",
+			data: `[
+    {
+        "metric": "meters2.current",
+        "timestamp": 1648432611249,
+        "value": 10.3,
+        "tags": {
+            "location": "California.SanFrancisco",
+            "groupid": 2
+        }
+    },
+    {
+        "metric": "meters2.voltage",
+        "timestamp": 1648432611249,
+        "value": 219,
+        "tags": {
+            "location": "California.LosAngeles",
+            "groupid": 1
+        }
+    },
+    {
+        "metric": "meters2.current",
+        "timestamp": 1648432611250,
+        "value": 12.6,
+        "tags": {
+            "location": "California.SanFrancisco",
+            "groupid": 2
+        }
+    },
+    {
+        "metric": "meters2.voltage",
+        "timestamp": 1648432611250,
+        "value": 221,
+        "tags": {
+            "location": "California.LosAngeles",
+            "groupid": 1
+        }
+    }
+]`,
 			ttl:  100,
 			code: 0,
 		},
