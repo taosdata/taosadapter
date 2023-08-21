@@ -630,9 +630,6 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 type TMQFetchReq struct {
 	ReqID     uint64 `json:"req_id"`
 	MessageID uint64 `json:"message_id"`
-	Topic     string `json:"topic"`
-	VgroupID  uint32 `json:"vgroup_id"`
-	Offset    uint64 `json:"offset"`
 }
 type TMQFetchResp struct {
 	Code          int                `json:"code"`
@@ -660,14 +657,8 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	logger.Debugln("get list lock cost:", log.GetLogDuration(isDebug, s))
-	var message *Message
-	var err error
-	if len(req.Topic) > 0 && req.MessageID == 0 {
-		message, err = t.getMessageByOffset(req.Topic, req.VgroupID, req.Offset)
-	} else {
-		message, err = t.getMessageByMessageID(req.MessageID)
-	}
 
+	message, err := t.getMessageByMessageID(req.MessageID)
 	if err != nil && errors.Is(err, NotFountError) {
 		wsTMQErrorMsg(ctx, session, 0xffff, "message is nil", TMQFetch, req.ReqID, &req.MessageID)
 		return
@@ -747,9 +738,6 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 type TMQFetchBlockReq struct {
 	ReqID     uint64 `json:"req_id"`
 	MessageID uint64 `json:"message_id"`
-	Topic     string `json:"topic"`
-	VgroupID  uint32 `json:"vgroup_id"`
-	Offset    uint64 `json:"offset"`
 }
 
 func (t *TMQ) fetchBlock(ctx context.Context, session *melody.Session, req *TMQFetchBlockReq) {
@@ -762,14 +750,7 @@ func (t *TMQ) fetchBlock(ctx context.Context, session *melody.Session, req *TMQF
 	s := log.GetLogNow(isDebug)
 	logger.Debugln("get list lock cost:", log.GetLogDuration(isDebug, s))
 
-	var message *Message
-	var err error
-	if len(req.Topic) > 0 && req.MessageID == 0 {
-		message, err = t.getMessageByOffset(req.Topic, req.VgroupID, req.Offset)
-	} else {
-		message, err = t.getMessageByMessageID(req.MessageID)
-	}
-
+	message, err := t.getMessageByMessageID(req.MessageID)
 	if err != nil && errors.Is(err, NotFountError) {
 		wsTMQErrorMsg(ctx, session, 0xffff, "message is nil", TMQFetch, req.ReqID, &req.MessageID)
 		return
@@ -1111,10 +1092,15 @@ func (t *TMQ) Close(logger logrus.FieldLogger) {
 			}
 		}
 	}()
-	t.cleanupMessages()
+	t.stopRecordMessages()
 }
 
 func (t *TMQ) cleanupMessages() {
+	t.messages.CleanAll()
+}
+
+func (t *TMQ) stopRecordMessages() {
+	t.messages.StopAutoClean()
 	t.messages.CleanAll()
 }
 

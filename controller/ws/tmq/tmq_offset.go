@@ -17,7 +17,7 @@ type TopicVGroup struct {
 	messages          *topicVGroupMessages
 	idx               *topicVGroupIdx
 	autoClean         bool
-	autoCleanInterval int
+	autoCleanInterval time.Duration
 	messageTimeout    time.Duration
 	autoCleanStarted  bool
 	sync.RWMutex
@@ -55,9 +55,9 @@ func WithAutoClean() TopicVGroupOpt {
 	}
 }
 
-func WithCleanInterval(interval int) TopicVGroupOpt {
+func WithCleanInterval(interval int64) TopicVGroupOpt {
 	return func(group *TopicVGroup) {
-		group.autoCleanInterval = interval
+		group.autoCleanInterval = time.Duration(interval) * time.Second
 	}
 }
 
@@ -71,8 +71,8 @@ func NewTopicVGroup(opts ...TopicVGroupOpt) *TopicVGroup {
 	tg := TopicVGroup{
 		messages:          newTopicVGroupMessages(),
 		idx:               newTopicVGroupIdx(),
-		autoCleanInterval: 10,
-		messageTimeout:    10 * time.Second,
+		autoCleanInterval: time.Second,
+		messageTimeout:    time.Second,
 	}
 	for _, opt := range opts {
 		opt(&tg)
@@ -96,7 +96,6 @@ func (tg *TopicVGroup) StopAutoClean() {
 		return
 	}
 
-	tg.autoClean = false
 	tg.autoCleanStarted = false
 }
 
@@ -173,11 +172,9 @@ func (tg *TopicVGroup) startAutoClean() {
 
 	tg.autoCleanStarted = true
 	go func() {
-		timer := time.NewTimer(time.Duration(tg.autoCleanInterval) * time.Second)
+		timer := time.NewTimer(tg.autoCleanInterval)
 		defer func() {
-			if !timer.Stop() {
-				<-timer.C
-			}
+			timer.Stop()
 		}()
 
 		for range timer.C {
@@ -185,13 +182,12 @@ func (tg *TopicVGroup) startAutoClean() {
 			for _, messages := range all {
 				messages.cleanTimeoutMessages()
 			}
-			timer.Reset(time.Duration(tg.autoCleanInterval) * time.Second)
+			if !timer.Stop() {
+				<-timer.C
+			}
+			timer.Reset(tg.autoCleanInterval)
 
-			if tg.autoCleanStarted {
-				if !timer.Stop() {
-					<-timer.C
-				}
-
+			if !tg.autoCleanStarted {
 				break
 			}
 		}
@@ -217,7 +213,7 @@ type topicVGroupMessages struct {
 }
 
 func newTopicVGroupMessages() *topicVGroupMessages {
-	return &topicVGroupMessages{messages: make(map[topicVGroup]*messageList, 128)}
+	return &topicVGroupMessages{messages: make(map[topicVGroup]*messageList, 64)}
 }
 
 func (tm *topicVGroupMessages) initMessageList(topic string, vGroupID uint32) *messageList {
@@ -428,27 +424,26 @@ type topicVGroupIdx struct {
 
 func newTopicVGroupIdx() *topicVGroupIdx {
 	return &topicVGroupIdx{
-		topicVGroupIdx:  make(map[topicVGroup]uint32, 128),
-		idxTopicVGroups: make(map[uint32]topicVGroup, 128),
+		topicVGroupIdx:  make(map[topicVGroup]uint32, 64),
+		idxTopicVGroups: make(map[uint32]topicVGroup, 64),
 	}
 }
 
 const maxMessageIndex = math.MaxUint64 >> 16 // top 16 is 0 and other is 1
 
-const maxTgIdx uint64 = math.MaxUint16 << 48 // top 16 bit is 1 and other is 0
-
-func (tv *topicVGroupIdx) addTopicAndVGroup(topic string, vGroupID uint32) {
+func (tv *topicVGroupIdx) addTopicAndVGroup(topic string, vGroupID uint32) uint64 {
 	tv.Lock()
 	defer tv.Unlock()
 
 	tg := topicVGroup{topic: topic, vGroupID: vGroupID}
-	if _, ok := tv.topicVGroupIdx[tg]; ok {
-		return
+	if idx, ok := tv.topicVGroupIdx[tg]; ok {
+		return uint64(idx)
 	}
 
 	idx := atomic.AddUint32(&tv.topicVGroupIndex, 1)
 	tv.topicVGroupIdx[tg] = idx
 	tv.idxTopicVGroups[idx] = tg
+	return uint64(idx)
 }
 
 func (tv *topicVGroupIdx) getTopicAndVGroup(id uint64) (topic string, vGroupID uint32, exists bool) {
@@ -460,7 +455,7 @@ func (tv *topicVGroupIdx) getTopicAndVGroup(id uint64) (topic string, vGroupID u
 }
 
 func (tv *topicVGroupIdx) getIdxByMessageID(id uint64) uint32 {
-	return uint32((id & maxTgIdx) >> 48) // only 16 bit, so uint32 is ok
+	return uint32(id >> 48) // only 16 bit, so uint32 is ok
 }
 
 func (tv *topicVGroupIdx) getTopicVGroupIdx(topic string, vGroupID uint32) (uint64, bool) {
@@ -474,12 +469,12 @@ func (tv *topicVGroupIdx) getTopicVGroupIdx(topic string, vGroupID uint32) (uint
 func (tv *topicVGroupIdx) messageId(topic string, vGroupID uint32) uint64 {
 	tgIdx, ok := tv.getTopicVGroupIdx(topic, vGroupID)
 	if !ok {
-		tv.addTopicAndVGroup(topic, vGroupID)
+		tgIdx = tv.addTopicAndVGroup(topic, vGroupID)
 	}
 
 	if tv.messageIndex+1 >= maxMessageIndex {
 		tv.Lock()
-		if tv.messageIndex+1 > maxMessageIndex {
+		if tv.messageIndex+1 >= maxMessageIndex {
 			tv.messageIndex = 1
 		}
 		tv.Unlock()
