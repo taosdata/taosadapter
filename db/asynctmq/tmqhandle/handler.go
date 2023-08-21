@@ -25,6 +25,11 @@ type GetTopicAssignmentResult struct {
 	Assignment []*Assignment
 }
 
+type ListTopicsResult struct {
+	Code   int32
+	Topics []string
+}
+
 type TMQCaller struct {
 	PollResult               chan unsafe.Pointer
 	FreeResult               chan struct{}
@@ -38,6 +43,9 @@ type TMQCaller struct {
 	NewConsumerResult        chan *NewConsumerResult
 	GetJsonMetaResult        chan unsafe.Pointer
 	GetTopicAssignmentResult chan *GetTopicAssignmentResult
+	CommittedResult          chan int64
+	PositionResult           chan int64
+	ListTopicsResult         chan *ListTopicsResult
 }
 
 func NewTMQCaller() *TMQCaller {
@@ -54,6 +62,9 @@ func NewTMQCaller() *TMQCaller {
 		NewConsumerResult:        make(chan *NewConsumerResult, 1),
 		GetJsonMetaResult:        make(chan unsafe.Pointer, 1),
 		GetTopicAssignmentResult: make(chan *GetTopicAssignmentResult, 1),
+		CommittedResult:          make(chan int64, 1),
+		PositionResult:           make(chan int64, 1),
+		ListTopicsResult:         make(chan *ListTopicsResult, 1),
 	}
 }
 
@@ -119,6 +130,21 @@ func (c *TMQCaller) GetTopicAssignment(code int32, assignment []*Assignment) {
 
 func (c *TMQCaller) OffsetSeekCall(code int32) {
 	c.OffsetSeekResult <- code
+}
+
+func (c *TMQCaller) CommittedCall(code int64) {
+	c.CommittedResult <- code
+}
+
+func (c *TMQCaller) PositionCall(code int64) {
+	c.PositionResult <- code
+}
+
+func (c *TMQCaller) ListTopicCall(code int32, topics []string) {
+	c.ListTopicsResult <- &ListTopicsResult{
+		Code:   code,
+		Topics: topics,
+	}
 }
 
 type poolReq struct {

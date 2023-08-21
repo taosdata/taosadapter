@@ -111,3 +111,21 @@ func AdapterTMQOffsetSeekCallback(handle C.uintptr_t, topicName unsafe.Pointer, 
 	caller := h.Value().(*tmqhandle.TMQCaller)
 	caller.OffsetSeekCall(errorCode)
 }
+
+//export AdapterTMQCommitOffsetCallback
+func AdapterTMQCommitOffsetCallback(handle C.uintptr_t, topicName unsafe.Pointer, code int32) {
+	C.free(topicName)
+	cgo.Handle(handle).Value().(*tmqhandle.TMQCaller).CommitCall(code)
+}
+
+//export AdapterTMQCommittedCallback
+func AdapterTMQCommittedCallback(handle C.uintptr_t, topicName unsafe.Pointer, code int64) {
+	C.free(topicName)
+	cgo.Handle(handle).Value().(*tmqhandle.TMQCaller).CommittedCall(code)
+}
+
+//export AdapterTMQPositionCallback
+func AdapterTMQPositionCallback(handle C.uintptr_t, topicName unsafe.Pointer, code int64) {
+	C.free(topicName)
+	cgo.Handle(handle).Value().(*tmqhandle.TMQCaller).PositionCall(code)
+}
