@@ -843,9 +843,6 @@ func (t *TMQ) fetchRawMeta(ctx context.Context, session *melody.Session, req *TM
 type TMQFetchJsonMetaReq struct {
 	ReqID     uint64 `json:"req_id"`
 	MessageID uint64 `json:"message_id"`
-	Topic     string `json:"topic"`
-	VgroupID  uint32 `json:"vgroup_id"`
-	Offset    uint64 `json:"offset"`
 }
 type TMQFetchJsonMetaResp struct {
 	Code      int             `json:"code"`
@@ -866,14 +863,7 @@ func (t *TMQ) fetchJsonMeta(ctx context.Context, session *melody.Session, req *T
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 
-	var message *Message
-	var err error
-	if len(req.Topic) > 0 && req.MessageID == 0 {
-		message, err = t.getMessageByOffset(req.Topic, req.VgroupID, req.Offset)
-	} else {
-		message, err = t.getMessageByMessageID(req.MessageID)
-	}
-
+	message, err := t.getMessageByMessageID(req.MessageID)
 	if err != nil && errors.Is(err, NotFountError) {
 		wsTMQErrorMsg(ctx, session, 0xffff, "message is nil", TMQFetchJsonMeta, req.ReqID, &req.MessageID)
 		return
