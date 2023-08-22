@@ -87,13 +87,44 @@ func TestRestful_InitSchemaless(t *testing.T) {
 			name:      "opentsdb_json",
 			protocol:  3,
 			precision: "ms",
-			data: "[{\"metric\": \"meters.current\", \"timestamp\": 1648432611249, \"value\": 10.3, \"tags\": " +
-				"{\"location\": \"California.SanFrancisco\", \"groupid\": 2 } }, {\"metric\": \"meters.voltage\", " +
-				"\"timestamp\": 1648432611249, \"value\": 219, \"tags\": {\"location\": \"California.LosAngeles\", " +
-				"\"groupid\": 1 } }, {\"metric\": \"meters.current\", \"timestamp\": 1648432611250, \"value\": 12.6, " +
-				"\"tags\": {\"location\": \"California.SanFrancisco\", \"groupid\": 2 } }, {\"metric\": \"meters.voltage\", " +
-				"\"timestamp\": 1648432611250, \"value\": 221, \"tags\": {\"location\": \"California.LosAngeles\", " +
-				"\"groupid\": 1 } }]",
+			data: `[
+    {
+        "metric": "meters2.current",
+        "timestamp": 1648432611249,
+        "value": 10.3,
+        "tags": {
+            "location": "California.SanFrancisco",
+            "groupid": 2
+        }
+    },
+    {
+        "metric": "meters2.voltage",
+        "timestamp": 1648432611249,
+        "value": 219,
+        "tags": {
+            "location": "California.LosAngeles",
+            "groupid": 1
+        }
+    },
+    {
+        "metric": "meters2.current",
+        "timestamp": 1648432611250,
+        "value": 12.6,
+        "tags": {
+            "location": "California.SanFrancisco",
+            "groupid": 2
+        }
+    },
+    {
+        "metric": "meters2.voltage",
+        "timestamp": 1648432611250,
+        "value": 221,
+        "tags": {
+            "location": "California.LosAngeles",
+            "groupid": 1
+        }
+    }
+]`,
 			ttl:  100,
 			code: 0,
 		},
@@ -117,7 +148,15 @@ func TestRestful_InitSchemaless(t *testing.T) {
 	if err := ws.WriteMessage(websocket.TextMessage, j); err != nil {
 		t.Fatal("send connect message error", err)
 	}
-
+	_, msg, err := ws.ReadMessage()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resp wstool.WSErrorResp
+	_ = json.Unmarshal(msg, &resp)
+	if resp.Code != 0 {
+		t.Fatal(resp)
+	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			j, _ := json.Marshal(map[string]interface{}{
