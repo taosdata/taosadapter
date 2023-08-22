@@ -76,6 +76,10 @@ func (stream *Stream) Write(p []byte) (nn int, err error) {
 	return len(p), nil
 }
 
+func (stream *Stream) WritePure(p []byte) {
+	stream.buf = append(stream.buf, p...)
+}
+
 func (stream *Stream) WriteByte(c byte) {
 	stream.writeByte(c)
 }
