@@ -35,6 +35,7 @@ type STMTController struct {
 
 func NewSTMTController() *STMTController {
 	stmtM := melody.New()
+	stmtM.UpGrader.EnableCompression = true
 	stmtM.Config.MaxMessageSize = 0
 
 	stmtM.HandleConnect(func(session *melody.Session) {
