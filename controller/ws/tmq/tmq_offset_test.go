@@ -63,8 +63,8 @@ func TestTopicVGroup_CleanByOffset(t *testing.T) {
 
 	assert.True(t, ok)
 	assert.Equal(t, 2, messages.messages.Len())
-	assert.Equal(t, uint64(8), allMessages[0].Offset)
-	assert.Equal(t, uint64(11), allMessages[1].Offset)
+	assert.Equal(t, int64(8), allMessages[0].Offset)
+	assert.Equal(t, int64(11), allMessages[1].Offset)
 }
 
 func TestTopicVGroup_WrongMessageID(t *testing.T) {
@@ -159,7 +159,7 @@ func TestMessage_MessageID(t *testing.T) {
 	assert.Equal(t, uint32(1), idx.getIdxByMessageID(id))
 	topic, vgID, ok := idx.getTopicAndVGroup(id)
 	assert.Equal(t, "topic_1", topic)
-	assert.Equal(t, uint32(1), vgID)
+	assert.Equal(t, int32(1), vgID)
 	assert.True(t, ok)
 	id = idx.messageId("topic_2", 2)
 	assert.Equal(t, uint32(2), idx.getIdxByMessageID(id))
@@ -172,9 +172,9 @@ func BenchmarkTopicVGroup_AddMessage(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for j := 0; j < 100; j++ {
-			msg := tg.CreateMessage("topic_1", uint32(i), uint64(j), 0, nil)
+			msg := tg.CreateMessage("topic_1", int32(i), int64(j), 0, nil)
 			tg.AddMessage(msg)
 		}
-		tg.CleanByOffset("topic_1", uint32(i), 100000)
+		tg.CleanByOffset("topic_1", int32(i), 100000)
 	}
 }

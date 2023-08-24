@@ -260,7 +260,7 @@ func (t *TMQ) cleanupMessage(m *Message) {
 	t.messages.CleanByOffset(m.Topic, m.VGroupID, m.Offset)
 }
 
-func (t *TMQ) cleanupMessageByOffset(topic string, vgID uint32, offset uint64) {
+func (t *TMQ) cleanupMessageByOffset(topic string, vgID int32, offset int64) {
 	t.messages.CleanByOffset(topic, vgID, offset)
 }
 
@@ -268,7 +268,7 @@ func (t *TMQ) addMessage(message *Message) {
 	t.messages.AddMessage(message)
 }
 
-func (t *TMQ) getMessageByOffset(topic string, vgID uint32, offset uint64) (*Message, error) {
+func (t *TMQ) getMessageByOffset(topic string, vgID int32, offset int64) (*Message, error) {
 	return t.messages.GetByOffset(topic, vgID, offset)
 }
 
@@ -585,10 +585,10 @@ type TMQPollResp struct {
 	HaveMessage bool   `json:"have_message"`
 	Topic       string `json:"topic"`
 	Database    string `json:"database"`
-	VgroupID    uint32 `json:"vgroup_id"`
+	VgroupID    int32  `json:"vgroup_id"`
 	MessageType int32  `json:"message_type"`
 	MessageID   uint64 `json:"message_id"`
-	Offset      uint64 `json:"offset"`
+	Offset      int64  `json:"offset"`
 }
 
 func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq) {
@@ -609,8 +609,8 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 		if messageTypeIsValid(messageType) {
 			m := t.messages.CreateMessage(
 				wrapper.TMQGetTopicName(message),
-				uint32(wrapper.TMQGetVgroupID(message)),
-				uint64(wrapper.TMQGetVgroupOffset(message)),
+				wrapper.TMQGetVgroupID(message),
+				wrapper.TMQGetVgroupOffset(message),
 				messageType, message)
 			t.addMessage(m)
 			resp.HaveMessage = true
@@ -843,9 +843,6 @@ func (t *TMQ) fetchRawMeta(ctx context.Context, session *melody.Session, req *TM
 type TMQFetchJsonMetaReq struct {
 	ReqID     uint64 `json:"req_id"`
 	MessageID uint64 `json:"message_id"`
-	Topic     string `json:"topic"`
-	VgroupID  uint32 `json:"vgroup_id"`
-	Offset    uint64 `json:"offset"`
 }
 type TMQFetchJsonMetaResp struct {
 	Code      int             `json:"code"`
@@ -866,14 +863,7 @@ func (t *TMQ) fetchJsonMeta(ctx context.Context, session *melody.Session, req *T
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 
-	var message *Message
-	var err error
-	if len(req.Topic) > 0 && req.MessageID == 0 {
-		message, err = t.getMessageByOffset(req.Topic, req.VgroupID, req.Offset)
-	} else {
-		message, err = t.getMessageByMessageID(req.MessageID)
-	}
-
+	message, err := t.getMessageByMessageID(req.MessageID)
 	if err != nil && errors.Is(err, NotFountError) {
 		wsTMQErrorMsg(ctx, session, 0xffff, "message is nil", TMQFetchJsonMeta, req.ReqID, &req.MessageID)
 		return
@@ -1189,12 +1179,7 @@ func (t *TMQ) committed(ctx context.Context, session *melody.Session, req *TMQCo
 
 type TopicVgroupID struct {
 	Topic    string `json:"topic"`
-	VgroupID uint32 `json:"vgroup_id"`
-}
-
-type offset struct {
-	idx    int
-	offset int64
+	VgroupID int32  `json:"vgroup_id"`
 }
 
 type TMQPositionReq struct {
@@ -1288,21 +1273,21 @@ func (t *TMQ) listTopics(ctx context.Context, session *melody.Session, req *TMQL
 }
 
 type TMQCommitOffsetReq struct {
-	ReqID  uint64 `json:"req_id"`
-	Topic  string `json:"topic"`
-	VgID   uint32 `json:"vg_id"`
-	Offset uint64 `json:"offset"`
+	ReqID    uint64 `json:"req_id"`
+	Topic    string `json:"topic"`
+	VgroupID int32  `json:"vgroup_id"`
+	Offset   int64  `json:"offset"`
 }
 
 type TMQCommitOffsetResp struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Action  string `json:"action"`
-	ReqID   uint64 `json:"req_id"`
-	Timing  int64  `json:"timing"`
-	Topic   string `json:"topic"`
-	VgID    uint32 `json:"vg_id"`
-	Offset  uint64 `json:"offset"`
+	Code     int    `json:"code"`
+	Message  string `json:"message"`
+	Action   string `json:"action"`
+	ReqID    uint64 `json:"req_id"`
+	Timing   int64  `json:"timing"`
+	Topic    string `json:"topic"`
+	VgroupID int32  `json:"vgroup_id"`
+	Offset   int64  `json:"offset"`
 }
 
 func (t *TMQ) commitOffset(ctx context.Context, session *melody.Session, req *TMQCommitOffsetReq) {
@@ -1315,7 +1300,7 @@ func (t *TMQ) commitOffset(ctx context.Context, session *melody.Session, req *TM
 		log.GetLogDuration(log.IsDebug(), log.GetLogNow(log.IsDebug())))
 
 	t.asyncLocker.Lock()
-	asynctmq.TaosaTMQCommitOffset(t.thread, t.consumer, req.Topic, int32(req.VgID), int64(req.Offset), t.handler.Handler)
+	asynctmq.TaosaTMQCommitOffset(t.thread, t.consumer, req.Topic, req.VgroupID, req.Offset, t.handler.Handler)
 	code := <-t.handler.Caller.CommitResult
 	t.asyncLocker.Unlock()
 	if code != 0 {
@@ -1324,14 +1309,14 @@ func (t *TMQ) commitOffset(ctx context.Context, session *melody.Session, req *TM
 		wsTMQErrorMsg(ctx, session, int(code), errMsg, TMQCommitOffset, req.ReqID, nil)
 		return
 	}
-	t.cleanupMessageByOffset(req.Topic, req.VgID, req.Offset)
+	t.cleanupMessageByOffset(req.Topic, req.VgroupID, req.Offset)
 
 	wstool.WSWriteJson(session, TMQCommitOffsetResp{
-		Action: TMQCommitOffset,
-		ReqID:  req.ReqID,
-		Timing: wstool.GetDuration(ctx),
-		Topic:  req.Topic,
-		VgID:   req.VgID,
-		Offset: req.Offset,
+		Action:   TMQCommitOffset,
+		ReqID:    req.ReqID,
+		Timing:   wstool.GetDuration(ctx),
+		Topic:    req.Topic,
+		VgroupID: req.VgroupID,
+		Offset:   req.Offset,
 	})
 }

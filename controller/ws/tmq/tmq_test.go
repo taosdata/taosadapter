@@ -2610,7 +2610,7 @@ func TestTMQ_CommitOffset(t *testing.T) {
 	assert.True(t, pollResp.Offset > 0, string(msg))
 
 	//commit offset
-	b, _ = json.Marshal(TMQCommitOffsetReq{ReqID: 0, Topic: topic, VgID: pollResp.VgroupID, Offset: pollResp.Offset})
+	b, _ = json.Marshal(TMQCommitOffsetReq{ReqID: 0, Topic: topic, VgroupID: pollResp.VgroupID, Offset: pollResp.Offset})
 	msg, err = doWebSocket(ws, TMQCommitOffset, b)
 	assert.NoError(t, err)
 	var commitOffsetResp TMQCommitOffsetResp
