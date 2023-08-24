@@ -25,14 +25,14 @@ type TopicVGroup struct {
 
 type topicVGroup struct {
 	topic    string
-	vGroupID uint32
+	vGroupID int32
 }
 
 type Message struct {
 	Index    uint64
 	Topic    string
-	VGroupID uint32
-	Offset   uint64
+	VGroupID int32
+	Offset   int64
 	Type     int32
 	CPointer unsafe.Pointer // message pointer from taosc
 	buffer   *bytes.Buffer
@@ -83,7 +83,7 @@ func NewTopicVGroup(opts ...TopicVGroupOpt) *TopicVGroup {
 	return &tg
 }
 
-func (tg *TopicVGroup) CreateMessage(topic string, vGroupID uint32, offset uint64, t int32, message unsafe.Pointer) *Message {
+func (tg *TopicVGroup) CreateMessage(topic string, vGroupID int32, offset int64, t int32, message unsafe.Pointer) *Message {
 	return &Message{Index: tg.getIndex(topic, vGroupID), Topic: topic, VGroupID: vGroupID, Offset: offset, Type: t, CPointer: message}
 }
 
@@ -119,11 +119,11 @@ func (tg *TopicVGroup) AddMessage(message *Message) {
 	messages.append(message)
 }
 
-func (tg *TopicVGroup) getMessages(topic string, vGroupID uint32) (*messageList, bool) {
+func (tg *TopicVGroup) getMessages(topic string, vGroupID int32) (*messageList, bool) {
 	return tg.messages.getMessageList(topic, vGroupID)
 }
 
-func (tg *TopicVGroup) initMessages(topic string, vGroupID uint32) *messageList {
+func (tg *TopicVGroup) initMessages(topic string, vGroupID int32) *messageList {
 	return tg.messages.initMessageList(topic, vGroupID)
 }
 
@@ -138,7 +138,7 @@ func (tg *TopicVGroup) GetByMessageID(messageID uint64) (message *Message, err e
 	return messages.getByIdx(messageID)
 }
 
-func (tg *TopicVGroup) GetByOffset(topic string, vGroupID uint32, offset uint64) (*Message, error) {
+func (tg *TopicVGroup) GetByOffset(topic string, vGroupID int32, offset int64) (*Message, error) {
 	messages, ok := tg.getMessages(topic, vGroupID)
 	if !ok {
 		return nil, NotFountError
@@ -147,7 +147,7 @@ func (tg *TopicVGroup) GetByOffset(topic string, vGroupID uint32, offset uint64)
 	return messages.getByOffset(offset)
 }
 
-func (tg *TopicVGroup) CleanByOffset(topic string, vGroupID uint32, offset uint64) {
+func (tg *TopicVGroup) CleanByOffset(topic string, vGroupID int32, offset int64) {
 	messages, ok := tg.getMessages(topic, vGroupID)
 	if !ok {
 		return
@@ -195,7 +195,7 @@ func (tg *TopicVGroup) startAutoClean() {
 }
 
 // getIndex to get the message id. message id is 64bit(uint64). top 10 bit refer to topic/vGroupID, other is atomic int
-func (tg *TopicVGroup) getIndex(topic string, vGroupID uint32) uint64 {
+func (tg *TopicVGroup) getIndex(topic string, vGroupID int32) uint64 {
 	return tg.idx.messageId(topic, vGroupID)
 }
 
@@ -203,7 +203,7 @@ func (tg *TopicVGroup) getAllMessageList() []*messageList {
 	return tg.messages.getAllMessageList()
 }
 
-func (tg *TopicVGroup) getTopicAndVGroup(messageID uint64) (topic string, vGroupID uint32, ok bool) {
+func (tg *TopicVGroup) getTopicAndVGroup(messageID uint64) (topic string, vGroupID int32, ok bool) {
 	return tg.idx.getTopicAndVGroup(messageID)
 }
 
@@ -216,7 +216,7 @@ func newTopicVGroupMessages() *topicVGroupMessages {
 	return &topicVGroupMessages{messages: make(map[topicVGroup]*messageList, 64)}
 }
 
-func (tm *topicVGroupMessages) initMessageList(topic string, vGroupID uint32) *messageList {
+func (tm *topicVGroupMessages) initMessageList(topic string, vGroupID int32) *messageList {
 	tm.Lock()
 	defer tm.Unlock()
 
@@ -232,7 +232,7 @@ func (tm *topicVGroupMessages) initMessageList(topic string, vGroupID uint32) *m
 	return messages
 }
 
-func (tm *topicVGroupMessages) getMessageList(topic string, vGroupID uint32) (*messageList, bool) {
+func (tm *topicVGroupMessages) getMessageList(topic string, vGroupID int32) (*messageList, bool) {
 	tm.RLock()
 	defer tm.RUnlock()
 	messages, ok := tm.messages[topicVGroup{topic: topic, vGroupID: vGroupID}]
@@ -261,7 +261,7 @@ func newMessageList() *messageList {
 
 var NotFountError = errors.New("not Found")
 
-func (n *messageList) getByOffset(offset uint64) (*Message, error) {
+func (n *messageList) getByOffset(offset int64) (*Message, error) {
 	n.RLock()
 	defer n.RUnlock()
 
@@ -306,7 +306,7 @@ func (n *messageList) append(message *Message) {
 	n.messages.PushBack(message)
 }
 
-func (n *messageList) cleanByOffset(offset uint64) {
+func (n *messageList) cleanByOffset(offset int64) {
 	n.Lock()
 	defer n.Unlock()
 
@@ -431,7 +431,7 @@ func newTopicVGroupIdx() *topicVGroupIdx {
 
 const maxMessageIndex = math.MaxUint64 >> 16 // top 16 is 0 and other is 1
 
-func (tv *topicVGroupIdx) addTopicAndVGroup(topic string, vGroupID uint32) uint64 {
+func (tv *topicVGroupIdx) addTopicAndVGroup(topic string, vGroupID int32) uint64 {
 	tv.Lock()
 	defer tv.Unlock()
 
@@ -446,7 +446,7 @@ func (tv *topicVGroupIdx) addTopicAndVGroup(topic string, vGroupID uint32) uint6
 	return uint64(idx)
 }
 
-func (tv *topicVGroupIdx) getTopicAndVGroup(id uint64) (topic string, vGroupID uint32, exists bool) {
+func (tv *topicVGroupIdx) getTopicAndVGroup(id uint64) (topic string, vGroupID int32, exists bool) {
 	tv.RLock()
 	defer tv.RUnlock()
 
@@ -458,7 +458,7 @@ func (tv *topicVGroupIdx) getIdxByMessageID(id uint64) uint32 {
 	return uint32(id >> 48) // only 16 bit, so uint32 is ok
 }
 
-func (tv *topicVGroupIdx) getTopicVGroupIdx(topic string, vGroupID uint32) (uint64, bool) {
+func (tv *topicVGroupIdx) getTopicVGroupIdx(topic string, vGroupID int32) (uint64, bool) {
 	tg := topicVGroup{topic: topic, vGroupID: vGroupID}
 	tv.RLock()
 	defer tv.RUnlock()
@@ -466,7 +466,7 @@ func (tv *topicVGroupIdx) getTopicVGroupIdx(topic string, vGroupID uint32) (uint
 	return uint64(id), ok
 }
 
-func (tv *topicVGroupIdx) messageId(topic string, vGroupID uint32) uint64 {
+func (tv *topicVGroupIdx) messageId(topic string, vGroupID int32) uint64 {
 	tgIdx, ok := tv.getTopicVGroupIdx(topic, vGroupID)
 	if !ok {
 		tgIdx = tv.addTopicAndVGroup(topic, vGroupID)
