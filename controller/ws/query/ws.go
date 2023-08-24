@@ -32,6 +32,7 @@ type QueryController struct {
 
 func NewQueryController() *QueryController {
 	queryM := melody.New()
+	queryM.UpGrader.EnableCompression = true
 	queryM.Config.MaxMessageSize = 0
 
 	queryM.HandleConnect(func(session *melody.Session) {

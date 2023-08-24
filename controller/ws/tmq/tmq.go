@@ -35,6 +35,7 @@ type TMQController struct {
 
 func NewTMQController() *TMQController {
 	tmqM := melody.New()
+	tmqM.UpGrader.EnableCompression = true
 	tmqM.Config.MaxMessageSize = 0
 
 	tmqM.HandleConnect(func(session *melody.Session) {

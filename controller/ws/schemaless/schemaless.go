@@ -26,6 +26,7 @@ type SchemalessController struct {
 
 func NewSchemalessController() *SchemalessController {
 	schemaless := melody.New()
+	schemaless.UpGrader.EnableCompression = true
 	schemaless.Config.MaxMessageSize = 0
 
 	schemaless.HandleConnect(func(session *melody.Session) {
