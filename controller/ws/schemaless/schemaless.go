@@ -26,7 +26,7 @@ type SchemalessController struct {
 
 func NewSchemalessController() *SchemalessController {
 	schemaless := melody.New()
-	schemaless.Config.MaxMessageSize = 4 * 1024 * 1024
+	schemaless.Config.MaxMessageSize = 0
 
 	schemaless.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
@@ -38,39 +38,41 @@ func NewSchemalessController() *SchemalessController {
 		if schemaless.IsClosed() {
 			return
 		}
-		ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
-		logger := session.MustGet("logger").(*logrus.Entry)
-		logger.Debugln("get ws message data:", string(bytes))
-		var action wstool.WSAction
-		err := json.Unmarshal(bytes, &action)
-		if err != nil {
-			logger.WithError(err).Errorln("unmarshal ws request")
-			wstool.WSError(ctx, session, err, action.Action, 0)
-			return
-		}
-		switch action.Action {
-		case wstool.ClientVersion:
-			session.Write(wstool.VersionResp)
-		case SchemalessConn:
-			var req schemalessConnReq
-			if err = json.Unmarshal(action.Args, &req); err != nil {
-				logger.WithError(err).Errorln("unmarshal connect request args")
-				wstool.WSError(ctx, session, err, SchemalessConn, req.ReqID)
+		go func() {
+			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
+			logger := session.MustGet("logger").(*logrus.Entry)
+			logger.Debugln("get ws message data:", string(bytes))
+			var action wstool.WSAction
+			err := json.Unmarshal(bytes, &action)
+			if err != nil {
+				logger.WithError(err).Errorln("unmarshal ws request")
+				wstool.WSError(ctx, session, err, action.Action, 0)
 				return
 			}
-			t := session.MustGet(taosSchemalessKey)
-			t.(*TaosSchemaless).connect(ctx, session, req)
-		case SchemalessWrite:
-			var req schemalessWriteReq
-			if err = json.Unmarshal(action.Args, &req); err != nil {
-				logger.WithError(err).WithField(config.ReqIDKey, req.ReqID).
-					Errorln("unmarshal req write request args")
-				wstool.WSError(ctx, session, err, SchemalessWrite, req.ReqID)
-				return
+			switch action.Action {
+			case wstool.ClientVersion:
+				session.Write(wstool.VersionResp)
+			case SchemalessConn:
+				var req schemalessConnReq
+				if err = json.Unmarshal(action.Args, &req); err != nil {
+					logger.WithError(err).Errorln("unmarshal connect request args")
+					wstool.WSError(ctx, session, err, SchemalessConn, req.ReqID)
+					return
+				}
+				t := session.MustGet(taosSchemalessKey)
+				t.(*TaosSchemaless).connect(ctx, session, req)
+			case SchemalessWrite:
+				var req schemalessWriteReq
+				if err = json.Unmarshal(action.Args, &req); err != nil {
+					logger.WithError(err).WithField(config.ReqIDKey, req.ReqID).
+						Errorln("unmarshal req write request args")
+					wstool.WSError(ctx, session, err, SchemalessWrite, req.ReqID)
+					return
+				}
+				t := session.MustGet(taosSchemalessKey)
+				t.(*TaosSchemaless).insert(ctx, session, req)
 			}
-			t := session.MustGet(taosSchemalessKey)
-			t.(*TaosSchemaless).insert(ctx, session, req)
-		}
+		}()
 	})
 
 	schemaless.HandleClose(func(session *melody.Session, i int, s string) error {

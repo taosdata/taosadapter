@@ -36,7 +36,7 @@ type TMQController struct {
 
 func NewTMQController() *TMQController {
 	tmqM := melody.New()
-	tmqM.Config.MaxMessageSize = 4 * 1024 * 1024
+	tmqM.Config.MaxMessageSize = 0
 
 	tmqM.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
@@ -48,112 +48,114 @@ func NewTMQController() *TMQController {
 		if tmqM.IsClosed() {
 			return
 		}
-		ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
-		logger := session.MustGet("logger").(*logrus.Entry)
-		logger.Debugln("get ws message data:", string(data))
-		var action wstool.WSAction
-		err := json.Unmarshal(data, &action)
-		if err != nil {
-			logger.WithError(err).Errorln("unmarshal ws request")
-			return
-		}
-		switch action.Action {
-		case wstool.ClientVersion:
-			session.Write(wstool.VersionResp)
-		case TMQSubscribe:
-			var req TMQSubscribeReq
-			err = json.Unmarshal(action.Args, &req)
+		go func() {
+			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
+			logger := session.MustGet("logger").(*logrus.Entry)
+			logger.Debugln("get ws message data:", string(data))
+			var action wstool.WSAction
+			err := json.Unmarshal(data, &action)
 			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal subscribe args")
+				logger.WithError(err).Errorln("unmarshal ws request")
 				return
 			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).subscribe(ctx, session, &req)
-		case TMQPoll:
-			var req TMQPollReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal pool args")
+			switch action.Action {
+			case wstool.ClientVersion:
+				session.Write(wstool.VersionResp)
+			case TMQSubscribe:
+				var req TMQSubscribeReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal subscribe args")
+					return
+				}
+				t := session.MustGet(TaosTMQKey)
+				t.(*TMQ).subscribe(ctx, session, &req)
+			case TMQPoll:
+				var req TMQPollReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal pool args")
+					return
+				}
+				t := session.MustGet(TaosTMQKey)
+				t.(*TMQ).poll(ctx, session, &req)
+			case TMQFetch:
+				var req TMQFetchReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch args")
+					return
+				}
+				t := session.MustGet(TaosTMQKey)
+				t.(*TMQ).fetch(ctx, session, &req)
+			case TMQFetchBlock:
+				var req TMQFetchBlockReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch block args")
+					return
+				}
+				t := session.MustGet(TaosTMQKey)
+				t.(*TMQ).fetchBlock(ctx, session, &req)
+			case TMQCommit:
+				var req TMQCommitReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal commit args")
+					return
+				}
+				t := session.MustGet(TaosTMQKey)
+				t.(*TMQ).commit(ctx, session, &req)
+			case TMQFetchJsonMeta:
+				var req TMQFetchJsonMetaReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch json meta args")
+					return
+				}
+				t := session.MustGet(TaosTMQKey)
+				t.(*TMQ).fetchJsonMeta(ctx, session, &req)
+			case TMQFetchRaw:
+				var req TMQFetchRawMetaReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch raw meta args")
+					return
+				}
+				t := session.MustGet(TaosTMQKey)
+				t.(*TMQ).fetchRawMeta(ctx, session, &req)
+			case TMQUnsubscribe:
+				var req TMQUnsubscribeReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal unsubscribe args")
+					return
+				}
+				t := session.MustGet(TaosTMQKey)
+				t.(*TMQ).unsubscribe(ctx, session, &req)
+			case TMQGetTopicAssignment:
+				var req TMQGetTopicAssignmentReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal unsubscribe args")
+					return
+				}
+				t := session.MustGet(TaosTMQKey)
+				t.(*TMQ).assignment(ctx, session, &req)
+			case TMQSeek:
+				var req TMQOffsetSeekReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal unsubscribe args")
+					return
+				}
+				t := session.MustGet(TaosTMQKey)
+				t.(*TMQ).offsetSeek(ctx, session, &req)
+			default:
+				logger.WithError(err).Errorln("unknown action: " + action.Action)
 				return
 			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).poll(ctx, session, &req)
-		case TMQFetch:
-			var req TMQFetchReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch args")
-				return
-			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).fetch(ctx, session, &req)
-		case TMQFetchBlock:
-			var req TMQFetchBlockReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch block args")
-				return
-			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).fetchBlock(ctx, session, &req)
-		case TMQCommit:
-			var req TMQCommitReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal commit args")
-				return
-			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).commit(ctx, session, &req)
-		case TMQFetchJsonMeta:
-			var req TMQFetchJsonMetaReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch json meta args")
-				return
-			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).fetchJsonMeta(ctx, session, &req)
-		case TMQFetchRaw:
-			var req TMQFetchRawMetaReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch raw meta args")
-				return
-			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).fetchRawMeta(ctx, session, &req)
-		case TMQUnsubscribe:
-			var req TMQUnsubscribeReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal unsubscribe args")
-				return
-			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).unsubscribe(ctx, session, &req)
-		case TMQGetTopicAssignment:
-			var req TMQGetTopicAssignmentReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal unsubscribe args")
-				return
-			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).assignment(ctx, session, &req)
-		case TMQSeek:
-			var req TMQOffsetSeekReq
-			err = json.Unmarshal(action.Args, &req)
-			if err != nil {
-				logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal unsubscribe args")
-				return
-			}
-			t := session.MustGet(TaosTMQKey)
-			t.(*TMQ).offsetSeek(ctx, session, &req)
-		default:
-			logger.WithError(err).Errorln("unknown action: " + action.Action)
-			return
-		}
+		}()
 	})
 	tmqM.HandleClose(func(session *melody.Session, i int, s string) error {
 		//message := melody.FormatCloseMessage(i, "")
@@ -648,10 +650,16 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQPoll, req.ReqID, nil)
 		return
 	}
+	logger := wstool.GetLogger(session).WithField("action", TMQPoll).WithField(config.ReqIDKey, req.ReqID)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
 	t.asyncLocker.Lock()
+	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	asynctmq.TaosaTMQPollA(t.thread, t.consumer, req.BlockingTime, t.handler.Handler)
+	s = log.GetLogNow(isDebug)
 	message := <-t.handler.Caller.PollResult
 	t.asyncLocker.Unlock()
+	logger.Debugln("tmq_poll blocking time", req.BlockingTime, " cost:", log.GetLogDuration(isDebug, s))
 	resp := &TMQPollResp{
 		Action: TMQPoll,
 		ReqID:  req.ReqID,

@@ -32,7 +32,7 @@ type QueryController struct {
 
 func NewQueryController() *QueryController {
 	queryM := melody.New()
-	queryM.Config.MaxMessageSize = 4 * 1024 * 1024
+	queryM.Config.MaxMessageSize = 0
 
 	queryM.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
@@ -44,108 +44,115 @@ func NewQueryController() *QueryController {
 		if queryM.IsClosed() {
 			return
 		}
-		ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
-		logger := session.MustGet("logger").(*logrus.Entry)
-		logger.Debugln("get ws message data:", string(data))
-		var action WSAction
-		err := json.Unmarshal(data, &action)
-		if err != nil {
-			logger.WithError(err).Errorln("unmarshal ws request")
-			return
-		}
-		switch action.Action {
-		case wstool.ClientVersion:
-			session.Write(wstool.VersionResp)
-		case WSConnect:
-			var wsConnect WSConnectReq
-			err = json.Unmarshal(action.Args, &wsConnect)
+		go func() {
+			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
+			logger := session.MustGet("logger").(*logrus.Entry)
+			logger.Debugln("get ws message data:", string(data))
+			var action WSAction
+			err := json.Unmarshal(data, &action)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal connect request args")
+				logger.WithError(err).Errorln("unmarshal ws request")
 				return
 			}
-			t := session.MustGet(TaosSessionKey)
-			t.(*Taos).connect(ctx, session, &wsConnect)
-		case WSQuery:
-			var wsQuery WSQueryReq
-			err = json.Unmarshal(action.Args, &wsQuery)
-			if err != nil {
-				logger.WithError(err).WithField(config.ReqIDKey, wsQuery.ReqID).Errorln("unmarshal query args")
+			switch action.Action {
+			case wstool.ClientVersion:
+				session.Write(wstool.VersionResp)
+			case WSConnect:
+				var wsConnect WSConnectReq
+				err = json.Unmarshal(action.Args, &wsConnect)
+				if err != nil {
+					logger.WithError(err).Errorln("unmarshal connect request args")
+					return
+				}
+				t := session.MustGet(TaosSessionKey)
+				t.(*Taos).connect(ctx, session, &wsConnect)
+			case WSQuery:
+				var wsQuery WSQueryReq
+				err = json.Unmarshal(action.Args, &wsQuery)
+				if err != nil {
+					logger.WithError(err).WithField(config.ReqIDKey, wsQuery.ReqID).Errorln("unmarshal query args")
+					return
+				}
+				t := session.MustGet(TaosSessionKey)
+				t.(*Taos).query(ctx, session, &wsQuery)
+			case WSFetch:
+				var wsFetch WSFetchReq
+				err = json.Unmarshal(action.Args, &wsFetch)
+				if err != nil {
+					logger.WithError(err).WithField(config.ReqIDKey, wsFetch.ReqID).Errorln("unmarshal fetch args")
+					return
+				}
+				t := session.MustGet(TaosSessionKey)
+				t.(*Taos).fetch(ctx, session, &wsFetch)
+			case WSFetchBlock:
+				var fetchBlock WSFetchBlockReq
+				err = json.Unmarshal(action.Args, &fetchBlock)
+				if err != nil {
+					logger.WithError(err).WithField(config.ReqIDKey, fetchBlock.ReqID).Errorln("unmarshal fetch_block args")
+					return
+				}
+				t := session.MustGet(TaosSessionKey)
+				t.(*Taos).fetchBlock(ctx, session, &fetchBlock)
+			case WSFreeResult:
+				var fetchJson WSFreeResultReq
+				err = json.Unmarshal(action.Args, &fetchJson)
+				if err != nil {
+					logger.WithError(err).WithField(config.ReqIDKey, fetchJson.ReqID).Errorln("unmarshal fetch_json args")
+					return
+				}
+				t := session.MustGet(TaosSessionKey)
+				t.(*Taos).freeResult(session, &fetchJson)
+			default:
+				logger.WithError(err).Errorln("unknown action :" + action.Action)
 				return
 			}
-			t := session.MustGet(TaosSessionKey)
-			t.(*Taos).query(ctx, session, &wsQuery)
-		case WSFetch:
-			var wsFetch WSFetchReq
-			err = json.Unmarshal(action.Args, &wsFetch)
-			if err != nil {
-				logger.WithError(err).WithField(config.ReqIDKey, wsFetch.ReqID).Errorln("unmarshal fetch args")
-				return
-			}
-			t := session.MustGet(TaosSessionKey)
-			t.(*Taos).fetch(ctx, session, &wsFetch)
-		case WSFetchBlock:
-			var fetchBlock WSFetchBlockReq
-			err = json.Unmarshal(action.Args, &fetchBlock)
-			if err != nil {
-				logger.WithError(err).WithField(config.ReqIDKey, fetchBlock.ReqID).Errorln("unmarshal fetch_block args")
-				return
-			}
-			t := session.MustGet(TaosSessionKey)
-			t.(*Taos).fetchBlock(ctx, session, &fetchBlock)
-		case WSFreeResult:
-			var fetchJson WSFreeResultReq
-			err = json.Unmarshal(action.Args, &fetchJson)
-			if err != nil {
-				logger.WithError(err).WithField(config.ReqIDKey, fetchJson.ReqID).Errorln("unmarshal fetch_json args")
-				return
-			}
-			t := session.MustGet(TaosSessionKey)
-			t.(*Taos).freeResult(session, &fetchJson)
-		default:
-			logger.WithError(err).Errorln("unknown action :" + action.Action)
-			return
-		}
+		}()
 	})
 
 	queryM.HandleMessageBinary(func(session *melody.Session, data []byte) {
-		ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
-		logger := session.MustGet("logger").(*logrus.Entry)
-		logger.Debugln("get ws block message data:", data)
-		p0 := *(*uintptr)(unsafe.Pointer(&data))
-		reqID := *(*uint64)(unsafe.Pointer(p0))
-		messageID := *(*uint64)(unsafe.Pointer(p0 + uintptr(8)))
-		action := *(*uint64)(unsafe.Pointer(p0 + uintptr(16)))
-		switch action {
-		case TMQRawMessage:
-			length := *(*uint32)(unsafe.Pointer(p0 + uintptr(24)))
-			metaType := *(*uint16)(unsafe.Pointer(p0 + uintptr(28)))
-			b := unsafe.Pointer(p0 + uintptr(30))
-			t := session.MustGet(TaosSessionKey)
-			t.(*Taos).writeRaw(ctx, session, reqID, messageID, length, metaType, b)
-		case RawBlockMessage:
-			numOfRows := *(*int32)(unsafe.Pointer(p0 + uintptr(24)))
-			tableNameLength := *(*uint16)(unsafe.Pointer(p0 + uintptr(28)))
-			tableName := make([]byte, tableNameLength)
-			for i := 0; i < int(tableNameLength); i++ {
-				tableName[i] = *(*byte)(unsafe.Pointer(p0 + uintptr(30+i)))
-			}
-			b := unsafe.Pointer(p0 + uintptr(30+tableNameLength))
-			t := session.MustGet(TaosSessionKey)
-			t.(*Taos).writeRawBlock(ctx, session, reqID, int(numOfRows), string(tableName), b)
-		case RawBlockMessageWithFields:
-			numOfRows := *(*int32)(unsafe.Pointer(p0 + uintptr(24)))
-			tableNameLength := int(*(*uint16)(unsafe.Pointer(p0 + uintptr(28))))
-			tableName := make([]byte, tableNameLength)
-			for i := 0; i < tableNameLength; i++ {
-				tableName[i] = *(*byte)(unsafe.Pointer(p0 + uintptr(30+i)))
-			}
-			b := unsafe.Pointer(p0 + uintptr(30+tableNameLength))
-			blockLength := int(parser.RawBlockGetLength(b))
-			numOfColumn := int(parser.RawBlockGetNumOfCols(b))
-			fieldsBlock := unsafe.Pointer(p0 + uintptr(30+tableNameLength+blockLength))
-			t := session.MustGet(TaosSessionKey)
-			t.(*Taos).writeRawBlockWithFields(ctx, session, reqID, int(numOfRows), string(tableName), b, fieldsBlock, numOfColumn)
+		if queryM.IsClosed() {
+			return
 		}
+		go func() {
+			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
+			logger := session.MustGet("logger").(*logrus.Entry)
+			logger.Debugln("get ws block message data:", data)
+			p0 := *(*uintptr)(unsafe.Pointer(&data))
+			reqID := *(*uint64)(unsafe.Pointer(p0))
+			messageID := *(*uint64)(unsafe.Pointer(p0 + uintptr(8)))
+			action := *(*uint64)(unsafe.Pointer(p0 + uintptr(16)))
+			switch action {
+			case TMQRawMessage:
+				length := *(*uint32)(unsafe.Pointer(p0 + uintptr(24)))
+				metaType := *(*uint16)(unsafe.Pointer(p0 + uintptr(28)))
+				b := unsafe.Pointer(p0 + uintptr(30))
+				t := session.MustGet(TaosSessionKey)
+				t.(*Taos).writeRaw(ctx, session, reqID, messageID, length, metaType, b)
+			case RawBlockMessage:
+				numOfRows := *(*int32)(unsafe.Pointer(p0 + uintptr(24)))
+				tableNameLength := *(*uint16)(unsafe.Pointer(p0 + uintptr(28)))
+				tableName := make([]byte, tableNameLength)
+				for i := 0; i < int(tableNameLength); i++ {
+					tableName[i] = *(*byte)(unsafe.Pointer(p0 + uintptr(30+i)))
+				}
+				b := unsafe.Pointer(p0 + uintptr(30+tableNameLength))
+				t := session.MustGet(TaosSessionKey)
+				t.(*Taos).writeRawBlock(ctx, session, reqID, int(numOfRows), string(tableName), b)
+			case RawBlockMessageWithFields:
+				numOfRows := *(*int32)(unsafe.Pointer(p0 + uintptr(24)))
+				tableNameLength := int(*(*uint16)(unsafe.Pointer(p0 + uintptr(28))))
+				tableName := make([]byte, tableNameLength)
+				for i := 0; i < tableNameLength; i++ {
+					tableName[i] = *(*byte)(unsafe.Pointer(p0 + uintptr(30+i)))
+				}
+				b := unsafe.Pointer(p0 + uintptr(30+tableNameLength))
+				blockLength := int(parser.RawBlockGetLength(b))
+				numOfColumn := int(parser.RawBlockGetNumOfCols(b))
+				fieldsBlock := unsafe.Pointer(p0 + uintptr(30+tableNameLength+blockLength))
+				t := session.MustGet(TaosSessionKey)
+				t.(*Taos).writeRawBlockWithFields(ctx, session, reqID, int(numOfRows), string(tableName), b, fieldsBlock, numOfColumn)
+			}
+		}()
 	})
 
 	queryM.HandleClose(func(session *melody.Session, i int, s string) error {
