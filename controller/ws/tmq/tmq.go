@@ -1180,7 +1180,7 @@ func (t *TMQ) committed(ctx context.Context, session *melody.Session, req *TMQCo
 
 	logger.Debugln("tmq get committed cost:", log.GetLogDuration(log.IsDebug(), s))
 	wstool.WSWriteJson(session, TMQCommittedResp{
-		Action:    TMQPosition,
+		Action:    TMQCommitted,
 		ReqID:     req.ReqID,
 		Timing:    wstool.GetDuration(ctx),
 		Committed: offsets,
