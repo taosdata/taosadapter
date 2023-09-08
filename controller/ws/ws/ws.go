@@ -57,7 +57,7 @@ func initController() *webSocketCtl {
 		var closeError *websocket.CloseError
 		is := errors.As(err, &closeError)
 		if is {
-			logger.WithError(err).Errorln("ws close in error")
+			logger.WithError(err).Debugln("ws close in error")
 		} else {
 			logger.WithError(err).Errorln("ws error")
 		}

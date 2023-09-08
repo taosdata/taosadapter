@@ -139,6 +139,7 @@ func TestWsQuery(t *testing.T) {
 	var connResp BaseResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
 	assert.Equal(t, 0, connResp.Code, connResp.Message)
 
 	// query
@@ -148,6 +149,7 @@ func TestWsQuery(t *testing.T) {
 	var queryResp QueryResponse
 	err = json.Unmarshal(resp, &queryResp)
 	assert.NoError(t, err)
+	assert.Equal(t, uint64(2), queryResp.ReqID)
 	assert.Equal(t, 0, queryResp.Code, queryResp.Message)
 
 	// fetch
@@ -157,6 +159,7 @@ func TestWsQuery(t *testing.T) {
 	var fetchResp FetchResponse
 	err = json.Unmarshal(resp, &fetchResp)
 	assert.NoError(t, err)
+	assert.Equal(t, uint64(3), fetchResp.ReqID)
 	assert.Equal(t, 0, fetchResp.Code, fetchResp.Message)
 	assert.Equal(t, 3, fetchResp.Rows)
 
@@ -173,19 +176,20 @@ func TestWsQuery(t *testing.T) {
 	assert.NoError(t, err)
 	err = json.Unmarshal(resp, &fetchResp)
 	assert.NoError(t, err)
+	assert.Equal(t, uint64(5), fetchResp.ReqID)
 	assert.Equal(t, 0, fetchResp.Code, fetchResp.Message)
 
 	assert.Equal(t, true, fetchResp.Completed)
 
 	// write block
-	buffer := &bytes.Buffer{}
-	wstool.WriteUint64(buffer, 300)                     // req id
-	wstool.WriteUint64(buffer, 400)                     // message id
-	wstool.WriteUint64(buffer, uint64(RawBlockMessage)) // action
-	wstool.WriteUint32(buffer, uint32(fetchResp.Rows))  // rows
-	wstool.WriteUint16(buffer, uint16(2))               // table name length
-	buffer.WriteString("t2")                            // table name
-	buffer.Write(fetchBlockResp[16:])                   // raw block
+	var buffer bytes.Buffer
+	wstool.WriteUint64(&buffer, 300)                     // req id
+	wstool.WriteUint64(&buffer, 400)                     // message id
+	wstool.WriteUint64(&buffer, uint64(RawBlockMessage)) // action
+	wstool.WriteUint32(&buffer, uint32(fetchResp.Rows))  // rows
+	wstool.WriteUint16(&buffer, uint16(2))               // table name length
+	buffer.WriteString("t2")                             // table name
+	buffer.Write(fetchBlockResp[16:])                    // raw block
 	err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
 	assert.NoError(t, err)
 	_, resp, err = ws.ReadMessage()
@@ -229,14 +233,14 @@ func TestWsQuery(t *testing.T) {
 	assert.Equal(t, true, fetchResp.Completed)
 
 	// write block with filed
-	buffer = &bytes.Buffer{}
-	wstool.WriteUint64(buffer, 300)                               // req id
-	wstool.WriteUint64(buffer, 400)                               // message id
-	wstool.WriteUint64(buffer, uint64(RawBlockMessageWithFields)) // action
-	wstool.WriteUint32(buffer, uint32(fetchResp.Rows))            // rows
-	wstool.WriteUint16(buffer, uint16(2))                         // table name length
-	buffer.WriteString("t3")                                      // table name
-	buffer.Write(fetchBlockResp[16:])                             // raw block
+	buffer.Reset()
+	wstool.WriteUint64(&buffer, 300)                               // req id
+	wstool.WriteUint64(&buffer, 400)                               // message id
+	wstool.WriteUint64(&buffer, uint64(RawBlockMessageWithFields)) // action
+	wstool.WriteUint32(&buffer, uint32(fetchResp.Rows))            // rows
+	wstool.WriteUint16(&buffer, uint16(2))                         // table name length
+	buffer.WriteString("t3")                                       // table name
+	buffer.Write(fetchBlockResp[16:])                              // raw block
 	fields := []byte{
 		// ts
 		0x74, 0x73, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -450,17 +454,21 @@ func TestWsSchemaless(t *testing.T) {
 	}
 
 	// connect
-	connReq := ConnRequest{User: "root", Password: "taosdata", DB: "test_ws_schemaless"}
+	connReq := ConnRequest{ReqID: 1, User: "root", Password: "taosdata", DB: "test_ws_schemaless"}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
 	var connResp BaseResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
 	assert.Equal(t, 0, connResp.Code, connResp.Message)
 
 	for _, c := range cases {
+		reqID := uint64(1)
 		t.Run(c.name, func(t *testing.T) {
+			reqID += 1
 			req := SchemalessWriteRequest{
+				ReqID:     reqID,
 				Protocol:  c.protocol,
 				Precision: c.precision,
 				TTL:       c.ttl,
@@ -471,6 +479,7 @@ func TestWsSchemaless(t *testing.T) {
 			var schemalessResp BaseResponse
 			err = json.Unmarshal(resp, &schemalessResp)
 			assert.NoError(t, err)
+			assert.Equal(t, reqID, schemalessResp.ReqID)
 			assert.Equal(t, 0, schemalessResp.Code, schemalessResp.Message)
 		})
 	}
@@ -502,65 +511,73 @@ func TestWsStmt(t *testing.T) {
 	}()
 
 	// connect
-	connReq := ConnRequest{User: "root", Password: "taosdata", DB: "test_ws_stmt"}
+	connReq := ConnRequest{ReqID: 1, User: "root", Password: "taosdata", DB: "test_ws_stmt"}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
 	var connResp BaseResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
 	assert.Equal(t, 0, connResp.Code, connResp.Message)
 
 	// init
-	resp, err = doWebSocket(ws, STMTInit, nil)
+	initReq := map[string]uint64{"req_id": 2}
+	resp, err = doWebSocket(ws, STMTInit, &initReq)
 	assert.NoError(t, err)
 	var initResp StmtInitResponse
 	err = json.Unmarshal(resp, &initResp)
 	assert.NoError(t, err)
+	assert.Equal(t, uint64(2), initResp.ReqID)
 	assert.Equal(t, 0, initResp.Code, initResp.Message)
 
 	// prepare
-	prepareReq := StmtPrepareRequest{StmtID: initResp.StmtID, SQL: "insert into ? using test_ws_stmt.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"}
+	prepareReq := StmtPrepareRequest{ReqID: 3, StmtID: initResp.StmtID, SQL: "insert into ? using test_ws_stmt.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"}
 	resp, err = doWebSocket(ws, STMTPrepare, &prepareReq)
 	assert.NoError(t, err)
 	var prepareResp StmtPrepareResponse
 	err = json.Unmarshal(resp, &prepareResp)
 	assert.NoError(t, err)
+	assert.Equal(t, uint64(3), prepareResp.ReqID)
 	assert.Equal(t, 0, prepareResp.Code, prepareResp.Message)
 
 	// set table name
-	setTableNameReq := StmtSetTableNameRequest{StmtID: prepareResp.StmtID, Name: "test_ws_stmt.ct1"}
+	setTableNameReq := StmtSetTableNameRequest{ReqID: 4, StmtID: prepareResp.StmtID, Name: "test_ws_stmt.ct1"}
 	resp, err = doWebSocket(ws, STMTSetTableName, &setTableNameReq)
 	assert.NoError(t, err)
 	var setTableNameResp BaseResponse
 	err = json.Unmarshal(resp, &setTableNameResp)
 	assert.NoError(t, err)
+	assert.Equal(t, uint64(4), setTableNameResp.ReqID)
 	assert.Equal(t, 0, setTableNameResp.Code, setTableNameResp.Message)
 
 	// get tag fields
-	getTagFieldsReq := StmtGetTagFieldsRequest{StmtID: prepareResp.StmtID}
+	getTagFieldsReq := StmtGetTagFieldsRequest{ReqID: 5, StmtID: prepareResp.StmtID}
 	resp, err = doWebSocket(ws, STMTGetTagFields, &getTagFieldsReq)
 	assert.NoError(t, err)
 	var getTagFieldsResp StmtGetTagFieldsResponse
 	err = json.Unmarshal(resp, &getTagFieldsResp)
 	assert.NoError(t, err)
+	assert.Equal(t, uint64(5), getTagFieldsResp.ReqID)
 	assert.Equal(t, 0, getTagFieldsResp.Code, getTagFieldsResp.Message)
 
 	// get col fields
-	getColFieldsReq := StmtGetColFieldsRequest{StmtID: prepareResp.StmtID}
+	getColFieldsReq := StmtGetColFieldsRequest{ReqID: 6, StmtID: prepareResp.StmtID}
 	resp, err = doWebSocket(ws, STMTGetColFields, &getColFieldsReq)
 	assert.NoError(t, err)
 	var getColFieldsResp StmtGetColFieldsResponse
 	err = json.Unmarshal(resp, &getColFieldsResp)
 	assert.NoError(t, err)
+	assert.Equal(t, uint64(6), getColFieldsResp.ReqID)
 	assert.Equal(t, 0, getColFieldsResp.Code, getColFieldsResp.Message)
 
 	// set tags
-	setTagsReq := StmtSetTagsRequest{StmtID: prepareResp.StmtID, Tags: json.RawMessage(`["{\"a\":\"b\"}"]`)}
+	setTagsReq := StmtSetTagsRequest{ReqID: 7, StmtID: prepareResp.StmtID, Tags: json.RawMessage(`["{\"a\":\"b\"}"]`)}
 	resp, err = doWebSocket(ws, STMTSetTags, &setTagsReq)
 	assert.NoError(t, err)
 	var setTagsResp BaseResponse
 	err = json.Unmarshal(resp, &setTagsResp)
 	assert.NoError(t, err)
+	assert.Equal(t, uint64(7), setTagsResp.ReqID)
 	assert.Equal(t, 0, setTagsResp.Code, setTagsResp.Message)
 
 	// bind
@@ -581,39 +598,43 @@ func TestWsStmt(t *testing.T) {
 		{"binary", "binary2", nil},
 		{"nchar", "nchar2", nil},
 	})
-	bindReq := StmtBindRequest{StmtID: prepareResp.StmtID, Columns: columns}
+	bindReq := StmtBindRequest{ReqID: 8, StmtID: prepareResp.StmtID, Columns: columns}
 	resp, err = doWebSocket(ws, STMTBind, &bindReq)
 	assert.NoError(t, err)
 	var bindResp StmtBindResponse
 	err = json.Unmarshal(resp, &bindResp)
 	assert.NoError(t, err)
+	assert.Equal(t, uint64(8), bindResp.ReqID)
 	assert.Equal(t, 0, bindResp.Code, bindResp.Message)
 
 	// add batch
-	addBatchReq := StmtAddBatchRequest{StmtID: prepareResp.StmtID}
+	addBatchReq := StmtAddBatchRequest{ReqID: 9, StmtID: prepareResp.StmtID}
 	resp, err = doWebSocket(ws, STMTAddBatch, &addBatchReq)
 	assert.NoError(t, err)
 	var addBatchResp StmtAddBatchResponse
 	err = json.Unmarshal(resp, &addBatchResp)
 	assert.NoError(t, err)
+	assert.Equal(t, uint64(9), addBatchResp.ReqID)
 	assert.Equal(t, 0, bindResp.Code, bindResp.Message)
 
 	// exec
-	execReq := StmtExecRequest{StmtID: prepareResp.StmtID}
+	execReq := StmtExecRequest{ReqID: 10, StmtID: prepareResp.StmtID}
 	resp, err = doWebSocket(ws, STMTExec, &execReq)
 	assert.NoError(t, err)
 	var execResp StmtExecResponse
 	err = json.Unmarshal(resp, &execResp)
 	assert.NoError(t, err)
+	assert.Equal(t, uint64(10), execResp.ReqID)
 	assert.Equal(t, 0, execResp.Code, execResp.Message)
 
 	// close
-	closeReq := StmtCloseRequest{StmtID: prepareResp.StmtID}
+	closeReq := StmtCloseRequest{ReqID: 11, StmtID: prepareResp.StmtID}
 	resp, err = doWebSocket(ws, STMTClose, &closeReq)
 	assert.NoError(t, err)
 	var closeResp BaseResponse
 	err = json.Unmarshal(resp, &closeResp)
 	assert.NoError(t, err)
+	assert.Equal(t, uint64(11), closeResp.ReqID)
 	assert.Equal(t, 0, closeResp.Code, closeResp.Message)
 
 	// query

@@ -555,7 +555,7 @@ func (t *TaosStmt) setTags(ctx context.Context, session *melody.Session, req *St
 		tags[i] = []driver.Value{req.Tags[i]}
 	}
 	s = log.GetLogNow(isDebug)
-	data, err := stmtParseTag(req.Tags, fields)
+	data, err := StmtParseTag(req.Tags, fields)
 	logger.Debugln("stmt parse tag json cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		wsStmtErrorMsg(ctx, session, 0xffff, fmt.Sprintf("stmt parse tag json:%s", err.Error()), STMTSetTags, req.ReqID, &req.StmtID)
@@ -762,7 +762,7 @@ func (t *TaosStmt) bind(ctx context.Context, session *melody.Session, req *StmtB
 		}
 	}
 	s = log.GetLogNow(isDebug)
-	data, err := stmtParseColumn(req.Columns, fields, fieldTypes)
+	data, err := StmtParseColumn(req.Columns, fields, fieldTypes)
 	logger.Debugln("stmt parse column json cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		wsStmtErrorMsg(ctx, session, 0xffff, fmt.Sprintf("stmt parse column json:%s", err.Error()), STMTBind, req.ReqID, &req.StmtID)
@@ -947,7 +947,7 @@ func (t *TaosStmt) setTagsBlock(ctx context.Context, session *melody.Session, re
 	fields := wrapper.StmtParseFields(tagNums, tagFields)
 	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
-	tags := blockConvert(block, int(rows), fields, nil)
+	tags := BlockConvert(block, int(rows), fields, nil)
 	logger.Debugln("block concert cost:", log.GetLogDuration(isDebug, s))
 	reTags := make([]driver.Value, tagNums)
 	for i := 0; i < tagNums; i++ {
@@ -1024,7 +1024,7 @@ func (t *TaosStmt) bindBlock(ctx context.Context, session *melody.Session, reqID
 		return
 	}
 	s = log.GetLogNow(isDebug)
-	data := blockConvert(block, rows, fields, fieldTypes)
+	data := BlockConvert(block, rows, fields, fieldTypes)
 	logger.Debugln("block convert cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	thread.Lock()

@@ -12,17 +12,19 @@ import (
 	"unsafe"
 
 	"github.com/huskar-t/melody"
-	"github.com/taosdata/driver-go/v3/common"
+	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/common/parser"
 	stmtCommon "github.com/taosdata/driver-go/v3/common/stmt"
 	errors2 "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/types"
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/taosadapter/v3/controller/ws/stmt"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/async"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 	"github.com/taosdata/taosadapter/v3/version"
 )
@@ -72,92 +74,143 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 		return
 	}
 
-	if request.ReqID == 0 {
-		request.ReqID = uint64(common.GetReqID())
-	}
-
+	var f dealFunc
 	switch request.Action {
 	case wstool.ClientVersion:
-		h.deal(ctx, session, &request, h.handleVersion)
+		f = h.handleVersion
 	case Connect:
-		h.deal(ctx, session, &request, h.handleConnect)
+		f = h.handleConnect
 	case WSQuery:
-		h.deal(ctx, session, &request, h.handleQuery)
+		f = h.handleQuery
 	case WSFetch:
-		h.deal(ctx, session, &request, h.handleFetch)
+		f = h.handleFetch
 	case WSFetchBlock:
-		h.deal(ctx, session, &request, h.handleFetchBlock)
+		f = h.handleFetchBlock
 	case WSFreeResult:
-		h.deal(ctx, session, &request, h.handleFreeResult)
+		f = h.handleFreeResult
 	case SchemalessWrite:
-		h.deal(ctx, session, &request, h.handleSchemalessWrite)
+		f = h.handleSchemalessWrite
 	case STMTInit:
-		h.deal(ctx, session, &request, h.handleStmtInit)
+		f = h.handleStmtInit
 	case STMTPrepare:
-		h.deal(ctx, session, &request, h.handleStmtPrepare)
+		f = h.handleStmtPrepare
 	case STMTSetTableName:
-		h.deal(ctx, session, &request, h.handleStmtSetTableName)
+		f = h.handleStmtSetTableName
 	case STMTSetTags:
-		h.deal(ctx, session, &request, h.handleStmtSetTags)
+		f = h.handleStmtSetTags
 	case STMTBind:
-		h.deal(ctx, session, &request, h.handleStmtBind)
+		f = h.handleStmtBind
 	case STMTAddBatch:
-		h.deal(ctx, session, &request, h.handleStmtAddBatch)
+		f = h.handleStmtAddBatch
 	case STMTExec:
-		h.deal(ctx, session, &request, h.handleStmtExec)
+		f = h.handleStmtExec
 	case STMTClose:
-		h.deal(ctx, session, &request, h.handleStmtClose)
+		f = h.handleStmtClose
 	case STMTGetColFields:
-		h.deal(ctx, session, &request, h.handleStmtGetColFields)
+		f = h.handleStmtGetColFields
 	case STMTGetTagFields:
-		h.deal(ctx, session, &request, h.handleStmtGetTagFields)
+		f = h.handleStmtGetTagFields
 	default:
-		h.deal(ctx, session, &request, h.handleDefault)
+		f = h.handleDefault
 	}
+	h.deal(ctx, session, request, f)
 }
 
 func (h *messageHandler) handleMessageBinary(session *melody.Session, bytes []byte) {
 	//p0 uin64  req_id
 	//p0+8 uint64  message_id
 	//p0+16 uint64 (1 (set tag) 2 (bind))
-	p0 := *(*uintptr)(unsafe.Pointer(&bytes))
-	reqID := *(*uint64)(unsafe.Pointer(p0))
-	messageID := *(*uint64)(unsafe.Pointer(p0 + uintptr(8)))
-	action := *(*uint64)(unsafe.Pointer(p0 + uintptr(16)))
+
+	p0 := unsafe.Pointer(&bytes[0])
+	reqID := *(*uint64)(p0)
+	messageID := *(*uint64)(tools.AddPointer(p0, uintptr(8)))
+	action := *(*uint64)(tools.AddPointer(p0, uintptr(16)))
 	logger.Debugln("get ws message binary reqID:", reqID, "messageID:", messageID, "action:", action)
 
 	ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 	mt := messageType(action)
+
+	var f dealBinaryFunc
 	switch mt {
 	case SetTagsMessage:
-		h.dealBinary(ctx, session, mt, reqID, messageID, p0, h.handleSetTagsMessage)
+		f = h.handleSetTagsMessage
 	case BindMessage:
-		h.dealBinary(ctx, session, mt, reqID, messageID, p0, h.handleBindMessage)
+		f = h.handleBindMessage
 	case TMQRawMessage:
-		h.dealBinary(ctx, session, mt, reqID, messageID, p0, h.handleTMQRawMessage)
+		f = h.handleTMQRawMessage
 	case RawBlockMessage:
-		h.dealBinary(ctx, session, mt, reqID, messageID, p0, h.handleRawBlockMessage)
+		f = h.handleRawBlockMessage
 	case RawBlockMessageWithFields:
-		h.dealBinary(ctx, session, mt, reqID, messageID, p0, h.handleRawBlockMessageWithFields)
+		f = h.handleRawBlockMessageWithFields
 	default:
-		h.dealBinary(ctx, session, mt, reqID, messageID, p0, h.handleDefaultBinary)
+		f = h.handleDefaultBinary
 	}
+	h.dealBinary(ctx, session, mt, reqID, messageID, p0, f)
 }
 
-func (h *messageHandler) deal(ctx context.Context, session *melody.Session, request *Request, f func(context.Context, *Request) Response) {
+type RequestID struct {
+	ReqID uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
+}
+
+type dealFunc func(context.Context, Request, *logrus.Entry, bool, time.Time) Response
+
+type dealBinaryRequest struct {
+	action messageType
+	reqID  uint64
+	id     uint64 // messageID or stmtID
+	p0     unsafe.Pointer
+}
+type dealBinaryFunc func(context.Context, dealBinaryRequest, *logrus.Entry, bool, time.Time) Response
+
+func (h *messageHandler) deal(ctx context.Context, session *melody.Session, request Request, f dealFunc) {
 	h.wait.Add(1)
 	go func() {
 		defer h.wait.Done()
-		resp := f(ctx, request)
-		h.writeResponse(ctx, session, resp, request.Action, request.ReqID)
+
+		if h.conn == nil && request.Action != Connect && request.Action != wstool.ClientVersion {
+			resp := &BaseResponse{Code: 0xffff, Message: "server not connected"}
+			h.writeResponse(ctx, session, resp, request.Action, request.ReqID)
+			return
+		}
+
+		reqID := request.ReqID
+		if reqID == 0 {
+			var req RequestID
+			_ = json.Unmarshal(request.Args, &req)
+			reqID = req.ReqID
+		}
+
+		logger := logger.WithField(actionKey, request.Action).WithField("req_id", reqID)
+		isDebug := log.IsDebug()
+		s := log.GetLogNow(isDebug)
+
+		resp := f(ctx, request, logger, isDebug, s)
+		h.writeResponse(ctx, session, resp, request.Action, reqID)
 	}()
 }
 
-func (h *messageHandler) dealBinary(ctx context.Context, session *melody.Session, action messageType, reqID uint64, messageID uint64, p0 uintptr, f func(ctx2 context.Context, reqID uint64, messageID uint64, p0 uintptr) Response) {
+func (h *messageHandler) dealBinary(ctx context.Context, session *melody.Session, action messageType, reqID uint64, messageID uint64, p0 unsafe.Pointer, f dealBinaryFunc) {
 	h.wait.Add(1)
 	go func() {
 		defer h.wait.Done()
-		resp := f(ctx, reqID, messageID, p0)
+
+		if h.conn == nil {
+			resp := &BaseResponse{Code: 0xffff, Message: "server not connected"}
+			h.writeResponse(ctx, session, resp, action.String(), reqID)
+			return
+		}
+
+		logger := logger.WithField(actionKey, action.String()).WithField("req_id", reqID)
+		isDebug := log.IsDebug()
+		s := log.GetLogNow(isDebug)
+
+		req := dealBinaryRequest{
+			action: action,
+			reqID:  reqID,
+			id:     messageID,
+			p0:     p0,
+		}
+		resp := f(ctx, req, logger, isDebug, s)
 		h.writeResponse(ctx, session, resp, action.String(), reqID)
 	}()
 }
@@ -165,13 +218,17 @@ func (h *messageHandler) dealBinary(ctx context.Context, session *melody.Session
 type BaseResponse struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
-	Action  string `json:"action,omitempty"`
-	ReqID   uint64 `json:"req_id,omitempty"`
-	Timing  int64  `json:"timing,omitempty"`
+	Action  string `json:"action"`
+	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
 	binary  bool
+	null    bool
 }
 
 func (h *messageHandler) writeResponse(ctx context.Context, session *melody.Session, response Response, action string, reqID uint64) {
+	if response.IsNull() {
+		return
+	}
 	if response.IsBinary() {
 		_ = session.WriteBinary(response.(*BinaryResponse).Data)
 		return
@@ -186,8 +243,19 @@ func (h *messageHandler) writeResponse(ctx context.Context, session *melody.Sess
 
 func (h *messageHandler) stop() {
 	h.once.Do(func() {
-		// clean groutine pool
-		h.wait.Wait()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+
+		waitCh := make(chan struct{}, 1)
+		go func() {
+			h.wait.Wait()
+			close(waitCh)
+		}()
+
+		select {
+		case <-ctx.Done():
+		case <-waitCh:
+		}
 		// clean query result and stmt
 		h.queryResults.FreeAll()
 		h.stmts.FreeAll()
@@ -198,40 +266,33 @@ func (h *messageHandler) stop() {
 	})
 }
 
-func (h *messageHandler) handleDefault(_ context.Context, request *Request) (resp Response) {
+func (h *messageHandler) handleDefault(_ context.Context, request Request, _ *logrus.Entry, _ bool, _ time.Time) (resp Response) {
 	return &BaseResponse{
 		Code:    0xffff,
 		Message: fmt.Sprintf("unknown action %s", request.Action),
 	}
 }
 
-func (h *messageHandler) handleDefaultBinary(_ context.Context, _, _ uint64, _ uintptr) (resp Response) {
-	return &BaseResponse{Code: 0xffff, Message: "unknown action"}
+func (h *messageHandler) handleDefaultBinary(_ context.Context, req dealBinaryRequest, _ *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+	return &BaseResponse{Code: 0xffff, Message: fmt.Sprintf("unknown action %v", req.action)}
 }
 
-func (h *messageHandler) handleVersion(_ context.Context, _ *Request) (resp Response) {
+func (h *messageHandler) handleVersion(_ context.Context, _ Request, _ *logrus.Entry, _ bool, _ time.Time) (resp Response) {
 	return &VersionResponse{Version: version.TaosClientVersion}
 }
 
 type ConnRequest struct {
-	ReqID    uint64 `json:"req_id,omitempty"` // Deprecated: use Request.ReqID instead
+	ReqID    uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
 	User     string `json:"user"`
 	Password string `json:"password"`
 	DB       string `json:"db"`
 }
 
-func (h *messageHandler) handleConnect(_ context.Context, request *Request) (resp Response) {
-	logger := logger.WithField(actionKey, Connect)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(log.IsDebug())
-
+func (h *messageHandler) handleConnect(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req ConnRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal connect request %s error: %s", string(request.Args), err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal connect request error"}
-	}
-	if req.ReqID != 0 {
-		request.ReqID = req.ReqID
 	}
 
 	h.Lock()
@@ -256,38 +317,27 @@ func (h *messageHandler) handleConnect(_ context.Context, request *Request) (res
 }
 
 type QueryRequest struct {
-	ReqID uint64 `json:"req_id,omitempty"` // Deprecated: use Request.ReqID instead
+	ReqID uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
 	Sql   string `json:"sql"`
 }
 
 type QueryResponse struct {
 	BaseResponse
-	ID            uint64             `json:"id,omitempty"`
-	IsUpdate      bool               `json:"is_update,omitempty"`
-	AffectedRows  int                `json:"affected_rows,omitempty"`
-	FieldsCount   int                `json:"fields_count,omitempty"`
-	FieldsNames   []string           `json:"fields_names,omitempty"`
-	FieldsTypes   jsontype.JsonUint8 `json:"fields_types,omitempty"`
-	FieldsLengths []int64            `json:"fields_lengths,omitempty"`
-	Precision     int                `json:"precision,omitempty"`
+	ID            uint64             `json:"id"`
+	IsUpdate      bool               `json:"is_update"`
+	AffectedRows  int                `json:"affected_rows"`
+	FieldsCount   int                `json:"fields_count"`
+	FieldsNames   []string           `json:"fields_names"`
+	FieldsTypes   jsontype.JsonUint8 `json:"fields_types"`
+	FieldsLengths []int64            `json:"fields_lengths"`
+	Precision     int                `json:"precision"`
 }
 
-func (h *messageHandler) handleQuery(_ context.Context, request *Request) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-
-	logger := logger.WithField(actionKey, WSQuery)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(log.IsDebug())
-
+func (h *messageHandler) handleQuery(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req QueryRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal ws query request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal ws query request error"}
-	}
-	if req.ReqID != 0 {
-		request.ReqID = req.ReqID
 	}
 
 	handler := async.GlobalAsync.HandlerPool.Get()
@@ -331,7 +381,7 @@ func (h *messageHandler) handleQuery(_ context.Context, request *Request) (resp 
 }
 
 type FetchRequest struct {
-	ReqID uint64 `json:"req_id,omitempty"` // Deprecated: use Request.ReqID instead
+	ReqID uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
 	ID    uint64 `json:"id"`
 }
 
@@ -343,22 +393,11 @@ type FetchResponse struct {
 	Rows      int    `json:"rows"`
 }
 
-func (h *messageHandler) handleFetch(_ context.Context, request *Request) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-
-	logger := logger.WithField(actionKey, WSFetch)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
+func (h *messageHandler) handleFetch(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req FetchRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal ws fetch request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal ws fetch request error"}
-	}
-	if req.ReqID != 0 {
-		request.ReqID = req.ReqID
 	}
 
 	item := h.queryResults.Get(req.ID)
@@ -389,26 +428,15 @@ func (h *messageHandler) handleFetch(_ context.Context, request *Request) (resp 
 }
 
 type FetchBlockRequest struct {
-	ReqID uint64 `json:"req_id,omitempty"` // Deprecated: use Request.ReqID instead
+	ReqID uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
 	ID    uint64 `json:"id"`
 }
 
-func (h *messageHandler) handleFetchBlock(ctx context.Context, request *Request) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-
-	logger := logger.WithField(actionKey, WSFetchBlock)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
+func (h *messageHandler) handleFetchBlock(ctx context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req FetchBlockRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal ws fetch block request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal ws fetch block request error"}
-	}
-	if req.ReqID != 0 {
-		request.ReqID = req.ReqID
 	}
 
 	item := h.queryResults.Get(req.ID)
@@ -431,7 +459,7 @@ func (h *messageHandler) handleFetchBlock(ctx context.Context, request *Request)
 	wstool.WriteUint64(item.buffer, uint64(wstool.GetDuration(ctx)))
 	wstool.WriteUint64(item.buffer, req.ID)
 	for offset := 0; offset < blockLength; offset++ {
-		item.buffer.WriteByte(*((*byte)(unsafe.Pointer(uintptr(item.Block) + uintptr(offset)))))
+		item.buffer.WriteByte(*((*byte)(tools.AddPointer(item.Block, uintptr(offset)))))
 	}
 	b := item.buffer.Bytes()
 	logger.Debugln("handle binary content cost:", log.GetLogDuration(isDebug, s))
@@ -441,52 +469,37 @@ func (h *messageHandler) handleFetchBlock(ctx context.Context, request *Request)
 }
 
 type FreeResultRequest struct {
-	ReqID uint64 `json:"req_id,omitempty"` // Deprecated: use Request.ReqID instead
+	ReqID uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
 	ID    uint64 `json:"id"`
 }
 
-func (h *messageHandler) handleFreeResult(_ context.Context, request *Request) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-	logger := logger.WithField(actionKey, WSFreeResult)
+func (h *messageHandler) handleFreeResult(_ context.Context, request Request, logger *logrus.Entry, _ bool, _ time.Time) (resp Response) {
 
 	var req FreeResultRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal ws fetch request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal connect request error"}
 	}
-	if req.ReqID != 0 {
-		request.ReqID = req.ReqID
-	}
 
 	h.queryResults.FreeResultByID(req.ID)
-	return &BaseResponse{}
+	resp = &BaseResponse{}
+	resp.SetNull(true)
+	return resp
 }
 
 type SchemalessWriteRequest struct {
-	ReqID     uint64 `json:"req_id,omitempty"` // Deprecated: use Request.ReqID instead
+	ReqID     uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
 	Protocol  int    `json:"protocol"`
 	Precision string `json:"precision"`
 	TTL       int    `json:"ttl"`
 	Data      string `json:"data"`
 }
 
-func (h *messageHandler) handleSchemalessWrite(_ context.Context, request *Request) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-	logger := logger.WithField(actionKey, SchemalessWrite)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
+func (h *messageHandler) handleSchemalessWrite(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req SchemalessWriteRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal schemaless write request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal schemaless write request error"}
-	}
-	if req.ReqID != 0 {
-		request.ReqID = req.ReqID
 	}
 
 	if req.Protocol == 0 {
@@ -512,14 +525,7 @@ type StmtInitResponse struct {
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) handleStmtInit(_ context.Context, request *Request) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-	logger := logger.WithField(actionKey, STMTInit)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
+func (h *messageHandler) handleStmtInit(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	stmtInit := wrapper.TaosStmtInitWithReqID(h.conn, int64(request.ReqID))
@@ -536,7 +542,7 @@ func (h *messageHandler) handleStmtInit(_ context.Context, request *Request) (re
 }
 
 type StmtPrepareRequest struct {
-	ReqID  uint64 `json:"req_id,omitempty"` // Deprecated: use Request.ReqID instead
+	ReqID  uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
 	StmtID uint64 `json:"stmt_id"`
 	SQL    string `json:"sql"`
 }
@@ -546,21 +552,11 @@ type StmtPrepareResponse struct {
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) handleStmtPrepare(_ context.Context, request *Request) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-	logger := logger.WithField(actionKey, STMTPrepare)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
+func (h *messageHandler) handleStmtPrepare(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req StmtPrepareRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt prepare request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal connect request error"}
-	}
-	if req.ReqID != 0 {
-		request.ReqID = req.ReqID
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
@@ -581,7 +577,7 @@ func (h *messageHandler) handleStmtPrepare(_ context.Context, request *Request) 
 }
 
 type StmtSetTableNameRequest struct {
-	ReqID  uint64 `json:"req_id,omitempty"` // Deprecated: use Request.ReqID instead
+	ReqID  uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
 	StmtID uint64 `json:"stmt_id"`
 	Name   string `json:"name"`
 }
@@ -591,22 +587,11 @@ type StmtSetTableNameResponse struct {
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) handleStmtSetTableName(_ context.Context, request *Request) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-
-	logger := logger.WithField(actionKey, STMTSetTableName)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
+func (h *messageHandler) handleStmtSetTableName(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req StmtSetTableNameRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt set table name request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal stmt set table name request error"}
-	}
-	if req.ReqID != 0 {
-		request.ReqID = req.ReqID
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
@@ -627,7 +612,7 @@ func (h *messageHandler) handleStmtSetTableName(_ context.Context, request *Requ
 }
 
 type StmtSetTagsRequest struct {
-	ReqID  uint64          `json:"req_id,omitempty"` // Deprecated: use Request.ReqID instead
+	ReqID  uint64          `json:"req_id"` // Deprecated: use Request.ReqID instead
 	StmtID uint64          `json:"stmt_id"`
 	Tags   json.RawMessage `json:"tags"`
 }
@@ -637,22 +622,11 @@ type StmtSetTagsResponse struct {
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) handleStmtSetTags(_ context.Context, request *Request) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-
-	logger := logger.WithField(actionKey, STMTSetTags)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
+func (h *messageHandler) handleStmtSetTags(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req StmtSetTagsRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt set tags request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal stmt set tags request error"}
-	}
-	if req.ReqID != 0 {
-		request.ReqID = req.ReqID
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
@@ -682,7 +656,7 @@ func (h *messageHandler) handleStmtSetTags(_ context.Context, request *Request) 
 	for i := 0; i < tagNums; i++ {
 		tags[i] = []driver.Value{req.Tags[i]}
 	}
-	data, err := stmtParseTag(req.Tags, fields)
+	data, err := stmt.StmtParseTag(req.Tags, fields)
 	logger.Debugln("stmt parse tag json cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		return &BaseResponse{Code: 0xffff, Message: fmt.Sprintf("stmt parse tag json:%s", err.Error())}
@@ -700,7 +674,7 @@ func (h *messageHandler) handleStmtSetTags(_ context.Context, request *Request) 
 }
 
 type StmtBindRequest struct {
-	ReqID   uint64          `json:"req_id,omitempty"` // Deprecated: use Request.ReqID instead
+	ReqID   uint64          `json:"req_id"` // Deprecated: use Request.ReqID instead
 	StmtID  uint64          `json:"stmt_id"`
 	Columns json.RawMessage `json:"columns"`
 }
@@ -710,22 +684,11 @@ type StmtBindResponse struct {
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) handleStmtBind(_ context.Context, request *Request) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-
-	logger := logger.WithField(actionKey, STMTBind)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
+func (h *messageHandler) handleStmtBind(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req StmtBindRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt bind tag request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal stmt bind tag request error"}
-	}
-	if req.ReqID != 0 {
-		request.ReqID = req.ReqID
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
@@ -758,7 +721,7 @@ func (h *messageHandler) handleStmtBind(_ context.Context, request *Request) (re
 			return &BaseResponse{Code: 0xffff, Message: fmt.Sprintf("stmt get column type error:%s", err.Error())}
 		}
 	}
-	data, err := stmtParseColumn(req.Columns, fields, fieldTypes)
+	data, err := stmt.StmtParseColumn(req.Columns, fields, fieldTypes)
 	logger.Debugln("stmt parse column json cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		return &BaseResponse{Code: 0xffff, Message: fmt.Sprintf("stmt parse column json:%s", err.Error())}
@@ -771,20 +734,12 @@ func (h *messageHandler) handleStmtBind(_ context.Context, request *Request) (re
 	return &StmtBindResponse{StmtID: req.StmtID}
 }
 
-func (h *messageHandler) handleBindMessage(_ context.Context, _ uint64, stmtID uint64, p0 uintptr) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-
-	logger := logger.WithField(actionKey, STMTGetTagFields)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
-	block := unsafe.Pointer(p0 + uintptr(24))
+func (h *messageHandler) handleBindMessage(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+	block := tools.AddPointer(req.p0, uintptr(24))
 	columns := parser.RawBlockGetNumOfCols(block)
 	rows := parser.RawBlockGetNumOfRows(block)
 
-	stmtItem := h.stmts.Get(stmtID)
+	stmtItem := h.stmts.Get(req.id)
 	if stmtItem == nil {
 		return &BaseResponse{Code: 0xffff, Message: "stmt is nil"}
 	}
@@ -802,7 +757,7 @@ func (h *messageHandler) handleBindMessage(_ context.Context, _ uint64, stmtID u
 		wrapper.TaosStmtReclaimFields(stmtItem.stmt, colFields)
 	}()
 	if colNums == 0 {
-		return &StmtBindResponse{StmtID: stmtID}
+		return &StmtBindResponse{StmtID: req.id}
 	}
 	fields := wrapper.StmtParseFields(colNums, colFields)
 	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
@@ -817,7 +772,7 @@ func (h *messageHandler) handleBindMessage(_ context.Context, _ uint64, stmtID u
 	if int(columns) != colNums {
 		return &BaseResponse{Code: 0xffff, Message: "stmt column count not match"}
 	}
-	data := blockConvert(block, int(rows), fields, fieldTypes)
+	data := stmt.BlockConvert(block, int(rows), fields, fieldTypes)
 	logger.Debugln("block convert cost:", log.GetLogDuration(isDebug, s))
 	thread.Lock()
 	logger.Debugln("stmt_bind_param_batch get thread lock cost:", log.GetLogDuration(isDebug, s))
@@ -825,11 +780,11 @@ func (h *messageHandler) handleBindMessage(_ context.Context, _ uint64, stmtID u
 	logger.Debugln("stmt_bind_param_batch cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 
-	return &StmtBindResponse{StmtID: stmtID}
+	return &StmtBindResponse{StmtID: req.id}
 }
 
 type StmtAddBatchRequest struct {
-	ReqID  uint64 `json:"req_id,omitempty"` // Deprecated: use Request.ReqID instead
+	ReqID  uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
 	StmtID uint64 `json:"stmt_id"`
 }
 
@@ -838,22 +793,11 @@ type StmtAddBatchResponse struct {
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) handleStmtAddBatch(_ context.Context, request *Request) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-
-	logger := logger.WithField(actionKey, STMTAddBatch)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
+func (h *messageHandler) handleStmtAddBatch(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req StmtAddBatchRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt add batch request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal stmt add batch request error"}
-	}
-	if req.ReqID != 0 {
-		request.ReqID = req.ReqID
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
@@ -876,7 +820,7 @@ func (h *messageHandler) handleStmtAddBatch(_ context.Context, request *Request)
 }
 
 type StmtExecRequest struct {
-	ReqID  uint64 `json:"req_id,omitempty"` // Deprecated: use Request.ReqID instead
+	ReqID  uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
 	StmtID uint64 `json:"stmt_id"`
 }
 
@@ -886,22 +830,11 @@ type StmtExecResponse struct {
 	Affected int    `json:"affected"`
 }
 
-func (h *messageHandler) handleStmtExec(_ context.Context, request *Request) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-
-	logger := logger.WithField(actionKey, STMTExec)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
+func (h *messageHandler) handleStmtExec(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req StmtExecRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt add batch request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal stmt add batch request error"}
-	}
-	if req.ReqID != 0 {
-		request.ReqID = req.ReqID
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
@@ -924,24 +857,15 @@ func (h *messageHandler) handleStmtExec(_ context.Context, request *Request) (re
 }
 
 type StmtCloseRequest struct {
-	ReqID  uint64 `json:"req_id,omitempty"` // Deprecated: use Request.ReqID instead
+	ReqID  uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) handleStmtClose(_ context.Context, request *Request) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-
-	logger := logger.WithField(actionKey, STMTClose)
+func (h *messageHandler) handleStmtClose(_ context.Context, request Request, logger *logrus.Entry, _ bool, _ time.Time) (resp Response) {
 	var req StmtCloseRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt close request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal stmt add batch request error"}
-	}
-
-	if req.ReqID != 0 {
-		request.ReqID = req.ReqID
 	}
 
 	h.stmts.FreeResultByID(req.StmtID)
@@ -949,7 +873,7 @@ func (h *messageHandler) handleStmtClose(_ context.Context, request *Request) (r
 }
 
 type StmtGetColFieldsRequest struct {
-	ReqID  uint64 `json:"req_id,omitempty"` // Deprecated: use Request.ReqID instead
+	ReqID  uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
 	StmtID uint64 `json:"stmt_id"`
 }
 
@@ -959,22 +883,11 @@ type StmtGetColFieldsResponse struct {
 	Fields []*stmtCommon.StmtField `json:"fields"`
 }
 
-func (h *messageHandler) handleStmtGetColFields(_ context.Context, request *Request) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-
-	logger := logger.WithField(actionKey, STMTGetColFields)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
+func (h *messageHandler) handleStmtGetColFields(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req StmtGetColFieldsRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt get tags request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal stmt get tags request error"}
-	}
-	if req.ReqID != 0 {
-		request.ReqID = req.ReqID
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
@@ -1004,7 +917,7 @@ func (h *messageHandler) handleStmtGetColFields(_ context.Context, request *Requ
 }
 
 type StmtGetTagFieldsRequest struct {
-	ReqID  uint64 `json:"req_id,omitempty"` // Deprecated: use Request.ReqID instead
+	ReqID  uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
 	StmtID uint64 `json:"stmt_id"`
 }
 
@@ -1014,23 +927,11 @@ type StmtGetTagFieldsResponse struct {
 	Fields []*stmtCommon.StmtField `json:"fields"`
 }
 
-func (h *messageHandler) handleStmtGetTagFields(_ context.Context, request *Request) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-
-	logger := logger.WithField(actionKey, STMTGetTagFields)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
+func (h *messageHandler) handleStmtGetTagFields(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req StmtGetTagFieldsRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt get tags request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal stmt get tags request error"}
-	}
-
-	if req.ReqID != 0 {
-		request.ReqID = req.ReqID
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
@@ -1057,16 +958,8 @@ func (h *messageHandler) handleStmtGetTagFields(_ context.Context, request *Requ
 	return &StmtGetTagFieldsResponse{StmtID: req.StmtID, Fields: wrapper.StmtParseFields(tagNums, tagFields)}
 }
 
-func (h *messageHandler) handleSetTagsMessage(_ context.Context, _ uint64, stmtID uint64, p0 uintptr) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-
-	logger := logger.WithField(actionKey, STMTGetTagFields)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
-	block := unsafe.Pointer(p0 + uintptr(24))
+func (h *messageHandler) handleSetTagsMessage(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+	block := tools.AddPointer(req.p0, uintptr(24))
 	columns := parser.RawBlockGetNumOfCols(block)
 	rows := parser.RawBlockGetNumOfRows(block)
 
@@ -1074,7 +967,7 @@ func (h *messageHandler) handleSetTagsMessage(_ context.Context, _ uint64, stmtI
 		return &BaseResponse{Code: 0xffff, Message: "rows not equal 1"}
 	}
 
-	stmtItem := h.stmts.Get(stmtID)
+	stmtItem := h.stmts.Get(req.id)
 	if stmtItem == nil {
 		return &BaseResponse{Code: 0xffff, Message: "stmt is nil"}
 	}
@@ -1091,14 +984,14 @@ func (h *messageHandler) handleSetTagsMessage(_ context.Context, _ uint64, stmtI
 		wrapper.TaosStmtReclaimFields(stmtItem.stmt, tagFields)
 	}()
 	if tagNums == 0 {
-		return &StmtSetTagsResponse{StmtID: stmtID}
+		return &StmtSetTagsResponse{StmtID: req.id}
 	}
 	if int(columns) != tagNums {
 		return &BaseResponse{Code: 0xffff, Message: "stmt tags count not match"}
 	}
 	fields := wrapper.StmtParseFields(tagNums, tagFields)
 	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
-	tags := blockConvert(block, int(rows), fields, nil)
+	tags := stmt.BlockConvert(block, int(rows), fields, nil)
 	logger.Debugln("block concert cost:", log.GetLogDuration(isDebug, s))
 	reTags := make([]driver.Value, tagNums)
 	for i := 0; i < tagNums; i++ {
@@ -1113,21 +1006,13 @@ func (h *messageHandler) handleSetTagsMessage(_ context.Context, _ uint64, stmtI
 		return &BaseResponse{Code: code, Message: wrapper.TaosStmtErrStr(stmtItem.stmt)}
 	}
 
-	return &StmtSetTagsResponse{StmtID: stmtID}
+	return &StmtSetTagsResponse{StmtID: req.id}
 }
 
-func (h *messageHandler) handleTMQRawMessage(_ context.Context, _ uint64, _ uint64, p0 uintptr) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-
-	logger := logger.WithField(actionKey, WSWriteRaw)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
-	length := *(*uint32)(unsafe.Pointer(p0 + uintptr(24)))
-	metaType := *(*uint16)(unsafe.Pointer(p0 + uintptr(28)))
-	data := unsafe.Pointer(p0 + uintptr(30))
+func (h *messageHandler) handleTMQRawMessage(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+	length := *(*uint32)(tools.AddPointer(req.p0, uintptr(24)))
+	metaType := *(*uint16)(tools.AddPointer(req.p0, uintptr(28)))
+	data := tools.AddPointer(req.p0, uintptr(30))
 
 	h.Lock()
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
@@ -1149,22 +1034,14 @@ func (h *messageHandler) handleTMQRawMessage(_ context.Context, _ uint64, _ uint
 	return &BaseResponse{}
 }
 
-func (h *messageHandler) handleRawBlockMessage(_ context.Context, _ uint64, _ uint64, p0 uintptr) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-
-	logger := logger.WithField(actionKey, WSWriteRawBlock)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
-	numOfRows := *(*int32)(unsafe.Pointer(p0 + uintptr(24)))
-	tableNameLength := *(*uint16)(unsafe.Pointer(p0 + uintptr(28)))
+func (h *messageHandler) handleRawBlockMessage(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+	numOfRows := *(*int32)(tools.AddPointer(req.p0, uintptr(24)))
+	tableNameLength := *(*uint16)(tools.AddPointer(req.p0, uintptr(28)))
 	tableName := make([]byte, tableNameLength)
 	for i := 0; i < int(tableNameLength); i++ {
-		tableName[i] = *(*byte)(unsafe.Pointer(p0 + uintptr(30+i)))
+		tableName[i] = *(*byte)(tools.AddPointer(req.p0, uintptr(30+i)))
 	}
-	rawBlock := unsafe.Pointer(p0 + uintptr(30+tableNameLength))
+	rawBlock := tools.AddPointer(req.p0, uintptr(30+tableNameLength))
 
 	h.Lock()
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
@@ -1184,25 +1061,17 @@ func (h *messageHandler) handleRawBlockMessage(_ context.Context, _ uint64, _ ui
 	return &BaseResponse{}
 }
 
-func (h *messageHandler) handleRawBlockMessageWithFields(_ context.Context, _ uint64, _ uint64, p0 uintptr) (resp Response) {
-	if h.conn == nil {
-		return &BaseResponse{Code: 0xffff, Message: "server not connected"}
-	}
-
-	logger := logger.WithField(actionKey, WSWriteRawBlockWithFields)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-
-	numOfRows := *(*int32)(unsafe.Pointer(p0 + uintptr(24)))
-	tableNameLength := int(*(*uint16)(unsafe.Pointer(p0 + uintptr(28))))
+func (h *messageHandler) handleRawBlockMessageWithFields(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+	numOfRows := *(*int32)(tools.AddPointer(req.p0, uintptr(24)))
+	tableNameLength := int(*(*uint16)(tools.AddPointer(req.p0, uintptr(28))))
 	tableName := make([]byte, tableNameLength)
 	for i := 0; i < tableNameLength; i++ {
-		tableName[i] = *(*byte)(unsafe.Pointer(p0 + uintptr(30+i)))
+		tableName[i] = *(*byte)(tools.AddPointer(req.p0, uintptr(30+i)))
 	}
-	rawBlock := unsafe.Pointer(p0 + uintptr(30+tableNameLength))
+	rawBlock := tools.AddPointer(req.p0, uintptr(30+tableNameLength))
 	blockLength := int(parser.RawBlockGetLength(rawBlock))
 	numOfColumn := int(parser.RawBlockGetNumOfCols(rawBlock))
-	fieldsBlock := unsafe.Pointer(p0 + uintptr(30+tableNameLength+blockLength))
+	fieldsBlock := tools.AddPointer(req.p0, uintptr(30+tableNameLength+blockLength))
 
 	h.Lock()
 	defer h.Unlock()
@@ -1243,6 +1112,8 @@ type Response interface {
 	SetTiming(timing int64)
 	SetBinary(b bool)
 	IsBinary() bool
+	SetNull(b bool)
+	IsNull() bool
 }
 
 func (b *BaseResponse) SetCode(code int) {
@@ -1271,6 +1142,14 @@ func (b *BaseResponse) SetBinary(binary bool) {
 
 func (b *BaseResponse) IsBinary() bool {
 	return b.binary
+}
+
+func (b *BaseResponse) SetNull(null bool) {
+	b.null = null
+}
+
+func (b *BaseResponse) IsNull() bool {
+	return b.null
 }
 
 type VersionResponse struct {
