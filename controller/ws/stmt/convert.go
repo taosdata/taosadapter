@@ -444,7 +444,7 @@ func stmtConvert(src [][]driver.Value, fields []*stmtCommon.StmtField, fieldType
 	return nil
 }
 
-func stmtParseColumn(columns json.RawMessage, fields []*stmtCommon.StmtField, fieldTypes []*types.ColumnType) ([][]driver.Value, error) {
+func StmtParseColumn(columns json.RawMessage, fields []*stmtCommon.StmtField, fieldTypes []*types.ColumnType) ([][]driver.Value, error) {
 	var err error
 	iter := jsonI.BorrowIterator(columns)
 	defer jsonI.ReturnIterator(iter)
@@ -533,7 +533,7 @@ func stmtParseColumn(columns json.RawMessage, fields []*stmtCommon.StmtField, fi
 	return data, nil
 }
 
-func stmtParseTag(tags json.RawMessage, fields []*stmtCommon.StmtField) ([]driver.Value, error) {
+func StmtParseTag(tags json.RawMessage, fields []*stmtCommon.StmtField) ([]driver.Value, error) {
 	var err error
 	iter := jsonI.BorrowIterator(tags)
 	defer jsonI.ReturnIterator(iter)
@@ -602,7 +602,7 @@ func stmtParseTag(tags json.RawMessage, fields []*stmtCommon.StmtField) ([]drive
 	return data, nil
 }
 
-func blockConvert(block unsafe.Pointer, blockSize int, fields []*stmtCommon.StmtField, fieldTypes []*types.ColumnType) [][]driver.Value {
+func BlockConvert(block unsafe.Pointer, blockSize int, fields []*stmtCommon.StmtField, fieldTypes []*types.ColumnType) [][]driver.Value {
 	colCount := len(fields)
 	r := make([][]driver.Value, colCount)
 	nullBitMapOffset := uintptr(parser.BitmapLen(blockSize))
