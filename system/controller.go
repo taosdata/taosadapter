@@ -10,4 +10,5 @@ import (
 	_ "github.com/taosdata/taosadapter/v3/controller/ws/schemaless"
 	_ "github.com/taosdata/taosadapter/v3/controller/ws/stmt"
 	_ "github.com/taosdata/taosadapter/v3/controller/ws/tmq"
+	_ "github.com/taosdata/taosadapter/v3/controller/ws/ws"
 )
