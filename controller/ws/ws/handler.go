@@ -15,6 +15,7 @@ import (
 
 	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
+	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/common/parser"
 	stmtCommon "github.com/taosdata/driver-go/v3/common/stmt"
 	errors2 "github.com/taosdata/driver-go/v3/errors"
@@ -117,6 +118,8 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 		f = h.handleStmtGetColFields
 	case STMTGetTagFields:
 		f = h.handleStmtGetTagFields
+	case STMTUseResult:
+		f = h.handleStmtUseResult
 	default:
 		f = h.handleDefault
 	}
@@ -127,7 +130,6 @@ func (h *messageHandler) handleMessageBinary(session *melody.Session, bytes []by
 	//p0 uin64  req_id
 	//p0+8 uint64  message_id
 	//p0+16 uint64 (1 (set tag) 2 (bind))
-
 	p0 := unsafe.Pointer(&bytes[0])
 	reqID := *(*uint64)(p0)
 	messageID := *(*uint64)(tools.AddPointer(p0, uintptr(8)))
@@ -378,7 +380,7 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 	code := wrapper.TaosError(result.Res)
 	if code != httperror.SUCCESS {
 		queryFailed = true
-		freeResult(result.Res)
+		freeCPointer(result.Res)
 		return &BaseResponse{Code: code, Message: wrapper.TaosErrorStr(result.Res)}
 	}
 
@@ -394,7 +396,7 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 	if isUpdate {
 		affectRows := wrapper.TaosAffectedRows(result.Res)
 		logger.Debugln("affected_rows cost:", log.GetLogDuration(isDebug, s))
-		freeResult(result.Res)
+		freeCPointer(result.Res)
 		return &QueryResponse{IsUpdate: true, AffectedRows: affectRows}
 	}
 	fieldsCount := wrapper.TaosNumFields(result.Res)
@@ -447,11 +449,11 @@ func (h *messageHandler) handleFetch(_ context.Context, request Request, logger 
 	result, _ := async.GlobalAsync.TaosFetchRawBlockA(item.TaosResult, handler)
 	logger.Debugln("fetch_raw_block_a cost:", log.GetLogDuration(isDebug, s))
 	if result.N == 0 {
-		h.queryResults.FreeResult(item)
+		h.queryResults.FreeResultByID(req.ID)
 		return &FetchResponse{ID: req.ID, Completed: true}
 	}
 	if result.N < 0 {
-		h.queryResults.FreeResult(item)
+		h.queryResults.FreeResultByID(req.ID)
 		return &BaseResponse{Code: 0xffff, Message: wrapper.TaosErrorStr(result.Res)}
 	}
 	length := wrapper.FetchLengths(item.TaosResult, item.FieldsCount)
@@ -510,7 +512,6 @@ type FreeResultRequest struct {
 }
 
 func (h *messageHandler) handleFreeResult(_ context.Context, request Request, logger *logrus.Entry, _ bool, _ time.Time) (resp Response) {
-
 	var req FreeResultRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal ws fetch request %s error: %s", request.Args, err)
@@ -548,7 +549,7 @@ func (h *messageHandler) handleSchemalessWrite(_ context.Context, request Reques
 	_, result := wrapper.TaosSchemalessInsertRawTTLWithReqID(h.conn, req.Data, req.Protocol, req.Precision, req.TTL, int64(request.ReqID))
 	logger.Debugln("taos_schemaless_insert_raw_ttl_with_reqid cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
-	defer freeResult(result)
+	defer freeCPointer(result)
 
 	if code := wrapper.TaosError(result); code != 0 {
 		return &BaseResponse{Code: code, Message: wrapper.TaosErrorStr(result)}
@@ -585,7 +586,8 @@ type StmtPrepareRequest struct {
 
 type StmtPrepareResponse struct {
 	BaseResponse
-	StmtID uint64 `json:"stmt_id"`
+	StmtID   uint64 `json:"stmt_id"`
+	IsInsert bool   `json:"is_insert"`
 }
 
 func (h *messageHandler) handleStmtPrepare(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
@@ -609,7 +611,16 @@ func (h *messageHandler) handleStmtPrepare(_ context.Context, request Request, l
 		logger.Errorf("## stmt prepare error: %s", errStr)
 		return &BaseResponse{Code: code, Message: errStr}
 	}
-	return &StmtPrepareResponse{StmtID: req.StmtID}
+	thread.Lock()
+	isInsert, code := wrapper.TaosStmtIsInsert(stmtItem.stmt)
+	thread.Unlock()
+	if code != httperror.SUCCESS {
+		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		logger.Errorf("## check stmt is insert error: %s", errStr)
+		return &BaseResponse{Code: code, Message: errStr}
+	}
+	stmtItem.isInsert = isInsert
+	return &StmtPrepareResponse{StmtID: req.StmtID, IsInsert: isInsert}
 }
 
 type StmtSetTableNameRequest struct {
@@ -724,13 +735,14 @@ func (h *messageHandler) handleStmtBind(_ context.Context, request Request, logg
 	var req StmtBindRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt bind tag request %s error: %s", request.Args, err)
-		return &BaseResponse{Code: 0xffff, Message: "unmarshal stmt bind tag request error"}
+		return &BaseResponse{Code: 0xffff, Message: "unmarshal stmt bind request error"}
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
 		return &BaseResponse{Code: 0xffff, Message: "stmt is nil"}
 	}
+
 	thread.Lock()
 	logger.Debugln("stmt_get_col_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
 	code, colNums, colFields := wrapper.TaosStmtGetColFields(stmtItem.stmt)
@@ -780,43 +792,126 @@ func (h *messageHandler) handleBindMessage(_ context.Context, req dealBinaryRequ
 		return &BaseResponse{Code: 0xffff, Message: "stmt is nil"}
 	}
 
+	var data [][]driver.Value
+	var fieldTypes []*types.ColumnType
+	if stmtItem.isInsert {
+		thread.Lock()
+		logger.Debugln("stmt_get_col_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
+		code, colNums, colFields := wrapper.TaosStmtGetColFields(stmtItem.stmt)
+		logger.Debugln("stmt_get_col_fields cost:", log.GetLogDuration(isDebug, s))
+		thread.Unlock()
+		if code != httperror.SUCCESS {
+			errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+			return &BaseResponse{Code: code, Message: errStr}
+		}
+		defer func() {
+			wrapper.TaosStmtReclaimFields(stmtItem.stmt, colFields)
+		}()
+		if colNums == 0 {
+			return &StmtBindResponse{StmtID: req.id}
+		}
+		fields := wrapper.StmtParseFields(colNums, colFields)
+		logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
+		fieldTypes = make([]*types.ColumnType, colNums)
+		var err error
+		for i := 0; i < colNums; i++ {
+			fieldTypes[i], err = fields[i].GetType()
+			if err != nil {
+				return &BaseResponse{Code: 0xffff, Message: fmt.Sprintf("stmt get column type error:%s", err.Error())}
+			}
+		}
+		if int(columns) != colNums {
+			return &BaseResponse{Code: 0xffff, Message: "stmt column count not match"}
+		}
+		data = stmt.BlockConvert(block, int(rows), fields, fieldTypes)
+		logger.Debugln("block convert cost:", log.GetLogDuration(isDebug, s))
+	} else {
+		var fields []*stmtCommon.StmtField
+		var err error
+		fields, fieldTypes, err = parseRowBlockInfo(block, int(columns))
+		if err != nil {
+			return &BaseResponse{Code: 0xffff, Message: fmt.Sprintf("parse row block info error:%s", err.Error())}
+		}
+		data = stmt.BlockConvert(block, int(rows), fields, fieldTypes)
+	}
+
 	thread.Lock()
-	logger.Debugln("stmt_get_col_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
-	code, colNums, colFields := wrapper.TaosStmtGetColFields(stmtItem.stmt)
-	logger.Debugln("stmt_get_col_fields cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("stmt_bind_param_batch get thread lock cost:", log.GetLogDuration(isDebug, s))
+	code := wrapper.TaosStmtBindParamBatch(stmtItem.stmt, data, fieldTypes)
+	logger.Debugln("stmt_bind_param_batch cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
-	if code != httperror.SUCCESS {
+	if code != 0 {
+		logger.Errorf("## stmt bind param error: %s", wrapper.TaosStmtErrStr(stmtItem.stmt))
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
 		return &BaseResponse{Code: code, Message: errStr}
 	}
-	defer func() {
-		wrapper.TaosStmtReclaimFields(stmtItem.stmt, colFields)
-	}()
-	if colNums == 0 {
-		return &StmtBindResponse{StmtID: req.id}
-	}
-	fields := wrapper.StmtParseFields(colNums, colFields)
-	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
-	fieldTypes := make([]*types.ColumnType, colNums)
-	var err error
-	for i := 0; i < colNums; i++ {
-		fieldTypes[i], err = fields[i].GetType()
-		if err != nil {
-			return &BaseResponse{Code: 0xffff, Message: fmt.Sprintf("stmt get column type error:%s", err.Error())}
-		}
-	}
-	if int(columns) != colNums {
-		return &BaseResponse{Code: 0xffff, Message: "stmt column count not match"}
-	}
-	data := stmt.BlockConvert(block, int(rows), fields, fieldTypes)
-	logger.Debugln("block convert cost:", log.GetLogDuration(isDebug, s))
-	thread.Lock()
-	logger.Debugln("stmt_bind_param_batch get thread lock cost:", log.GetLogDuration(isDebug, s))
-	wrapper.TaosStmtBindParamBatch(stmtItem.stmt, data, fieldTypes)
-	logger.Debugln("stmt_bind_param_batch cost:", log.GetLogDuration(isDebug, s))
-	thread.Unlock()
 
 	return &StmtBindResponse{StmtID: req.id}
+}
+
+func parseRowBlockInfo(block unsafe.Pointer, columns int) (fields []*stmtCommon.StmtField, fieldTypes []*types.ColumnType, err error) {
+	infos := make([]parser.RawBlockColInfo, columns)
+	parser.RawBlockGetColInfo(block, infos)
+
+	fields = make([]*stmtCommon.StmtField, len(infos))
+	fieldTypes = make([]*types.ColumnType, len(infos))
+
+	for i, info := range infos {
+		switch info.ColType {
+		case common.TSDB_DATA_TYPE_BOOL:
+			fields[i] = &stmtCommon.StmtField{FieldType: common.TSDB_DATA_TYPE_BOOL}
+			fieldTypes[i] = &types.ColumnType{Type: types.TaosBoolType}
+		case common.TSDB_DATA_TYPE_TINYINT:
+			fields[i] = &stmtCommon.StmtField{FieldType: common.TSDB_DATA_TYPE_TINYINT}
+			fieldTypes[i] = &types.ColumnType{Type: types.TaosTinyintType}
+		case common.TSDB_DATA_TYPE_SMALLINT:
+			fields[i] = &stmtCommon.StmtField{FieldType: common.TSDB_DATA_TYPE_SMALLINT}
+			fieldTypes[i] = &types.ColumnType{Type: types.TaosSmallintType}
+		case common.TSDB_DATA_TYPE_INT:
+			fields[i] = &stmtCommon.StmtField{FieldType: common.TSDB_DATA_TYPE_INT}
+			fieldTypes[i] = &types.ColumnType{Type: types.TaosIntType}
+		case common.TSDB_DATA_TYPE_BIGINT:
+			fields[i] = &stmtCommon.StmtField{FieldType: common.TSDB_DATA_TYPE_BIGINT}
+			fieldTypes[i] = &types.ColumnType{Type: types.TaosBigintType}
+		case common.TSDB_DATA_TYPE_FLOAT:
+			fields[i] = &stmtCommon.StmtField{FieldType: common.TSDB_DATA_TYPE_FLOAT}
+			fieldTypes[i] = &types.ColumnType{Type: types.TaosFloatType}
+		case common.TSDB_DATA_TYPE_DOUBLE:
+			fields[i] = &stmtCommon.StmtField{FieldType: common.TSDB_DATA_TYPE_DOUBLE}
+			fieldTypes[i] = &types.ColumnType{Type: types.TaosDoubleType}
+		case common.TSDB_DATA_TYPE_BINARY:
+			fields[i] = &stmtCommon.StmtField{FieldType: common.TSDB_DATA_TYPE_BINARY}
+			fieldTypes[i] = &types.ColumnType{Type: types.TaosBinaryType}
+		//case common.TSDB_DATA_TYPE_TIMESTAMP: // todo precision
+		//	fields[i] = &stmtCommon.StmtField{FieldType: common.TSDB_DATA_TYPE_TIMESTAMP}
+		//	fieldTypes[i] = &types.ColumnType{Type: types.TaosTimestampType}
+		case common.TSDB_DATA_TYPE_NCHAR:
+			fields[i] = &stmtCommon.StmtField{FieldType: common.TSDB_DATA_TYPE_NCHAR}
+			fieldTypes[i] = &types.ColumnType{Type: types.TaosNcharType}
+		case common.TSDB_DATA_TYPE_UTINYINT:
+			fields[i] = &stmtCommon.StmtField{FieldType: common.TSDB_DATA_TYPE_UTINYINT}
+			fieldTypes[i] = &types.ColumnType{Type: types.TaosUTinyintType}
+		case common.TSDB_DATA_TYPE_USMALLINT:
+			fields[i] = &stmtCommon.StmtField{FieldType: common.TSDB_DATA_TYPE_USMALLINT}
+			fieldTypes[i] = &types.ColumnType{Type: types.TaosUSmallintType}
+		case common.TSDB_DATA_TYPE_UINT:
+			fields[i] = &stmtCommon.StmtField{FieldType: common.TSDB_DATA_TYPE_UINT}
+			fieldTypes[i] = &types.ColumnType{Type: types.TaosUIntType}
+		case common.TSDB_DATA_TYPE_UBIGINT:
+			fields[i] = &stmtCommon.StmtField{FieldType: common.TSDB_DATA_TYPE_UBIGINT}
+			fieldTypes[i] = &types.ColumnType{Type: types.TaosUBigintType}
+		case common.TSDB_DATA_TYPE_JSON:
+			fields[i] = &stmtCommon.StmtField{FieldType: common.TSDB_DATA_TYPE_JSON}
+			fieldTypes[i] = &types.ColumnType{Type: types.TaosJsonType}
+		case common.TSDB_DATA_TYPE_VARBINARY:
+			fields[i] = &stmtCommon.StmtField{FieldType: common.TSDB_DATA_TYPE_VARBINARY}
+			fieldTypes[i] = &types.ColumnType{Type: types.TaosBinaryType}
+		default:
+			err = fmt.Errorf("unsupported data type %d", info.ColType)
+		}
+	}
+
+	return
 }
 
 type StmtAddBatchRequest struct {
@@ -904,7 +999,7 @@ func (h *messageHandler) handleStmtClose(_ context.Context, request Request, log
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal stmt add batch request error"}
 	}
 
-	h.stmts.FreeResultByID(req.StmtID)
+	h.stmts.FreeStmtByID(req.StmtID)
 	return &BaseResponse{}
 }
 
@@ -992,6 +1087,57 @@ func (h *messageHandler) handleStmtGetTagFields(_ context.Context, request Reque
 	}
 	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
 	return &StmtGetTagFieldsResponse{StmtID: req.StmtID, Fields: wrapper.StmtParseFields(tagNums, tagFields)}
+}
+
+type StmtUseResultRequest struct {
+	ReqID  uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
+	StmtID uint64 `json:"stmt_id"`
+}
+
+type StmtUseResultResponse struct {
+	BaseResponse
+	StmtID        uint64             `json:"stmt_id"`
+	ResultID      uint64             `json:"result_id"`
+	FieldsCount   int                `json:"fields_count"`
+	FieldsNames   []string           `json:"fields_names"`
+	FieldsTypes   jsontype.JsonUint8 `json:"fields_types"`
+	FieldsLengths []int64            `json:"fields_lengths"`
+	Precision     int                `json:"precision"`
+}
+
+func (h *messageHandler) handleStmtUseResult(_ context.Context, request Request, logger *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+	var req StmtUseResultRequest
+	if err := json.Unmarshal(request.Args, &req); err != nil {
+		logger.Errorf("## unmarshal stmt get tags request %s error: %s", request.Args, err)
+		return &BaseResponse{Code: 0xffff, Message: "unmarshal stmt get tags request error"}
+	}
+
+	stmtItem := h.stmts.Get(req.StmtID)
+	if stmtItem == nil {
+		return &BaseResponse{Code: 0xffff, Message: "stmt is nil"}
+	}
+	result := wrapper.TaosStmtUseResult(stmtItem.stmt)
+	if result == nil {
+		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		logger.Errorf("## stmt use result error: %s", errStr)
+		return &BaseResponse{Code: 0xffff, Message: errStr}
+	}
+
+	fieldsCount := wrapper.TaosNumFields(result)
+	rowsHeader, _ := wrapper.ReadColumn(result, fieldsCount)
+	precision := wrapper.TaosResultPrecision(result)
+	queryResult := QueryResult{TaosResult: result, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision, inStmt: true}
+	idx := h.queryResults.Add(&queryResult)
+
+	return &StmtUseResultResponse{
+		StmtID:        req.StmtID,
+		ResultID:      idx,
+		FieldsCount:   fieldsCount,
+		FieldsNames:   rowsHeader.ColNames,
+		FieldsTypes:   rowsHeader.ColTypes,
+		FieldsLengths: rowsHeader.ColLength,
+		Precision:     precision,
+	}
 }
 
 func (h *messageHandler) handleSetTagsMessage(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
@@ -1127,7 +1273,7 @@ func (h *messageHandler) handleRawBlockMessageWithFields(_ context.Context, req 
 	return &BaseResponse{}
 }
 
-func freeResult(pointer unsafe.Pointer) {
+func freeCPointer(pointer unsafe.Pointer) {
 	if pointer == nil {
 		return
 	}
