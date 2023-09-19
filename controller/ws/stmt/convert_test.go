@@ -2617,11 +2617,11 @@ func Test_stmtParseColumn(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := stmtParseColumn(tt.args.columns, tt.args.fields, tt.args.fieldTypes)
-			if !tt.wantErr(t, err, fmt.Sprintf("stmtParseColumn(%v, %v, %v)", tt.args.columns, tt.args.fields, tt.args.fieldTypes)) {
+			got, err := StmtParseColumn(tt.args.columns, tt.args.fields, tt.args.fieldTypes)
+			if !tt.wantErr(t, err, fmt.Sprintf("StmtParseColumn(%v, %v, %v)", tt.args.columns, tt.args.fields, tt.args.fieldTypes)) {
 				return
 			}
-			assert.Equalf(t, tt.want, got, "stmtParseColumn(%v, %v, %v)", tt.args.columns, tt.args.fields, tt.args.fieldTypes)
+			assert.Equalf(t, tt.want, got, "StmtParseColumn(%v, %v, %v)", tt.args.columns, tt.args.fields, tt.args.fieldTypes)
 		})
 	}
 }
@@ -2683,11 +2683,11 @@ func Test_stmtParseTag(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := stmtParseTag(tt.args.tags, tt.args.fields)
-			if !tt.wantErr(t, err, fmt.Sprintf("stmtParseTag(%v, %v)", tt.args.tags, tt.args.fields)) {
+			got, err := StmtParseTag(tt.args.tags, tt.args.fields)
+			if !tt.wantErr(t, err, fmt.Sprintf("StmtParseTag(%v, %v)", tt.args.tags, tt.args.fields)) {
 				return
 			}
-			assert.Equalf(t, tt.want, got, "stmtParseTag(%v, %v)", tt.args.tags, tt.args.fields)
+			assert.Equalf(t, tt.want, got, "StmtParseTag(%v, %v)", tt.args.tags, tt.args.fields)
 		})
 	}
 }
