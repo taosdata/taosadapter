@@ -43,15 +43,15 @@ const (
 func (m messageType) String() string {
 	switch m {
 	case SetTagsMessage:
-		return "binary_set_tags"
+		return "set_tags"
 	case BindMessage:
-		return "binary_bind"
+		return "bind"
 	case TMQRawMessage:
-		return "binary_tmq_raw"
+		return "write_raw"
 	case RawBlockMessage:
-		return "binary_raw_block"
+		return "write_raw_block"
 	case RawBlockMessageWithFields:
-		return "binary_raw_block_with_fields"
+		return "write_raw_block_with_fields"
 	default:
 		return "unknown"
 	}
