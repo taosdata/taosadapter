@@ -809,16 +809,16 @@ func TestWsStmt(t *testing.T) {
 }
 
 func TestStmtQuery(t *testing.T) {
-	// for stable
-	//prepareDataSql := []string{
-	//	"create stable meters (ts timestamp,current float,voltage int,phase float) tags (group_id int, location varchar(24))",
-	//	"insert into d0 using meters tags (2, 'California.SanFrancisco') values ('2023-09-13 17:53:52.123', 10.2, 219, 0.32) ",
-	//	"insert into d1 using meters tags (1, 'California.SanFrancisco') values ('2023-09-13 17:54:43.321', 10.3, 218, 0.31) ",
-	//}
-	//StmtQuery(t, "test_ws_stmt_query_for_stable", prepareDataSql)
+	//for stable
+	prepareDataSql := []string{
+		"create stable meters (ts timestamp,current float,voltage int,phase float) tags (group_id int, location varchar(24))",
+		"insert into d0 using meters tags (2, 'California.SanFrancisco') values ('2023-09-13 17:53:52.123', 10.2, 219, 0.32) ",
+		"insert into d1 using meters tags (1, 'California.SanFrancisco') values ('2023-09-13 17:54:43.321', 10.3, 218, 0.31) ",
+	}
+	StmtQuery(t, "test_ws_stmt_query_for_stable", prepareDataSql)
 
 	// for table
-	prepareDataSql := []string{
+	prepareDataSql = []string{
 		"create table meters (ts timestamp,current float,voltage int,phase float, group_id int, location varchar(24))",
 		"insert into meters values ('2023-09-13 17:53:52.123', 10.2, 219, 0.32, 2, 'California.SanFrancisco') ",
 		"insert into meters values ('2023-09-13 17:54:43.321', 10.3, 218, 0.31, 1, 'California.SanFrancisco') ",
