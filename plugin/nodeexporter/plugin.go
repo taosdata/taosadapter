@@ -145,6 +145,7 @@ func (p *NodeExporter) prepareUrls() error {
 			}
 			addr := "http://localhost" + path
 			req, err = http.NewRequest("GET", addr, nil)
+			req.RemoteAddr = "127.0.0.1:33333"
 			if err != nil {
 				return fmt.Errorf("unable to create new request '%s': %s", addr, err)
 			}
@@ -173,6 +174,7 @@ func (p *NodeExporter) prepareUrls() error {
 				URL.Path = "/metrics"
 			}
 			req, err = http.NewRequest(http.MethodGet, URL.String(), nil)
+			req.RemoteAddr = "127.0.0.1:33333"
 			if err != nil {
 				if err != nil {
 					return fmt.Errorf("unable to create new request '%s': %s", URL.String(), err)
@@ -191,8 +193,10 @@ func (p *NodeExporter) prepareUrls() error {
 	return nil
 }
 
+var localhost = net.IPv4(127, 0, 0, 1)
+
 func (p *NodeExporter) Gather() {
-	conn, err := commonpool.GetConnection(p.conf.User, p.conf.Password)
+	conn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, localhost)
 	if err != nil {
 		logger.WithError(err).Errorln("commonpool.GetConnection error")
 		return

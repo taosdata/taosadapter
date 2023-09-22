@@ -2,7 +2,11 @@ package commonpool
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"net"
 	"runtime"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -16,25 +20,30 @@ import (
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/connectpool"
+	"golang.org/x/sync/singleflight"
 )
 
 type ConnectorPool struct {
-	notifyChan chan int32
-	user       string
-	password   string
-	pool       *connectpool.ConnectPool
-	logger     *logrus.Entry
-	once       sync.Once
-	ctx        context.Context
-	cancel     context.CancelFunc
+	notifyChan    chan int32
+	whitelistChan chan int64
+	user          string
+	password      string
+	pool          *connectpool.ConnectPool
+	logger        *logrus.Entry
+	once          sync.Once
+	ctx           context.Context
+	cancel        context.CancelFunc
+	ipNetsLock    sync.RWMutex
+	ipNets        []*net.IPNet
 }
 
 func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	cp := &ConnectorPool{
-		user:       user,
-		password:   password,
-		notifyChan: make(chan int32, 1),
-		logger:     log.GetLogger("connect_pool").WithField("user", user),
+		user:          user,
+		password:      password,
+		notifyChan:    make(chan int32, 1),
+		whitelistChan: make(chan int64, 1),
+		logger:        log.GetLogger("connect_pool").WithField("user", user),
 	}
 	maxConnect := config.Conf.Pool.MaxConnect
 	if maxConnect == 0 {
@@ -53,8 +62,32 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	}
 	cp.pool = p
 	v, _ := p.Get()
+	// notify
 	cp.ctx, cp.cancel = context.WithCancel(context.Background())
 	errCode := wrapper.TaosSetNotifyCB(v, cgo.NewHandle(cp.notifyChan), common.TAOS_NOTIFY_PASSVER)
+	if errCode != 0 {
+		errStr := wrapper.TaosErrorStr(nil)
+		p.Put(v)
+		p.Release()
+		return nil, tErrors.NewError(int(errCode), errStr)
+	}
+	// whitelist
+	c := make(chan *wrapper.WhitelistResult, 1)
+	handler := cgo.NewHandle(c)
+	// fetch whitelist
+	thread.Lock()
+	wrapper.TaosFetchWhitelistA(v, handler)
+	thread.Unlock()
+	data := <-c
+	if data.ErrCode != 0 {
+		errStr := wrapper.TaosErrorStr(nil)
+		p.Put(v)
+		p.Release()
+		return nil, tErrors.NewError(int(data.ErrCode), errStr)
+	}
+	cp.ipNets = data.IPNets
+	// register whitelist modify callback
+	errCode = wrapper.TaosSetNotifyCB(v, cgo.NewHandle(cp.whitelistChan), common.TAOS_NOTIFY_WHITELIST_VER)
 	if errCode != 0 {
 		errStr := wrapper.TaosErrorStr(nil)
 		p.Put(v)
@@ -65,10 +98,38 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	go func() {
 		select {
 		case <-cp.notifyChan:
+			// password changed
 			connectionLocker.Lock()
 			defer connectionLocker.Unlock()
 			cp.Release()
 			return
+		case <-cp.whitelistChan:
+			// whitelist changed
+			cp.logger.Info("whitelist change")
+			c := make(chan *wrapper.WhitelistResult, 1)
+			handler := cgo.NewHandle(c)
+			// fetch whitelist
+			thread.Lock()
+			wrapper.TaosFetchWhitelistA(v, handler)
+			thread.Unlock()
+			data := <-c
+			if data.ErrCode != 0 {
+				// fetch whitelist error
+				cp.logger.WithError(tErrors.NewError(int(data.ErrCode), wrapper.TaosErrorStr(nil))).Error("fetch whitelist error! release connection!")
+				connectionLocker.Lock()
+				defer connectionLocker.Unlock()
+				// release connection pool
+				cp.Release()
+				return
+			}
+			cp.ipNetsLock.Lock()
+			cp.ipNets = data.IPNets
+			tmp := make([]string, len(cp.ipNets))
+			for _, ipNet := range cp.ipNets {
+				tmp = append(tmp, ipNet.String())
+			}
+			cp.logger.WithField("whitelist", strings.Join(tmp, ",")).Debugln("whitelist change")
+			cp.ipNetsLock.Unlock()
 		case <-cp.ctx.Done():
 			return
 		}
@@ -119,6 +180,17 @@ func (cp *ConnectorPool) verifyPassword(password string) bool {
 	return password == cp.password
 }
 
+func (cp *ConnectorPool) verifyIP(ip net.IP) bool {
+	cp.ipNetsLock.RLock()
+	defer cp.ipNetsLock.RUnlock()
+	for _, ipNet := range cp.ipNets {
+		if ipNet.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 func (cp *ConnectorPool) Release() {
 	cp.once.Do(func() {
 		cp.cancel()
@@ -127,6 +199,7 @@ func (cp *ConnectorPool) Release() {
 			connectionMap.Delete(cp.user)
 		}
 		close(cp.notifyChan)
+		close(cp.whitelistChan)
 		cp.pool.Release()
 		cp.logger.Warnln("connector released")
 	})
@@ -144,21 +217,64 @@ func (c *Conn) Put() error {
 	return c.pool.Put(c.TaosConnection)
 }
 
-func GetConnection(user, password string) (*Conn, error) {
+var singleGroup singleflight.Group
+var ErrWhitelistForbidden error = errors.New("whitelist prohibits current IP access")
+
+func GetConnection(user, password string, clientIp net.IP) (*Conn, error) {
+	cp, err := getConnectionPool(user, password)
+	if err != nil {
+		return nil, err
+	}
+	return getConnectDirect(cp, clientIp)
+}
+
+func getConnectionPool(user, password string) (*ConnectorPool, error) {
 	p, exist := connectionMap.Load(user)
 	if exist {
 		connectionPool := p.(*ConnectorPool)
 		if connectionPool.verifyPassword(password) {
-			return getConnectDirect(connectionPool)
+			return connectionPool, nil
 		} else {
-			return getConnectionSafe(user, password)
+			cp, err, _ := singleGroup.Do(fmt.Sprintf("%s:%s", user, password), func() (interface{}, error) {
+				return getConnectorPoolSafe(user, password)
+			})
+			if err != nil {
+				return nil, err
+			}
+			return cp.(*ConnectorPool), nil
 		}
 	} else {
-		return getConnectionSafe(user, password)
+		cp, err, _ := singleGroup.Do(fmt.Sprintf("%s:%s", user, password), func() (interface{}, error) {
+			return getConnectorPoolSafe(user, password)
+		})
+		if err != nil {
+			return nil, err
+		}
+		return cp.(*ConnectorPool), nil
 	}
 }
 
-func getConnectDirect(connectionPool *ConnectorPool) (*Conn, error) {
+func VerifyClientIP(user, password string, clientIP net.IP) (authed bool, valid bool, connectionPoolExits bool) {
+	p, exist := connectionMap.Load(user)
+	if !exist {
+		return
+	}
+	connectionPoolExits = true
+	if !p.(*ConnectorPool).verifyPassword(password) {
+		return
+	}
+	authed = true
+	if !p.(*ConnectorPool).verifyIP(clientIP) {
+		return
+	}
+	valid = true
+	return
+}
+
+func getConnectDirect(connectionPool *ConnectorPool, clientIP net.IP) (*Conn, error) {
+	if !connectionPool.verifyIP(clientIP) {
+		return nil, ErrWhitelistForbidden
+	}
 	c, err := connectionPool.Get()
 	if err != nil {
 		return nil, err
@@ -169,14 +285,14 @@ func getConnectDirect(connectionPool *ConnectorPool) (*Conn, error) {
 	}, nil
 }
 
-func getConnectionSafe(user, password string) (*Conn, error) {
+func getConnectorPoolSafe(user, password string) (*ConnectorPool, error) {
 	connectionLocker.Lock()
 	defer connectionLocker.Unlock()
 	p, exist := connectionMap.Load(user)
 	if exist {
 		connectionPool := p.(*ConnectorPool)
 		if connectionPool.verifyPassword(password) {
-			return getConnectDirect(connectionPool)
+			return connectionPool, nil
 		} else {
 			newPool, err := NewConnectorPool(user, password)
 			if err != nil {
@@ -184,7 +300,7 @@ func getConnectionSafe(user, password string) (*Conn, error) {
 			}
 			connectionPool.Release()
 			connectionMap.Store(user, newPool)
-			return getConnectDirect(newPool)
+			return newPool, nil
 		}
 	} else {
 		newPool, err := NewConnectorPool(user, password)
@@ -192,6 +308,6 @@ func getConnectionSafe(user, password string) (*Conn, error) {
 			return nil, err
 		}
 		connectionMap.Store(user, newPool)
-		return getConnectDirect(newPool)
+		return newPool, nil
 	}
 }

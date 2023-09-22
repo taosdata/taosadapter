@@ -6,6 +6,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,6 +26,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
+	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
@@ -41,14 +44,20 @@ func NewSTMTController() *STMTController {
 	stmtM.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws connect")
-		session.Set(TaosStmtKey, NewTaosStmt())
+		session.Set(TaosStmtKey, NewTaosStmt(session))
 	})
 
 	stmtM.HandleMessage(func(session *melody.Session, data []byte) {
 		if stmtM.IsClosed() {
 			return
 		}
+		t := session.MustGet(TaosStmtKey).(*TaosStmt)
+		if t.closed {
+			return
+		}
+		t.wg.Add(1)
 		go func() {
+			defer t.wg.Done()
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 			logger := session.MustGet("logger").(*logrus.Entry)
 			logger.Debugln("get ws message data:", string(data))
@@ -68,8 +77,7 @@ func NewSTMTController() *STMTController {
 					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal connect request args")
 					return
 				}
-				t := session.MustGet(TaosStmtKey)
-				t.(*TaosStmt).connect(ctx, session, &req)
+				t.connect(ctx, session, &req)
 			case STMTInit:
 				var req StmtInitReq
 				err = json.Unmarshal(action.Args, &req)
@@ -77,8 +85,7 @@ func NewSTMTController() *STMTController {
 					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal init args")
 					return
 				}
-				t := session.MustGet(TaosStmtKey)
-				t.(*TaosStmt).init(ctx, session, &req)
+				t.init(ctx, session, &req)
 			case STMTPrepare:
 				var req StmtPrepareReq
 				err = json.Unmarshal(action.Args, &req)
@@ -86,8 +93,7 @@ func NewSTMTController() *STMTController {
 					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal prepare args")
 					return
 				}
-				t := session.MustGet(TaosStmtKey)
-				t.(*TaosStmt).prepare(ctx, session, &req)
+				t.prepare(ctx, session, &req)
 			case STMTSetTableName:
 				var req StmtSetTableNameReq
 				err = json.Unmarshal(action.Args, &req)
@@ -95,8 +101,7 @@ func NewSTMTController() *STMTController {
 					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal set table name args")
 					return
 				}
-				t := session.MustGet(TaosStmtKey)
-				t.(*TaosStmt).setTableName(ctx, session, &req)
+				t.setTableName(ctx, session, &req)
 			case STMTSetTags:
 				var req StmtSetTagsReq
 				err = json.Unmarshal(action.Args, &req)
@@ -104,8 +109,7 @@ func NewSTMTController() *STMTController {
 					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal set tags args")
 					return
 				}
-				t := session.MustGet(TaosStmtKey)
-				t.(*TaosStmt).setTags(ctx, session, &req)
+				t.setTags(ctx, session, &req)
 			case STMTBind:
 				var req StmtBindReq
 				err = json.Unmarshal(action.Args, &req)
@@ -113,8 +117,7 @@ func NewSTMTController() *STMTController {
 					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal bind args")
 					return
 				}
-				t := session.MustGet(TaosStmtKey)
-				t.(*TaosStmt).bind(ctx, session, &req)
+				t.bind(ctx, session, &req)
 			case STMTAddBatch:
 				var req StmtAddBatchReq
 				err = json.Unmarshal(action.Args, &req)
@@ -122,8 +125,7 @@ func NewSTMTController() *STMTController {
 					logger.WithError(err).Errorln("unmarshal add batch args")
 					return
 				}
-				t := session.MustGet(TaosStmtKey)
-				t.(*TaosStmt).addBatch(ctx, session, &req)
+				t.addBatch(ctx, session, &req)
 			case STMTExec:
 				var req StmtExecReq
 				err = json.Unmarshal(action.Args, &req)
@@ -131,8 +133,7 @@ func NewSTMTController() *STMTController {
 					logger.WithError(err).Errorln("unmarshal exec args")
 					return
 				}
-				t := session.MustGet(TaosStmtKey)
-				t.(*TaosStmt).exec(ctx, session, &req)
+				t.exec(ctx, session, &req)
 			case STMTClose:
 				var req StmtClose
 				err = json.Unmarshal(action.Args, &req)
@@ -140,8 +141,7 @@ func NewSTMTController() *STMTController {
 					logger.WithError(err).Errorln("unmarshal close args")
 					return
 				}
-				t := session.MustGet(TaosStmtKey)
-				t.(*TaosStmt).close(ctx, session, &req)
+				t.close(ctx, session, &req)
 			case STMTGetColFields:
 				var req StmtGetColFieldsReq
 				err = json.Unmarshal(action.Args, &req)
@@ -149,8 +149,7 @@ func NewSTMTController() *STMTController {
 					logger.WithError(err).Errorln("unmarshal get_col_fields args")
 					return
 				}
-				t := session.MustGet(TaosStmtKey)
-				t.(*TaosStmt).getColFields(ctx, session, &req)
+				t.getColFields(ctx, session, &req)
 			case STMTGetTagFields:
 				var req StmtGetTagFieldsReq
 				err = json.Unmarshal(action.Args, &req)
@@ -158,8 +157,7 @@ func NewSTMTController() *STMTController {
 					logger.WithError(err).Errorln("unmarshal get_tag_fields args")
 					return
 				}
-				t := session.MustGet(TaosStmtKey)
-				t.(*TaosStmt).getTagFields(ctx, session, &req)
+				t.getTagFields(ctx, session, &req)
 			default:
 				logger.WithError(err).Errorln("unknown action: " + action.Action)
 				return
@@ -171,7 +169,13 @@ func NewSTMTController() *STMTController {
 		if stmtM.IsClosed() {
 			return
 		}
+		t := session.MustGet(TaosStmtKey).(*TaosStmt)
+		if t.closed {
+			return
+		}
+		t.wg.Add(1)
 		go func() {
+			defer t.wg.Done()
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 			//p0 uin64  req_id
 			//p0+8 uint64  stmt_id
@@ -191,11 +195,9 @@ func NewSTMTController() *STMTController {
 			logger.Debugln("get ws stmt block message data:", data)
 			switch action {
 			case BindMessage:
-				t := session.MustGet(TaosStmtKey)
-				t.(*TaosStmt).bindBlock(ctx, session, reqID, stmtID, int(rows), int(columns), block)
+				t.bindBlock(ctx, session, reqID, stmtID, int(rows), int(columns), block)
 			case SetTagsMessage:
-				t := session.MustGet(TaosStmtKey)
-				t.(*TaosStmt).setTagsBlock(ctx, session, reqID, stmtID, int(rows), int(columns), block)
+				t.setTagsBlock(ctx, session, reqID, stmtID, int(rows), int(columns), block)
 			}
 		}()
 	})
@@ -245,12 +247,51 @@ func (s *STMTController) Init(ctl gin.IRouter) {
 }
 
 type TaosStmt struct {
-	conn            unsafe.Pointer
-	stmtIndexLocker sync.RWMutex
-	StmtList        *list.List
-	stmtIndex       uint64
-	closed          bool
+	conn                unsafe.Pointer
+	stmtIndexLocker     sync.RWMutex
+	StmtList            *list.List
+	stmtIndex           uint64
+	closed              bool
+	exit                chan struct{}
+	whitelistChangeChan chan int64
+	session             *melody.Session
+	ip                  net.IP
+	wg                  sync.WaitGroup
 	sync.Mutex
+}
+
+func (t *TaosStmt) waitSignal() {
+	for {
+		if t.closed {
+			return
+		}
+		select {
+		case <-t.whitelistChangeChan:
+			t.Lock()
+			if t.closed {
+				t.Unlock()
+				return
+			}
+			whitelist, err := tool.GetWhitelist(t.conn)
+			if err != nil {
+				wstool.GetLogger(t.session).WithField("clientIP", t.session.Request.RemoteAddr).WithError(err).Errorln("get whitelist error! close connection!")
+				t.session.Close()
+				t.Unlock()
+				return
+			}
+			valid := tool.CheckWhitelist(whitelist, t.ip)
+			if !valid {
+				wstool.GetLogger(t.session).WithField("clientIP", t.session.Request.RemoteAddr).Errorln("ip not in whitelist! close connection!")
+				t.session.Close()
+				t.Close()
+				t.Unlock()
+				return
+			}
+			t.Unlock()
+		case <-t.exit:
+			return
+		}
+	}
 }
 
 type StmtItem struct {
@@ -269,8 +310,16 @@ func (s *StmtItem) clean() {
 	s.Unlock()
 }
 
-func NewTaosStmt() *TaosStmt {
-	return &TaosStmt{StmtList: list.New()}
+func NewTaosStmt(session *melody.Session) *TaosStmt {
+	host, _, _ := net.SplitHostPort(strings.TrimSpace(session.Request.RemoteAddr))
+	ipAddr := net.ParseIP(host)
+	return &TaosStmt{
+		StmtList:            list.New(),
+		exit:                make(chan struct{}),
+		whitelistChangeChan: make(chan int64, 1),
+		session:             session,
+		ip:                  ipAddr,
+	}
 }
 
 func (t *TaosStmt) addStmtItem(stmt *StmtItem) {
@@ -332,6 +381,9 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 	t.Lock()
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer t.Unlock()
+	if t.closed {
+		return
+	}
 	if t.conn != nil {
 		wsStmtErrorMsg(ctx, session, 0xffff, "duplicate connections", STMTConnect, req.ReqID, nil)
 		return
@@ -347,7 +399,32 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 		wsStmtError(ctx, session, err, STMTConnect, req.ReqID, nil)
 		return
 	}
+	whitelist, err := tool.GetWhitelist(conn)
+	if err != nil {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		wstool.WSError(ctx, session, err, STMTConnect, req.ReqID)
+		return
+	}
+	valid := tool.CheckWhitelist(whitelist, t.ip)
+	if !valid {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		wstool.WSErrorMsg(ctx, session, 0xffff, "whitelist prohibits current IP access", STMTConnect, req.ReqID)
+		return
+	}
+	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeChan)
+	if err != nil {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		wstool.WSError(ctx, session, err, STMTConnect, req.ReqID)
+		return
+	}
 	t.conn = conn
+	go t.waitSignal()
 	wstool.WSWriteJson(session, &StmtConnectResp{
 		Action: STMTConnect,
 		ReqID:  req.ReqID,
@@ -1044,6 +1121,17 @@ func (t *TaosStmt) Close() {
 		return
 	}
 	t.closed = true
+	close(t.exit)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		t.wg.Wait()
+	}()
+	select {
+	case <-ctx.Done():
+	case <-done:
+	}
 	t.cleanUp()
 	if t.conn != nil {
 		thread.Lock()

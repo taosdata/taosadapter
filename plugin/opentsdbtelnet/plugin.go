@@ -34,7 +34,7 @@ type TCPListener struct {
 	index     int
 	listener  *net.TCPListener
 	id        uint64
-	connList  map[uint64]*net.TCPConn
+	connList  map[uint64]*Connection
 	accept    chan bool
 	keepalive bool
 	cleanup   sync.Mutex
@@ -45,7 +45,7 @@ type TCPListener struct {
 func NewTCPListener(plugin *Plugin, index int, listener *net.TCPListener, maxConnections int, keepalive bool) *TCPListener {
 	l := &TCPListener{plugin: plugin, index: index, listener: listener, keepalive: keepalive}
 	l.done = make(chan struct{})
-	l.connList = make(map[uint64]*net.TCPConn)
+	l.connList = make(map[uint64]*Connection)
 	l.accept = make(chan bool, maxConnections)
 	for i := 0; i < maxConnections; i++ {
 		l.accept <- true
@@ -64,7 +64,15 @@ func (l *TCPListener) start() error {
 			if err != nil {
 				return err
 			}
-
+			if conn.RemoteAddr() == nil {
+				logger.Errorf("RemoteAddr is nil")
+			}
+			_, valid, poolExists := commonpool.VerifyClientIP(l.plugin.conf.User, l.plugin.conf.Password, conn.RemoteAddr().(*net.TCPAddr).IP)
+			if poolExists && !valid {
+				logger.WithField("user", l.plugin.conf.User).WithField("clientIP", conn.RemoteAddr().(*net.TCPAddr).IP.String()).Error("forbidden clientIP")
+				_ = conn.Close()
+				continue
+			}
 			if l.keepalive {
 				if err = conn.SetKeepAlive(true); err != nil {
 					return err
@@ -75,8 +83,19 @@ func (l *TCPListener) start() error {
 			case <-l.accept:
 				l.wg.Add(1)
 				id := atomic.AddUint64(&l.id, 1)
-				l.remember(id, conn)
-				go l.handler(conn, id)
+				connection := &Connection{
+					l:         l,
+					conn:      conn,
+					id:        id,
+					db:        l.plugin.conf.DBList[l.index],
+					clientIP:  conn.RemoteAddr().(*net.TCPAddr).IP,
+					batchSize: l.plugin.conf.BatchSize,
+					exit:      make(chan struct{}),
+					once:      sync.Once{},
+					closed:    false,
+				}
+				l.remember(id, connection)
+				go connection.handle()
 			default:
 				l.refuser(conn)
 			}
@@ -90,7 +109,7 @@ func (l *TCPListener) forget(id uint64) {
 	delete(l.connList, id)
 }
 
-func (l *TCPListener) remember(id uint64, conn *net.TCPConn) {
+func (l *TCPListener) remember(id uint64, conn *Connection) {
 	l.cleanup.Lock()
 	defer l.cleanup.Unlock()
 	l.connList[id] = conn
@@ -102,23 +121,37 @@ func (l *TCPListener) refuser(conn *net.TCPConn) {
 	logger.Warn("Maximum TCP Connections reached")
 }
 
-func (l *TCPListener) handler(conn *net.TCPConn, id uint64) {
+type Connection struct {
+	l         *TCPListener
+	conn      *net.TCPConn
+	id        uint64
+	db        string
+	clientIP  net.IP
+	batchSize int
+	exit      chan struct{}
+	once      sync.Once
+	closed    bool
+}
+
+func (c *Connection) handle() {
 	defer func() {
-		l.wg.Done()
-		conn.Close()
-		l.accept <- true
-		l.forget(id)
+		c.l.wg.Done()
+		c.conn.Close()
+		c.l.accept <- true
+		c.l.forget(c.id)
 	}()
+	ip := c.conn.RemoteAddr().(*net.TCPAddr).IP
 	for {
 		select {
-		case <-l.done:
+		case <-c.l.done:
+			return
+		case <-c.exit:
 			return
 		default:
-			b := bufio.NewReader(conn)
-			cache := make([]string, 0, l.plugin.conf.BatchSize)
-			dataChan := make(chan string, l.plugin.conf.BatchSize*2)
-			exitChan := make(chan struct{})
-			flushInterval := l.plugin.conf.FlushInterval
+			b := bufio.NewReader(c.conn)
+			cache := make([]string, 0, c.batchSize)
+			dataChan := make(chan string, c.batchSize*2)
+			flushInterval := c.l.plugin.conf.FlushInterval
 			if flushInterval <= 0 {
 				flushInterval = math.MaxInt64
 			}
@@ -126,46 +159,49 @@ func (l *TCPListener) handler(conn *net.TCPConn, id uint64) {
 			go func() {
 				for {
 					select {
-					case <-exitChan:
+					case <-c.exit:
 						ticker.Stop()
 						unConsumedLen := len(dataChan)
 						for i := 0; i < unConsumedLen; i++ {
 							data := <-dataChan
 							cache = append(cache, data)
-							if len(cache) >= l.plugin.conf.BatchSize {
-								l.plugin.handleData(l.index, cache)
+							if len(cache) >= c.l.plugin.conf.BatchSize {
+								c.l.plugin.handleData(c, cache, ip)
 								cache = cache[:0]
 							}
 						}
 						if len(cache) > 0 {
-							l.plugin.handleData(l.index, cache)
+							c.l.plugin.handleData(c, cache, ip)
 							cache = cache[:0]
 						}
 						return
-					case <-l.done:
+					case <-c.l.done:
 						ticker.Stop()
 						return
 					case <-ticker.C:
 						if len(cache) > 0 {
-							l.plugin.handleData(l.index, cache)
+							c.l.plugin.handleData(c, cache, ip)
 							cache = cache[:0]
 						}
 					case data := <-dataChan:
 						cache = append(cache, data)
-						if len(cache) >= l.plugin.conf.BatchSize {
-							l.plugin.handleData(l.index, cache)
+						if len(cache) >= c.batchSize {
+							c.l.plugin.handleData(c, cache, ip)
 							cache = cache[:0]
 						}
 					}
 				}
 			}()
 			for {
+				if c.closed {
+					return
+				}
 				s, err := b.ReadString('\n')
 				if err != nil {
 					if err != io.EOF {
 						logger.WithError(err).Error("conn read")
 					}
-					close(exitChan)
+					c.close()
 					return
 				}
 				if monitor.AllPaused() {
@@ -176,7 +212,7 @@ func (l *TCPListener) handler(conn *net.TCPConn, id uint64) {
 				}
 				s = s[:len(s)-1]
 				if s == versionCommand {
-					conn.Write([]byte{'1'})
+					c.conn.Write([]byte{'1'})
 					continue
 				} else {
 					dataChan <- s
@@ -186,17 +222,24 @@ func (l *TCPListener) handler(conn *net.TCPConn, id uint64) {
 	}
 }
 
+func (c *Connection) close() {
+	c.once.Do(func() {
+		close(c.exit)
+		c.closed = true
+	})
+}
+
 func (l *TCPListener) stop() error {
 	close(l.done)
 	l.listener.Close()
-	var tcpConnList []*net.TCPConn
+	var tcpConnList []*Connection
 	l.cleanup.Lock()
 	for _, conn := range l.connList {
 		tcpConnList = append(tcpConnList, conn)
 	}
 	l.cleanup.Unlock()
 	for _, conn := range tcpConnList {
-		conn.Close()
+		conn.close()
 	}
 	l.wg.Wait()
 	return nil
@@ -282,10 +325,13 @@ func (p *Plugin) tcp(port int, index int) error {
 	return nil
 }
 
-func (p *Plugin) handleData(index int, line []string) {
-	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password)
+func (p *Plugin) handleData(connection *Connection, line []string, clientIP net.IP) {
+	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, clientIP)
 	if err != nil {
 		logger.WithError(err).Error("connect server error")
+		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
+			connection.close()
+		}
 		return
 	}
 	defer func() {
@@ -299,7 +345,7 @@ func (p *Plugin) handleData(index int, line []string) {
 		start = time.Now()
 	}
 	logger.Debugln(start, " insert telnet payload ", line)
-	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, line, p.conf.DBList[index], p.conf.TTL, 0)
+	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, line, connection.db, p.conf.TTL, 0)
 	if err != nil {
 		logger.WithError(err).Errorln("insert telnet payload error :", line)
 	}

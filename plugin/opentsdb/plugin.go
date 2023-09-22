@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -121,9 +122,13 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		}
 	}
 
-	taosConn, err := commonpool.GetConnection(user, password)
+	taosConn, err := commonpool.GetConnection(user, password, net.ParseIP(c.RemoteIP()))
 	if err != nil {
 		logger.WithError(err).Error("connect server error")
+		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
+			p.errorResponse(c, http.StatusForbidden, err)
+			return
+		}
 		p.errorResponse(c, http.StatusInternalServerError, err)
 		return
 	}
@@ -224,9 +229,13 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 		p.errorResponse(c, http.StatusBadRequest, err)
 		return
 	}
-	taosConn, err := commonpool.GetConnection(user, password)
+	taosConn, err := commonpool.GetConnection(user, password, net.ParseIP(c.RemoteIP()))
 	if err != nil {
 		logger.WithError(err).Error("connect server error")
+		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
+			p.errorResponse(c, http.StatusForbidden, err)
+			return
+		}
 		p.errorResponse(c, http.StatusInternalServerError, err)
 		return
 	}

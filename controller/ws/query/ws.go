@@ -5,6 +5,8 @@ import (
 	"container/list"
 	"context"
 	"encoding/json"
+	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,6 +22,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/async"
+	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
@@ -38,14 +41,20 @@ func NewQueryController() *QueryController {
 	queryM.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws connect")
-		session.Set(TaosSessionKey, NewTaos())
+		session.Set(TaosSessionKey, NewTaos(session))
 	})
 
 	queryM.HandleMessage(func(session *melody.Session, data []byte) {
 		if queryM.IsClosed() {
 			return
 		}
+		t := session.MustGet(TaosSessionKey).(*Taos)
+		if t.closed {
+			return
+		}
+		t.wg.Add(1)
 		go func() {
+			defer t.wg.Done()
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 			logger := session.MustGet("logger").(*logrus.Entry)
 			logger.Debugln("get ws message data:", string(data))
@@ -65,8 +74,7 @@ func NewQueryController() *QueryController {
 					logger.WithError(err).Errorln("unmarshal connect request args")
 					return
 				}
-				t := session.MustGet(TaosSessionKey)
-				t.(*Taos).connect(ctx, session, &wsConnect)
+				t.connect(ctx, session, &wsConnect)
 			case WSQuery:
 				var wsQuery WSQueryReq
 				err = json.Unmarshal(action.Args, &wsQuery)
@@ -74,8 +82,7 @@ func NewQueryController() *QueryController {
 					logger.WithError(err).WithField(config.ReqIDKey, wsQuery.ReqID).Errorln("unmarshal query args")
 					return
 				}
-				t := session.MustGet(TaosSessionKey)
-				t.(*Taos).query(ctx, session, &wsQuery)
+				t.query(ctx, session, &wsQuery)
 			case WSFetch:
 				var wsFetch WSFetchReq
 				err = json.Unmarshal(action.Args, &wsFetch)
@@ -83,8 +90,7 @@ func NewQueryController() *QueryController {
 					logger.WithError(err).WithField(config.ReqIDKey, wsFetch.ReqID).Errorln("unmarshal fetch args")
 					return
 				}
-				t := session.MustGet(TaosSessionKey)
-				t.(*Taos).fetch(ctx, session, &wsFetch)
+				t.fetch(ctx, session, &wsFetch)
 			case WSFetchBlock:
 				var fetchBlock WSFetchBlockReq
 				err = json.Unmarshal(action.Args, &fetchBlock)
@@ -92,8 +98,7 @@ func NewQueryController() *QueryController {
 					logger.WithError(err).WithField(config.ReqIDKey, fetchBlock.ReqID).Errorln("unmarshal fetch_block args")
 					return
 				}
-				t := session.MustGet(TaosSessionKey)
-				t.(*Taos).fetchBlock(ctx, session, &fetchBlock)
+				t.fetchBlock(ctx, session, &fetchBlock)
 			case WSFreeResult:
 				var fetchJson WSFreeResultReq
 				err = json.Unmarshal(action.Args, &fetchJson)
@@ -101,8 +106,7 @@ func NewQueryController() *QueryController {
 					logger.WithError(err).WithField(config.ReqIDKey, fetchJson.ReqID).Errorln("unmarshal fetch_json args")
 					return
 				}
-				t := session.MustGet(TaosSessionKey)
-				t.(*Taos).freeResult(session, &fetchJson)
+				t.freeResult(session, &fetchJson)
 			default:
 				logger.WithError(err).Errorln("unknown action :" + action.Action)
 				return
@@ -115,7 +119,13 @@ func NewQueryController() *QueryController {
 		if queryM.IsClosed() {
 			return
 		}
+		t := session.MustGet(TaosSessionKey).(*Taos)
+		if t.closed {
+			return
+		}
+		t.wg.Add(1)
 		go func() {
+			defer t.wg.Done()
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 			logger := session.MustGet("logger").(*logrus.Entry)
 			logger.Debugln("get ws block message data:", data)
@@ -128,8 +138,7 @@ func NewQueryController() *QueryController {
 				length := *(*uint32)(unsafe.Pointer(p0 + uintptr(24)))
 				metaType := *(*uint16)(unsafe.Pointer(p0 + uintptr(28)))
 				b := unsafe.Pointer(p0 + uintptr(30))
-				t := session.MustGet(TaosSessionKey)
-				t.(*Taos).writeRaw(ctx, session, reqID, messageID, length, metaType, b)
+				t.writeRaw(ctx, session, reqID, messageID, length, metaType, b)
 			case RawBlockMessage:
 				numOfRows := *(*int32)(unsafe.Pointer(p0 + uintptr(24)))
 				tableNameLength := *(*uint16)(unsafe.Pointer(p0 + uintptr(28)))
@@ -138,8 +147,7 @@ func NewQueryController() *QueryController {
 					tableName[i] = *(*byte)(unsafe.Pointer(p0 + uintptr(30+i)))
 				}
 				b := unsafe.Pointer(p0 + uintptr(30+tableNameLength))
-				t := session.MustGet(TaosSessionKey)
-				t.(*Taos).writeRawBlock(ctx, session, reqID, int(numOfRows), string(tableName), b)
+				t.writeRawBlock(ctx, session, reqID, int(numOfRows), string(tableName), b)
 			case RawBlockMessageWithFields:
 				numOfRows := *(*int32)(unsafe.Pointer(p0 + uintptr(24)))
 				tableNameLength := int(*(*uint16)(unsafe.Pointer(p0 + uintptr(28))))
@@ -151,8 +159,7 @@ func NewQueryController() *QueryController {
 				blockLength := int(parser.RawBlockGetLength(b))
 				numOfColumn := int(parser.RawBlockGetNumOfCols(b))
 				fieldsBlock := unsafe.Pointer(p0 + uintptr(30+tableNameLength+blockLength))
-				t := session.MustGet(TaosSessionKey)
-				t.(*Taos).writeRawBlockWithFields(ctx, session, reqID, int(numOfRows), string(tableName), b, fieldsBlock, numOfColumn)
+				t.writeRawBlockWithFields(ctx, session, reqID, int(numOfRows), string(tableName), b, fieldsBlock, numOfColumn)
 			}
 		}()
 	})
@@ -202,16 +209,63 @@ func (s *QueryController) Init(ctl gin.IRouter) {
 }
 
 type Taos struct {
-	conn         unsafe.Pointer
-	resultLocker sync.RWMutex
-	Results      *list.List
-	resultIndex  uint64
-	closed       bool
+	conn                unsafe.Pointer
+	resultLocker        sync.RWMutex
+	Results             *list.List
+	resultIndex         uint64
+	closed              bool
+	exit                chan struct{}
+	whitelistChangeChan chan int64
+	session             *melody.Session
+	ip                  net.IP
+	wg                  sync.WaitGroup
 	sync.Mutex
 }
 
-func NewTaos() *Taos {
-	return &Taos{Results: list.New()}
+func NewTaos(session *melody.Session) *Taos {
+	host, _, _ := net.SplitHostPort(strings.TrimSpace(session.Request.RemoteAddr))
+	ipAddr := net.ParseIP(host)
+	return &Taos{
+		Results:             list.New(),
+		exit:                make(chan struct{}),
+		whitelistChangeChan: make(chan int64, 1),
+		session:             session,
+		ip:                  ipAddr,
+	}
+}
+
+func (t *Taos) waitSignal() {
+	for {
+		if t.closed {
+			return
+		}
+		select {
+		case <-t.whitelistChangeChan:
+			t.Lock()
+			if t.closed {
+				t.Unlock()
+				return
+			}
+			whitelist, err := tool.GetWhitelist(t.conn)
+			if err != nil {
+				wstool.GetLogger(t.session).WithField("clientIP", t.session.Request.RemoteAddr).WithError(err).Errorln("get whitelist error! close connection!")
+				t.session.Close()
+				t.Unlock()
+				return
+			}
+			valid := tool.CheckWhitelist(whitelist, t.ip)
+			if !valid {
+				wstool.GetLogger(t.session).WithField("clientIP", t.session.Request.RemoteAddr).Errorln("ip not in whitelist! close connection!")
+				t.session.Close()
+				t.Close()
+				t.Unlock()
+				return
+			}
+			t.Unlock()
+		case <-t.exit:
+			return
+		}
+	}
 }
 
 type Result struct {
@@ -302,6 +356,9 @@ func (t *Taos) connect(ctx context.Context, session *melody.Session, req *WSConn
 	t.Lock()
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer t.Unlock()
+	if t.closed {
+		return
+	}
 	if t.conn != nil {
 		wsErrorMsg(ctx, session, 0xffff, "duplicate connections", WSConnect, req.ReqID)
 		return
@@ -317,7 +374,32 @@ func (t *Taos) connect(ctx context.Context, session *melody.Session, req *WSConn
 		wstool.WSError(ctx, session, err, WSConnect, req.ReqID)
 		return
 	}
+	whitelist, err := tool.GetWhitelist(conn)
+	if err != nil {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		wstool.WSError(ctx, session, err, WSConnect, req.ReqID)
+		return
+	}
+	valid := tool.CheckWhitelist(whitelist, t.ip)
+	if !valid {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		wstool.WSErrorMsg(ctx, session, 0xffff, "whitelist prohibits current IP access", WSConnect, req.ReqID)
+		return
+	}
+	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeChan)
+	if err != nil {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		wstool.WSError(ctx, session, err, WSConnect, req.ReqID)
+		return
+	}
 	t.conn = conn
+	go t.waitSignal()
 	wstool.WSWriteJson(session, &WSConnectResp{
 		Action: WSConnect,
 		ReqID:  req.ReqID,
@@ -438,6 +520,9 @@ func (t *Taos) writeRaw(ctx context.Context, session *melody.Session, reqID, mes
 	t.Lock()
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer t.Unlock()
+	if t.closed {
+		return
+	}
 	if t.conn == nil {
 		wsTMQErrorMsg(ctx, session, 0xffff, "server not connected", WSWriteRaw, reqID, &messageID)
 		return
@@ -474,6 +559,9 @@ func (t *Taos) writeRawBlock(ctx context.Context, session *melody.Session, reqID
 	t.Lock()
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer t.Unlock()
+	if t.closed {
+		return
+	}
 	if t.conn == nil {
 		wsErrorMsg(ctx, session, 0xffff, "server not connected", WSWriteRawBlock, reqID)
 		return
@@ -509,6 +597,9 @@ func (t *Taos) writeRawBlockWithFields(ctx context.Context, session *melody.Sess
 	t.Lock()
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer t.Unlock()
+	if t.closed {
+		return
+	}
 	if t.conn == nil {
 		wsErrorMsg(ctx, session, 0xffff, "server not connected", WSWriteRawBlockWithFields, reqID)
 		return
@@ -709,9 +800,23 @@ func (t *Taos) Close() {
 		return
 	}
 	t.closed = true
+	close(t.exit)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		t.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-ctx.Done():
+	case <-done:
+	}
 	t.freeAllResult()
 	if t.conn != nil {
+		thread.Lock()
 		wrapper.TaosClose(t.conn)
+		thread.Unlock()
 		t.conn = nil
 	}
 }

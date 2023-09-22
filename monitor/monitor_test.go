@@ -77,6 +77,7 @@ func TestMonitor(t *testing.T) {
 		w := httptest.NewRecorder()
 		body := strings.NewReader("show databases")
 		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
@@ -84,17 +85,20 @@ func TestMonitor(t *testing.T) {
 		w = httptest.NewRecorder()
 		body = strings.NewReader("create database if not exists t1")
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 
 		w = httptest.NewRecorder()
 		req, _ = http.NewRequest(http.MethodGet, "/-/ping?action=query", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 
 		w = httptest.NewRecorder()
 		req, _ = http.NewRequest(http.MethodGet, "/-/ping", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 	}
@@ -107,6 +111,7 @@ func TestMonitor(t *testing.T) {
 		w := httptest.NewRecorder()
 		body := strings.NewReader("show databases")
 		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 503, w.Code)
@@ -114,17 +119,20 @@ func TestMonitor(t *testing.T) {
 		w = httptest.NewRecorder()
 		body = strings.NewReader("create database if not exists t1")
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 
 		w = httptest.NewRecorder()
 		req, _ = http.NewRequest(http.MethodGet, "/-/ping?action=query", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 503, w.Code)
 
 		w = httptest.NewRecorder()
 		req, _ = http.NewRequest(http.MethodGet, "/-/ping", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 	}
@@ -136,6 +144,7 @@ func TestMonitor(t *testing.T) {
 		w := httptest.NewRecorder()
 		body := strings.NewReader("show databases")
 		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 503, w.Code)
@@ -143,17 +152,20 @@ func TestMonitor(t *testing.T) {
 		w = httptest.NewRecorder()
 		body = strings.NewReader("create database if not exists t1")
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 503, w.Code)
 
 		w = httptest.NewRecorder()
 		req, _ = http.NewRequest(http.MethodGet, "/-/ping?action=query", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 503, w.Code)
 
 		w = httptest.NewRecorder()
 		req, _ = http.NewRequest(http.MethodGet, "/-/ping", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 503, w.Code)
 	}
@@ -168,6 +180,7 @@ func TestMonitor(t *testing.T) {
 		w := httptest.NewRecorder()
 		body := strings.NewReader("show databases")
 		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
@@ -175,17 +188,20 @@ func TestMonitor(t *testing.T) {
 		w = httptest.NewRecorder()
 		body = strings.NewReader("create database if not exists t1")
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 
 		w = httptest.NewRecorder()
 		req, _ = http.NewRequest(http.MethodGet, "/-/ping?action=query", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 
 		w = httptest.NewRecorder()
 		req, _ = http.NewRequest(http.MethodGet, "/-/ping", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 	}
@@ -193,6 +209,7 @@ func TestMonitor(t *testing.T) {
 		w := httptest.NewRecorder()
 		body := strings.NewReader("drop database if exists t1")
 		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
@@ -208,6 +225,7 @@ func TestWriteLog(t *testing.T) {
 		w := httptest.NewRecorder()
 		body := strings.NewReader("show databases")
 		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 	}
@@ -215,6 +233,7 @@ func TestWriteLog(t *testing.T) {
 		w := httptest.NewRecorder()
 		body := strings.NewReader("xxx")
 		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 	}
@@ -223,6 +242,7 @@ func TestWriteLog(t *testing.T) {
 		w := httptest.NewRecorder()
 		body := strings.NewReader("xxx")
 		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 	}
@@ -237,6 +257,7 @@ func TestWriteLog(t *testing.T) {
 		w := httptest.NewRecorder()
 		body := strings.NewReader("select * from log." + table)
 		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		var r result

@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -21,6 +23,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller/ws/stmt"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/async"
+	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
@@ -38,12 +41,57 @@ type messageHandler struct {
 
 	queryResults *QueryResultHolder // ws query
 	stmts        *StmtHolder        // stmt bind message
+
+	exit                chan struct{}
+	whitelistChangeChan chan int64
+	session             *melody.Session
+	ip                  net.IP
 }
 
-func newHandler() *messageHandler {
+func newHandler(session *melody.Session) *messageHandler {
+	host, _, _ := net.SplitHostPort(strings.TrimSpace(session.Request.RemoteAddr))
+	ipAddr := net.ParseIP(host)
 	return &messageHandler{
-		queryResults: NewQueryResultHolder(),
-		stmts:        NewStmtHolder(),
+		queryResults:        NewQueryResultHolder(),
+		stmts:               NewStmtHolder(),
+		exit:                make(chan struct{}),
+		whitelistChangeChan: make(chan int64, 1),
+		session:             session,
+		ip:                  ipAddr,
+	}
+}
+
+func (h *messageHandler) waitSignal() {
+	for {
+		if h.closed {
+			return
+		}
+		select {
+		case <-h.whitelistChangeChan:
+			h.Lock()
+			if h.closed {
+				h.Unlock()
+				return
+			}
+			whitelist, err := tool.GetWhitelist(h.conn)
+			if err != nil {
+				wstool.GetLogger(h.session).WithField("clientIP", h.session.Request.RemoteAddr).WithError(err).Errorln("get whitelist error! close connection!")
+				h.session.Close()
+				h.Unlock()
+				return
+			}
+			valid := tool.CheckWhitelist(whitelist, h.ip)
+			if !valid {
+				wstool.GetLogger(h.session).WithField("clientIP", h.session.Request.RemoteAddr).Errorln("ip not in whitelist! close connection!")
+				h.session.Close()
+				h.Close()
+				h.Unlock()
+				return
+			}
+			h.Unlock()
+		case <-h.exit:
+			return
+		}
 	}
 }
 
@@ -55,6 +103,7 @@ func (h *messageHandler) Close() {
 		return
 	}
 	h.closed = true
+	close(h.exit)
 	h.stop()
 }
 
@@ -261,7 +310,9 @@ func (h *messageHandler) stop() {
 		h.stmts.FreeAll()
 		// clean connection
 		if h.conn != nil {
+			thread.Lock()
 			wrapper.TaosClose(h.conn)
+			thread.Unlock()
 		}
 	})
 }
@@ -297,6 +348,9 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 
 	h.Lock()
 	defer h.Unlock()
+	if h.closed {
+		return
+	}
 	if h.conn != nil {
 		return &BaseResponse{Code: 0xffff, Message: "duplicate connections"}
 	}
@@ -312,7 +366,33 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		errors.As(err, &taosErr)
 		return &BaseResponse{Code: int(taosErr.Code), Message: taosErr.ErrStr}
 	}
+	whitelist, err := tool.GetWhitelist(conn)
+	if err != nil {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		var taosErr *errors2.TaosError
+		errors.As(err, &taosErr)
+		return &BaseResponse{Code: int(taosErr.Code), Message: taosErr.ErrStr}
+	}
+	valid := tool.CheckWhitelist(whitelist, h.ip)
+	if !valid {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		return &BaseResponse{Code: 0xffff, Message: "whitelist prohibits current IP access"}
+	}
+	err = tool.RegisterChangeWhitelist(conn, h.whitelistChangeChan)
+	if err != nil {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		var taosErr *errors2.TaosError
+		errors.As(err, &taosErr)
+		return &BaseResponse{Code: int(taosErr.Code), Message: taosErr.ErrStr}
+	}
 	h.conn = conn
+	go h.waitSignal()
 	return &BaseResponse{}
 }
 
@@ -1017,6 +1097,9 @@ func (h *messageHandler) handleTMQRawMessage(_ context.Context, req dealBinaryRe
 	h.Lock()
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer h.Unlock()
+	if h.closed {
+		return
+	}
 	meta := wrapper.BuildRawMeta(length, metaType, data)
 
 	thread.Lock()
@@ -1046,6 +1129,9 @@ func (h *messageHandler) handleRawBlockMessage(_ context.Context, req dealBinary
 	h.Lock()
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer h.Unlock()
+	if h.closed {
+		return
+	}
 
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
@@ -1075,6 +1161,9 @@ func (h *messageHandler) handleRawBlockMessageWithFields(_ context.Context, req 
 
 	h.Lock()
 	defer h.Unlock()
+	if h.closed {
+		return
+	}
 
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	thread.Lock()
