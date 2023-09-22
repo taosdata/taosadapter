@@ -18,6 +18,7 @@ require (
 	github.com/kardianos/service v1.2.2
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369
 	github.com/patrickmn/go-cache v2.1.0+incompatible
+	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/client_model v0.3.0
 	github.com/prometheus/common v0.37.0
@@ -30,6 +31,7 @@ require (
 	github.com/swaggo/swag v1.8.8
 	github.com/taosdata/driver-go/v3 v3.5.6-0.20240605055834-cfdec2a0b318
 	go.uber.org/automaxprocs v1.5.1
+	golang.org/x/sync v0.1.0
 )
 
 require (

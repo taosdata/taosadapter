@@ -1,6 +1,7 @@
 package prometheus
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/plugin"
 	prompbWrite "github.com/taosdata/taosadapter/v3/plugin/prometheus/proto/write"
+	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
 	"github.com/taosdata/taosadapter/v3/tools/web"
 )
@@ -96,10 +98,14 @@ func (p *Plugin) Read(c *gin.Context) {
 	}
 	logger.Debug("read protobuf unmarshal cost:", time.Since(start))
 	start = time.Now()
-	taosConn, err := commonpool.GetConnection(user, password)
+	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
 	if err != nil {
 		logger.WithError(err).Error("connect server error")
-		c.String(http.StatusBadRequest, err.Error())
+		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
+			c.String(http.StatusForbidden, err.Error())
+			return
+		}
+		c.String(http.StatusUnauthorized, err.Error())
 		return
 	}
 	logger.Debug("read commonpool.GetConnection cost:", time.Since(start))
@@ -179,10 +185,14 @@ func (p *Plugin) Write(c *gin.Context) {
 		return
 	}
 	start = time.Now()
-	taosConn, err := commonpool.GetConnection(user, password)
+	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
 	if err != nil {
 		logger.WithError(err).Error("connect server error")
-		c.String(http.StatusBadRequest, err.Error())
+		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
+			c.String(http.StatusForbidden, err.Error())
+			return
+		}
+		c.String(http.StatusUnauthorized, err.Error())
 		return
 	}
 	logger.Debug("commonpool.GetConnection cost:", time.Since(start))

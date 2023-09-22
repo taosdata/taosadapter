@@ -1,6 +1,7 @@
 package commonpool
 
 import (
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -18,7 +19,7 @@ func TestMain(m *testing.M) {
 
 func BenchmarkGetConnection(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		conn, err := GetConnection("root", "taosdata")
+		conn, err := GetConnection("root", "taosdata", net.ParseIP("127.0.0.1"))
 		if err != nil {
 			b.Error(err)
 			return
@@ -58,7 +59,7 @@ func TestGetConnection(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetConnection(tt.args.user, tt.args.password)
+			got, err := GetConnection(tt.args.user, tt.args.password, net.ParseIP("127.0.0.1"))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetConnection() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -76,9 +77,9 @@ func TestGetConnection(t *testing.T) {
 // @date: 2021/12/14 15:04
 // @description: test connection pool re-get connection
 func TestReGetConnection(t *testing.T) {
-	conn, err := GetConnection("root", "taosdata")
+	conn, err := GetConnection("root", "taosdata", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
-	conn2, err := GetConnection("root", "wrong")
+	conn2, err := GetConnection("root", "wrong", net.ParseIP("127.0.0.1"))
 	assert.Error(t, err)
 	assert.Nil(t, conn2)
 	err = conn.Put()
@@ -103,7 +104,7 @@ func TestConnectorPool_Close(t *testing.T) {
 }
 
 func TestChangePassword(t *testing.T) {
-	c, err := GetConnection("root", "taosdata")
+	c, err := GetConnection("root", "taosdata", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 
 	result := wrapper.TaosQuery(c.TaosConnection, "drop user test")
@@ -121,7 +122,7 @@ func TestChangePassword(t *testing.T) {
 		wrapper.TaosFreeResult(r)
 	}()
 
-	conn, err := GetConnection("test", "test")
+	conn, err := GetConnection("test", "test", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 
 	result = wrapper.TaosQuery(c.TaosConnection, "alter user test pass 'test2'")
@@ -143,11 +144,11 @@ func TestChangePassword(t *testing.T) {
 	assert.Equal(t, unsafe.Pointer(nil), wc)
 	conn.Put()
 
-	conn2, err := GetConnection("test", "test")
+	conn2, err := GetConnection("test", "test", net.ParseIP("127.0.0.1"))
 	assert.Error(t, err)
 	assert.Nil(t, conn2)
 
-	conn3, err := GetConnection("test", "test2")
+	conn3, err := GetConnection("test", "test2", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 	assert.NotNil(t, conn3)
 	result2 := wrapper.TaosQuery(conn3.TaosConnection, "show databases")
@@ -156,7 +157,7 @@ func TestChangePassword(t *testing.T) {
 	assert.Equal(t, 0, errNo)
 	conn3.Put()
 
-	conn4, err := GetConnection("test", "test2")
+	conn4, err := GetConnection("test", "test2", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 	assert.NotNil(t, conn4)
 	result3 := wrapper.TaosQuery(conn4.TaosConnection, "show databases")
@@ -167,7 +168,7 @@ func TestChangePassword(t *testing.T) {
 }
 
 func TestChangePasswordConcurrent(t *testing.T) {
-	c, err := GetConnection("root", "taosdata")
+	c, err := GetConnection("root", "taosdata", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 
 	result := wrapper.TaosQuery(c.TaosConnection, "drop user test")
@@ -184,7 +185,7 @@ func TestChangePasswordConcurrent(t *testing.T) {
 		r := wrapper.TaosQuery(c.TaosConnection, "drop user test")
 		wrapper.TaosFreeResult(r)
 	}()
-	conn, err := GetConnection("test", "test")
+	conn, err := GetConnection("test", "test", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 
 	result = wrapper.TaosQuery(c.TaosConnection, "alter user test pass 'test2'")
@@ -206,18 +207,18 @@ func TestChangePasswordConcurrent(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		go func() {
 			defer wg.Done()
-			conn2, err := GetConnection("test", "test2")
+			conn2, err := GetConnection("test", "test2", net.ParseIP("127.0.0.1"))
 			assert.NoError(t, err)
 			assert.NotNil(t, conn2)
 			conn2.Put()
 		}()
 	}
 	wg.Wait()
-	conn2, err := GetConnection("test", "test")
+	conn2, err := GetConnection("test", "test", net.ParseIP("127.0.0.1"))
 	assert.Error(t, err)
 	assert.Nil(t, conn2)
 
-	conn3, err := GetConnection("test", "test2")
+	conn3, err := GetConnection("test", "test2", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 	assert.NotNil(t, conn3)
 	result2 := wrapper.TaosQuery(conn3.TaosConnection, "show databases")
@@ -226,7 +227,7 @@ func TestChangePasswordConcurrent(t *testing.T) {
 	assert.Equal(t, 0, errNo)
 	conn3.Put()
 
-	conn4, err := GetConnection("test", "test2")
+	conn4, err := GetConnection("test", "test2", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 	assert.NotNil(t, conn4)
 	result3 := wrapper.TaosQuery(conn4.TaosConnection, "show databases")

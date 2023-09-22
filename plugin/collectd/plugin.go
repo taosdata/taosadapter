@@ -1,6 +1,7 @@
 package collectd
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -19,11 +20,15 @@ import (
 
 var logger = log.GetLogger("collectd")
 
+type MetricWithClientIP struct {
+	ClientIP net.IP
+	Metric   []telegraf.Metric
+}
 type Plugin struct {
 	conf       Config
-	conn       net.PacketConn
+	conn       *net.UDPConn
 	parser     *collectd.CollectdParser
-	metricChan chan []telegraf.Metric
+	metricChan chan *MetricWithClientIP
 	closeChan  chan struct{}
 }
 
@@ -49,19 +54,19 @@ func (p *Plugin) Start() error {
 			return err
 		}
 	}
-	conn, err := udpListen("udp", fmt.Sprintf(":%d", p.conf.Port))
+	conn, err := udpListen("udp4", fmt.Sprintf(":%d", p.conf.Port))
 	if err != nil {
 		return err
 	}
 	p.closeChan = make(chan struct{})
-	p.metricChan = make(chan []telegraf.Metric, 2*p.conf.Worker)
+	p.metricChan = make(chan *MetricWithClientIP, 2*p.conf.Worker)
 	for i := 0; i < p.conf.Worker; i++ {
 		go func() {
 			serializer := influx.NewSerializer()
 			for {
 				select {
 				case metric := <-p.metricChan:
-					p.HandleMetrics(serializer, metric)
+					p.HandleMetrics(serializer, metric.ClientIP, metric.Metric)
 				case <-p.closeChan:
 					return
 				}
@@ -92,7 +97,7 @@ func (p *Plugin) Version() string {
 	return "v1"
 }
 
-func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metrics []telegraf.Metric) {
+func (p *Plugin) HandleMetrics(serializer *influx.Serializer, clientIP net.IP, metrics []telegraf.Metric) {
 	if len(metrics) == 0 {
 		return
 	}
@@ -107,8 +112,12 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metrics []telegraf
 		logger.WithError(err).Error("serialize collectd error")
 		return
 	}
-	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password)
+	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, clientIP)
 	if err != nil {
+		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
+			logger.WithError(err).WithField("user", p.conf.User).WithField("clientIP", clientIP.String()).Errorln("whitelist forbidden")
+			return
+		}
 		logger.WithError(err).Errorln("connect server error")
 		return
 	}
@@ -131,7 +140,7 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metrics []telegraf
 func (p *Plugin) listen() {
 	buf := make([]byte, 64*1024) // 64kb - maximum size of IP packet
 	for {
-		n, _, err := p.conn.ReadFrom(buf)
+		n, addr, err := p.conn.ReadFrom(buf)
 		if monitor.AllPaused() {
 			continue
 		}
@@ -141,40 +150,30 @@ func (p *Plugin) listen() {
 			}
 			break
 		}
-
+		if addr == nil {
+			logger.Error("addr is nil,ignore data")
+			continue
+		}
 		metrics, err := p.parser.Parse(buf[:n])
 		if err != nil {
 			logger.Errorf("Unable to parse incoming packet: %s", err.Error())
 			continue
 		}
-		p.metricChan <- metrics
-
+		p.metricChan <- &MetricWithClientIP{
+			ClientIP: addr.(*net.UDPAddr).IP,
+			Metric:   metrics,
+		}
 	}
 }
 
-func udpListen(network string, address string) (net.PacketConn, error) {
-	switch network {
-	case "udp", "udp4", "udp6":
-		var addr *net.UDPAddr
-		var err error
-		var ifi *net.Interface
-		if spl := strings.SplitN(address, "%", 2); len(spl) == 2 {
-			address = spl[0]
-			ifi, err = net.InterfaceByName(spl[1])
-			if err != nil {
-				return nil, err
-			}
-		}
-		addr, err = net.ResolveUDPAddr(network, address)
-		if err != nil {
-			return nil, err
-		}
-		if addr.IP.IsMulticast() {
-			return net.ListenMulticastUDP(network, ifi, addr)
-		}
-		return net.ListenUDP(network, addr)
+func udpListen(network string, address string) (*net.UDPConn, error) {
+	var addr *net.UDPAddr
+	var err error
+	addr, err = net.ResolveUDPAddr(network, address)
+	if err != nil {
+		return nil, err
 	}
-	return net.ListenPacket(network, address)
+	return net.ListenUDP(network, addr)
 }
 
 func init() {

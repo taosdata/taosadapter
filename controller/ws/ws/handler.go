@@ -26,35 +26,93 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller/ws/stmt"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/async"
+	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
+	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 	"github.com/taosdata/taosadapter/v3/version"
 )
 
 type messageHandler struct {
-	conn   unsafe.Pointer
-	closed bool
-	once   sync.Once
-	wait   sync.WaitGroup
+	conn           unsafe.Pointer
+	closed         bool
+	once           sync.Once
+	wait           sync.WaitGroup
+	dropUserNotify chan struct{}
 	sync.RWMutex
 
 	queryResults *QueryResultHolder // ws query
 	stmts        *StmtHolder        // stmt bind message
-	ipStr        string
+
+	exit                chan struct{}
+	whitelistChangeChan chan int64
+	session             *melody.Session
+	ip                  net.IP
+	ipStr               string
 }
 
 func newHandler(session *melody.Session) *messageHandler {
-	host, _, _ := net.SplitHostPort(strings.TrimSpace(session.Request.RemoteAddr))
-	ipAddr := net.ParseIP(host)
+	ipAddr := iptool.GetRealIP(session.Request)
 	return &messageHandler{
-		queryResults: NewQueryResultHolder(),
-		stmts:        NewStmtHolder(),
-		ipStr:        ipAddr.String(),
+		queryResults:        NewQueryResultHolder(),
+		stmts:               NewStmtHolder(),
+		exit:                make(chan struct{}),
+		whitelistChangeChan: make(chan int64, 1),
+		dropUserNotify:      make(chan struct{}, 1),
+		session:             session,
+		ip:                  ipAddr,
+		ipStr:               ipAddr.String(),
+	}
+}
+
+func (h *messageHandler) waitSignal() {
+	for {
+		if h.closed {
+			return
+		}
+		select {
+		case <-h.dropUserNotify:
+			h.Lock()
+			if h.closed {
+				h.Unlock()
+				return
+			}
+			wstool.GetLogger(h.session).WithField("clientIP", h.ipStr).Info("user dropped! close connection!")
+			h.session.Close()
+			h.Unlock()
+			h.Close()
+			return
+		case <-h.whitelistChangeChan:
+			h.Lock()
+			if h.closed {
+				h.Unlock()
+				return
+			}
+			whitelist, err := tool.GetWhitelist(h.conn)
+			if err != nil {
+				wstool.GetLogger(h.session).WithField("clientIP", h.ipStr).WithError(err).Errorln("get whitelist error! close connection!")
+				h.session.Close()
+				h.Unlock()
+				h.Close()
+				return
+			}
+			valid := tool.CheckWhitelist(whitelist, h.ip)
+			if !valid {
+				wstool.GetLogger(h.session).WithField("clientIP", h.ipStr).Errorln("ip not in whitelist! close connection!")
+				h.session.Close()
+				h.Unlock()
+				h.Close()
+				return
+			}
+			h.Unlock()
+		case <-h.exit:
+			return
+		}
 	}
 }
 
@@ -66,6 +124,9 @@ func (h *messageHandler) Close() {
 		return
 	}
 	h.closed = true
+	close(h.exit)
+	close(h.whitelistChangeChan)
+	close(h.dropUserNotify)
 	h.stop()
 }
 
@@ -349,7 +410,42 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		errors.As(err, &taosErr)
 		return wsCommonErrorMsg(int(taosErr.Code), taosErr.ErrStr)
 	}
+	whitelist, err := tool.GetWhitelist(conn)
+	if err != nil {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		var taosErr *errors2.TaosError
+		errors.As(err, &taosErr)
+		return wsCommonErrorMsg(int(taosErr.Code), taosErr.ErrStr)
+	}
+	valid := tool.CheckWhitelist(whitelist, h.ip)
+	if !valid {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		return wsCommonErrorMsg(0xffff, "whitelist prohibits current IP access")
+	}
+	err = tool.RegisterChangeWhitelist(conn, h.whitelistChangeChan)
+	if err != nil {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		var taosErr *errors2.TaosError
+		errors.As(err, &taosErr)
+		return wsCommonErrorMsg(int(taosErr.Code), taosErr.ErrStr)
+	}
+	err = tool.RegisterDropUser(conn, h.dropUserNotify)
+	if err != nil {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		var taosErr *errors2.TaosError
+		errors.As(err, &taosErr)
+		return wsCommonErrorMsg(int(taosErr.Code), taosErr.ErrStr)
+	}
 	h.conn = conn
+	go h.waitSignal()
 	return &BaseResponse{}
 }
 
