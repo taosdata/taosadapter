@@ -101,7 +101,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        go: [ '1.17', '1.19' ]
+        go: [ '1.17', '1.20' ]
     name: Build taosAdapter ${{ matrix.go }}
     steps:
       - name: get cache server by pr
@@ -150,7 +150,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        go: [ '1.17', '1.19' ]
+        go: [ '1.17', '1.20' ]
     name: test taosAdapter ${{ matrix.go }}
     steps:
       - name: get cache server by pr
