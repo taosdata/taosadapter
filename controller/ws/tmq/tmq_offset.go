@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/taosadapter/v3/thread"
 )
 
 type TopicVGroup struct {
@@ -172,20 +173,14 @@ func (tg *TopicVGroup) startAutoClean() {
 
 	tg.autoCleanStarted = true
 	go func() {
-		timer := time.NewTimer(tg.autoCleanInterval)
-		defer func() {
-			timer.Stop()
-		}()
+		ticker := time.NewTicker(tg.autoCleanInterval)
+		defer ticker.Stop()
 
-		for range timer.C {
+		for range ticker.C {
 			all := tg.getAllMessageList()
 			for _, messages := range all {
 				messages.cleanTimeoutMessages()
 			}
-			if !timer.Stop() {
-				<-timer.C
-			}
-			timer.Reset(tg.autoCleanInterval)
 
 			if !tg.autoCleanStarted {
 				break
@@ -409,7 +404,9 @@ func (n *messageList) freeCPointer(pointer unsafe.Pointer) {
 	if pointer == nil {
 		return
 	}
+	thread.Lock()
 	wrapper.TaosFreeResult(pointer)
+	thread.Unlock()
 	pointer = nil
 }
 
