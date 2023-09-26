@@ -339,7 +339,7 @@ type ConnRequest struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	DB       string `json:"db"`
-	Mode     int    `json:"mode"`
+	Mode     *int   `json:"mode"`
 }
 
 func (h *messageHandler) handleConnect(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
@@ -394,9 +394,10 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		errors.As(err, &taosErr)
 		return &BaseResponse{Code: int(taosErr.Code), Message: taosErr.ErrStr}
 	}
-	if req.Mode != 0 {
-		switch req.Mode {
-		case 1:
+	if req.Mode != nil {
+		switch *req.Mode {
+		case 0:
+			// BI mode
 			code := wrapper.TaosSetConnMode(conn, 0, 1)
 			if code != 0 {
 				thread.Lock()
