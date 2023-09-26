@@ -73,6 +73,10 @@ func CommonErrorResponse(c *gin.Context, msg string) {
 	errorResp(c, httpCode, 0xffff, msg)
 }
 
+func ForbiddenResponse(c *gin.Context, msg string) {
+	errorResp(c, http.StatusForbidden, 0xffff, msg)
+}
+
 type MessageWithTiming struct {
 	Code   int    `json:"code"`
 	Desc   string `json:"desc"`

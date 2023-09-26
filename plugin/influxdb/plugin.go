@@ -1,6 +1,8 @@
 package influxdb
 
 import (
+	"errors"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -148,8 +150,15 @@ func (p *Influxdb) write(c *gin.Context) {
 		})
 		return
 	}
-	taosConn, err := commonpool.GetConnection(user, password)
+	taosConn, err := commonpool.GetConnection(user, password, net.ParseIP(c.RemoteIP()))
 	if err != nil {
+		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
+			p.commonResponse(c, http.StatusUnauthorized, &message{
+				Code:    "forbidden",
+				Message: err.Error(),
+			})
+			return
+		}
 		logger.WithError(err).Errorln("connect server error")
 		p.commonResponse(c, http.StatusInternalServerError, &message{Code: "internal error", Message: err.Error()})
 		return

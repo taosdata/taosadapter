@@ -2,12 +2,12 @@ package statsd
 
 import (
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/agent"
-	"github.com/influxdata/telegraf/plugins/inputs/statsd"
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
@@ -22,7 +22,7 @@ var logger = log.GetLogger("statsd")
 type Plugin struct {
 	conf       Config
 	ac         telegraf.Accumulator
-	input      *statsd.Statsd
+	input      *Statsd
 	closeChan  chan struct{}
 	metricChan chan telegraf.Metric
 }
@@ -55,7 +55,9 @@ func (p *Plugin) Start() error {
 			}
 		}()
 	}
-	p.input = &statsd.Statsd{
+	p.input = &Statsd{
+		User:                   p.conf.User,
+		Password:               p.conf.Password,
 		Protocol:               p.conf.Protocol,
 		ServiceAddress:         fmt.Sprintf(":%d", p.conf.Port),
 		MaxTCPConnections:      p.conf.MaxTCPConnections,
@@ -112,13 +114,15 @@ func (p *Plugin) Version() string {
 	return "v1"
 }
 
+var localhost = net.IPv4(127, 0, 0, 1)
+
 func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metric telegraf.Metric) {
 	data, err := serializer.Serialize(metric)
 	if err != nil {
 		logger.WithError(err).Error("serialize statsd error")
 		return
 	}
-	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password)
+	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, localhost)
 	if err != nil {
 		logger.WithError(err).Errorln("connect server error")
 		return

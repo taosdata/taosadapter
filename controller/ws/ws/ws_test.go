@@ -58,6 +58,7 @@ func doRestful(sql string, db string) (code int, message string) {
 		url = fmt.Sprintf("/rest/sql/%s", db)
 	}
 	req, _ := http.NewRequest(http.MethodPost, url, body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -488,16 +489,16 @@ func TestWsSchemaless(t *testing.T) {
 }
 
 func TestWsStmt(t *testing.T) {
-	code, message := doRestful("drop database if exists test_ws_stmt", "")
+	code, message := doRestful("drop database if exists test_ws_stmt_ws", "")
 	assert.Equal(t, 0, code, message)
-	code, message = doRestful("create database if not exists test_ws_stmt precision 'ns'", "")
+	code, message = doRestful("create database if not exists test_ws_stmt_ws precision 'ns'", "")
 	assert.Equal(t, 0, code, message)
 
-	defer doRestful("drop database if exists test_ws_stmt", "")
+	defer doRestful("drop database if exists test_ws_stmt_ws", "")
 
 	code, message = doRestful(
 		"create table if not exists stb (ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20)) tags (info json)",
-		"test_ws_stmt")
+		"test_ws_stmt_ws")
 	assert.Equal(t, 0, code, message)
 
 	s := httptest.NewServer(router)
@@ -513,7 +514,7 @@ func TestWsStmt(t *testing.T) {
 	}()
 
 	// connect
-	connReq := ConnRequest{ReqID: 1, User: "root", Password: "taosdata", DB: "test_ws_stmt"}
+	connReq := ConnRequest{ReqID: 1, User: "root", Password: "taosdata", DB: "test_ws_stmt_ws"}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
 	var connResp BaseResponse
@@ -533,7 +534,7 @@ func TestWsStmt(t *testing.T) {
 	assert.Equal(t, 0, initResp.Code, initResp.Message)
 
 	// prepare
-	prepareReq := StmtPrepareRequest{ReqID: 3, StmtID: initResp.StmtID, SQL: "insert into ? using test_ws_stmt.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"}
+	prepareReq := StmtPrepareRequest{ReqID: 3, StmtID: initResp.StmtID, SQL: "insert into ? using test_ws_stmt_ws.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"}
 	resp, err = doWebSocket(ws, STMTPrepare, &prepareReq)
 	assert.NoError(t, err)
 	var prepareResp StmtPrepareResponse
@@ -544,7 +545,7 @@ func TestWsStmt(t *testing.T) {
 	assert.True(t, prepareResp.IsInsert)
 
 	// set table name
-	setTableNameReq := StmtSetTableNameRequest{ReqID: 4, StmtID: prepareResp.StmtID, Name: "test_ws_stmt.ct1"}
+	setTableNameReq := StmtSetTableNameRequest{ReqID: 4, StmtID: prepareResp.StmtID, Name: "test_ws_stmt_ws.ct1"}
 	resp, err = doWebSocket(ws, STMTSetTableName, &setTableNameReq)
 	assert.NoError(t, err)
 	var setTableNameResp BaseResponse
@@ -641,7 +642,7 @@ func TestWsStmt(t *testing.T) {
 	assert.Equal(t, 0, closeResp.Code, closeResp.Message)
 
 	// query
-	queryReq := QueryRequest{Sql: "select * from test_ws_stmt.stb"}
+	queryReq := QueryRequest{Sql: "select * from test_ws_stmt_ws.stb"}
 	resp, err = doWebSocket(ws, WSQuery, &queryReq)
 	assert.NoError(t, err)
 	var queryResp QueryResponse
@@ -686,7 +687,7 @@ func TestWsStmt(t *testing.T) {
 	assert.Equal(t, 0, initResp.Code, initResp.Message)
 
 	// prepare
-	prepareReq = StmtPrepareRequest{StmtID: initResp.StmtID, SQL: "insert into ? using test_ws_stmt.stb tags(?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"}
+	prepareReq = StmtPrepareRequest{StmtID: initResp.StmtID, SQL: "insert into ? using test_ws_stmt_ws.stb tags(?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"}
 	resp, err = doWebSocket(ws, STMTPrepare, &prepareReq)
 	assert.NoError(t, err)
 	err = json.Unmarshal(resp, &prepareResp)
@@ -694,7 +695,7 @@ func TestWsStmt(t *testing.T) {
 	assert.Equal(t, 0, prepareResp.Code, prepareResp.Message)
 
 	// set table name
-	setTableNameReq = StmtSetTableNameRequest{StmtID: prepareResp.StmtID, Name: "test_ws_stmt.ct2"}
+	setTableNameReq = StmtSetTableNameRequest{StmtID: prepareResp.StmtID, Name: "test_ws_stmt_ws.ct2"}
 	resp, err = doWebSocket(ws, STMTSetTableName, &setTableNameReq)
 	assert.NoError(t, err)
 	err = json.Unmarshal(resp, &setTableNameResp)
@@ -774,7 +775,7 @@ func TestWsStmt(t *testing.T) {
 	assert.Equal(t, 0, execResp.Code, execResp.Message)
 
 	// query
-	queryReq = QueryRequest{Sql: "select * from test_ws_stmt.ct2"}
+	queryReq = QueryRequest{Sql: "select * from test_ws_stmt_ws.ct2"}
 	resp, err = doWebSocket(ws, WSQuery, &queryReq)
 	assert.NoError(t, err)
 	err = json.Unmarshal(resp, &queryResp)

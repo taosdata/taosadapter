@@ -28,22 +28,26 @@ func TestAuth(t *testing.T) {
 	RegisterGenerateAuth(router)
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:33333"
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 401, w.Code)
 
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest("GET", "/genauth/root/taosdata/aaa", nil)
+	req.RemoteAddr = "127.0.0.1:33333"
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	token := w.Body.Bytes()
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:33333"
 	tokenStr := base64.StdEncoding.EncodeToString(token)
 	req.Header.Set("Authorization", "Basic "+tokenStr)
 	router.ServeHTTP(w, req)

@@ -31,10 +31,11 @@ func (ws *webSocketCtl) Init(ctl gin.IRouter) {
 func initController() *webSocketCtl {
 	m := melody.New()
 	m.Config.MaxMessageSize = 0
+	m.UpGrader.EnableCompression = true
 
 	m.HandleConnect(func(session *melody.Session) {
 		logger.Debugln("ws connect")
-		session.Set(TaosKey, newHandler())
+		session.Set(TaosKey, newHandler(session))
 	})
 	m.HandleMessage(func(session *melody.Session, data []byte) {
 		if m.IsClosed() {

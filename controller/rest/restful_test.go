@@ -40,6 +40,7 @@ func BenchmarkRestful(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		body := strings.NewReader("show databases")
 		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 		router.ServeHTTP(w, req)
 		assert.Equal(b, 200, w.Code)
@@ -53,6 +54,7 @@ func TestSql(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("show databases")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql/log", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -64,6 +66,7 @@ func TestSql(t *testing.T) {
 func TestLogin(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/rest/login/root/password", nil)
+	req.RemoteAddr = "127.0.0.1:33333"
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 401, w.Code)
 	req, _ = http.NewRequest(http.MethodGet, "/rest/login/root111111111111111111111111111/password", nil)
@@ -78,6 +81,7 @@ func TestWrongSql(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("wrong sql")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql/log", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -90,6 +94,7 @@ func TestNoSql(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql/log", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 400, w.Code)
@@ -103,24 +108,28 @@ func TestAllType(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("create database if not exists test_alltype")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists alltype(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20)) tags (info json)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`insert into t1 using alltype tags('{"table":"t1"}') values (%d,true,2,3,4,5,6,7,8,9,10.123,11.123,'中文"binary','中文nchar')`, now))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`select alltype.*,info->'table' from alltype where ts = %d`, now))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -146,6 +155,7 @@ func TestAllType(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop database if exists test_alltype")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -160,24 +170,28 @@ func TestRowLimit(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("create database if not exists test_rowlimit")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists test_rowlimit(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20)) tags (info json)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_rowlimit", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`insert into t1 using test_rowlimit tags('{"table":"t1"}') values (%d,true,2,3,4,5,6,7,8,9,10,11,'中文"binary','中文nchar')(%d,false,12,13,14,15,16,17,18,19,110,111,'中文"binary','中文nchar')`, now, now+1))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_rowlimit", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
 	body = strings.NewReader(`select test_rowlimit.*,info->'table' from test_rowlimit`)
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_rowlimit", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -205,6 +219,7 @@ func TestRowLimit(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader(`drop database if exists test_rowlimit`)
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -221,6 +236,7 @@ func TestUpload(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("create database if not exists `test_Upload`")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -228,6 +244,7 @@ func TestUpload(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists `test_Upload`.`T2`(ts timestamp,n1 int,n2 double,n3 binary(30))")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -247,6 +264,7 @@ func TestUpload(t *testing.T) {
 		return
 	}
 	req, _ = http.NewRequest(http.MethodPost, "/rest/upload?db=test_Upload&table=T2&batch=10", payload)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	router.ServeHTTP(w, req)
@@ -255,6 +273,7 @@ func TestUpload(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("select n1,n2,n3 from `test_Upload`.`T2`")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -277,6 +296,7 @@ func TestUpload(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop database if exists `test_Upload`")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -290,24 +310,28 @@ func TestPrecision(t *testing.T) {
 		w := httptest.NewRecorder()
 		body := strings.NewReader("create database if not exists test_pc_ms precision 'ms'")
 		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 		w = httptest.NewRecorder()
 		body = strings.NewReader("create table if not exists t1(ts timestamp,v1 bool)")
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_pc_ms", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 		w = httptest.NewRecorder()
 		body = strings.NewReader(fmt.Sprintf(`insert into t1 values ('%s',true)`, nowT.Format(time.RFC3339Nano)))
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_pc_ms", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 		w = httptest.NewRecorder()
 		body = strings.NewReader(`select * from t1 limit 1`)
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_pc_ms", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
@@ -320,6 +344,7 @@ func TestPrecision(t *testing.T) {
 		w = httptest.NewRecorder()
 		body = strings.NewReader(`drop database test_pc_ms`)
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
@@ -328,24 +353,28 @@ func TestPrecision(t *testing.T) {
 		w := httptest.NewRecorder()
 		body := strings.NewReader("create database if not exists test_pc_us precision 'us'")
 		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 		w = httptest.NewRecorder()
 		body = strings.NewReader("create table if not exists t1(ts timestamp,v1 bool)")
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_pc_us", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 		w = httptest.NewRecorder()
 		body = strings.NewReader(fmt.Sprintf(`insert into t1 values ('%s',true)`, nowT.Format(time.RFC3339Nano)))
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_pc_us", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 		w = httptest.NewRecorder()
 		body = strings.NewReader(`select * from t1 limit 1`)
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_pc_us", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
@@ -358,6 +387,7 @@ func TestPrecision(t *testing.T) {
 		w = httptest.NewRecorder()
 		body = strings.NewReader(`drop database test_pc_us`)
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
@@ -366,24 +396,28 @@ func TestPrecision(t *testing.T) {
 		w := httptest.NewRecorder()
 		body := strings.NewReader("create database if not exists test_pc_ns precision 'ns'")
 		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 		w = httptest.NewRecorder()
 		body = strings.NewReader("create table if not exists t1(ts timestamp,v1 bool)")
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_pc_ns", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 		w = httptest.NewRecorder()
 		body = strings.NewReader(fmt.Sprintf(`insert into t1 values ('%s',true)`, nowT.Format(time.RFC3339Nano)))
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_pc_ns", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
 		w = httptest.NewRecorder()
 		body = strings.NewReader(`select * from t1 limit 1`)
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_pc_ns", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
@@ -396,6 +430,7 @@ func TestPrecision(t *testing.T) {
 		w = httptest.NewRecorder()
 		body = strings.NewReader(`drop database test_pc_ns`)
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
@@ -409,18 +444,21 @@ func TestTimeZone(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("create database if not exists test_tz")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists t1(ts timestamp,v1 bool)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_tz", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`insert into t1 values ('%s',true)`, nowT.Format(time.RFC3339Nano)))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_tz", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -437,6 +475,7 @@ func TestTimeZone(t *testing.T) {
 		w := httptest.NewRecorder()
 		body := strings.NewReader(`select * from t1 limit 1`)
 		req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/rest/sql/test_tz?tz=%s", zone), body)
+		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
@@ -450,6 +489,7 @@ func TestTimeZone(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader(`drop database test_tz`)
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -461,6 +501,7 @@ func TestBadRequest(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("wrong sql")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -469,6 +510,7 @@ func TestBadRequest(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("wrong sql")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -480,6 +522,7 @@ func TestInternalError(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("CREATE MNODE ON DNODE 1")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
@@ -488,6 +531,7 @@ func TestInternalError(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("CREATE MNODE ON DNODE 1")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)

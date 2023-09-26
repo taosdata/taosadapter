@@ -1,6 +1,8 @@
 package prometheus
 
 import (
+	"errors"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -96,10 +98,14 @@ func (p *Plugin) Read(c *gin.Context) {
 	}
 	logger.Debug("read protobuf unmarshal cost:", time.Since(start))
 	start = time.Now()
-	taosConn, err := commonpool.GetConnection(user, password)
+	taosConn, err := commonpool.GetConnection(user, password, net.ParseIP(c.RemoteIP()))
 	if err != nil {
 		logger.WithError(err).Error("connect server error")
-		c.String(http.StatusBadRequest, err.Error())
+		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
+			c.String(http.StatusForbidden, err.Error())
+			return
+		}
+		c.String(http.StatusUnauthorized, err.Error())
 		return
 	}
 	logger.Debug("read commonpool.GetConnection cost:", time.Since(start))
@@ -179,10 +185,14 @@ func (p *Plugin) Write(c *gin.Context) {
 		return
 	}
 	start = time.Now()
-	taosConn, err := commonpool.GetConnection(user, password)
+	taosConn, err := commonpool.GetConnection(user, password, net.ParseIP(c.RemoteIP()))
 	if err != nil {
 		logger.WithError(err).Error("connect server error")
-		c.String(http.StatusBadRequest, err.Error())
+		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
+			c.String(http.StatusForbidden, err.Error())
+			return
+		}
+		c.String(http.StatusUnauthorized, err.Error())
 		return
 	}
 	logger.Debug("commonpool.GetConnection cost:", time.Since(start))
