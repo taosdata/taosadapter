@@ -335,10 +335,11 @@ func (h *messageHandler) handleVersion(_ context.Context, _ Request, _ *logrus.E
 }
 
 type ConnRequest struct {
-	ReqID    uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
-	User     string `json:"user"`
-	Password string `json:"password"`
-	DB       string `json:"db"`
+	ReqID    uint64      `json:"req_id"` // Deprecated: use Request.ReqID instead
+	User     string      `json:"user"`
+	Password string      `json:"password"`
+	DB       string      `json:"db"`
+	Mode     map[int]int `json:"mode"`
 }
 
 func (h *messageHandler) handleConnect(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
@@ -392,6 +393,17 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		var taosErr *errors2.TaosError
 		errors.As(err, &taosErr)
 		return &BaseResponse{Code: int(taosErr.Code), Message: taosErr.ErrStr}
+	}
+	if len(req.Mode) > 0 {
+		for k, v := range req.Mode {
+			code := wrapper.TaosSetConnMode(conn, k, v)
+			if code != 0 {
+				thread.Lock()
+				wrapper.TaosClose(conn)
+				thread.Unlock()
+				return &BaseResponse{Code: code, Message: wrapper.TaosErrorStr(nil)}
+			}
+		}
 	}
 	h.conn = conn
 	go h.waitSignal()
