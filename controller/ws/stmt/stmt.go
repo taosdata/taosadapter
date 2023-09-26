@@ -1127,6 +1127,7 @@ func (t *TaosStmt) Close() {
 	done := make(chan struct{})
 	go func() {
 		t.wg.Wait()
+		close(done)
 	}()
 	select {
 	case <-ctx.Done():
