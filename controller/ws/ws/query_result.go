@@ -21,6 +21,7 @@ type QueryResult struct {
 	Block       unsafe.Pointer
 	precision   int
 	buffer      *bytes.Buffer
+	inStmt      bool
 	sync.Mutex
 }
 
@@ -29,11 +30,17 @@ func (r *QueryResult) free() {
 	defer r.Unlock()
 
 	r.Block = nil
-	if r.TaosResult != nil {
-		thread.Lock()
-		wrapper.TaosFreeResult(r.TaosResult)
-		thread.Unlock()
+	if r.TaosResult == nil {
+		return
 	}
+
+	if r.inStmt { // stmt result is no need to free
+		return
+	}
+
+	thread.Lock()
+	wrapper.TaosFreeResult(r.TaosResult)
+	thread.Unlock()
 }
 
 type QueryResultHolder struct {
@@ -63,11 +70,11 @@ func (h *QueryResultHolder) Get(index uint64) *QueryResult {
 
 	node := h.results.Front()
 	for {
-		if node == nil {
+		if node == nil || node.Value == nil {
 			return nil
 		}
-		result := node.Value.(*QueryResult)
-		if result.index == index {
+
+		if result := node.Value.(*QueryResult); result.index == index {
 			return result
 		}
 		node = node.Next()
@@ -77,34 +84,16 @@ func (h *QueryResultHolder) Get(index uint64) *QueryResult {
 func (h *QueryResultHolder) FreeResultByID(index uint64) {
 	h.Lock()
 	defer h.Unlock()
-	node := h.results.Front()
-	for {
-		if node == nil {
-			return
-		}
-		result := node.Value.(*QueryResult)
-		if result.index == index {
-			h.results.Remove(node)
-			result.free()
-			return
-		}
-		node = node.Next()
-	}
-}
-
-func (h *QueryResultHolder) FreeResult(item *QueryResult) {
-	h.Lock()
-	defer h.Unlock()
 
 	node := h.results.Front()
 	for {
-		if node == nil {
+		if node == nil || node.Value == nil {
 			return
 		}
-		result := node.Value.(*QueryResult)
-		if result == item {
-			h.results.Remove(node)
+
+		if result := node.Value.(*QueryResult); result.index == index {
 			result.free()
+			h.results.Remove(node)
 			return
 		}
 		node = node.Next()
@@ -115,9 +104,13 @@ func (h *QueryResultHolder) FreeAll() {
 	h.Lock()
 	defer h.Unlock()
 
+	if h.results.Len() == 0 {
+		return
+	}
+
 	node := h.results.Front()
 	for {
-		if node == nil {
+		if node == nil || node.Value == nil {
 			return
 		}
 		next := node.Next()
@@ -129,8 +122,9 @@ func (h *QueryResultHolder) FreeAll() {
 }
 
 type StmtItem struct {
-	index uint64
-	stmt  unsafe.Pointer
+	index    uint64
+	stmt     unsafe.Pointer
+	isInsert bool
 	sync.RWMutex
 }
 
@@ -138,11 +132,13 @@ func (s *StmtItem) free() {
 	s.Lock()
 	defer s.Unlock()
 
-	if s.stmt != nil {
-		thread.Lock()
-		wrapper.TaosStmtClose(s.stmt)
-		thread.Unlock()
+	if s.stmt == nil {
+		return
 	}
+
+	thread.Lock()
+	wrapper.TaosStmtClose(s.stmt)
+	thread.Unlock()
 }
 
 type StmtHolder struct {
@@ -183,37 +179,23 @@ func (h *StmtHolder) Get(index uint64) *StmtItem {
 	}
 }
 
-func (h *StmtHolder) FreeResultByID(index uint64) {
+func (h *StmtHolder) FreeStmtByID(index uint64) {
 	h.Lock()
 	defer h.Unlock()
+
+	if h.results.Len() == 0 {
+		return
+	}
+
 	node := h.results.Front()
 	for {
-		if node == nil {
+		if node == nil || node.Value == nil {
 			return
 		}
 		result := node.Value.(*StmtItem)
 		if result.index == index {
-			h.results.Remove(node)
 			result.free()
-			return
-		}
-		node = node.Next()
-	}
-}
-
-func (h *StmtHolder) FreeResult(item *StmtItem) {
-	h.Lock()
-	defer h.Unlock()
-
-	node := h.results.Front()
-	for {
-		if node == nil {
-			return
-		}
-		result := node.Value.(*StmtItem)
-		if result == item {
 			h.results.Remove(node)
-			result.free()
 			return
 		}
 		node = node.Next()
@@ -224,9 +206,13 @@ func (h *StmtHolder) FreeAll() {
 	h.Lock()
 	defer h.Unlock()
 
+	if h.results.Len() == 0 {
+		return
+	}
+
 	node := h.results.Front()
 	for {
-		if node == nil {
+		if node == nil || node.Value == nil {
 			return
 		}
 		next := node.Next()
