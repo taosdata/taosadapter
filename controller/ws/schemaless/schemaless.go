@@ -130,6 +130,7 @@ type TaosSchemaless struct {
 	closed              bool
 	exit                chan struct{}
 	whitelistChangeChan chan int64
+	dropUserNotify      chan struct{}
 	session             *melody.Session
 	ip                  net.IP
 	wg                  sync.WaitGroup
@@ -142,6 +143,7 @@ func NewTaosSchemaless(session *melody.Session) *TaosSchemaless {
 	return &TaosSchemaless{
 		exit:                make(chan struct{}),
 		whitelistChangeChan: make(chan int64, 1),
+		dropUserNotify:      make(chan struct{}, 1),
 		session:             session,
 		ip:                  ipAddr,
 	}
@@ -153,6 +155,18 @@ func (t *TaosSchemaless) waitSignal() {
 			return
 		}
 		select {
+		case <-t.dropUserNotify:
+			t.Lock()
+			if t.closed {
+				t.Unlock()
+				return
+			}
+			logger := wstool.GetLogger(t.session)
+			logger.WithField("clientIP", t.session.Request.RemoteAddr).Info("user dropped! close connection!")
+			t.session.Close()
+			t.Unlock()
+			t.close()
+			return
 		case <-t.whitelistChangeChan:
 			t.Lock()
 			if t.closed {
@@ -170,8 +184,8 @@ func (t *TaosSchemaless) waitSignal() {
 			if !valid {
 				wstool.GetLogger(t.session).WithField("clientIP", t.session.Request.RemoteAddr).Errorln("ip not in whitelist! close connection!")
 				t.session.Close()
-				t.close()
 				t.Unlock()
+				t.close()
 				return
 			}
 			t.Unlock()
@@ -189,6 +203,8 @@ func (t *TaosSchemaless) close() {
 	}
 	t.closed = true
 	close(t.exit)
+	close(t.whitelistChangeChan)
+	close(t.dropUserNotify)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	done := make(chan struct{})
@@ -265,6 +281,14 @@ func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, r
 		return
 	}
 	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeChan)
+	if err != nil {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		wstool.WSError(ctx, session, err, SchemalessConn, req.ReqID)
+		return
+	}
+	err = tool.RegisterDropUser(conn, t.dropUserNotify)
 	if err != nil {
 		thread.Lock()
 		wrapper.TaosClose(conn)

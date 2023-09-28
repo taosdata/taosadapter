@@ -34,10 +34,11 @@ import (
 )
 
 type messageHandler struct {
-	conn   unsafe.Pointer
-	closed bool
-	once   sync.Once
-	wait   sync.WaitGroup
+	conn           unsafe.Pointer
+	closed         bool
+	once           sync.Once
+	wait           sync.WaitGroup
+	dropUserNotify chan struct{}
 	sync.RWMutex
 
 	queryResults *QueryResultHolder // ws query
@@ -57,6 +58,7 @@ func newHandler(session *melody.Session) *messageHandler {
 		stmts:               NewStmtHolder(),
 		exit:                make(chan struct{}),
 		whitelistChangeChan: make(chan int64, 1),
+		dropUserNotify:      make(chan struct{}, 1),
 		session:             session,
 		ip:                  ipAddr,
 	}
@@ -68,6 +70,17 @@ func (h *messageHandler) waitSignal() {
 			return
 		}
 		select {
+		case <-h.dropUserNotify:
+			h.Lock()
+			if h.closed {
+				h.Unlock()
+				return
+			}
+			wstool.GetLogger(h.session).WithField("clientIP", h.session.Request.RemoteAddr).Info("user dropped! close connection!")
+			h.session.Close()
+			h.Unlock()
+			h.Close()
+			return
 		case <-h.whitelistChangeChan:
 			h.Lock()
 			if h.closed {
@@ -79,14 +92,15 @@ func (h *messageHandler) waitSignal() {
 				wstool.GetLogger(h.session).WithField("clientIP", h.session.Request.RemoteAddr).WithError(err).Errorln("get whitelist error! close connection!")
 				h.session.Close()
 				h.Unlock()
+				h.Close()
 				return
 			}
 			valid := tool.CheckWhitelist(whitelist, h.ip)
 			if !valid {
 				wstool.GetLogger(h.session).WithField("clientIP", h.session.Request.RemoteAddr).Errorln("ip not in whitelist! close connection!")
 				h.session.Close()
-				h.Close()
 				h.Unlock()
+				h.Close()
 				return
 			}
 			h.Unlock()
@@ -105,6 +119,8 @@ func (h *messageHandler) Close() {
 	}
 	h.closed = true
 	close(h.exit)
+	close(h.whitelistChangeChan)
+	close(h.dropUserNotify)
 	h.stop()
 }
 
@@ -394,11 +410,20 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		errors.As(err, &taosErr)
 		return &BaseResponse{Code: int(taosErr.Code), Message: taosErr.ErrStr}
 	}
+	err = tool.RegisterDropUser(conn, h.dropUserNotify)
+	if err != nil {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		var taosErr *errors2.TaosError
+		errors.As(err, &taosErr)
+		return &BaseResponse{Code: int(taosErr.Code), Message: taosErr.ErrStr}
+	}
 	if req.Mode != nil {
 		switch *req.Mode {
-		case 0:
+		case common.TAOS_CONN_MODE_BI:
 			// BI mode
-			code := wrapper.TaosSetConnMode(conn, 0, 1)
+			code := wrapper.TaosSetConnMode(conn, common.TAOS_CONN_MODE_BI, 1)
 			if code != 0 {
 				thread.Lock()
 				wrapper.TaosClose(conn)
