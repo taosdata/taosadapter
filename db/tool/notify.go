@@ -41,3 +41,11 @@ func RegisterChangeWhitelist(conn unsafe.Pointer, versionChan chan int64) error 
 	}
 	return nil
 }
+
+func RegisterDropUser(conn unsafe.Pointer, dropChan chan struct{}) error {
+	errCode := wrapper.TaosSetNotifyCB(conn, cgo.NewHandle(dropChan), common.TAOS_NOTIFY_USER_DROPPED)
+	if errCode != 0 {
+		return errors.NewError(int(errCode), wrapper.TaosErrorStr(nil))
+	}
+	return nil
+}

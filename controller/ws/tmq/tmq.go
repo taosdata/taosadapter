@@ -245,6 +245,7 @@ type TMQ struct {
 	nextTime            time.Time
 	ticker              *time.Timer
 	exit                chan struct{}
+	dropUserNotify      chan struct{}
 	whitelistChangeChan chan int64
 	session             *melody.Session
 	ip                  net.IP
@@ -263,6 +264,7 @@ func NewTaosTMQ(session *melody.Session) *TMQ {
 		isAutoCommit:        true,
 		exit:                make(chan struct{}),
 		whitelistChangeChan: make(chan int64, 1),
+		dropUserNotify:      make(chan struct{}, 1),
 		session:             session,
 		ip:                  ipAddr,
 	}
@@ -274,6 +276,18 @@ func (t *TMQ) waitSignal() {
 			return
 		}
 		select {
+		case <-t.dropUserNotify:
+			t.Lock()
+			if t.closed {
+				t.Unlock()
+				return
+			}
+			logger := wstool.GetLogger(t.session)
+			logger.WithField("clientIP", t.session.Request.RemoteAddr).Info("user dropped! close connection!")
+			t.session.Close()
+			t.Unlock()
+			t.Close(logger)
+			return
 		case <-t.whitelistChangeChan:
 			t.Lock()
 			if t.closed {
@@ -282,18 +296,20 @@ func (t *TMQ) waitSignal() {
 			}
 			whitelist, err := tool.GetWhitelist(t.conn)
 			if err != nil {
-				wstool.GetLogger(t.session).WithField("clientIP", t.session.Request.RemoteAddr).WithError(err).Errorln("get whitelist error! close connection!")
+				logger := wstool.GetLogger(t.session)
+				logger.WithField("clientIP", t.session.Request.RemoteAddr).WithError(err).Errorln("get whitelist error! close connection!")
 				t.session.Close()
 				t.Unlock()
+				t.Close(logger)
 				return
 			}
 			valid := tool.CheckWhitelist(whitelist, t.ip)
 			if !valid {
-				wstool.GetLogger(t.session).WithField("clientIP", t.session.Request.RemoteAddr).Errorln("ip not in whitelist! close connection!")
+				logger := wstool.GetLogger(t.session)
+				logger.WithField("clientIP", t.session.Request.RemoteAddr).Errorln("ip not in whitelist! close connection!")
 				t.session.Close()
-				logger := t.session.MustGet("logger").(*logrus.Entry)
-				t.Close(logger)
 				t.Unlock()
+				t.Close(logger)
 				return
 			}
 			t.Unlock()
@@ -548,6 +564,19 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		return
 	}
 	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeChan)
+	if err != nil {
+		s = log.GetLogNow(isDebug)
+		t.asyncLocker.Lock()
+		logger.Debugln("tmq_consumer_close get thread lock cost:", log.GetLogDuration(isDebug, s))
+		s = log.GetLogNow(isDebug)
+		asynctmq.TaosaTMQConsumerCloseA(t.thread, t.consumer, t.handler.Handler)
+		<-t.handler.Caller.ConsumerCloseResult
+		logger.Debugln("tmq_consumer_close cost:", log.GetLogDuration(isDebug, s))
+		t.asyncLocker.Unlock()
+		wstool.WSError(ctx, session, err, TMQSubscribe, req.ReqID)
+		return
+	}
+	err = tool.RegisterDropUser(conn, t.dropUserNotify)
 	if err != nil {
 		s = log.GetLogNow(isDebug)
 		t.asyncLocker.Lock()
@@ -1142,6 +1171,8 @@ func (t *TMQ) Close(logger logrus.FieldLogger) {
 	}
 	t.closed = true
 	close(t.exit)
+	close(t.whitelistChangeChan)
+	close(t.dropUserNotify)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	done := make(chan struct{})

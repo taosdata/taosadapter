@@ -254,6 +254,7 @@ type TaosStmt struct {
 	closed              bool
 	exit                chan struct{}
 	whitelistChangeChan chan int64
+	dropUserNotify      chan struct{}
 	session             *melody.Session
 	ip                  net.IP
 	wg                  sync.WaitGroup
@@ -266,6 +267,18 @@ func (t *TaosStmt) waitSignal() {
 			return
 		}
 		select {
+		case <-t.dropUserNotify:
+			t.Lock()
+			if t.closed {
+				t.Unlock()
+				return
+			}
+			logger := wstool.GetLogger(t.session)
+			logger.WithField("clientIP", t.session.Request.RemoteAddr).Info("user dropped! close connection!")
+			t.session.Close()
+			t.Unlock()
+			t.Close()
+			return
 		case <-t.whitelistChangeChan:
 			t.Lock()
 			if t.closed {
@@ -277,14 +290,15 @@ func (t *TaosStmt) waitSignal() {
 				wstool.GetLogger(t.session).WithField("clientIP", t.session.Request.RemoteAddr).WithError(err).Errorln("get whitelist error! close connection!")
 				t.session.Close()
 				t.Unlock()
+				t.Close()
 				return
 			}
 			valid := tool.CheckWhitelist(whitelist, t.ip)
 			if !valid {
 				wstool.GetLogger(t.session).WithField("clientIP", t.session.Request.RemoteAddr).Errorln("ip not in whitelist! close connection!")
 				t.session.Close()
-				t.Close()
 				t.Unlock()
+				t.Close()
 				return
 			}
 			t.Unlock()
@@ -317,6 +331,7 @@ func NewTaosStmt(session *melody.Session) *TaosStmt {
 		StmtList:            list.New(),
 		exit:                make(chan struct{}),
 		whitelistChangeChan: make(chan int64, 1),
+		dropUserNotify:      make(chan struct{}, 1),
 		session:             session,
 		ip:                  ipAddr,
 	}
@@ -416,6 +431,14 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 		return
 	}
 	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeChan)
+	if err != nil {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		wstool.WSError(ctx, session, err, STMTConnect, req.ReqID)
+		return
+	}
+	err = tool.RegisterDropUser(conn, t.dropUserNotify)
 	if err != nil {
 		thread.Lock()
 		wrapper.TaosClose(conn)
@@ -1122,6 +1145,8 @@ func (t *TaosStmt) Close() {
 	}
 	t.closed = true
 	close(t.exit)
+	close(t.whitelistChangeChan)
+	close(t.dropUserNotify)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	done := make(chan struct{})

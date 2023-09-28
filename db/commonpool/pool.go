@@ -24,26 +24,28 @@ import (
 )
 
 type ConnectorPool struct {
-	notifyChan    chan int32
-	whitelistChan chan int64
-	user          string
-	password      string
-	pool          *connectpool.ConnectPool
-	logger        *logrus.Entry
-	once          sync.Once
-	ctx           context.Context
-	cancel        context.CancelFunc
-	ipNetsLock    sync.RWMutex
-	ipNets        []*net.IPNet
+	changePassChan chan int32
+	whitelistChan  chan int64
+	dropUserChan   chan struct{}
+	user           string
+	password       string
+	pool           *connectpool.ConnectPool
+	logger         *logrus.Entry
+	once           sync.Once
+	ctx            context.Context
+	cancel         context.CancelFunc
+	ipNetsLock     sync.RWMutex
+	ipNets         []*net.IPNet
 }
 
 func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	cp := &ConnectorPool{
-		user:          user,
-		password:      password,
-		notifyChan:    make(chan int32, 1),
-		whitelistChan: make(chan int64, 1),
-		logger:        log.GetLogger("connect_pool").WithField("user", user),
+		user:           user,
+		password:       password,
+		changePassChan: make(chan int32, 1),
+		whitelistChan:  make(chan int64, 1),
+		dropUserChan:   make(chan struct{}, 1),
+		logger:         log.GetLogger("connect_pool").WithField("user", user),
 	}
 	maxConnect := config.Conf.Pool.MaxConnect
 	if maxConnect == 0 {
@@ -62,9 +64,17 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	}
 	cp.pool = p
 	v, _ := p.Get()
-	// notify
+	// notify modify
 	cp.ctx, cp.cancel = context.WithCancel(context.Background())
-	errCode := wrapper.TaosSetNotifyCB(v, cgo.NewHandle(cp.notifyChan), common.TAOS_NOTIFY_PASSVER)
+	errCode := wrapper.TaosSetNotifyCB(v, cgo.NewHandle(cp.changePassChan), common.TAOS_NOTIFY_PASSVER)
+	if errCode != 0 {
+		errStr := wrapper.TaosErrorStr(nil)
+		p.Put(v)
+		p.Release()
+		return nil, tErrors.NewError(int(errCode), errStr)
+	}
+	// notify drop
+	errCode = wrapper.TaosSetNotifyCB(v, cgo.NewHandle(cp.dropUserChan), common.TAOS_NOTIFY_USER_DROPPED)
 	if errCode != 0 {
 		errStr := wrapper.TaosErrorStr(nil)
 		p.Put(v)
@@ -97,8 +107,16 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	p.Put(v)
 	go func() {
 		select {
-		case <-cp.notifyChan:
+		case <-cp.changePassChan:
 			// password changed
+			cp.logger.Info("password changed")
+			connectionLocker.Lock()
+			defer connectionLocker.Unlock()
+			cp.Release()
+			return
+		case <-cp.dropUserChan:
+			// user dropped
+			cp.logger.Info("user dropped")
 			connectionLocker.Lock()
 			defer connectionLocker.Unlock()
 			cp.Release()
@@ -198,8 +216,9 @@ func (cp *ConnectorPool) Release() {
 		if exist && v == cp {
 			connectionMap.Delete(cp.user)
 		}
-		close(cp.notifyChan)
+		close(cp.changePassChan)
 		close(cp.whitelistChan)
+		close(cp.dropUserChan)
 		cp.pool.Release()
 		cp.logger.Warnln("connector released")
 	})
