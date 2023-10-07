@@ -22,6 +22,8 @@ import (
 	_ "github.com/taosdata/taosadapter/v3/controller/rest"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 	"github.com/taosdata/taosadapter/v3/version"
 )
@@ -29,17 +31,21 @@ import (
 var router *gin.Engine
 
 func TestMain(m *testing.M) {
+	viper.Set("monitor.writeToTD", true)
+	viper.Set("monitor.writeInterval", time.Millisecond*10)
 	viper.Set("pool.maxConnect", 10000)
 	viper.Set("pool.maxIdle", 10000)
 	viper.Set("logLevel", "debug")
 	config.Init()
 	db.PrepareConnection()
+	log.ConfigLog()
 	gin.SetMode(gin.ReleaseMode)
 	router = gin.New()
 	controllers := controller.GetControllers()
 	for _, webController := range controllers {
 		webController.Init(router)
 	}
+	monitor.StartMonitor()
 	m.Run()
 }
 
@@ -307,6 +313,7 @@ func TestWsQuery(t *testing.T) {
 	assert.Equal(t, 0, fetchResp.Code, fetchResp.Message)
 
 	assert.Equal(t, true, fetchResp.Completed)
+	time.Sleep(time.Second)
 }
 
 func checkBlockResult(t *testing.T, blockResult [][]driver.Value) {

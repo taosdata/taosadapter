@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/log"
 )
 
 var router *gin.Engine
@@ -28,6 +29,7 @@ func TestMain(m *testing.M) {
 	viper.Set("logLevel", "debug")
 	config.Init()
 	db.PrepareConnection()
+	log.ConfigLog()
 	gin.SetMode(gin.ReleaseMode)
 	router = gin.New()
 	var ctl Restful
