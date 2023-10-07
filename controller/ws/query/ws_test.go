@@ -20,6 +20,7 @@ import (
 	_ "github.com/taosdata/taosadapter/v3/controller/rest"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 )
 
@@ -31,6 +32,7 @@ func TestMain(m *testing.M) {
 	viper.Set("logLevel", "debug")
 	config.Init()
 	db.PrepareConnection()
+	log.ConfigLog()
 	gin.SetMode(gin.ReleaseMode)
 	router = gin.New()
 	controllers := controller.GetControllers()

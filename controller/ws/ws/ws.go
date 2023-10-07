@@ -34,7 +34,7 @@ func initController() *webSocketCtl {
 
 	m.HandleConnect(func(session *melody.Session) {
 		logger.Debugln("ws connect")
-		session.Set(TaosKey, newHandler())
+		session.Set(TaosKey, newHandler(session))
 	})
 	m.HandleMessage(func(session *melody.Session, data []byte) {
 		if m.IsClosed() {

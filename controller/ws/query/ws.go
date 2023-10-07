@@ -5,6 +5,8 @@ import (
 	"container/list"
 	"context"
 	"encoding/json"
+	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -38,7 +40,7 @@ func NewQueryController() *QueryController {
 	queryM.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws connect")
-		session.Set(TaosSessionKey, NewTaos())
+		session.Set(TaosSessionKey, NewTaos(session))
 	})
 
 	queryM.HandleMessage(func(session *melody.Session, data []byte) {
@@ -207,11 +209,14 @@ type Taos struct {
 	Results      *list.List
 	resultIndex  uint64
 	closed       bool
+	ipStr        string
 	sync.Mutex
 }
 
-func NewTaos() *Taos {
-	return &Taos{Results: list.New()}
+func NewTaos(session *melody.Session) *Taos {
+	host, _, _ := net.SplitHostPort(strings.TrimSpace(session.Request.RemoteAddr))
+	ipAddr := net.ParseIP(host)
+	return &Taos{Results: list.New(), ipStr: ipAddr.String()}
 }
 
 type Result struct {
@@ -358,6 +363,13 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	s = log.GetLogNow(isDebug)
+	if !config.Conf.Monitor.Disable {
+		if config.Conf.Monitor.DisableClientIP {
+			log.WSTotalQueryRequest.WithLabelValues("invisible").Inc()
+		} else {
+			log.WSTotalQueryRequest.WithLabelValues(t.ipStr).Inc()
+		}
+	}
 	result, _ := async.GlobalAsync.TaosQuery(t.conn, req.SQL, handler, int64(req.ReqID))
 	logger.Debugln("query cost ", log.GetLogDuration(isDebug, s))
 	code := wrapper.TaosError(result.Res)
@@ -377,6 +389,17 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
 	logger.Debugln("is_update_query cost:", log.GetLogDuration(isDebug, s))
 	queryResult := &WSQueryResult{Action: WSQuery, ReqID: req.ReqID}
+	if !config.Conf.Monitor.Disable {
+		clientIP := t.ipStr
+		if config.Conf.Monitor.DisableClientIP {
+			clientIP = "invisible"
+		}
+		if isUpdate {
+			log.WSUpdateQueryRequest.WithLabelValues(clientIP).Inc()
+		} else {
+			log.WSSelectQueryRequest.WithLabelValues(clientIP).Inc()
+		}
+	}
 	if isUpdate {
 		var affectRows int
 		s = log.GetLogNow(isDebug)

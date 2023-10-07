@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -18,6 +20,7 @@ import (
 	errors2 "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/types"
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller/ws/stmt"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/async"
@@ -38,12 +41,16 @@ type messageHandler struct {
 
 	queryResults *QueryResultHolder // ws query
 	stmts        *StmtHolder        // stmt bind message
+	ipStr        string
 }
 
-func newHandler() *messageHandler {
+func newHandler(session *melody.Session) *messageHandler {
+	host, _, _ := net.SplitHostPort(strings.TrimSpace(session.Request.RemoteAddr))
+	ipAddr := net.ParseIP(host)
 	return &messageHandler{
 		queryResults: NewQueryResultHolder(),
 		stmts:        NewStmtHolder(),
+		ipStr:        ipAddr.String(),
 	}
 }
 
@@ -343,6 +350,13 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
+	if !config.Conf.Monitor.Disable {
+		if config.Conf.Monitor.DisableClientIP {
+			log.WSTotalQueryRequest.WithLabelValues("invisible").Inc()
+		} else {
+			log.WSTotalQueryRequest.WithLabelValues(h.ipStr).Inc()
+		}
+	}
 	result, _ := async.GlobalAsync.TaosQuery(h.conn, req.Sql, handler, int64(request.ReqID))
 	logger.Debugln("query cost ", log.GetLogDuration(isDebug, s))
 
@@ -354,7 +368,17 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
 	logger.Debugln("is_update_query cost:", log.GetLogDuration(isDebug, s))
-
+	if !config.Conf.Monitor.Disable {
+		clientIP := h.ipStr
+		if config.Conf.Monitor.DisableClientIP {
+			clientIP = "invisible"
+		}
+		if isUpdate {
+			log.WSUpdateQueryRequest.WithLabelValues(clientIP).Inc()
+		} else {
+			log.WSSelectQueryRequest.WithLabelValues(clientIP).Inc()
+		}
+	}
 	if isUpdate {
 		affectRows := wrapper.TaosAffectedRows(result.Res)
 		logger.Debugln("affected_rows cost:", log.GetLogDuration(isDebug, s))
