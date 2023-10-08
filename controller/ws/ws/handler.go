@@ -178,6 +178,16 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 		f = h.handleStmtGetTagFields
 	case STMTUseResult:
 		f = h.handleStmtUseResult
+	case STMTNumParams:
+		f = h.handleStmtNumParams
+	case STMTGetParam:
+		f = h.handleStmtGetParam
+	case WSNumFields:
+		f = h.handleNumFields
+	case WSGetCurrentDB:
+		f = h.handleGetCurrentDB
+	case WSGetServerInfo:
+		f = h.handleGetServerInfo
 	default:
 		f = h.handleDefault
 	}
@@ -1368,6 +1378,140 @@ func (h *messageHandler) handleRawBlockMessageWithFields(_ context.Context, req 
 		return &BaseResponse{Code: int(code) & 0xffff, Message: errStr}
 	}
 	return &BaseResponse{}
+}
+
+type GetCurrentDBResponse struct {
+	BaseResponse
+	DB string `json:"db"`
+}
+
+func (h *messageHandler) handleGetCurrentDB(_ context.Context, _ Request, logger *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+	thread.Lock()
+	db, err := wrapper.TaosGetCurrentDB(h.conn)
+	thread.Unlock()
+	if err != nil {
+		var taosErr *errors2.TaosError
+		errors.As(err, &taosErr)
+		logger.Errorf("## get current db error: %s", taosErr.Error())
+		return &BaseResponse{Code: int(taosErr.Code), Message: taosErr.Error()}
+	}
+	return &GetCurrentDBResponse{DB: db}
+}
+
+type GetServerInfoResponse struct {
+	BaseResponse
+	Info string `json:"info"`
+}
+
+func (h *messageHandler) handleGetServerInfo(_ context.Context, _ Request, _ *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+	thread.Lock()
+	serverInfo := wrapper.TaosGetServerInfo(h.conn)
+	thread.Unlock()
+	return &GetServerInfoResponse{Info: serverInfo}
+}
+
+type NumFieldsRequest struct {
+	ReqID    uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
+	ResultID uint64 `json:"result_id"`
+}
+
+type NumFieldsResponse struct {
+	BaseResponse
+	NumFields int `json:"num_fields"`
+}
+
+func (h *messageHandler) handleNumFields(_ context.Context, request Request, logger *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+	var req NumFieldsRequest
+	if err := json.Unmarshal(request.Args, &req); err != nil {
+		logger.Errorf("## unmarshal stmt num params request %s error: %s", request.Args, err)
+		return &BaseResponse{Code: 0xffff, Message: "unmarshal stmt num params request error"}
+	}
+
+	item := h.queryResults.Get(req.ResultID)
+	if item == nil {
+		return &BaseResponse{Code: 0xffff, Message: "result is nil"}
+	}
+
+	thread.Lock()
+	num := wrapper.TaosNumFields(item.TaosResult)
+	thread.Unlock()
+	return &NumFieldsResponse{NumFields: num}
+}
+
+type StmtNumParamsRequest struct {
+	ReqID  uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
+	StmtID uint64 `json:"stmt_id"`
+}
+
+type StmtNumParamsResponse struct {
+	BaseResponse
+	StmtID    uint64 `json:"stmt_id"`
+	NumParams int    `json:"num_params"`
+}
+
+func (h *messageHandler) handleStmtNumParams(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+	var req StmtNumParamsRequest
+	if err := json.Unmarshal(request.Args, &req); err != nil {
+		logger.Errorf("## unmarshal stmt num params request %s error: %s", request.Args, err)
+		return &BaseResponse{Code: 0xffff, Message: "unmarshal stmt num params request error"}
+	}
+
+	stmtItem := h.stmts.Get(req.StmtID)
+	if stmtItem == nil {
+		return &BaseResponse{Code: 0xffff, Message: "stmt is nil"}
+	}
+
+	thread.Lock()
+	logger.Debugln("stmt_num_params get thread lock cost:", log.GetLogDuration(isDebug, s))
+	count, code := wrapper.TaosStmtNumParams(stmtItem.stmt)
+	logger.Debugln("stmt_num_params cost:", log.GetLogDuration(isDebug, s))
+	thread.Unlock()
+	if code != httperror.SUCCESS {
+		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		logger.Errorf("## stmt get col fields error: %s", errStr)
+		return &BaseResponse{Code: code, Message: errStr}
+	}
+	return &StmtNumParamsResponse{StmtID: req.StmtID, NumParams: count}
+}
+
+type StmtGetParamRequest struct {
+	ReqID  uint64 `json:"req_id"` // Deprecated: use Request.ReqID instead
+	StmtID uint64 `json:"stmt_id"`
+	Index  int    `json:"index"`
+}
+
+type StmtGetParamResponse struct {
+	BaseResponse
+	StmtID   uint64 `json:"stmt_id"`
+	Index    int    `json:"index"`
+	DataType int    `json:"data_type"`
+	Length   int    `json:"length"`
+}
+
+func (h *messageHandler) handleStmtGetParam(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+	var req StmtGetParamRequest
+	if err := json.Unmarshal(request.Args, &req); err != nil {
+		logger.Errorf("## unmarshal stmt get param request %s error: %s", request.Args, err)
+		return &BaseResponse{Code: 0xffff, Message: "unmarshal stmt get param request error"}
+	}
+
+	stmtItem := h.stmts.Get(req.StmtID)
+	if stmtItem == nil {
+		return &BaseResponse{Code: 0xffff, Message: "stmt is nil"}
+	}
+
+	thread.Lock()
+	logger.Debugln("stmt_get_param get thread lock cost:", log.GetLogDuration(isDebug, s))
+	dataType, length, err := wrapper.TaosStmtGetParam(stmtItem.stmt, req.Index)
+	logger.Debugln("stmt_get_param cost:", log.GetLogDuration(isDebug, s))
+	thread.Unlock()
+	if err != nil {
+		var taosErr *errors2.TaosError
+		errors.As(err, &taosErr)
+		logger.Errorf("## stmt get param error: %s", taosErr.Error())
+		return &BaseResponse{Code: int(taosErr.Code), Message: taosErr.Error()}
+	}
+	return &StmtGetParamResponse{StmtID: req.StmtID, Index: req.Index, DataType: dataType, Length: length}
 }
 
 func freeCPointer(pointer unsafe.Pointer) {
