@@ -346,7 +346,22 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 		logger.Errorf("## unmarshal ws query request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal ws query request error"}
 	}
-
+	clientIP := h.ipStr
+	if !config.Conf.Monitor.Disable && config.Conf.Monitor.DisableClientIP {
+		clientIP = "invisible"
+	}
+	if !config.Conf.Monitor.Disable {
+		log.WSQueryRequestInFlight.Inc()
+		defer log.WSQueryRequestInFlight.Desc()
+	}
+	queryFailed := false
+	defer func() {
+		if !config.Conf.Monitor.Disable {
+			if queryFailed {
+				log.WSFailQueryRequest.WithLabelValues(clientIP).Inc()
+			}
+		}
+	}()
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
@@ -362,6 +377,7 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 
 	code := wrapper.TaosError(result.Res)
 	if code != httperror.SUCCESS {
+		queryFailed = true
 		freeResult(result.Res)
 		return &BaseResponse{Code: code, Message: wrapper.TaosErrorStr(result.Res)}
 	}
@@ -369,10 +385,6 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
 	logger.Debugln("is_update_query cost:", log.GetLogDuration(isDebug, s))
 	if !config.Conf.Monitor.Disable {
-		clientIP := h.ipStr
-		if config.Conf.Monitor.DisableClientIP {
-			clientIP = "invisible"
-		}
 		if isUpdate {
 			log.WSUpdateQueryRequest.WithLabelValues(clientIP).Inc()
 		} else {

@@ -63,6 +63,10 @@ var (
 	WSUpdateQueryRequest *prometheus.GaugeVec
 
 	WSSelectQueryRequest *prometheus.GaugeVec
+
+	WSFailQueryRequest *prometheus.GaugeVec
+
+	WSQueryRequestInFlight prometheus.Gauge
 )
 
 type FileHook struct {
@@ -236,6 +240,23 @@ func ConfigLog() {
 				Name:      "query_request_select",
 				Help:      "The total number of update ws insert query requests",
 			}, []string{"client_ip"})
+
+		WSFailQueryRequest = promauto.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "taosadapter",
+				Subsystem: "ws",
+				Name:      "query_request_fail",
+				Help:      "The number of failures of ws query request processing",
+			}, []string{"client_ip"})
+
+		WSQueryRequestInFlight = promauto.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace: "taosadapter",
+				Subsystem: "ws",
+				Name:      "query_request_in_flight",
+				Help:      "Current number of in-flight ws query requests",
+			},
+		)
 	})
 }
 

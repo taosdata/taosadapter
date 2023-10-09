@@ -284,7 +284,8 @@ type TMQSubscribeReq struct {
 	DB                   string   `json:"db"`
 	GroupID              string   `json:"group_id"`
 	ClientID             string   `json:"client_id"`
-	OffsetRest           string   `json:"offset_rest"`
+	OffsetRest           string   `json:"offset_rest"` // typo
+	OffsetReset          string   `json:"offset_reset"`
 	Topics               []string `json:"topics"`
 	AutoCommit           string   `json:"auto_commit"`
 	AutoCommitIntervalMS string   `json:"auto_commit_interval_ms"`
@@ -382,9 +383,13 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 			return
 		}
 	}
+	offsetReset := req.OffsetRest
 
-	if len(req.OffsetRest) != 0 {
-		errCode := wrapper.TMQConfSet(tmqConfig, "auto.offset.reset", req.OffsetRest)
+	if len(req.OffsetReset) != 0 {
+		offsetReset = req.OffsetReset
+	}
+	if len(offsetReset) != 0 {
+		errCode := wrapper.TMQConfSet(tmqConfig, "auto.offset.reset", offsetReset)
 		if errCode != httperror.SUCCESS {
 			errStr := wrapper.TMQErr2Str(errCode)
 			wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
