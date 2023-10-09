@@ -76,8 +76,8 @@ func init() {
 	viper.SetDefault("statsd.gatherInterval", "5s")
 
 	_ = viper.BindEnv("statsd.protocol", "TAOS_ADAPTER_STATSD_PROTOCOL")
-	pflag.String("statsd.protocol", "udp", `statsd protocol [tcp or udp]. Env "TAOS_ADAPTER_STATSD_PROTOCOL"`)
-	viper.SetDefault("statsd.protocol", "udp")
+	pflag.String("statsd.protocol", "udp4", `statsd protocol [tcp or udp]. Env "TAOS_ADAPTER_STATSD_PROTOCOL"`)
+	viper.SetDefault("statsd.protocol", "udp4")
 
 	_ = viper.BindEnv("statsd.maxTCPConnections", "TAOS_ADAPTER_STATSD_MAX_TCP_CONNECTIONS")
 	pflag.Int("statsd.maxTCPConnections", 250, `statsd max tcp connections. Env "TAOS_ADAPTER_STATSD_MAX_TCP_CONNECTIONS"`)

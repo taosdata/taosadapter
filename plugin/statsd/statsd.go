@@ -28,7 +28,7 @@ const (
 
 	defaultFieldName = "value"
 
-	defaultProtocol = "udp"
+	defaultProtocol = "udp4"
 
 	defaultSeparator           = "_"
 	defaultAllowPendingMessage = 10000
@@ -341,11 +341,11 @@ func (s *Statsd) Start(ac telegraf.Accumulator) error {
 			}
 		}()
 	} else {
-		address, err := net.ResolveTCPAddr("tcp", s.ServiceAddress)
+		address, err := net.ResolveTCPAddr("tcp4", s.ServiceAddress)
 		if err != nil {
 			return err
 		}
-		listener, err := net.ListenTCP("tcp", address)
+		listener, err := net.ListenTCP("tcp4", address)
 		if err != nil {
 			return err
 		}

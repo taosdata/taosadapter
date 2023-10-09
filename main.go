@@ -8,6 +8,7 @@ package main
 // @query.collection.format multi
 
 import (
+	"net"
 	"net/http"
 
 	"github.com/taosdata/taosadapter/v3/log"
@@ -19,7 +20,11 @@ var logger = log.GetLogger("main")
 func main() {
 	r := system.Init()
 	system.Start(r, func(server *http.Server) {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		ln, err := net.Listen("tcp4", server.Addr)
+		if err != nil {
+			logger.Fatalf("listen: %s\n", err)
+		}
+		if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
 			logger.Fatalf("listen: %s\n", err)
 		}
 	})
