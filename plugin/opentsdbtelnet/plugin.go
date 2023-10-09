@@ -298,11 +298,11 @@ func (p *Plugin) Version() string {
 }
 
 func (p *Plugin) tcp(port int, index int) error {
-	address, err := net.ResolveTCPAddr("tcp", fmt.Sprintf(":%d", port))
+	address, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return err
 	}
-	listener, err := net.ListenTCP("tcp", address)
+	listener, err := net.ListenTCP("tcp4", address)
 	if err != nil {
 		return err
 	}
