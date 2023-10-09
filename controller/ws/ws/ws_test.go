@@ -977,3 +977,279 @@ func StmtQuery(t *testing.T, db string, prepareDataSql []string) {
 	assert.Equal(t, uint64(11), closeResp.ReqID)
 	assert.Equal(t, 0, closeResp.Code, closeResp.Message)
 }
+
+func TestStmtNumParams(t *testing.T) {
+	db := "test_ws_stmt_num_params"
+	code, message := doRestful(fmt.Sprintf("drop database if exists %s", db), "")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(fmt.Sprintf("create database if not exists %s", db), "")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(fmt.Sprintf("create stable if not exists %s.meters (ts timestamp,current float,voltage int,phase float) tags (groupid int,location varchar(24))", db), "")
+	assert.Equal(t, 0, code, message)
+
+	defer doRestful(fmt.Sprintf("drop database if exists %s", db), "")
+
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err := ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	// connect
+	connReq := ConnRequest{ReqID: 1, User: "root", Password: "taosdata", DB: db}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp BaseResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+
+	// init
+	initReq := map[string]uint64{"req_id": 2}
+	resp, err = doWebSocket(ws, STMTInit, &initReq)
+	assert.NoError(t, err)
+	var initResp StmtInitResponse
+	err = json.Unmarshal(resp, &initResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(2), initResp.ReqID)
+	assert.Equal(t, 0, initResp.Code, initResp.Message)
+
+	// prepare
+	prepareReq := StmtPrepareRequest{
+		ReqID:  3,
+		StmtID: initResp.StmtID,
+		SQL:    fmt.Sprintf("insert into d1 using %s.meters tags(?, ?) values (?, ?, ?, ?)", db),
+	}
+	resp, err = doWebSocket(ws, STMTPrepare, &prepareReq)
+	assert.NoError(t, err)
+	var prepareResp StmtPrepareResponse
+	err = json.Unmarshal(resp, &prepareResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(3), prepareResp.ReqID)
+	assert.Equal(t, 0, prepareResp.Code, prepareResp.Message)
+
+	// num params
+	numParamsReq := StmtNumParamsRequest{ReqID: 4, StmtID: prepareResp.StmtID}
+	resp, err = doWebSocket(ws, STMTNumParams, &numParamsReq)
+	assert.NoError(t, err)
+	var numParamsResp StmtNumParamsResponse
+	err = json.Unmarshal(resp, &numParamsResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, numParamsResp.Code, numParamsResp.Message)
+	assert.Equal(t, uint64(4), numParamsResp.ReqID)
+	assert.Equal(t, 4, numParamsResp.NumParams)
+}
+
+func TestStmtGetParams(t *testing.T) {
+	db := "test_ws_stmt_get_params"
+	code, message := doRestful(fmt.Sprintf("drop database if exists %s", db), "")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(fmt.Sprintf("create database if not exists %s", db), "")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(fmt.Sprintf("create stable if not exists %s.meters (ts timestamp,current float,voltage int,phase float) tags (groupid int,location varchar(24))", db), "")
+	assert.Equal(t, 0, code, message)
+
+	defer doRestful(fmt.Sprintf("drop database if exists %s", db), "")
+
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err := ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	// connect
+	connReq := ConnRequest{ReqID: 1, User: "root", Password: "taosdata", DB: db}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp BaseResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+
+	// init
+	initReq := map[string]uint64{"req_id": 2}
+	resp, err = doWebSocket(ws, STMTInit, &initReq)
+	assert.NoError(t, err)
+	var initResp StmtInitResponse
+	err = json.Unmarshal(resp, &initResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(2), initResp.ReqID)
+	assert.Equal(t, 0, initResp.Code, initResp.Message)
+
+	// prepare
+	prepareReq := StmtPrepareRequest{
+		ReqID:  3,
+		StmtID: initResp.StmtID,
+		SQL:    fmt.Sprintf("insert into d1 using %s.meters tags(?, ?) values (?, ?, ?, ?)", db),
+	}
+	resp, err = doWebSocket(ws, STMTPrepare, &prepareReq)
+	assert.NoError(t, err)
+	var prepareResp StmtPrepareResponse
+	err = json.Unmarshal(resp, &prepareResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(3), prepareResp.ReqID)
+	assert.Equal(t, 0, prepareResp.Code, prepareResp.Message)
+
+	// get param
+	getParamsReq := StmtGetParamRequest{ReqID: 4, StmtID: prepareResp.StmtID, Index: 0}
+	resp, err = doWebSocket(ws, STMTGetParam, &getParamsReq)
+	assert.NoError(t, err)
+	var getParamsResp StmtGetParamResponse
+	err = json.Unmarshal(resp, &getParamsResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, getParamsResp.Code, getParamsResp.Message)
+	assert.Equal(t, uint64(4), getParamsResp.ReqID)
+	assert.Equal(t, 0, getParamsResp.Index)
+	assert.Equal(t, 9, getParamsResp.DataType)
+	assert.Equal(t, 8, getParamsResp.Length)
+}
+
+func TestGetCurrentDB(t *testing.T) {
+	db := "test_current_db"
+	code, message := doRestful(fmt.Sprintf("drop database if exists %s", db), "")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(fmt.Sprintf("create database if not exists %s", db), "")
+	assert.Equal(t, 0, code, message)
+
+	defer doRestful(fmt.Sprintf("drop database if exists %s", db), "")
+
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err := ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	// connect
+	connReq := ConnRequest{ReqID: 1, User: "root", Password: "taosdata", DB: db}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp BaseResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+
+	// current db
+	currentDBReq := map[string]uint64{"req_id": 1}
+	resp, err = doWebSocket(ws, WSGetCurrentDB, &currentDBReq)
+	assert.NoError(t, err)
+	var currentDBResp GetCurrentDBResponse
+	err = json.Unmarshal(resp, &currentDBResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), currentDBResp.ReqID)
+	assert.Equal(t, 0, currentDBResp.Code, currentDBResp.Message)
+	assert.Equal(t, db, currentDBResp.DB)
+}
+
+func TestGetServerInfo(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err := ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	// connect
+	connReq := ConnRequest{ReqID: 1, User: "root", Password: "taosdata"}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp BaseResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+
+	// server info
+	serverInfoReq := map[string]uint64{"req_id": 1}
+	resp, err = doWebSocket(ws, WSGetServerInfo, &serverInfoReq)
+	assert.NoError(t, err)
+	var serverInfoResp GetServerInfoResponse
+	err = json.Unmarshal(resp, &serverInfoResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), serverInfoResp.ReqID)
+	assert.Equal(t, 0, serverInfoResp.Code, serverInfoResp.Message)
+	t.Log(serverInfoResp.Info)
+}
+
+func TestNumFields(t *testing.T) {
+	db := "test_ws_num_fields"
+	code, message := doRestful(fmt.Sprintf("drop database if exists %s", db), db)
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(fmt.Sprintf("create database if not exists %s", db), db)
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(fmt.Sprintf("create stable if not exists %s.meters (ts timestamp,current float,voltage int,phase float) tags (groupid int,location varchar(24))", db), db)
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful("INSERT INTO d1 USING meters TAGS (1, 'location1') VALUES (now, 10.2, 219, 0.31) "+
+		"d2 USING meters TAGS (2, 'location2') VALUES (now, 10.3, 220, 0.32)", db)
+	assert.Equal(t, 0, code, message)
+
+	defer doRestful(fmt.Sprintf("drop database if exists %s", db), "")
+
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err := ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	// connect
+	connReq := ConnRequest{ReqID: 1, User: "root", Password: "taosdata", DB: db}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp BaseResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+
+	// query
+	queryReq := QueryRequest{ReqID: 2, Sql: "select * from meters"}
+	resp, err = doWebSocket(ws, WSQuery, &queryReq)
+	assert.NoError(t, err)
+	var queryResp QueryResponse
+	err = json.Unmarshal(resp, &queryResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(2), queryResp.ReqID)
+	assert.Equal(t, 0, queryResp.Code, queryResp.Message)
+
+	// num fields
+	numFieldsReq := NumFieldsRequest{ReqID: 3, ResultID: queryResp.ID}
+	resp, err = doWebSocket(ws, WSNumFields, &numFieldsReq)
+	assert.NoError(t, err)
+	var numFieldsResp NumFieldsResponse
+	err = json.Unmarshal(resp, &numFieldsResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(3), numFieldsResp.ReqID)
+	assert.Equal(t, 0, numFieldsResp.Code, numFieldsResp.Message)
+	assert.Equal(t, 6, numFieldsResp.NumFields)
+}
