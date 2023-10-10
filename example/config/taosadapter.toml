@@ -41,6 +41,14 @@ user = "root"
 password = "taosdata"
 writeInterval = "30s"
 
+[uploadKeeper]
+enable = false
+url = "http://127.0.0.1:6043/adapter_report"
+interval = "15s"
+timeout = "5s"
+retryTimes = 3
+retryInterval = "5s"
+
 [opentsdb]
 enable = true
 

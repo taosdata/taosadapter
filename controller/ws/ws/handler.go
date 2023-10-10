@@ -26,6 +26,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/async"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
@@ -346,6 +347,7 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 		logger.Errorf("## unmarshal ws query request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal ws query request error"}
 	}
+	sqlType := monitor.WSRecordRequest(req.Sql)
 	clientIP := h.ipStr
 	if !config.Conf.Monitor.Disable && config.Conf.Monitor.DisableClientIP {
 		clientIP = "invisible"
@@ -377,11 +379,12 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 
 	code := wrapper.TaosError(result.Res)
 	if code != httperror.SUCCESS {
+		monitor.WSRecordResult(sqlType, false)
 		queryFailed = true
 		freeResult(result.Res)
 		return &BaseResponse{Code: code, Message: wrapper.TaosErrorStr(result.Res)}
 	}
-
+	monitor.WSRecordResult(sqlType, true)
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
 	logger.Debugln("is_update_query cost:", log.GetLogDuration(isDebug, s))
 	if !config.Conf.Monitor.Disable {
