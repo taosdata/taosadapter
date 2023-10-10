@@ -112,6 +112,8 @@ func StartMonitor() {
 			}
 		}()
 	}
+	InitKeeper()
+	StartUpload()
 }
 
 func QueryPaused() bool {

@@ -24,6 +24,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/async"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 )
@@ -356,6 +357,7 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 		wsErrorMsg(ctx, session, 0xffff, "server not connected", WSQuery, req.ReqID)
 		return
 	}
+	sqlType := monitor.WSRecordRequest(req.SQL)
 	clientIP := t.ipStr
 	if !config.Conf.Monitor.Disable && config.Conf.Monitor.DisableClientIP {
 		clientIP = "invisible"
@@ -390,6 +392,7 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 	logger.Debugln("query cost ", log.GetLogDuration(isDebug, s))
 	code := wrapper.TaosError(result.Res)
 	if code != httperror.SUCCESS {
+		monitor.WSRecordResult(sqlType, false)
 		queryFailed = true
 		errStr := wrapper.TaosErrorStr(result.Res)
 		s = log.GetLogNow(isDebug)
@@ -402,6 +405,7 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 		wsErrorMsg(ctx, session, code, errStr, WSQuery, req.ReqID)
 		return
 	}
+	monitor.WSRecordResult(sqlType, true)
 	s = log.GetLogNow(isDebug)
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
 	logger.Debugln("is_update_query cost:", log.GetLogDuration(isDebug, s))
