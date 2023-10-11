@@ -755,11 +755,11 @@ func (t *TMQ) fetchBlock(ctx context.Context, session *melody.Session, req *TMQF
 
 	message, err := t.getMessageByMessageID(req.MessageID)
 	if err != nil && errors.Is(err, NotFountError) {
-		wsTMQErrorMsg(ctx, session, 0xffff, "message is nil", TMQFetch, req.ReqID, &req.MessageID)
+		wsTMQErrorMsg(ctx, session, 0xffff, "message is nil", TMQFetchBlock, req.ReqID, &req.MessageID)
 		return
 	}
 	if err != nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, err.Error(), TMQFetch, req.ReqID, &req.MessageID)
+		wsTMQErrorMsg(ctx, session, 0xffff, err.Error(), TMQFetchBlock, req.ReqID, &req.MessageID)
 		return
 	}
 
@@ -942,7 +942,7 @@ func (t *TMQ) unsubscribe(ctx context.Context, session *melody.Session, req *TMQ
 	if errCode != 0 {
 		errStr := wrapper.TMQErr2Str(errCode)
 		logger.WithError(taoserrors.NewError(int(errCode), errStr)).Error("tmq unsubscribe consumer")
-		wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
+		wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQUnsubscribe, req.ReqID, nil)
 		return
 	}
 	t.cleanupMessages()
