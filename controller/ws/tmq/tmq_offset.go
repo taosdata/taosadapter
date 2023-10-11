@@ -72,8 +72,8 @@ func NewTopicVGroup(opts ...TopicVGroupOpt) *TopicVGroup {
 	tg := TopicVGroup{
 		messages:          newTopicVGroupMessages(),
 		idx:               newTopicVGroupIdx(),
-		autoCleanInterval: 30 * time.Second,
-		messageTimeout:    time.Second,
+		autoCleanInterval: time.Second,
+		messageTimeout:    10 * time.Second,
 	}
 	for _, opt := range opts {
 		opt(&tg)
