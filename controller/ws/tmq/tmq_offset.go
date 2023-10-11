@@ -72,7 +72,7 @@ func NewTopicVGroup(opts ...TopicVGroupOpt) *TopicVGroup {
 	tg := TopicVGroup{
 		messages:          newTopicVGroupMessages(),
 		idx:               newTopicVGroupIdx(),
-		autoCleanInterval: time.Second,
+		autoCleanInterval: 30 * time.Second,
 		messageTimeout:    time.Second,
 	}
 	for _, opt := range opts {
@@ -177,13 +177,13 @@ func (tg *TopicVGroup) startAutoClean() {
 		defer ticker.Stop()
 
 		for range ticker.C {
+			if !tg.autoCleanStarted {
+				break
+			}
+
 			all := tg.getAllMessageList()
 			for _, messages := range all {
 				messages.cleanTimeoutMessages()
-			}
-
-			if !tg.autoCleanStarted {
-				break
 			}
 		}
 	}()
