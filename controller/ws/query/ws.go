@@ -220,6 +220,7 @@ type Taos struct {
 	session             *melody.Session
 	ip                  net.IP
 	wg                  sync.WaitGroup
+	ipStr               string
 	sync.Mutex
 }
 
@@ -233,6 +234,7 @@ func NewTaos(session *melody.Session) *Taos {
 		dropUserNotify:      make(chan struct{}, 1),
 		session:             session,
 		ip:                  ipAddr,
+		ipStr:               ipAddr.String(),
 	}
 }
 

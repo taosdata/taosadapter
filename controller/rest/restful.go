@@ -396,9 +396,6 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 				}
 				flushTiming += tmpFlushTiming
 				builder.WriteArrayEnd()
-				if err != nil {
-					return
-				}
 				total += 1
 				if config.Conf.RestfulRowLimit > -1 && total == config.Conf.RestfulRowLimit {
 					break
@@ -416,7 +413,10 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 		builder.WriteInt64(time.Now().UnixNano() - st.(int64) - flushTiming)
 	}
 	builder.WriteObjectEnd()
-	forceFlush(w, builder)
+	err = forceFlush(w, builder)
+	if err != nil {
+		logger.WithError(err).Error("force flush error")
+	}
 }
 
 func tryFlush(w gin.ResponseWriter, builder *jsonbuilder.Stream, calculateTiming bool) (int64, error) {

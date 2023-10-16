@@ -24,6 +24,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller/ws/query"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 )
 
@@ -35,6 +36,7 @@ func TestMain(m *testing.M) {
 	viper.Set("logLevel", "debug")
 	config.Init()
 	db.PrepareConnection()
+	log.ConfigLog()
 	gin.SetMode(gin.ReleaseMode)
 	router = gin.New()
 	controllers := controller.GetControllers()
@@ -401,6 +403,7 @@ func TestTMQ(t *testing.T) {
 		AutoCommitIntervalMS: "5000",
 		SnapshotEnable:       "true",
 		WithTableName:        "true",
+		OffsetReset:          "earliest",
 	}
 
 	b, _ := json.Marshal(init)
@@ -804,6 +807,7 @@ func TestMeta(t *testing.T) {
 		AutoCommitIntervalMS: "5000",
 		SnapshotEnable:       "true",
 		WithTableName:        "true",
+		OffsetReset:          "earliest",
 	}
 
 	b, _ := json.Marshal(init)
@@ -1327,6 +1331,7 @@ func TestTMQAutoCommit(t *testing.T) {
 		GroupID:              "test",
 		Topics:               []string{"test_tmq_ws_auto_commit_topic"},
 		AutoCommit:           "true",
+		OffsetReset:          "earliest",
 		AutoCommitIntervalMS: "500",
 		SnapshotEnable:       "true",
 		WithTableName:        "true",
@@ -1676,8 +1681,9 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 			}
 			status = AfterTMQSubscribe2
 			b, _ := json.Marshal(&TMQSubscribeReq{
-				ReqID:  0,
-				Topics: []string{"test_tmq_ws_unsubscribe2_topic"},
+				ReqID:       0,
+				OffsetReset: "earliest",
+				Topics:      []string{"test_tmq_ws_unsubscribe2_topic"},
 			})
 			action, _ := json.Marshal(&wstool.WSAction{
 				Action: TMQSubscribe,
@@ -1902,6 +1908,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 		User:                 "root",
 		Password:             "taosdata",
 		GroupID:              "test",
+		OffsetReset:          "earliest",
 		Topics:               []string{"test_tmq_ws_unsubscribe_topic"},
 		AutoCommit:           "true",
 		AutoCommitIntervalMS: "500",
@@ -2030,6 +2037,7 @@ func TestTMQSeek(t *testing.T) {
 			Password:      "taosdata",
 			GroupID:       "test",
 			Topics:        []string{topic},
+			OffsetReset:   "earliest",
 			AutoCommit:    "false",
 			WithTableName: "true",
 		}
@@ -2522,7 +2530,15 @@ func TestTMQ_Position_And_Committed(t *testing.T) {
 	defer after(ws, dbName, topic)
 
 	// subscribe
-	b, _ := json.Marshal(TMQSubscribeReq{User: "root", Password: "taosdata", DB: dbName, GroupID: "test", Topics: []string{topic}, AutoCommit: "false"})
+	b, _ := json.Marshal(TMQSubscribeReq{
+		User:        "root",
+		Password:    "taosdata",
+		DB:          dbName,
+		GroupID:     "test",
+		Topics:      []string{topic},
+		AutoCommit:  "false",
+		OffsetReset: "earliest",
+	})
 	msg, err := doWebSocket(ws, TMQSubscribe, b)
 	assert.NoError(t, err)
 	var subscribeResp TMQSubscribeResp
@@ -2595,7 +2611,15 @@ func TestTMQ_ListTopics(t *testing.T) {
 	defer after(ws, dbName, topic)
 
 	// subscribe
-	b, _ := json.Marshal(TMQSubscribeReq{User: "root", Password: "taosdata", DB: dbName, GroupID: "test", Topics: []string{topic}, AutoCommit: "false"})
+	b, _ := json.Marshal(TMQSubscribeReq{
+		User:        "root",
+		Password:    "taosdata",
+		DB:          dbName,
+		GroupID:     "test",
+		Topics:      []string{topic},
+		AutoCommit:  "false",
+		OffsetReset: "earliest",
+	})
 	msg, err := doWebSocket(ws, TMQSubscribe, b)
 	assert.NoError(t, err)
 	var subscribeResp TMQSubscribeResp
@@ -2630,7 +2654,15 @@ func TestTMQ_CommitOffset(t *testing.T) {
 	defer after(ws, dbName, topic)
 
 	// subscribe
-	b, _ := json.Marshal(TMQSubscribeReq{User: "root", Password: "taosdata", DB: dbName, GroupID: "test", Topics: []string{topic}, AutoCommit: "false"})
+	b, _ := json.Marshal(TMQSubscribeReq{
+		User:        "root",
+		Password:    "taosdata",
+		DB:          dbName,
+		GroupID:     "test",
+		Topics:      []string{topic},
+		AutoCommit:  "false",
+		OffsetReset: "earliest",
+	})
 	msg, err := doWebSocket(ws, TMQSubscribe, b)
 	assert.NoError(t, err)
 	var subscribeResp TMQSubscribeResp

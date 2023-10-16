@@ -48,6 +48,7 @@ type messageHandler struct {
 	whitelistChangeChan chan int64
 	session             *melody.Session
 	ip                  net.IP
+	ipStr               string
 }
 
 func newHandler(session *melody.Session) *messageHandler {
@@ -61,6 +62,7 @@ func newHandler(session *melody.Session) *messageHandler {
 		dropUserNotify:      make(chan struct{}, 1),
 		session:             session,
 		ip:                  ipAddr,
+		ipStr:               ipAddr.String(),
 	}
 }
 
@@ -475,7 +477,6 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 		logger.Errorf("## unmarshal ws query request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal ws query request error"}
 	}
-
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
@@ -490,7 +491,6 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
 	logger.Debugln("is_update_query cost:", log.GetLogDuration(isDebug, s))
-
 	if isUpdate {
 		affectRows := wrapper.TaosAffectedRows(result.Res)
 		logger.Debugln("affected_rows cost:", log.GetLogDuration(isDebug, s))
