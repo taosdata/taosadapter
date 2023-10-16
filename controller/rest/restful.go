@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -259,6 +260,19 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	c.Header("Content-Type", "application/json; charset=utf-8")
 	c.Header("Transfer-Encoding", "chunked")
 	w.WriteHeader(http.StatusOK)
+	if !config.Conf.Monitor.Disable {
+		reqMethod := c.Request.Method
+		reqUri := url.QueryEscape(c.Request.RequestURI)
+		clientIP := c.ClientIP()
+		if config.Conf.Monitor.DisableClientIP {
+			clientIP = "invisible"
+		}
+		if isUpdate {
+			log.UpdateRequest.WithLabelValues(clientIP, reqMethod, reqUri).Inc()
+		} else {
+			log.SelectRequest.WithLabelValues(clientIP, reqMethod, reqUri).Inc()
+		}
+	}
 	if isUpdate {
 		affectRows := wrapper.TaosAffectedRows(res)
 		_, err := w.Write(ExecHeader)
@@ -396,9 +410,6 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 				}
 				flushTiming += tmpFlushTiming
 				builder.WriteArrayEnd()
-				if err != nil {
-					return
-				}
 				total += 1
 				if config.Conf.RestfulRowLimit > -1 && total == config.Conf.RestfulRowLimit {
 					break
@@ -416,7 +427,10 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 		builder.WriteInt64(time.Now().UnixNano() - st.(int64) - flushTiming)
 	}
 	builder.WriteObjectEnd()
-	forceFlush(w, builder)
+	err = forceFlush(w, builder)
+	if err != nil {
+		logger.WithError(err).Error("force flush error")
+	}
 }
 
 func tryFlush(w gin.ResponseWriter, builder *jsonbuilder.Stream, calculateTiming bool) (int64, error) {

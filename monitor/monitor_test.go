@@ -237,7 +237,28 @@ func TestWriteLog(t *testing.T) {
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 	}
+	{
+		w := httptest.NewRecorder()
+		body := strings.NewReader("create database test_monitor")
+		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+		router.ServeHTTP(w, req)
+	}
+	{
+		w := httptest.NewRecorder()
+		body := strings.NewReader("drop database if exists test_monitor")
+		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+		router.ServeHTTP(w, req)
+	}
 	time.Sleep(time.Second)
+	{
+		w := httptest.NewRecorder()
+		body := strings.NewReader("drop database if exists test_monitor")
+		req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+		router.ServeHTTP(w, req)
+	}
 	{
 		w := httptest.NewRecorder()
 		body := strings.NewReader("xxx")
@@ -250,6 +271,8 @@ func TestWriteLog(t *testing.T) {
 	checkTables := []string{
 		"taosadapter_restful_http_request_total",
 		"taosadapter_restful_http_request_fail",
+		"taosadapter_restful_http_request_update",
+		"taosadapter_restful_http_request_select",
 		"taosadapter_system_mem_percent",
 		"taosadapter_system_cpu_percent",
 	}
