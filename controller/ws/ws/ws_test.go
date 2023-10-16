@@ -25,7 +25,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/log"
-	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 	"github.com/taosdata/taosadapter/v3/version"
 )
@@ -33,8 +32,6 @@ import (
 var router *gin.Engine
 
 func TestMain(m *testing.M) {
-	viper.Set("monitor.writeToTD", true)
-	viper.Set("monitor.writeInterval", time.Millisecond*10)
 	viper.Set("pool.maxConnect", 10000)
 	viper.Set("pool.maxIdle", 10000)
 	viper.Set("logLevel", "debug")
@@ -47,7 +44,6 @@ func TestMain(m *testing.M) {
 	for _, webController := range controllers {
 		webController.Init(router)
 	}
-	monitor.StartMonitor()
 	m.Run()
 }
 
