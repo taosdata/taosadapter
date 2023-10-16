@@ -49,7 +49,7 @@ type messageHandler struct {
 	whitelistChangeChan chan int64
 	session             *melody.Session
 	ip                  net.IP
-	ipStr        string
+	ipStr               string
 }
 
 func newHandler(session *melody.Session) *messageHandler {
@@ -63,7 +63,7 @@ func newHandler(session *melody.Session) *messageHandler {
 		dropUserNotify:      make(chan struct{}, 1),
 		session:             session,
 		ip:                  ipAddr,
-		ipStr:        ipAddr.String(),
+		ipStr:               ipAddr.String(),
 	}
 }
 
