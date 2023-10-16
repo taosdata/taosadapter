@@ -12,6 +12,9 @@ const (
 	WSWriteRaw                = "write_raw"
 	WSWriteRawBlock           = "write_raw_block"
 	WSWriteRawBlockWithFields = "write_raw_block_with_fields"
+	WSGetCurrentDB            = "get_current_db"
+	WSGetServerInfo           = "get_server_info"
+	WSNumFields               = "num_fields"
 
 	// schemaless
 	SchemalessWrite = "insert"
@@ -27,6 +30,9 @@ const (
 	STMTClose        = "close"
 	STMTGetTagFields = "get_tag_fields"
 	STMTGetColFields = "get_col_fields"
+	STMTUseResult    = "use_result"
+	STMTNumParams    = "stmt_num_params"
+	STMTGetParam     = "stmt_get_param"
 )
 
 type messageType uint64

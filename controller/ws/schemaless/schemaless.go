@@ -3,6 +3,8 @@ package schemaless
 import (
 	"context"
 	"encoding/json"
+	"net"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -16,6 +18,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
+	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
 )
@@ -32,14 +35,20 @@ func NewSchemalessController() *SchemalessController {
 	schemaless.HandleConnect(func(session *melody.Session) {
 		logger := session.MustGet("logger").(*logrus.Entry)
 		logger.Debugln("ws connect")
-		session.Set(taosSchemalessKey, NewTaosSchemaless())
+		session.Set(taosSchemalessKey, NewTaosSchemaless(session))
 	})
 
 	schemaless.HandleMessage(func(session *melody.Session, bytes []byte) {
 		if schemaless.IsClosed() {
 			return
 		}
+		t := session.MustGet(taosSchemalessKey).(*TaosSchemaless)
+		if t.closed {
+			return
+		}
+		t.wg.Add(1)
 		go func() {
+			defer t.wg.Done()
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 			logger := session.MustGet("logger").(*logrus.Entry)
 			logger.Debugln("get ws message data:", string(bytes))
@@ -60,8 +69,7 @@ func NewSchemalessController() *SchemalessController {
 					wstool.WSError(ctx, session, err, SchemalessConn, req.ReqID)
 					return
 				}
-				t := session.MustGet(taosSchemalessKey)
-				t.(*TaosSchemaless).connect(ctx, session, req)
+				t.connect(ctx, session, req)
 			case SchemalessWrite:
 				var req schemalessWriteReq
 				if err = json.Unmarshal(action.Args, &req); err != nil {
@@ -70,8 +78,7 @@ func NewSchemalessController() *SchemalessController {
 					wstool.WSError(ctx, session, err, SchemalessWrite, req.ReqID)
 					return
 				}
-				t := session.MustGet(taosSchemalessKey)
-				t.(*TaosSchemaless).insert(ctx, session, req)
+				t.insert(ctx, session, req)
 			}
 		}()
 	})
@@ -119,13 +126,73 @@ func (s *SchemalessController) Init(ctl gin.IRouter) {
 }
 
 type TaosSchemaless struct {
-	conn   unsafe.Pointer
-	closed bool
+	conn                unsafe.Pointer
+	closed              bool
+	exit                chan struct{}
+	whitelistChangeChan chan int64
+	dropUserNotify      chan struct{}
+	session             *melody.Session
+	ip                  net.IP
+	wg                  sync.WaitGroup
 	sync.Mutex
 }
 
-func NewTaosSchemaless() *TaosSchemaless {
-	return &TaosSchemaless{}
+func NewTaosSchemaless(session *melody.Session) *TaosSchemaless {
+	host, _, _ := net.SplitHostPort(strings.TrimSpace(session.Request.RemoteAddr))
+	ipAddr := net.ParseIP(host)
+	return &TaosSchemaless{
+		exit:                make(chan struct{}),
+		whitelistChangeChan: make(chan int64, 1),
+		dropUserNotify:      make(chan struct{}, 1),
+		session:             session,
+		ip:                  ipAddr,
+	}
+}
+
+func (t *TaosSchemaless) waitSignal() {
+	for {
+		if t.closed {
+			return
+		}
+		select {
+		case <-t.dropUserNotify:
+			t.Lock()
+			if t.closed {
+				t.Unlock()
+				return
+			}
+			logger := wstool.GetLogger(t.session)
+			logger.WithField("clientIP", t.session.Request.RemoteAddr).Info("user dropped! close connection!")
+			t.session.Close()
+			t.Unlock()
+			t.close()
+			return
+		case <-t.whitelistChangeChan:
+			t.Lock()
+			if t.closed {
+				t.Unlock()
+				return
+			}
+			whitelist, err := tool.GetWhitelist(t.conn)
+			if err != nil {
+				wstool.GetLogger(t.session).WithField("clientIP", t.session.Request.RemoteAddr).WithError(err).Errorln("get whitelist error! close connection!")
+				t.session.Close()
+				t.Unlock()
+				return
+			}
+			valid := tool.CheckWhitelist(whitelist, t.ip)
+			if !valid {
+				wstool.GetLogger(t.session).WithField("clientIP", t.session.Request.RemoteAddr).Errorln("ip not in whitelist! close connection!")
+				t.session.Close()
+				t.Unlock()
+				t.close()
+				return
+			}
+			t.Unlock()
+		case <-t.exit:
+			return
+		}
+	}
 }
 
 func (t *TaosSchemaless) close() {
@@ -135,6 +202,20 @@ func (t *TaosSchemaless) close() {
 		return
 	}
 	t.closed = true
+	close(t.exit)
+	close(t.whitelistChangeChan)
+	close(t.dropUserNotify)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		t.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-ctx.Done():
+	case <-done:
+	}
 	if t.conn != nil {
 		thread.Lock()
 		wrapper.TaosClose(t.conn)
@@ -165,6 +246,9 @@ func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, r
 	t.Lock()
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer t.Unlock()
+	if t.closed {
+		return
+	}
 	if t.conn != nil {
 		wsSchemalessErrorMsg(ctx, session, 0xffff, "duplicate connections", SchemalessConn, req.ReqID)
 		return
@@ -180,7 +264,40 @@ func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, r
 		wstool.WSError(ctx, session, err, SchemalessConn, req.ReqID)
 		return
 	}
+	whitelist, err := tool.GetWhitelist(conn)
+	if err != nil {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		wstool.WSError(ctx, session, err, SchemalessConn, req.ReqID)
+		return
+	}
+	valid := tool.CheckWhitelist(whitelist, t.ip)
+	if !valid {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		wstool.WSErrorMsg(ctx, session, 0xffff, "whitelist prohibits current IP access", SchemalessConn, req.ReqID)
+		return
+	}
+	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeChan)
+	if err != nil {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		wstool.WSError(ctx, session, err, SchemalessConn, req.ReqID)
+		return
+	}
+	err = tool.RegisterDropUser(conn, t.dropUserNotify)
+	if err != nil {
+		thread.Lock()
+		wrapper.TaosClose(conn)
+		thread.Unlock()
+		wstool.WSError(ctx, session, err, SchemalessConn, req.ReqID)
+		return
+	}
 	t.conn = conn
+	go t.waitSignal()
 	wstool.WSWriteJson(session, &schemalessConnResp{
 		Action: SchemalessConn,
 		ReqID:  req.ReqID,

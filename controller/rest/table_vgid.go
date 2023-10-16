@@ -1,6 +1,8 @@
 package rest
 
 import (
+	"errors"
+	"net"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -11,7 +13,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/thread"
 )
 
-func (*Restful) tableVgID(c *gin.Context) {
+func (ctl *Restful) tableVgID(c *gin.Context) {
 	db := c.Param("db")
 	var tables []string
 	err := c.ShouldBindJSON(&tables)
@@ -28,11 +30,16 @@ func (*Restful) tableVgID(c *gin.Context) {
 	password := c.MustGet(PasswordKey).(string)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
-	taosConn, err := commonpool.GetConnection(user, password)
+	taosConn, err := commonpool.GetConnection(user, password, net.ParseIP(c.RemoteIP()))
 	logger.Debugln("connect cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.WithError(err).Error("connect server error")
-		if tError, is := err.(*tErrors.TaosError); is {
+		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
+			ForbiddenResponse(c, commonpool.ErrWhitelistForbidden.Error())
+			return
+		}
+		var tError *tErrors.TaosError
+		if errors.As(err, &tError) {
 			TaosErrorResponse(c, int(tError.Code), tError.ErrStr)
 			return
 		}

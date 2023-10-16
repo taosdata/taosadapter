@@ -31,6 +31,7 @@ func (ws *webSocketCtl) Init(ctl gin.IRouter) {
 func initController() *webSocketCtl {
 	m := melody.New()
 	m.Config.MaxMessageSize = 0
+	m.UpGrader.EnableCompression = true
 
 	m.HandleConnect(func(session *melody.Session) {
 		logger.Debugln("ws connect")

@@ -126,36 +126,20 @@ const InsertStatement = "insert into"
 
 const (
 	createRequestTotal    = "create stable if not exists `taosadapter_restful_http_request_total` (`_ts` timestamp, `gauge` double) tags (`client_ip` nchar(40), `endpoint` nchar(45), `request_method` nchar(16), `request_uri` nchar(128), `status_code` nchar(4))"
-	createRequestUpdate   = "create stable if not exists `taosadapter_restful_http_request_update` (`_ts` timestamp, `gauge` double) tags (`client_ip` nchar(40), `endpoint` nchar(45), `request_method` nchar(16), `request_uri` nchar(128))"
-	createRequestSelect   = "create stable if not exists `taosadapter_restful_http_request_select` (`_ts` timestamp, `gauge` double) tags (`client_ip` nchar(40), `endpoint` nchar(45), `request_method` nchar(16), `request_uri` nchar(128))"
 	createRequestFail     = "create stable if not exists `taosadapter_restful_http_request_fail` (`_ts` timestamp, `gauge` double) tags (`client_ip` nchar(40), `endpoint` nchar(45), `request_method` nchar(16), `request_uri` nchar(128), `status_code` nchar(4))"
 	createRequestInFlight = "create stable if not exists `taosadapter_restful_http_request_in_flight` (`_ts` timestamp, `gauge` double) tags (`endpoint` nchar(45))"
 	createRequestSummary  = "create stable if not exists `taosadapter_restful_http_request_summary_milliseconds` (`_ts` timestamp, `0.1` double, `0.2` double, `0.5` double, `0.9` double, `0.99` double, `count` double, `sum` double) tags (`endpoint` nchar(45), `request_method` nchar(16), `request_uri` nchar(128))"
-
-	createMemPercent = "create stable if not exists `taosadapter_system_mem_percent` (`_ts` timestamp, `gauge` double) tags (`endpoint` nchar(45))"
-	createCpuPercent = "create stable if not exists `taosadapter_system_cpu_percent` (`_ts` timestamp, `gauge` double) tags (`endpoint` nchar(45))"
-
-	createWSQueryRequestTotal    = "create stable if not exists `taosadapter_ws_query_request_total` (`_ts` timestamp, `gauge` double) tags (`client_ip` nchar(40), `endpoint` nchar(45))"
-	createWSQueryRequestUpdate   = "create stable if not exists `taosadapter_ws_query_request_update` (`_ts` timestamp, `gauge` double) tags (`client_ip` nchar(40), `endpoint` nchar(45))"
-	createWSQueryRequestSelect   = "create stable if not exists `taosadapter_ws_query_request_select` (`_ts` timestamp, `gauge` double) tags (`client_ip` nchar(40), `endpoint` nchar(45))"
-	createWSQueryRequestFail     = "create stable if not exists `taosadapter_ws_query_request_fail` (`_ts` timestamp, `gauge` double) tags (`client_ip` nchar(40), `endpoint` nchar(45))"
-	createWSQueryRequestInFlight = "create stable if not exists `taosadapter_ws_query_request_in_flight` (`_ts` timestamp, `gauge` double) tags (`endpoint` nchar(45))"
+	createMemPercent      = "create stable if not exists `taosadapter_system_mem_percent` (`_ts` timestamp, `gauge` double) tags (`endpoint` nchar(45))"
+	createCpuPercent      = "create stable if not exists `taosadapter_system_cpu_percent` (`_ts` timestamp, `gauge` double) tags (`endpoint` nchar(45))"
 )
 
 var insightTableList = []string{
 	createRequestTotal,
-	createRequestUpdate,
-	createRequestSelect,
 	createRequestFail,
 	createRequestInFlight,
 	createRequestSummary,
 	createMemPercent,
 	createCpuPercent,
-	createWSQueryRequestTotal,
-	createWSQueryRequestUpdate,
-	createWSQueryRequestSelect,
-	createWSQueryRequestFail,
-	createWSQueryRequestInFlight,
 }
 
 var tableInitialized bool
@@ -227,62 +211,6 @@ func writeToTDLog() error {
 					}
 					inserts = append(inserts, fmt.Sprintf(" taosa_http_request_total_%s using taosadapter_restful_http_request_total tags('%s','%s','%s','%s','%d') values('%s',%f)", subName, clientIP, identity, requestMethod, requestUri, statusCode, now, value))
 					log.TotalRequest.WithLabelValues(statusCodeStr, clientIP, requestMethod, requestUri).Sub(value)
-				}
-			}
-		case "taosadapter_restful_http_request_update":
-			metric := data[i].GetMetric()
-			for _, m := range metric {
-				value := m.GetGauge().GetValue()
-				if value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) {
-					labels := m.GetLabel()
-
-					subName := calculateTableName(labels)
-					var (
-						clientIP      string
-						requestMethod string
-						requestUri    string
-					)
-
-					for j := 0; j < len(labels); j++ {
-						switch labels[j].GetName() {
-						case "client_ip":
-							clientIP = labels[j].GetValue()
-						case "request_method":
-							requestMethod = labels[j].GetValue()
-						case "request_uri":
-							requestUri = labels[j].GetValue()
-						}
-					}
-					inserts = append(inserts, fmt.Sprintf(" taosa_http_request_update_%s using taosadapter_restful_http_request_update tags('%s','%s','%s','%s') values('%s',%f)", subName, clientIP, identity, requestMethod, requestUri, now, value))
-					log.UpdateRequest.WithLabelValues(clientIP, requestMethod, requestUri).Sub(value)
-				}
-			}
-		case "taosadapter_restful_http_request_select":
-			metric := data[i].GetMetric()
-			for _, m := range metric {
-				value := m.GetGauge().GetValue()
-				if value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) {
-					labels := m.GetLabel()
-
-					subName := calculateTableName(labels)
-					var (
-						clientIP      string
-						requestMethod string
-						requestUri    string
-					)
-
-					for j := 0; j < len(labels); j++ {
-						switch labels[j].GetName() {
-						case "client_ip":
-							clientIP = labels[j].GetValue()
-						case "request_method":
-							requestMethod = labels[j].GetValue()
-						case "request_uri":
-							requestUri = labels[j].GetValue()
-						}
-					}
-					inserts = append(inserts, fmt.Sprintf(" taosa_http_request_select_%s using taosadapter_restful_http_request_select tags('%s','%s','%s','%s') values('%s',%f)", subName, clientIP, identity, requestMethod, requestUri, now, value))
-					log.SelectRequest.WithLabelValues(clientIP, requestMethod, requestUri).Sub(value)
 				}
 			}
 		case "taosadapter_restful_http_request_fail":
@@ -383,103 +311,6 @@ func writeToTDLog() error {
 			m := metric[len(metric)-1]
 
 			inserts = append(inserts, fmt.Sprintf(" taos_system_mem_%s using taosadapter_system_mem_percent tags('%s') values('%s',%f)", calculateTableName(m.GetLabel()), identity, now, m.GetGauge().GetValue()))
-		case "taosadapter_ws_query_request_total":
-			metric := data[i].GetMetric()
-			for _, m := range metric {
-				value := m.GetGauge().GetValue()
-				if value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) {
-					labels := m.GetLabel()
-
-					subName := calculateTableName(labels)
-					var (
-						clientIP string
-					)
-
-					for j := 0; j < len(labels); j++ {
-						switch labels[j].GetName() {
-						case "client_ip":
-							clientIP = labels[j].GetValue()
-						}
-					}
-					inserts = append(inserts, fmt.Sprintf(" taosa_ws_query_request_total_%s using taosadapter_ws_query_request_total tags('%s','%s') values('%s',%f)", subName, clientIP, identity, now, value))
-					log.WSTotalQueryRequest.WithLabelValues(clientIP).Sub(value)
-				}
-			}
-		case "taosadapter_ws_query_request_update":
-			metric := data[i].GetMetric()
-			for _, m := range metric {
-				value := m.GetGauge().GetValue()
-				if value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) {
-					labels := m.GetLabel()
-
-					subName := calculateTableName(labels)
-					var (
-						clientIP string
-					)
-
-					for j := 0; j < len(labels); j++ {
-						switch labels[j].GetName() {
-						case "client_ip":
-							clientIP = labels[j].GetValue()
-						}
-					}
-					inserts = append(inserts, fmt.Sprintf(" taosa_ws_query_request_update_%s using taosadapter_ws_query_request_update tags('%s','%s') values('%s',%f)", subName, clientIP, identity, now, value))
-					log.WSUpdateQueryRequest.WithLabelValues(clientIP).Sub(value)
-				}
-			}
-		case "taosadapter_ws_query_request_select":
-			metric := data[i].GetMetric()
-			for _, m := range metric {
-				value := m.GetGauge().GetValue()
-				if value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) {
-					labels := m.GetLabel()
-
-					subName := calculateTableName(labels)
-					var (
-						clientIP string
-					)
-
-					for j := 0; j < len(labels); j++ {
-						switch labels[j].GetName() {
-						case "client_ip":
-							clientIP = labels[j].GetValue()
-						}
-					}
-					inserts = append(inserts, fmt.Sprintf(" taosa_ws_query_request_select_%s using taosadapter_ws_query_request_select tags('%s','%s') values('%s',%f)", subName, clientIP, identity, now, value))
-					log.WSUpdateQueryRequest.WithLabelValues(clientIP).Sub(value)
-				}
-			}
-		case "taosadapter_ws_query_request_fail":
-			metric := data[i].GetMetric()
-			for _, m := range metric {
-				value := m.GetGauge().GetValue()
-				if value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) {
-					labels := m.GetLabel()
-
-					subName := calculateTableName(labels)
-					var (
-						clientIP string
-					)
-
-					for j := 0; j < len(labels); j++ {
-						switch labels[j].GetName() {
-						case "client_ip":
-							clientIP = labels[j].GetValue()
-						}
-					}
-					inserts = append(inserts, fmt.Sprintf(" taosa_ws_query_request_fail_%s using taosadapter_ws_query_request_fail tags('%s','%s') values('%s',%f)", subName, clientIP, identity, now, value))
-					log.WSTotalQueryRequest.WithLabelValues(clientIP).Sub(value)
-				}
-			}
-		case "taosadapter_ws_query_request_in_flight":
-			metric := data[i].GetMetric()
-			for _, m := range metric {
-				value := m.GetGauge().GetValue()
-				if value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) {
-					subName := calculateTableName(nil)
-					inserts = append(inserts, fmt.Sprintf(" taosa_ws_query_request_in_flight_%s using taosadapter_ws_query_request_in_flight tags('%s') values('%s',%f)", subName, identity, now, value))
-				}
-			}
 		}
 	}
 	defer builder.Reset()
