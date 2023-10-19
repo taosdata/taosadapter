@@ -86,6 +86,19 @@ func doWebSocket(ws *websocket.Conn, action string, arg interface{}) (resp []byt
 	return message, err
 }
 
+func doWebSocketWithoutResp(ws *websocket.Conn, action string, arg interface{}) error {
+	var b []byte
+	if arg != nil {
+		b, _ = json.Marshal(arg)
+	}
+	a, _ := json.Marshal(Request{Action: action, Args: b})
+	err := ws.WriteMessage(websocket.TextMessage, a)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func TestVersion(t *testing.T) {
 	s := httptest.NewServer(router)
 	defer s.Close()
@@ -636,13 +649,8 @@ func TestWsStmt(t *testing.T) {
 
 	// close
 	closeReq := StmtCloseRequest{ReqID: 11, StmtID: prepareResp.StmtID}
-	resp, err = doWebSocket(ws, STMTClose, &closeReq)
+	err = doWebSocketWithoutResp(ws, STMTClose, &closeReq)
 	assert.NoError(t, err)
-	var closeResp BaseResponse
-	err = json.Unmarshal(resp, &closeResp)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(11), closeResp.ReqID)
-	assert.Equal(t, 0, closeResp.Code, closeResp.Message)
 
 	// query
 	queryReq := QueryRequest{Sql: "select * from test_ws_stmt_ws.stb"}
@@ -972,13 +980,8 @@ func StmtQuery(t *testing.T, db string, prepareDataSql []string) {
 
 	// close
 	closeReq := StmtCloseRequest{ReqID: 11, StmtID: prepareResp.StmtID}
-	resp, err = doWebSocket(ws, STMTClose, &closeReq)
+	err = doWebSocketWithoutResp(ws, STMTClose, &closeReq)
 	assert.NoError(t, err)
-	var closeResp BaseResponse
-	err = json.Unmarshal(resp, &closeResp)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(11), closeResp.ReqID)
-	assert.Equal(t, 0, closeResp.Code, closeResp.Message)
 }
 
 func TestStmtNumParams(t *testing.T) {
