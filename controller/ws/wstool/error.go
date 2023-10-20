@@ -16,7 +16,7 @@ type WSErrorResp struct {
 	Timing  int64  `json:"timing"`
 }
 
-func wsErrorMsg(ctx context.Context, session *melody.Session, code int, message string, action string, reqID uint64) {
+func WSErrorMsg(ctx context.Context, session *melody.Session, code int, message string, action string, reqID uint64) {
 	b, _ := json.Marshal(&WSErrorResp{
 		Code:    code & 0xffff,
 		Message: message,
@@ -29,8 +29,8 @@ func wsErrorMsg(ctx context.Context, session *melody.Session, code int, message 
 func WSError(ctx context.Context, session *melody.Session, err error, action string, reqID uint64) {
 	e, is := err.(*tErrors.TaosError)
 	if is {
-		wsErrorMsg(ctx, session, int(e.Code)&0xffff, e.ErrStr, action, reqID)
+		WSErrorMsg(ctx, session, int(e.Code)&0xffff, e.ErrStr, action, reqID)
 	} else {
-		wsErrorMsg(ctx, session, 0xffff, err.Error(), action, reqID)
+		WSErrorMsg(ctx, session, 0xffff, err.Error(), action, reqID)
 	}
 }
