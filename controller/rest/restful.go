@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -258,19 +257,6 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	c.Header("Content-Type", "application/json; charset=utf-8")
 	c.Header("Transfer-Encoding", "chunked")
 	w.WriteHeader(http.StatusOK)
-	if !config.Conf.Monitor.Disable {
-		reqMethod := c.Request.Method
-		reqUri := url.QueryEscape(c.Request.RequestURI)
-		clientIP := c.ClientIP()
-		if config.Conf.Monitor.DisableClientIP {
-			clientIP = "invisible"
-		}
-		if isUpdate {
-			log.UpdateRequest.WithLabelValues(clientIP, reqMethod, reqUri).Inc()
-		} else {
-			log.SelectRequest.WithLabelValues(clientIP, reqMethod, reqUri).Inc()
-		}
-	}
 	if isUpdate {
 		affectRows := wrapper.TaosAffectedRows(res)
 		_, err := w.Write(ExecHeader)
