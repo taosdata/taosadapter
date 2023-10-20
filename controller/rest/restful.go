@@ -173,8 +173,6 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID in
 	if err != nil {
 		monitor.RestRecordResult(sqlType, false)
 		logger.WithField("sql", sql).WithError(err).Error("connect server error")
-		if tError, is := err.(*tErrors.TaosError); is {
-		logger.WithError(err).Error("connect server error")
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 			ForbiddenResponse(c, commonpool.ErrWhitelistForbidden.Error())
 			return
