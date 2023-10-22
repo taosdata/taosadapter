@@ -128,7 +128,7 @@ const InsertStatement = "insert into"
 
 const (
 	createRequestTotal    = "create stable if not exists `taosadapter_restful_http_request_total` (`_ts` timestamp, `gauge` double) tags (`client_ip` nchar(40), `endpoint` nchar(45), `request_method` nchar(16), `request_uri` nchar(128), `status_code` nchar(4))"
-	createRequestUpdate   = "create stable if not exists `taosadapter_restful_http_request_update` (`_ts` timestamp, `gauge` double) tags (`client_ip` nchar(40), `endpoint` nchar(45), `request_method` nchar(16), `request_uri` nchar(128))"
+	createRequestFail     = "create stable if not exists `taosadapter_restful_http_request_fail` (`_ts` timestamp, `gauge` double) tags (`client_ip` nchar(40), `endpoint` nchar(45), `request_method` nchar(16), `request_uri` nchar(128), `status_code` nchar(4))"
 	createRequestInFlight = "create stable if not exists `taosadapter_restful_http_request_in_flight` (`_ts` timestamp, `gauge` double) tags (`endpoint` nchar(45))"
 	createRequestSummary  = "create stable if not exists `taosadapter_restful_http_request_summary_milliseconds` (`_ts` timestamp, `0.1` double, `0.2` double, `0.5` double, `0.9` double, `0.99` double, `count` double, `sum` double) tags (`endpoint` nchar(45), `request_method` nchar(16), `request_uri` nchar(128))"
 
@@ -138,7 +138,7 @@ const (
 
 var insightTableList = []string{
 	createRequestTotal,
-	createRequestUpdate,
+	createRequestFail,
 	createRequestInFlight,
 	createRequestSummary,
 	createMemPercent,
