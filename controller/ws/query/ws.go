@@ -24,6 +24,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/async"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 )
@@ -356,22 +357,7 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 		wsErrorMsg(ctx, session, 0xffff, "server not connected", WSQuery, req.ReqID)
 		return
 	}
-	clientIP := t.ipStr
-	if !config.Conf.Monitor.Disable && config.Conf.Monitor.DisableClientIP {
-		clientIP = "invisible"
-	}
-	if !config.Conf.Monitor.Disable {
-		log.WSQueryRequestInFlight.Inc()
-		defer log.WSQueryRequestInFlight.Dec()
-	}
-	queryFailed := false
-	defer func() {
-		if !config.Conf.Monitor.Disable {
-			if queryFailed {
-				log.WSFailQueryRequest.WithLabelValues(clientIP).Inc()
-			}
-		}
-	}()
+	sqlType := monitor.WSRecordRequest(req.SQL)
 	logger := wstool.GetLogger(session).WithField("action", WSQuery)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
@@ -379,18 +365,11 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	s = log.GetLogNow(isDebug)
-	if !config.Conf.Monitor.Disable {
-		if config.Conf.Monitor.DisableClientIP {
-			log.WSTotalQueryRequest.WithLabelValues("invisible").Inc()
-		} else {
-			log.WSTotalQueryRequest.WithLabelValues(t.ipStr).Inc()
-		}
-	}
 	result, _ := async.GlobalAsync.TaosQuery(t.conn, req.SQL, handler, int64(req.ReqID))
 	logger.Debugln("query cost ", log.GetLogDuration(isDebug, s))
 	code := wrapper.TaosError(result.Res)
 	if code != httperror.SUCCESS {
-		queryFailed = true
+		monitor.WSRecordResult(sqlType, false)
 		errStr := wrapper.TaosErrorStr(result.Res)
 		s = log.GetLogNow(isDebug)
 		thread.Lock()
@@ -402,17 +381,11 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 		wsErrorMsg(ctx, session, code, errStr, WSQuery, req.ReqID)
 		return
 	}
+	monitor.WSRecordResult(sqlType, true)
 	s = log.GetLogNow(isDebug)
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
 	logger.Debugln("is_update_query cost:", log.GetLogDuration(isDebug, s))
 	queryResult := &WSQueryResult{Action: WSQuery, ReqID: req.ReqID}
-	if !config.Conf.Monitor.Disable {
-		if isUpdate {
-			log.WSUpdateQueryRequest.WithLabelValues(clientIP).Inc()
-		} else {
-			log.WSSelectQueryRequest.WithLabelValues(clientIP).Inc()
-		}
-	}
 	if isUpdate {
 		var affectRows int
 		s = log.GetLogNow(isDebug)
