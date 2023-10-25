@@ -27,6 +27,7 @@ const (
 	STMTClose        = "close"
 	STMTGetTagFields = "get_tag_fields"
 	STMTGetColFields = "get_col_fields"
+	STMTUseResult    = "use_result"
 )
 
 type messageType uint64
