@@ -971,7 +971,9 @@ func (h *messageHandler) handleStmtClose(_ context.Context, request Request, log
 	}
 
 	h.stmts.FreeStmtByID(req.StmtID)
-	return &BaseResponse{}
+	resp = &BaseResponse{}
+	resp.SetNull(true)
+	return resp
 }
 
 type StmtGetColFieldsRequest struct {
