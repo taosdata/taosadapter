@@ -6,6 +6,7 @@ import (
 
 	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/common/parser"
+	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
 )
 
@@ -31,72 +32,72 @@ func BMIsNull(c byte, n int) bool {
 	return c&(1<<(7-BitPos(n))) == (1 << (7 - BitPos(n)))
 }
 
-func ItemIsNull(pHeader uintptr, row int) bool {
+func ItemIsNull(pHeader unsafe.Pointer, row int) bool {
 	offset := CharOffset(row)
-	c := *((*byte)(unsafe.Pointer(pHeader + uintptr(offset))))
+	c := *((*byte)(tools.AddPointer(pHeader, uintptr(offset))))
 	return BMIsNull(c, row)
 }
 
-func WriteRawJsonBool(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	if (*((*byte)(unsafe.Pointer(pStart + uintptr(row)*1)))) != 0 {
+func WriteRawJsonBool(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row int) {
+	if (*((*byte)(tools.AddPointer(pStart, uintptr(row)*1)))) != 0 {
 		builder.WriteTrue()
 	} else {
 		builder.WriteFalse()
 	}
 }
 
-func WriteRawJsonTinyint(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteInt8(*((*int8)(unsafe.Pointer(pStart + uintptr(row)*parser.Int8Size))))
+func WriteRawJsonTinyint(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row int) {
+	builder.WriteInt8(*((*int8)(tools.AddPointer(pStart, uintptr(row)*parser.Int8Size))))
 }
 
-func WriteRawJsonSmallint(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteInt16(*((*int16)(unsafe.Pointer(pStart + uintptr(row)*parser.Int16Size))))
+func WriteRawJsonSmallint(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row int) {
+	builder.WriteInt16(*((*int16)(tools.AddPointer(pStart, uintptr(row)*parser.Int16Size))))
 }
 
-func WriteRawJsonInt(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteInt32(*((*int32)(unsafe.Pointer(pStart + uintptr(row)*parser.Int32Size))))
+func WriteRawJsonInt(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row int) {
+	builder.WriteInt32(*((*int32)(tools.AddPointer(pStart, uintptr(row)*parser.Int32Size))))
 }
 
-func WriteRawJsonBigint(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteInt64(*((*int64)(unsafe.Pointer(pStart + uintptr(row)*parser.Int64Size))))
+func WriteRawJsonBigint(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row int) {
+	builder.WriteInt64(*((*int64)(tools.AddPointer(pStart, uintptr(row)*parser.Int64Size))))
 }
 
-func WriteRawJsonUTinyint(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteUint8(*((*uint8)(unsafe.Pointer(pStart + uintptr(row)*parser.UInt8Size))))
+func WriteRawJsonUTinyint(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row int) {
+	builder.WriteUint8(*((*uint8)(tools.AddPointer(pStart, uintptr(row)*parser.UInt8Size))))
 }
 
-func WriteRawJsonUSmallint(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteUint16(*((*uint16)(unsafe.Pointer(pStart + uintptr(row)*parser.UInt16Size))))
+func WriteRawJsonUSmallint(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row int) {
+	builder.WriteUint16(*((*uint16)(tools.AddPointer(pStart, uintptr(row)*parser.UInt16Size))))
 }
 
-func WriteRawJsonUInt(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteUint32(*((*uint32)(unsafe.Pointer(pStart + uintptr(row)*parser.UInt32Size))))
+func WriteRawJsonUInt(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row int) {
+	builder.WriteUint32(*((*uint32)(tools.AddPointer(pStart, uintptr(row)*parser.UInt32Size))))
 }
 
-func WriteRawJsonUBigint(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteUint64(*((*uint64)(unsafe.Pointer(pStart + uintptr(row)*parser.UInt64Size))))
+func WriteRawJsonUBigint(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row int) {
+	builder.WriteUint64(*((*uint64)(tools.AddPointer(pStart, uintptr(row)*parser.UInt64Size))))
 }
 
-func WriteRawJsonFloat(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteFloat32(math.Float32frombits(*((*uint32)(unsafe.Pointer(pStart + uintptr(row)*parser.Float32Size)))))
+func WriteRawJsonFloat(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row int) {
+	builder.WriteFloat32(math.Float32frombits(*((*uint32)(tools.AddPointer(pStart, uintptr(row)*parser.Float32Size)))))
 }
 
-func WriteRawJsonDouble(builder *jsonbuilder.Stream, pStart uintptr, row int) {
-	builder.WriteFloat64(math.Float64frombits(*((*uint64)(unsafe.Pointer(pStart + uintptr(row)*parser.Float64Size)))))
+func WriteRawJsonDouble(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row int) {
+	builder.WriteFloat64(math.Float64frombits(*((*uint64)(tools.AddPointer(pStart, uintptr(row)*parser.Float64Size)))))
 }
 
-func WriteRawJsonTime(builder *jsonbuilder.Stream, pStart uintptr, row int, precision int, timeFormat FormatTimeFunc) {
-	value := *((*int64)(unsafe.Pointer(pStart + uintptr(row)*parser.Int64Size)))
+func WriteRawJsonTime(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row int, precision int, timeFormat FormatTimeFunc) {
+	value := *((*int64)(tools.AddPointer(pStart, uintptr(row)*parser.Int64Size)))
 	timeFormat(builder, value, precision)
 }
 
-func WriteRawJsonBinary(builder *jsonbuilder.Stream, pHeader, pStart uintptr, row int) {
-	offset := *((*int32)(unsafe.Pointer(pHeader + uintptr(row*4))))
+func WriteRawJsonBinary(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
+	offset := *((*int32)(tools.AddPointer(pHeader, uintptr(row*4))))
 	if offset == -1 {
 		builder.WriteNil()
 		return
 	}
-	currentRow := unsafe.Pointer(pStart + uintptr(offset))
+	currentRow := tools.AddPointer(pStart, uintptr(offset))
 	clen := *((*int16)(currentRow))
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 
@@ -107,13 +108,13 @@ func WriteRawJsonBinary(builder *jsonbuilder.Stream, pHeader, pStart uintptr, ro
 	builder.WriteByte('"')
 }
 
-func WriteRawJsonNchar(builder *jsonbuilder.Stream, pHeader, pStart uintptr, row int) {
-	offset := *((*int32)(unsafe.Pointer(pHeader + uintptr(row*4))))
+func WriteRawJsonNchar(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
+	offset := *((*int32)(tools.AddPointer(pHeader, uintptr(row*4))))
 	if offset == -1 {
 		builder.WriteNil()
 		return
 	}
-	currentRow := unsafe.Pointer(pStart + uintptr(offset))
+	currentRow := tools.AddPointer(pStart, uintptr(offset))
 	clen := *((*int16)(currentRow)) / 4
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 	builder.WriteByte('"')
@@ -123,13 +124,13 @@ func WriteRawJsonNchar(builder *jsonbuilder.Stream, pHeader, pStart uintptr, row
 	builder.WriteByte('"')
 }
 
-func WriteRawJsonJson(builder *jsonbuilder.Stream, pHeader, pStart uintptr, row int) {
-	offset := *((*int32)(unsafe.Pointer(pHeader + uintptr(row*4))))
+func WriteRawJsonJson(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
+	offset := *((*int32)(tools.AddPointer(pHeader, uintptr(row*4))))
 	if offset == -1 {
 		builder.WriteNil()
 		return
 	}
-	currentRow := unsafe.Pointer(pStart + uintptr(offset))
+	currentRow := tools.AddPointer(pStart, uintptr(offset))
 	clen := *((*int16)(currentRow))
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 
@@ -138,7 +139,7 @@ func WriteRawJsonJson(builder *jsonbuilder.Stream, pHeader, pStart uintptr, row 
 	}
 }
 
-func JsonWriteRawBlock(builder *jsonbuilder.Stream, colType uint8, pHeader, pStart uintptr, row int, precision int, timeFormat FormatTimeFunc) {
+func JsonWriteRawBlock(builder *jsonbuilder.Stream, colType uint8, pHeader, pStart unsafe.Pointer, row int, precision int, timeFormat FormatTimeFunc) {
 	if IsVarDataType(colType) {
 		switch colType {
 		case uint8(common.TSDB_DATA_TYPE_BINARY):

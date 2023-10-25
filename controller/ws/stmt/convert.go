@@ -15,6 +15,7 @@ import (
 	"github.com/taosdata/driver-go/v3/common/parser"
 	stmtCommon "github.com/taosdata/driver-go/v3/common/stmt"
 	"github.com/taosdata/driver-go/v3/types"
+	"github.com/taosdata/taosadapter/v3/tools"
 )
 
 var jsonI = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -607,7 +608,7 @@ func BlockConvert(block unsafe.Pointer, blockSize int, fields []*stmtCommon.Stmt
 	r := make([][]driver.Value, colCount)
 	nullBitMapOffset := uintptr(parser.BitmapLen(blockSize))
 	lengthOffset := parser.RawBlockGetColumnLengthOffset(colCount)
-	pHeader := uintptr(block) + parser.RawBlockGetColDataOffset(colCount)
+	pHeader := tools.AddPointer(block, parser.RawBlockGetColDataOffset(colCount))
 	pStart := pHeader
 	length := 0
 	for column := 0; column < colCount; column++ {
@@ -615,7 +616,7 @@ func BlockConvert(block unsafe.Pointer, blockSize int, fields []*stmtCommon.Stmt
 		colLength := *((*int32)(unsafe.Pointer(uintptr(block) + lengthOffset + uintptr(column)*parser.Int32Size)))
 		if parser.IsVarDataType(uint8(fields[column].FieldType)) {
 			convertF := rawConvertVarDataMap[fields[column].FieldType]
-			pStart = pHeader + uintptr(4*blockSize)
+			pStart = tools.AddPointer(pHeader, uintptr(4*blockSize))
 			for row := 0; row < blockSize; row++ {
 				r[column][row], length = convertF(pHeader, pStart, row)
 				if fieldTypes != nil {
@@ -626,7 +627,7 @@ func BlockConvert(block unsafe.Pointer, blockSize int, fields []*stmtCommon.Stmt
 			}
 		} else {
 			convertF := rawConvertFuncMap[fields[column].FieldType]
-			pStart = pHeader + nullBitMapOffset
+			pStart = tools.AddPointer(pHeader, nullBitMapOffset)
 			for row := 0; row < blockSize; row++ {
 				if ItemIsNull(pHeader, row) {
 					r[column][row] = nil
@@ -635,14 +636,14 @@ func BlockConvert(block unsafe.Pointer, blockSize int, fields []*stmtCommon.Stmt
 				}
 			}
 		}
-		pHeader = pStart + uintptr(colLength)
+		pHeader = tools.AddPointer(pStart, uintptr(colLength))
 	}
 	return r
 }
 
-type rawConvertFunc func(pStart uintptr, row int, arg ...interface{}) driver.Value
+type rawConvertFunc func(pStart unsafe.Pointer, row int, arg ...interface{}) driver.Value
 
-type rawConvertVarDataFunc func(pHeader, pStart uintptr, row int) (driver.Value, int)
+type rawConvertVarDataFunc func(pHeader, pStart unsafe.Pointer, row int) (driver.Value, int)
 
 var rawConvertFuncMap = map[int8]rawConvertFunc{
 	int8(common.TSDB_DATA_TYPE_BOOL):      rawConvertBool,
@@ -665,73 +666,73 @@ var rawConvertVarDataMap = map[int8]rawConvertVarDataFunc{
 	int8(common.TSDB_DATA_TYPE_JSON):   rawConvertJson,
 }
 
-func ItemIsNull(pHeader uintptr, row int) bool {
+func ItemIsNull(pHeader unsafe.Pointer, row int) bool {
 	offset := parser.CharOffset(row)
-	c := *((*byte)(unsafe.Pointer(pHeader + uintptr(offset))))
+	c := *((*byte)(tools.AddPointer(pHeader, uintptr(offset))))
 	return parser.BMIsNull(c, row)
 }
 
-func rawConvertBool(pStart uintptr, row int, _ ...interface{}) driver.Value {
-	if (*((*byte)(unsafe.Pointer(pStart + uintptr(row)*1)))) != 0 {
+func rawConvertBool(pStart unsafe.Pointer, row int, _ ...interface{}) driver.Value {
+	if (*((*byte)(tools.AddPointer(pStart, uintptr(row)*1)))) != 0 {
 		return types.TaosBool(true)
 	} else {
 		return types.TaosBool(false)
 	}
 }
 
-func rawConvertTinyint(pStart uintptr, row int, _ ...interface{}) driver.Value {
-	return types.TaosTinyint(*((*int8)(unsafe.Pointer(pStart + uintptr(row)*1))))
+func rawConvertTinyint(pStart unsafe.Pointer, row int, _ ...interface{}) driver.Value {
+	return types.TaosTinyint(*((*int8)(tools.AddPointer(pStart, uintptr(row)*1))))
 }
 
-func rawConvertSmallint(pStart uintptr, row int, _ ...interface{}) driver.Value {
-	return types.TaosSmallint(*((*int16)(unsafe.Pointer(pStart + uintptr(row)*2))))
+func rawConvertSmallint(pStart unsafe.Pointer, row int, _ ...interface{}) driver.Value {
+	return types.TaosSmallint(*((*int16)(tools.AddPointer(pStart, uintptr(row)*2))))
 }
 
-func rawConvertInt(pStart uintptr, row int, _ ...interface{}) driver.Value {
-	return types.TaosInt(*((*int32)(unsafe.Pointer(pStart + uintptr(row)*4))))
+func rawConvertInt(pStart unsafe.Pointer, row int, _ ...interface{}) driver.Value {
+	return types.TaosInt(*((*int32)(tools.AddPointer(pStart, uintptr(row)*4))))
 }
 
-func rawConvertBigint(pStart uintptr, row int, _ ...interface{}) driver.Value {
-	return types.TaosBigint(*((*int64)(unsafe.Pointer(pStart + uintptr(row)*8))))
+func rawConvertBigint(pStart unsafe.Pointer, row int, _ ...interface{}) driver.Value {
+	return types.TaosBigint(*((*int64)(tools.AddPointer(pStart, uintptr(row)*8))))
 }
 
-func rawConvertUTinyint(pStart uintptr, row int, _ ...interface{}) driver.Value {
-	return types.TaosUTinyint(*((*uint8)(unsafe.Pointer(pStart + uintptr(row)*1))))
+func rawConvertUTinyint(pStart unsafe.Pointer, row int, _ ...interface{}) driver.Value {
+	return types.TaosUTinyint(*((*uint8)(tools.AddPointer(pStart, uintptr(row)*1))))
 }
 
-func rawConvertUSmallint(pStart uintptr, row int, _ ...interface{}) driver.Value {
-	return types.TaosUSmallint(*((*uint16)(unsafe.Pointer(pStart + uintptr(row)*2))))
+func rawConvertUSmallint(pStart unsafe.Pointer, row int, _ ...interface{}) driver.Value {
+	return types.TaosUSmallint(*((*uint16)(tools.AddPointer(pStart, uintptr(row)*2))))
 }
 
-func rawConvertUInt(pStart uintptr, row int, _ ...interface{}) driver.Value {
-	return types.TaosUInt(*((*uint32)(unsafe.Pointer(pStart + uintptr(row)*4))))
+func rawConvertUInt(pStart unsafe.Pointer, row int, _ ...interface{}) driver.Value {
+	return types.TaosUInt(*((*uint32)(tools.AddPointer(pStart, uintptr(row)*4))))
 }
 
-func rawConvertUBigint(pStart uintptr, row int, _ ...interface{}) driver.Value {
-	return types.TaosUBigint(*((*uint64)(unsafe.Pointer(pStart + uintptr(row)*8))))
+func rawConvertUBigint(pStart unsafe.Pointer, row int, _ ...interface{}) driver.Value {
+	return types.TaosUBigint(*((*uint64)(tools.AddPointer(pStart, uintptr(row)*8))))
 }
 
-func rawConvertFloat(pStart uintptr, row int, _ ...interface{}) driver.Value {
-	return types.TaosFloat(*((*float32)(unsafe.Pointer(pStart + uintptr(row)*4))))
+func rawConvertFloat(pStart unsafe.Pointer, row int, _ ...interface{}) driver.Value {
+	return types.TaosFloat(*((*float32)(tools.AddPointer(pStart, uintptr(row)*4))))
 }
 
-func rawConvertDouble(pStart uintptr, row int, _ ...interface{}) driver.Value {
-	return types.TaosDouble(*((*float64)(unsafe.Pointer(pStart + uintptr(row)*8))))
+func rawConvertDouble(pStart unsafe.Pointer, row int, _ ...interface{}) driver.Value {
+	return types.TaosDouble(*((*float64)(tools.AddPointer(pStart, uintptr(row)*8))))
 }
 
-func rawConvertTime(pStart uintptr, row int, arg ...interface{}) driver.Value {
+func rawConvertTime(pStart unsafe.Pointer, row int, arg ...interface{}) driver.Value {
 	return types.TaosTimestamp{
-		T:         common.TimestampConvertToTime(*((*int64)(unsafe.Pointer(pStart + uintptr(row)*8))), arg[0].(int)),
+		T:         common.TimestampConvertToTime(*((*int64)(tools.AddPointer(pStart, uintptr(row)*8))), arg[0].(int)),
 		Precision: arg[0].(int),
 	}
 }
 
-func rawConvertBinary(pHeader, pStart uintptr, row int) (driver.Value, int) {
-	offset := *((*int32)(unsafe.Pointer(pHeader + uintptr(row*4))))
+func rawConvertBinary(pHeader, pStart unsafe.Pointer, row int) (driver.Value, int) {
+	offset := *((*int32)(tools.AddPointer(pHeader, uintptr(row*4))))
 	if offset == -1 {
 		return nil, 0
 	}
-	currentRow := unsafe.Pointer(pStart + uintptr(offset))
+	currentRow := tools.AddPointer(pStart, uintptr(offset))
 	clen := *((*int16)(currentRow))
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 
@@ -743,12 +744,12 @@ func rawConvertBinary(pHeader, pStart uintptr, row int) (driver.Value, int) {
 	return types.TaosBinary(binaryVal), int(clen)
 }
 
-func rawConvertNchar(pHeader, pStart uintptr, row int) (driver.Value, int) {
-	offset := *((*int32)(unsafe.Pointer(pHeader + uintptr(row*4))))
+func rawConvertNchar(pHeader, pStart unsafe.Pointer, row int) (driver.Value, int) {
+	offset := *((*int32)(tools.AddPointer(pHeader, uintptr(row*4))))
 	if offset == -1 {
 		return nil, 0
 	}
-	currentRow := unsafe.Pointer(pStart + uintptr(offset))
+	currentRow := tools.AddPointer(pStart, uintptr(offset))
 	clen := *((*int16)(currentRow)) / 4
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 
@@ -760,12 +761,12 @@ func rawConvertNchar(pHeader, pStart uintptr, row int) (driver.Value, int) {
 	return types.TaosNchar(binaryVal), int(clen) * 4
 }
 
-func rawConvertJson(pHeader, pStart uintptr, row int) (driver.Value, int) {
-	offset := *((*int32)(unsafe.Pointer(pHeader + uintptr(row*4))))
+func rawConvertJson(pHeader, pStart unsafe.Pointer, row int) (driver.Value, int) {
+	offset := *((*int32)(tools.AddPointer(pHeader, uintptr(row*4))))
 	if offset == -1 {
 		return nil, 0
 	}
-	currentRow := unsafe.Pointer(pStart + uintptr(offset))
+	currentRow := tools.AddPointer(pStart, uintptr(offset))
 	clen := *((*int16)(currentRow))
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 
