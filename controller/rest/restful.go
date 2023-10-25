@@ -24,6 +24,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/csv"
 	"github.com/taosdata/taosadapter/v3/tools/ctools"
 	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
@@ -333,8 +334,8 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	builder.WritePure(Query3)
 	precision := wrapper.TaosResultPrecision(res)
 	fetched := false
-	pHeaderList := make([]uintptr, fieldsCount)
-	pStartList := make([]uintptr, fieldsCount)
+	pHeaderList := make([]unsafe.Pointer, fieldsCount)
+	pStartList := make([]unsafe.Pointer, fieldsCount)
 	for {
 		if config.Conf.RestfulRowLimit > -1 && total == config.Conf.RestfulRowLimit {
 			break
@@ -364,20 +365,20 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 			blockSize := result.N
 			nullBitMapOffset := uintptr(ctools.BitmapLen(blockSize))
 			lengthOffset := parser.RawBlockGetColumnLengthOffset(fieldsCount)
-			tmpPHeader := uintptr(block) + parser.RawBlockGetColDataOffset(fieldsCount) // length i32, group u64
+			tmpPHeader := tools.AddPointer(block, parser.RawBlockGetColDataOffset(fieldsCount))
 			tmpPStart := tmpPHeader
 			for column := 0; column < fieldsCount; column++ {
 				colLength := *((*int32)(unsafe.Pointer(uintptr(block) + lengthOffset + uintptr(column)*parser.Int32Size)))
 				if ctools.IsVarDataType(rowsHeader.ColTypes[column]) {
 					pHeaderList[column] = tmpPHeader
-					tmpPStart = tmpPHeader + uintptr(4*blockSize)
+					tmpPStart = tools.AddPointer(tmpPHeader, uintptr(4*blockSize))
 					pStartList[column] = tmpPStart
 				} else {
 					pHeaderList[column] = tmpPHeader
-					tmpPStart = tmpPHeader + nullBitMapOffset
+					tmpPStart = tools.AddPointer(tmpPHeader, nullBitMapOffset)
 					pStartList[column] = tmpPStart
 				}
-				tmpPHeader = tmpPStart + uintptr(colLength)
+				tmpPHeader = tools.AddPointer(tmpPStart, uintptr(colLength))
 			}
 
 			for row := 0; row < result.N; row++ {
