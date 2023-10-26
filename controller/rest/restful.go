@@ -31,6 +31,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
 	"github.com/taosdata/taosadapter/v3/tools/layout"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
+	"github.com/taosdata/taosadapter/v3/tools/sqltype"
 )
 
 var logger = log.GetLogger("restful")
@@ -158,6 +159,7 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID in
 		BadRequestResponse(c, httperror.HTTP_NO_SQL_INPUT)
 		return
 	}
+	sqlType := monitor.RestRecordRequest(sql)
 	c.Set("sql", sql)
 	user := c.MustGet(UserKey).(string)
 	password := c.MustGet(PasswordKey).(string)
@@ -169,7 +171,8 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID in
 		logger.Debugln("connect server cost:", time.Since(s))
 	}
 	if err != nil {
-		logger.WithError(err).Error("connect server error")
+		monitor.RestRecordResult(sqlType, false)
+		logger.WithField("sql", sql).WithError(err).Error("connect server error")
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 			ForbiddenResponse(c, commonpool.ErrWhitelistForbidden.Error())
 			return
@@ -206,7 +209,7 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID in
 		thread.Unlock()
 		logger.Debugln("select db cost:", time.Since(s))
 	}
-	execute(c, logger, taosConnect.TaosConnection, sql, timeFunc, reqID)
+	execute(c, logger, taosConnect.TaosConnection, sql, timeFunc, reqID, sqlType)
 }
 
 var (
@@ -219,7 +222,7 @@ var (
 	Timing            = []byte(`,"timing":`)
 )
 
-func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, sql string, timeFormat ctools.FormatTimeFunc, reqID int64) {
+func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, sql string, timeFormat ctools.FormatTimeFunc, reqID int64, sqlType sqltype.SqlType) {
 	st, calculateTiming := c.Get(StartTimeKey)
 	flushTiming := int64(0)
 	isDebug := log.IsDebug()
@@ -249,11 +252,13 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	res := result.Res
 	code := wrapper.TaosError(res)
 	if code != httperror.SUCCESS {
+		monitor.RestRecordResult(sqlType, false)
 		errStr := wrapper.TaosErrorStr(res)
 		logger.WithFields(logrus.Fields{"sql": sql, "error_code": code & 0xffff, "error_msg": errStr}).Error("")
 		TaosErrorResponse(c, code, errStr)
 		return
 	}
+	monitor.RestRecordResult(sqlType, true)
 	isUpdate := wrapper.TaosIsUpdateQuery(res)
 	w := c.Writer
 	c.Header("Content-Type", "application/json; charset=utf-8")
@@ -300,6 +305,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	fieldsCount := wrapper.TaosNumFields(res)
 	rowsHeader, err := wrapper.ReadColumn(res, fieldsCount)
 	if err != nil {
+		logger.WithField("sql", sql).WithError(err).Error("read column error")
 		tError, ok := err.(*tErrors.TaosError)
 		if ok {
 			TaosErrorResponse(c, int(tError.Code), tError.ErrStr)
@@ -415,7 +421,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 	builder.WriteObjectEnd()
 	err = forceFlush(w, builder)
 	if err != nil {
-		logger.WithError(err).Error("force flush error")
+		logger.WithField("sql", sql).WithError(err).Error("force flush error")
 	}
 }
 

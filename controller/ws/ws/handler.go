@@ -27,6 +27,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
@@ -477,6 +478,7 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 		logger.Errorf("## unmarshal ws query request %s error: %s", request.Args, err)
 		return &BaseResponse{Code: 0xffff, Message: "unmarshal ws query request error"}
 	}
+	sqlType := monitor.WSRecordRequest(req.Sql)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
@@ -486,9 +488,10 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 	code := wrapper.TaosError(result.Res)
 	if code != httperror.SUCCESS {
 		freeCPointer(result.Res)
+		monitor.WSRecordResult(sqlType, false)
 		return &BaseResponse{Code: code, Message: wrapper.TaosErrorStr(result.Res)}
 	}
-
+	monitor.WSRecordResult(sqlType, true)
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
 	logger.Debugln("is_update_query cost:", log.GetLogDuration(isDebug, s))
 	if isUpdate {
@@ -1098,7 +1101,9 @@ func (h *messageHandler) handleStmtClose(_ context.Context, request Request, log
 	}
 
 	h.stmts.FreeStmtByID(req.StmtID)
-	return &BaseResponse{}
+	resp = &BaseResponse{}
+	resp.SetNull(true)
+	return resp
 }
 
 type StmtGetColFieldsRequest struct {

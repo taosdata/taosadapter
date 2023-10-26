@@ -69,6 +69,14 @@ func TestInit(t *testing.T) {
 					Password:                  "taosdata",
 					WriteInterval:             30 * time.Second,
 				},
+				UploadKeeper: UploadKeeper{
+					Enable:        false,
+					Url:           "http://127.0.0.1:6043/adapter_report",
+					Interval:      15 * time.Second,
+					Timeout:       5 * time.Second,
+					RetryTimes:    3,
+					RetryInterval: 5 * time.Second,
+				},
 				TMQ: TMQ{
 					ReleaseIntervalMultiplierForAutocommit: 2,
 				},
