@@ -1609,12 +1609,15 @@ func TestTCP(t *testing.T) {
 	_, err = conn.Write([]byte("cpu.time_idle:42|c\n"))
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
-
+	start := time.Now()
 	for {
 		require.NoError(t, statsd.Gather(&acc))
 
 		if len(acc.Metrics) > 0 {
 			break
+		}
+		if time.Now().Sub(start) > time.Second*5 {
+			t.Fatal("timeout waiting for metrics")
 		}
 	}
 
@@ -1655,12 +1658,15 @@ func TestUdp(t *testing.T) {
 	_, err = conn.Write([]byte("cpu.time_idle:42|c\n"))
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
-
+	start := time.Now()
 	for {
 		require.NoError(t, statsd.Gather(&acc))
 
 		if len(acc.Metrics) > 0 {
 			break
+		}
+		if time.Now().Sub(start) > time.Second*5 {
+			t.Fatal("timeout waiting for metrics")
 		}
 	}
 
