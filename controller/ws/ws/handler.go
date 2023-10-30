@@ -368,7 +368,7 @@ type ConnRequest struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	DB       string `json:"db"`
-	Mode     *int   `json:"mode"`
+	//Mode     *int   `json:"mode"`
 }
 
 func (h *messageHandler) handleConnect(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
@@ -432,24 +432,24 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		errors.As(err, &taosErr)
 		return &BaseResponse{Code: int(taosErr.Code), Message: taosErr.ErrStr}
 	}
-	if req.Mode != nil {
-		switch *req.Mode {
-		case common.TAOS_CONN_MODE_BI:
-			// BI mode
-			code := wrapper.TaosSetConnMode(conn, common.TAOS_CONN_MODE_BI, 1)
-			if code != 0 {
-				thread.Lock()
-				wrapper.TaosClose(conn)
-				thread.Unlock()
-				return &BaseResponse{Code: code, Message: wrapper.TaosErrorStr(nil)}
-			}
-		default:
-			thread.Lock()
-			wrapper.TaosClose(conn)
-			thread.Unlock()
-			return &BaseResponse{Code: 0xffff, Message: fmt.Sprintf("unexpected mode: %d", req.Mode)}
-		}
-	}
+	//if req.Mode != nil {
+	//	switch *req.Mode {
+	//	case common.TAOS_CONN_MODE_BI:
+	//		// BI mode
+	//		code := wrapper.TaosSetConnMode(conn, common.TAOS_CONN_MODE_BI, 1)
+	//		if code != 0 {
+	//			thread.Lock()
+	//			wrapper.TaosClose(conn)
+	//			thread.Unlock()
+	//			return &BaseResponse{Code: code, Message: wrapper.TaosErrorStr(nil)}
+	//		}
+	//	default:
+	//		thread.Lock()
+	//		wrapper.TaosClose(conn)
+	//		thread.Unlock()
+	//		return &BaseResponse{Code: 0xffff, Message: fmt.Sprintf("unexpected mode: %d", req.Mode)}
+	//	}
+	//}
 	h.conn = conn
 	go h.waitSignal()
 	return &BaseResponse{}
