@@ -440,6 +440,38 @@ func stmtConvert(src [][]driver.Value, fields []*stmtCommon.StmtField, fieldType
 					fieldTypes[column].MaxLen = len(src[column][row].(types.TaosJson))
 				}
 			}
+		case common.TSDB_DATA_TYPE_VARBINARY:
+			for row := 0; row < len(src[column]); row++ {
+				if src[column][row] == nil {
+					continue
+				}
+				switch src[column][row].(type) {
+				case string:
+					src[column][row] = types.TaosVarBinary(src[column][row].(string))
+				case []byte:
+					src[column][row] = types.TaosVarBinary(src[column][row].([]byte))
+				default:
+					return fmt.Errorf("stmtConvert:%v can not convert to varbinary", src[column][row])
+				}
+				if fieldTypes != nil && len(src[column][row].(types.TaosVarBinary)) > fieldTypes[column].MaxLen {
+					fieldTypes[column].MaxLen = len(src[column][row].(types.TaosVarBinary))
+				}
+			}
+		case common.TSDB_DATA_TYPE_GEOMETRY:
+			for row := 0; row < len(src[column]); row++ {
+				if src[column][row] == nil {
+					continue
+				}
+				switch src[column][row].(type) {
+				case []byte:
+					src[column][row] = types.TaosGeometry(src[column][row].([]byte))
+				default:
+					return fmt.Errorf("stmtConvert:%v can not convert to geometry", src[column][row])
+				}
+				if fieldTypes != nil && len(src[column][row].(types.TaosGeometry)) > fieldTypes[column].MaxLen {
+					fieldTypes[column].MaxLen = len(src[column][row].(types.TaosGeometry))
+				}
+			}
 		}
 	}
 	return nil
@@ -486,6 +518,26 @@ func StmtParseColumn(columns json.RawMessage, fields []*stmtCommon.StmtField, fi
 				case common.TSDB_DATA_TYPE_BINARY:
 					s := iterRow.ReadString()
 					data[colIndex] = append(data[colIndex], types.TaosBinary(s))
+					if fieldTypes != nil && len(s) > fieldTypes[colIndex].MaxLen {
+						fieldTypes[colIndex].MaxLen = len(s)
+					}
+				case common.TSDB_DATA_TYPE_VARBINARY:
+					str := iterRow.ReadString()
+					s, err := strToHex(str)
+					if err != nil {
+						iterRow.ReportError("parse varbinary", err.Error())
+					}
+					data[colIndex] = append(data[colIndex], types.TaosVarBinary(s))
+					if fieldTypes != nil && len(s) > fieldTypes[colIndex].MaxLen {
+						fieldTypes[colIndex].MaxLen = len(s)
+					}
+				case common.TSDB_DATA_TYPE_GEOMETRY:
+					str := iterRow.ReadString()
+					s, err := strToHex(str)
+					if err != nil {
+						iterRow.ReportError("parse geometry", err.Error())
+					}
+					data[colIndex] = append(data[colIndex], types.TaosGeometry(s))
 					if fieldTypes != nil && len(s) > fieldTypes[colIndex].MaxLen {
 						fieldTypes[colIndex].MaxLen = len(s)
 					}
@@ -562,6 +614,20 @@ func StmtParseTag(tags json.RawMessage, fields []*stmtCommon.StmtField) ([]drive
 				data[colIndex] = types.TaosDouble(iterCol.ReadFloat64())
 			case common.TSDB_DATA_TYPE_BINARY:
 				data[colIndex] = types.TaosBinary(iterCol.ReadString())
+			case common.TSDB_DATA_TYPE_VARBINARY:
+				str := iterCol.ReadString()
+				s, err := strToHex(str)
+				if err != nil {
+					iterCol.ReportError("parse varbinary", err.Error())
+				}
+				data[colIndex] = types.TaosVarBinary(s)
+			case common.TSDB_DATA_TYPE_GEOMETRY:
+				str := iterCol.ReadString()
+				s, err := strToHex(str)
+				if err != nil {
+					iterCol.ReportError("parse geometry", err.Error())
+				}
+				data[colIndex] = types.TaosGeometry(s)
 			case common.TSDB_DATA_TYPE_TIMESTAMP:
 				valueType := iterCol.WhatIsNext()
 				ts := types.TaosTimestamp{
@@ -661,9 +727,11 @@ var rawConvertFuncMap = map[int8]rawConvertFunc{
 }
 
 var rawConvertVarDataMap = map[int8]rawConvertVarDataFunc{
-	int8(common.TSDB_DATA_TYPE_BINARY): rawConvertBinary,
-	int8(common.TSDB_DATA_TYPE_NCHAR):  rawConvertNchar,
-	int8(common.TSDB_DATA_TYPE_JSON):   rawConvertJson,
+	int8(common.TSDB_DATA_TYPE_BINARY):    rawConvertBinary,
+	int8(common.TSDB_DATA_TYPE_NCHAR):     rawConvertNchar,
+	int8(common.TSDB_DATA_TYPE_JSON):      rawConvertJson,
+	int8(common.TSDB_DATA_TYPE_VARBINARY): rawConvertVarBinary,
+	int8(common.TSDB_DATA_TYPE_GEOMETRY):  rawConvertGeometry,
 }
 
 func ItemIsNull(pHeader unsafe.Pointer, row int) bool {
@@ -728,20 +796,27 @@ func rawConvertTime(pStart unsafe.Pointer, row int, arg ...interface{}) driver.V
 }
 
 func rawConvertBinary(pHeader, pStart unsafe.Pointer, row int) (driver.Value, int) {
-	offset := *((*int32)(tools.AddPointer(pHeader, uintptr(row*4))))
-	if offset == -1 {
+	binaryVal, clen := getBytesFromPointer(pHeader, pStart, row)
+	if binaryVal == nil {
 		return nil, 0
 	}
-	currentRow := tools.AddPointer(pStart, uintptr(offset))
-	clen := *((*int16)(currentRow))
-	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
+	return types.TaosBinary(binaryVal), clen
+}
 
-	binaryVal := make([]byte, clen)
-
-	for index := int16(0); index < clen; index++ {
-		binaryVal[index] = *((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index))))
+func rawConvertVarBinary(pHeader, pStart unsafe.Pointer, row int) (driver.Value, int) {
+	binaryVal, clen := getBytesFromPointer(pHeader, pStart, row)
+	if binaryVal == nil {
+		return nil, 0
 	}
-	return types.TaosBinary(binaryVal), int(clen)
+	return types.TaosVarBinary(binaryVal), clen
+}
+
+func rawConvertGeometry(pHeader, pStart unsafe.Pointer, row int) (driver.Value, int) {
+	binaryVal, clen := getBytesFromPointer(pHeader, pStart, row)
+	if binaryVal == nil {
+		return nil, 0
+	}
+	return types.TaosGeometry(binaryVal), clen
 }
 
 func rawConvertNchar(pHeader, pStart unsafe.Pointer, row int) (driver.Value, int) {
@@ -762,6 +837,14 @@ func rawConvertNchar(pHeader, pStart unsafe.Pointer, row int) (driver.Value, int
 }
 
 func rawConvertJson(pHeader, pStart unsafe.Pointer, row int) (driver.Value, int) {
+	binaryVal, clen := getBytesFromPointer(pHeader, pStart, row)
+	if binaryVal == nil {
+		return nil, 0
+	}
+	return types.TaosJson(binaryVal), clen
+}
+
+func getBytesFromPointer(pHeader, pStart unsafe.Pointer, row int) ([]byte, int) {
 	offset := *((*int32)(tools.AddPointer(pHeader, uintptr(row*4))))
 	if offset == -1 {
 		return nil, 0
@@ -775,5 +858,24 @@ func rawConvertJson(pHeader, pStart unsafe.Pointer, row int) (driver.Value, int)
 	for index := int16(0); index < clen; index++ {
 		binaryVal[index] = *((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index))))
 	}
-	return types.TaosJson(binaryVal), int(clen)
+	return binaryVal, int(clen)
+}
+
+func strToHex(str string) ([]byte, error) {
+	if len(str) == 0 {
+		return nil, nil
+	}
+	if len(str)%2 != 0 {
+		return nil, fmt.Errorf("strToHex: %s is not hex string", str)
+	}
+	times := len(str) / 2
+	result := make([]byte, 0, times)
+	for i := 0; i < times; i++ {
+		v, err := strconv.ParseUint(str[i*2:i*2+2], 16, 8)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, byte(v))
+	}
+	return result, nil
 }
