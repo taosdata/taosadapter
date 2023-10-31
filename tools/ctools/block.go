@@ -133,26 +133,7 @@ func WriteRawJsonVarBinary(builder *jsonbuilder.Stream, pHeader, pStart unsafe.P
 }
 
 func WriteRawJsonGeometry(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
-	offset := *((*int32)(tools.AddPointer(pHeader, uintptr(row*4))))
-	if offset == -1 {
-		builder.WriteNil()
-		return
-	}
-	currentRow := tools.AddPointer(pStart, uintptr(offset))
-	clen := *((*int16)(currentRow))
-	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
-
-	builder.WriteByte('"')
-	var b byte
-	for index := int16(0); index < clen; index++ {
-		b = *((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index))))
-		s := strconv.FormatInt(int64(b), 16)
-		if len(s) == 1 {
-			builder.WriteByte('0')
-		}
-		builder.WriteRaw(s)
-	}
-	builder.WriteByte('"')
+	WriteRawJsonVarBinary(builder, pHeader, pStart, row)
 }
 
 func WriteRawJsonNchar(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
