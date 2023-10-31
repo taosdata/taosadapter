@@ -27,6 +27,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 )
 
@@ -130,36 +131,36 @@ func NewQueryController() *QueryController {
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 			logger := session.MustGet("logger").(*logrus.Entry)
 			logger.Debugln("get ws block message data:", data)
-			p0 := *(*uintptr)(unsafe.Pointer(&data))
-			reqID := *(*uint64)(unsafe.Pointer(p0))
-			messageID := *(*uint64)(unsafe.Pointer(p0 + uintptr(8)))
-			action := *(*uint64)(unsafe.Pointer(p0 + uintptr(16)))
+			p0 := unsafe.Pointer(&data[0])
+			reqID := *(*uint64)(p0)
+			messageID := *(*uint64)(tools.AddPointer(p0, uintptr(8)))
+			action := *(*uint64)(tools.AddPointer(p0, uintptr(16)))
 			switch action {
 			case TMQRawMessage:
-				length := *(*uint32)(unsafe.Pointer(p0 + uintptr(24)))
-				metaType := *(*uint16)(unsafe.Pointer(p0 + uintptr(28)))
-				b := unsafe.Pointer(p0 + uintptr(30))
+				length := *(*uint32)(tools.AddPointer(p0, uintptr(24)))
+				metaType := *(*uint16)(tools.AddPointer(p0, uintptr(28)))
+				b := tools.AddPointer(p0, uintptr(30))
 				t.writeRaw(ctx, session, reqID, messageID, length, metaType, b)
 			case RawBlockMessage:
-				numOfRows := *(*int32)(unsafe.Pointer(p0 + uintptr(24)))
-				tableNameLength := *(*uint16)(unsafe.Pointer(p0 + uintptr(28)))
+				numOfRows := *(*int32)(tools.AddPointer(p0, uintptr(24)))
+				tableNameLength := *(*uint16)(tools.AddPointer(p0, uintptr(28)))
 				tableName := make([]byte, tableNameLength)
 				for i := 0; i < int(tableNameLength); i++ {
-					tableName[i] = *(*byte)(unsafe.Pointer(p0 + uintptr(30+i)))
+					tableName[i] = *(*byte)(tools.AddPointer(p0, uintptr(30+i)))
 				}
-				b := unsafe.Pointer(p0 + uintptr(30+tableNameLength))
+				b := tools.AddPointer(p0, uintptr(30+tableNameLength))
 				t.writeRawBlock(ctx, session, reqID, int(numOfRows), string(tableName), b)
 			case RawBlockMessageWithFields:
-				numOfRows := *(*int32)(unsafe.Pointer(p0 + uintptr(24)))
-				tableNameLength := int(*(*uint16)(unsafe.Pointer(p0 + uintptr(28))))
+				numOfRows := *(*int32)(tools.AddPointer(p0, uintptr(24)))
+				tableNameLength := int(*(*uint16)(tools.AddPointer(p0, uintptr(28))))
 				tableName := make([]byte, tableNameLength)
 				for i := 0; i < tableNameLength; i++ {
-					tableName[i] = *(*byte)(unsafe.Pointer(p0 + uintptr(30+i)))
+					tableName[i] = *(*byte)(tools.AddPointer(p0, uintptr(30+i)))
 				}
-				b := unsafe.Pointer(p0 + uintptr(30+tableNameLength))
+				b := tools.AddPointer(p0, uintptr(30+tableNameLength))
 				blockLength := int(parser.RawBlockGetLength(b))
 				numOfColumn := int(parser.RawBlockGetNumOfCols(b))
-				fieldsBlock := unsafe.Pointer(p0 + uintptr(30+tableNameLength+blockLength))
+				fieldsBlock := tools.AddPointer(p0, uintptr(30+tableNameLength+blockLength))
 				t.writeRawBlockWithFields(ctx, session, reqID, int(numOfRows), string(tableName), b, fieldsBlock, numOfColumn)
 			}
 		}()
