@@ -52,7 +52,9 @@ func Init() {
 		os.Exit(0)
 	}
 	if *v {
-		fmt.Printf(" %sadapter v%s-%s\n", version.CUS_PROMPT, version.Version, version.CommitID)
+		fmt.Printf("version: %s\n", version.Version)
+		fmt.Printf("gitinfo: %s\n", version.CommitID)
+		fmt.Printf("buildInfo: Built at %s\n", version.BuildInfo)
 		os.Exit(0)
 	}
 	if *cp != "" {
