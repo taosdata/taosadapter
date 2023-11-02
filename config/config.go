@@ -43,7 +43,7 @@ func Init() {
 		viper.AddConfigPath(fmt.Sprintf("/etc/%s", version.CUS_PROMPT))
 		cp = pflag.StringP("config", "c", "", fmt.Sprintf("config path default /etc/%s/%sadapter.toml", version.CUS_PROMPT, version.CUS_PROMPT))
 	}
-	v := pflag.Bool("version", false, "Print the version and exit")
+	v := pflag.BoolP("version", "V", false, "Print the version and exit")
 	help := pflag.Bool("help", false, "Print this help message and exit")
 	pflag.Parse()
 	if *help {
@@ -52,7 +52,9 @@ func Init() {
 		os.Exit(0)
 	}
 	if *v {
-		fmt.Printf(" %sadapter v%s-%s\n", version.CUS_PROMPT, version.Version, version.CommitID)
+		fmt.Printf("version: %s\n", version.Version)
+		fmt.Printf("gitinfo: %s\n", version.CommitID)
+		fmt.Printf("buildInfo: Built at %s\n", version.BuildInfo)
 		os.Exit(0)
 	}
 	if *cp != "" {
