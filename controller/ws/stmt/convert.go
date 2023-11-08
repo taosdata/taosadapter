@@ -732,12 +732,12 @@ func rawConvertBinary(pHeader, pStart uintptr, row int) (driver.Value, int) {
 		return nil, 0
 	}
 	currentRow := unsafe.Pointer(pStart + uintptr(offset))
-	clen := *((*int16)(currentRow))
+	clen := *((*uint16)(currentRow))
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 
 	binaryVal := make([]byte, clen)
 
-	for index := int16(0); index < clen; index++ {
+	for index := uint16(0); index < clen; index++ {
 		binaryVal[index] = *((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index))))
 	}
 	return types.TaosBinary(binaryVal), int(clen)
@@ -749,12 +749,12 @@ func rawConvertNchar(pHeader, pStart uintptr, row int) (driver.Value, int) {
 		return nil, 0
 	}
 	currentRow := unsafe.Pointer(pStart + uintptr(offset))
-	clen := *((*int16)(currentRow)) / 4
+	clen := *((*uint16)(currentRow)) / 4
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 
 	binaryVal := make([]rune, clen)
 
-	for index := int16(0); index < clen; index++ {
+	for index := uint16(0); index < clen; index++ {
 		binaryVal[index] = *((*rune)(unsafe.Pointer(uintptr(currentRow) + uintptr(index*4))))
 	}
 	return types.TaosNchar(binaryVal), int(clen) * 4
@@ -766,12 +766,12 @@ func rawConvertJson(pHeader, pStart uintptr, row int) (driver.Value, int) {
 		return nil, 0
 	}
 	currentRow := unsafe.Pointer(pStart + uintptr(offset))
-	clen := *((*int16)(currentRow))
+	clen := *((*uint16)(currentRow))
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 
 	binaryVal := make([]byte, clen)
 
-	for index := int16(0); index < clen; index++ {
+	for index := uint16(0); index < clen; index++ {
 		binaryVal[index] = *((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index))))
 	}
 	return types.TaosJson(binaryVal), int(clen)
