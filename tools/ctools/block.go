@@ -99,11 +99,11 @@ func WriteRawJsonBinary(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Poin
 		return
 	}
 	currentRow := tools.AddPointer(pStart, uintptr(offset))
-	clen := *((*int16)(currentRow))
+	clen := *((*uint16)(currentRow))
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 
 	builder.WriteByte('"')
-	for index := int16(0); index < clen; index++ {
+	for index := uint16(0); index < clen; index++ {
 		builder.WriteStringByte(*((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index)))))
 	}
 	builder.WriteByte('"')
@@ -116,12 +116,12 @@ func WriteRawJsonVarBinary(builder *jsonbuilder.Stream, pHeader, pStart unsafe.P
 		return
 	}
 	currentRow := tools.AddPointer(pStart, uintptr(offset))
-	clen := *((*int16)(currentRow))
+	clen := *((*uint16)(currentRow))
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 
 	builder.WriteByte('"')
 	var b byte
-	for index := int16(0); index < clen; index++ {
+	for index := uint16(0); index < clen; index++ {
 		b = *((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index))))
 		s := strconv.FormatInt(int64(b), 16)
 		if len(s) == 1 {
@@ -143,10 +143,10 @@ func WriteRawJsonNchar(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Point
 		return
 	}
 	currentRow := tools.AddPointer(pStart, uintptr(offset))
-	clen := *((*int16)(currentRow)) / 4
+	clen := *((*uint16)(currentRow)) / 4
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 	builder.WriteByte('"')
-	for index := int16(0); index < clen; index++ {
+	for index := uint16(0); index < clen; index++ {
 		builder.WriteRuneString(*((*rune)(unsafe.Pointer(uintptr(currentRow) + uintptr(index*4)))))
 	}
 	builder.WriteByte('"')
@@ -159,10 +159,10 @@ func WriteRawJsonJson(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointe
 		return
 	}
 	currentRow := tools.AddPointer(pStart, uintptr(offset))
-	clen := *((*int16)(currentRow))
+	clen := *((*uint16)(currentRow))
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 
-	for index := int16(0); index < clen; index++ {
+	for index := uint16(0); index < clen; index++ {
 		builder.WriteByte(*((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index)))))
 	}
 }
