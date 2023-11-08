@@ -237,6 +237,11 @@ jobs:
         with:
           path: 'taosadapter'
 
+      - name: copy taos cfg
+        run: |
+          sudo mkdir -p /etc/taos
+          sudo cp ./taosadapter/.github/workflows/taos.cfg /etc/taos/taos.cfg
+
       - uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go }}
@@ -249,7 +254,14 @@ jobs:
           EOF
 
       - name: start taosd
-        run: nohup sudo sh ./start.sh &
+        run: nohup sudo sh ./start.sh & disown
 
       - name: test
-        run: cd ./taosadapter && go test -v --count=1 ./...
+        id: test
+        run: cd ./taosadapter && sudo go test -v --count=1 ./...
+
+      - uses: actions/upload-artifact@v3
+        if: always() && (steps.test.outcome == 'failure' || steps.test.outcome == 'cancelled')
+        with:
+          name: ${{ runner.os }}-${{ matrix.go }}-log
+          path: /var/log/taos/
