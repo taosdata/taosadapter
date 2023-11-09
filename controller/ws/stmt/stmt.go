@@ -27,6 +27,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/tools"
 )
 
 type STMTController struct {
@@ -177,11 +178,11 @@ func NewSTMTController() *STMTController {
 			//p0+8 uint64  stmt_id
 			//p0+16 uint64 (1 (set tag) 2 (bind))
 			//p0+24 raw block
-			p0 := *(*uintptr)(unsafe.Pointer(&data))
-			reqID := *(*uint64)(unsafe.Pointer(p0))
-			stmtID := *(*uint64)(unsafe.Pointer(p0 + uintptr(8)))
-			action := *(*uint64)(unsafe.Pointer(p0 + uintptr(16)))
-			block := unsafe.Pointer(p0 + uintptr(24))
+			p0 := unsafe.Pointer(&data[0])
+			reqID := *(*uint64)(p0)
+			stmtID := *(*uint64)(tools.AddPointer(p0, uintptr(8)))
+			action := *(*uint64)(tools.AddPointer(p0, uintptr(16)))
+			block := tools.AddPointer(p0, uintptr(24))
 			columns := parser.RawBlockGetNumOfCols(block)
 			rows := parser.RawBlockGetNumOfRows(block)
 			if stmtM.IsClosed() {

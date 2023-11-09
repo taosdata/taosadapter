@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/common/parser"
+	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
 )
 
@@ -46,25 +47,25 @@ func TestJsonWriteRawBlock(t *testing.T) {
 	fieldTypes := []uint8{9, 1, 2, 3, 4, 5, 11, 12, 13, 14, 6, 7, 8, 10, 15}
 	blockSize := 2
 	precision := 0
-	pHeaderList := make([]uintptr, fieldsCount)
-	pStartList := make([]uintptr, fieldsCount)
+	pHeaderList := make([]unsafe.Pointer, fieldsCount)
+	pStartList := make([]unsafe.Pointer, fieldsCount)
 	nullBitMapOffset := uintptr(BitmapLen(blockSize))
-	block := unsafe.Pointer(*(*uintptr)(unsafe.Pointer(&raw)))
+	block := unsafe.Pointer(&raw[0])
 	lengthOffset := parser.RawBlockGetColumnLengthOffset(fieldsCount)
-	tmpPHeader := uintptr(block) + parser.RawBlockGetColDataOffset(fieldsCount)
+	tmpPHeader := tools.AddPointer(block, parser.RawBlockGetColDataOffset(fieldsCount))
 	tmpPStart := tmpPHeader
 	for column := 0; column < fieldsCount; column++ {
 		colLength := *((*int32)(unsafe.Pointer(uintptr(block) + lengthOffset + uintptr(column)*parser.Int32Size)))
 		if IsVarDataType(fieldTypes[column]) {
 			pHeaderList[column] = tmpPHeader
-			tmpPStart = tmpPHeader + uintptr(4*blockSize)
+			tmpPStart = tools.AddPointer(tmpPHeader, uintptr(4*blockSize))
 			pStartList[column] = tmpPStart
 		} else {
 			pHeaderList[column] = tmpPHeader
-			tmpPStart = tmpPHeader + nullBitMapOffset
+			tmpPStart = tools.AddPointer(tmpPHeader, nullBitMapOffset)
 			pStartList[column] = tmpPStart
 		}
-		tmpPHeader = tmpPStart + uintptr(colLength)
+		tmpPHeader = tools.AddPointer(tmpPStart, uintptr(colLength))
 	}
 	timeBuffer := make([]byte, 0, 30)
 	builder.WriteObjectStart()
