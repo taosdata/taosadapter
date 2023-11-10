@@ -217,9 +217,13 @@ func NewSTMTController() *STMTController {
 
 	stmtM.HandleError(func(session *melody.Session, err error) {
 		logger := session.MustGet("logger").(*logrus.Entry)
-		_, is := err.(*websocket.CloseError)
+		wsCloseErr, is := err.(*websocket.CloseError)
 		if is {
-			logger.WithError(err).Debugln("ws close in error")
+			if wsCloseErr.Code == websocket.CloseNormalClosure {
+				logger.Debugln("ws close normal")
+			} else {
+				logger.WithError(err).Debugln("ws close in error")
+			}
 		} else {
 			logger.WithError(err).Errorln("ws error")
 		}
