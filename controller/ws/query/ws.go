@@ -13,7 +13,6 @@ import (
 	"unsafe"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/common/parser"
@@ -179,17 +178,7 @@ func NewQueryController() *QueryController {
 	})
 
 	queryM.HandleError(func(session *melody.Session, err error) {
-		logger := session.MustGet("logger").(*logrus.Entry)
-		wsCloseErr, is := err.(*websocket.CloseError)
-		if is {
-			if wsCloseErr.Code == websocket.CloseNormalClosure {
-				logger.Debugln("ws close normal")
-			} else {
-				logger.WithError(err).Debugln("ws close in error")
-			}
-		} else {
-			logger.WithError(err).Errorln("ws error")
-		}
+		wstool.LogWSError(session, err)
 		t, exist := session.Get(TaosSessionKey)
 		if exist && t != nil {
 			t.(*Taos).Close()
