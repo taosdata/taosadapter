@@ -1340,7 +1340,7 @@ func (h *messageHandler) handleRawBlockMessage(_ context.Context, req dealBinary
 
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
-	code := wrapper.TaosWriteRawBlock(h.conn, int(numOfRows), rawBlock, string(tableName))
+	code := wrapper.TaosWriteRawBlockWithReqID(h.conn, int(numOfRows), rawBlock, string(tableName), int64(req.reqID))
 	thread.Unlock()
 	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
 	if code != 0 {
@@ -1374,7 +1374,7 @@ func (h *messageHandler) handleRawBlockMessageWithFields(_ context.Context, req 
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
-	code := wrapper.TaosWriteRawBlockWithFields(h.conn, int(numOfRows), rawBlock, string(tableName), fieldsBlock, numOfColumn)
+	code := wrapper.TaosWriteRawBlockWithFieldsWithReqID(h.conn, int(numOfRows), rawBlock, string(tableName), fieldsBlock, numOfColumn, int64(req.reqID))
 	thread.Unlock()
 	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
 	if code != 0 {
