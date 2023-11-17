@@ -600,7 +600,7 @@ func (t *Taos) writeRawBlock(ctx context.Context, session *melody.Session, reqID
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
-	errCode := wrapper.TaosWriteRawBlock(t.conn, numOfRows, rawBlock, tableName)
+	errCode := wrapper.TaosWriteRawBlockWithReqID(t.conn, numOfRows, rawBlock, tableName, int64(reqID))
 	thread.Unlock()
 	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
 	if errCode != 0 {
@@ -638,7 +638,7 @@ func (t *Taos) writeRawBlockWithFields(ctx context.Context, session *melody.Sess
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
-	errCode := wrapper.TaosWriteRawBlockWithFields(t.conn, numOfRows, rawBlock, tableName, fields, numFields)
+	errCode := wrapper.TaosWriteRawBlockWithFieldsWithReqID(t.conn, numOfRows, rawBlock, tableName, fields, numFields, int64(reqID))
 	thread.Unlock()
 	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
 	if errCode != 0 {
