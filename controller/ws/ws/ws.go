@@ -1,12 +1,10 @@
 package ws
 
 import (
-	"errors"
-
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"github.com/huskar-t/melody"
 	"github.com/taosdata/taosadapter/v3/controller"
+	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/log"
 )
 
@@ -55,14 +53,7 @@ func initController() *webSocketCtl {
 		return session.Close()
 	})
 	m.HandleError(func(session *melody.Session, err error) {
-		var closeError *websocket.CloseError
-		is := errors.As(err, &closeError)
-		if is {
-			logger.WithError(err).Debugln("ws close in error")
-		} else {
-			logger.WithError(err).Errorln("ws error")
-		}
-
+		wstool.LogWSError(session, err)
 		CloseWs(session)
 	})
 	m.HandleDisconnect(func(session *melody.Session) {
