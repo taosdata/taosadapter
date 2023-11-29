@@ -20,7 +20,7 @@ type webSocketCtl struct {
 
 func (ws *webSocketCtl) Init(ctl gin.IRouter) {
 	ctl.GET("ws", func(c *gin.Context) {
-		if err := ws.m.HandleRequest(c.Writer, c.Request); err != nil {
+		if err := ws.m.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": logger}); err != nil {
 			panic(err)
 		}
 	})
