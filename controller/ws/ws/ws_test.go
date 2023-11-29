@@ -136,10 +136,9 @@ func TestWsQuery(t *testing.T) {
 	code, message = doRestful("create table t3 using stb1 tags('{\"table\":\"t3\"}')", "test_ws_query")
 	assert.Equal(t, 0, code, message)
 
-	defer doRestful("drop database if exists test_ws_query", "")
-
 	s := httptest.NewServer(router)
 	defer s.Close()
+	defer doRestful("drop database if exists test_ws_query", "")
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
 	if err != nil {
 		t.Error(err)
