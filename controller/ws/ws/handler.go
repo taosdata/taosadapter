@@ -490,7 +490,9 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 	if code != httperror.SUCCESS {
 		freeCPointer(result.Res)
 		monitor.WSRecordResult(sqlType, false)
-		return &BaseResponse{Code: code, Message: wrapper.TaosErrorStr(result.Res)}
+		errStr := wrapper.TaosErrorStr(result.Res)
+		freeCPointer(result.Res)
+		return &BaseResponse{Code: code, Message: errStr}
 	}
 	monitor.WSRecordResult(sqlType, true)
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
@@ -555,8 +557,9 @@ func (h *messageHandler) handleFetch(_ context.Context, request Request, logger 
 		return &FetchResponse{ID: req.ID, Completed: true}
 	}
 	if result.N < 0 {
+		errStr := wrapper.TaosErrorStr(result.Res)
 		h.queryResults.FreeResultByID(req.ID)
-		return &BaseResponse{Code: 0xffff, Message: wrapper.TaosErrorStr(result.Res)}
+		return &BaseResponse{Code: 0xffff, Message: errStr}
 	}
 	length := wrapper.FetchLengths(item.TaosResult, item.FieldsCount)
 	logger.Debugln("fetch_lengths cost:", log.GetLogDuration(isDebug, s))
@@ -1009,8 +1012,8 @@ func (h *messageHandler) handleBindMessage(_ context.Context, req dealBinaryRequ
 	logger.Debugln("stmt_bind_param_batch cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != 0 {
-		logger.Errorf("## stmt bind param error: %s", wrapper.TaosStmtErrStr(stmtItem.stmt))
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		logger.Errorf("## stmt bind param error: %s", errStr)
 		return &StmtBindResponse{
 			BaseResponse: BaseResponse{Code: code, Message: errStr},
 			StmtID:       req.id,
