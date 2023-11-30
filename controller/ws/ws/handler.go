@@ -248,7 +248,7 @@ func (h *messageHandler) deal(ctx context.Context, session *melody.Session, requ
 		defer h.wait.Done()
 
 		if h.conn == nil && request.Action != Connect && request.Action != wstool.ClientVersion {
-			resp := &BaseResponse{Code: 0xffff, Message: "server not connected"}
+			resp := wsCommonErrorMsg(0xffff, "server not connected")
 			h.writeResponse(ctx, session, resp, request.Action, request.ReqID)
 			return
 		}
@@ -276,7 +276,7 @@ func (h *messageHandler) dealBinary(ctx context.Context, session *melody.Session
 		defer h.wait.Done()
 
 		if h.conn == nil {
-			resp := &BaseResponse{Code: 0xffff, Message: "server not connected"}
+			resp := wsCommonErrorMsg(0xffff, "server not connected")
 			h.writeResponse(ctx, session, resp, action.String(), reqID)
 			return
 		}
@@ -350,14 +350,11 @@ func (h *messageHandler) stop() {
 }
 
 func (h *messageHandler) handleDefault(_ context.Context, request Request, _ *logrus.Entry, _ bool, _ time.Time) (resp Response) {
-	return &BaseResponse{
-		Code:    0xffff,
-		Message: fmt.Sprintf("unknown action %s", request.Action),
-	}
+	return wsCommonErrorMsg(0xffff, fmt.Sprintf("unknown action %s", request.Action))
 }
 
 func (h *messageHandler) handleDefaultBinary(_ context.Context, req dealBinaryRequest, _ *logrus.Entry, _ bool, _ time.Time) (resp Response) {
-	return &BaseResponse{Code: 0xffff, Message: fmt.Sprintf("unknown action %v", req.action)}
+	return wsCommonErrorMsg(0xffff, fmt.Sprintf("unknown action %v", req.action))
 }
 
 func (h *messageHandler) handleVersion(_ context.Context, _ Request, _ *logrus.Entry, _ bool, _ time.Time) (resp Response) {
@@ -376,7 +373,7 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 	var req ConnRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal connect request %s error: %s", string(request.Args), err)
-		return &BaseResponse{Code: 0xffff, Message: "unmarshal connect request error"}
+		return wsCommonErrorMsg(0xffff, "unmarshal connect request error")
 	}
 
 	h.Lock()
@@ -385,7 +382,7 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		return
 	}
 	if h.conn != nil {
-		return &BaseResponse{Code: 0xffff, Message: "duplicate connections"}
+		return wsCommonErrorMsg(0xffff, "duplicate connections")
 	}
 
 	thread.Lock()
@@ -397,7 +394,7 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 	if err != nil {
 		var taosErr *errors2.TaosError
 		errors.As(err, &taosErr)
-		return &BaseResponse{Code: int(taosErr.Code), Message: taosErr.ErrStr}
+		return wsCommonErrorMsg(int(taosErr.Code), taosErr.ErrStr)
 	}
 	whitelist, err := tool.GetWhitelist(conn)
 	if err != nil {
@@ -406,14 +403,14 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		thread.Unlock()
 		var taosErr *errors2.TaosError
 		errors.As(err, &taosErr)
-		return &BaseResponse{Code: int(taosErr.Code), Message: taosErr.ErrStr}
+		return wsCommonErrorMsg(int(taosErr.Code), taosErr.ErrStr)
 	}
 	valid := tool.CheckWhitelist(whitelist, h.ip)
 	if !valid {
 		thread.Lock()
 		wrapper.TaosClose(conn)
 		thread.Unlock()
-		return &BaseResponse{Code: 0xffff, Message: "whitelist prohibits current IP access"}
+		return wsCommonErrorMsg(0xffff, "whitelist prohibits current IP access")
 	}
 	err = tool.RegisterChangeWhitelist(conn, h.whitelistChangeChan)
 	if err != nil {
@@ -422,7 +419,7 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		thread.Unlock()
 		var taosErr *errors2.TaosError
 		errors.As(err, &taosErr)
-		return &BaseResponse{Code: int(taosErr.Code), Message: taosErr.ErrStr}
+		return wsCommonErrorMsg(int(taosErr.Code), taosErr.ErrStr)
 	}
 	err = tool.RegisterDropUser(conn, h.dropUserNotify)
 	if err != nil {
@@ -431,7 +428,7 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		thread.Unlock()
 		var taosErr *errors2.TaosError
 		errors.As(err, &taosErr)
-		return &BaseResponse{Code: int(taosErr.Code), Message: taosErr.ErrStr}
+		return wsCommonErrorMsg(int(taosErr.Code), taosErr.ErrStr)
 	}
 	if req.Mode != nil {
 		switch *req.Mode {
@@ -442,13 +439,13 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 				thread.Lock()
 				wrapper.TaosClose(conn)
 				thread.Unlock()
-				return &BaseResponse{Code: code, Message: wrapper.TaosErrorStr(nil)}
+				return wsCommonErrorMsg(code, wrapper.TaosErrorStr(nil))
 			}
 		default:
 			thread.Lock()
 			wrapper.TaosClose(conn)
 			thread.Unlock()
-			return &BaseResponse{Code: 0xffff, Message: fmt.Sprintf("unexpected mode: %d", req.Mode)}
+			return wsCommonErrorMsg(0xffff, fmt.Sprintf("unexpected mode: %d", req.Mode))
 		}
 	}
 	h.conn = conn
@@ -477,7 +474,7 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 	var req QueryRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal ws query request %s error: %s", request.Args, err)
-		return &BaseResponse{Code: 0xffff, Message: "unmarshal ws query request error"}
+		return wsCommonErrorMsg(0xffff, "unmarshal ws query request error")
 	}
 	sqlType := monitor.WSRecordRequest(req.Sql)
 	handler := async.GlobalAsync.HandlerPool.Get()
@@ -492,7 +489,7 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 		monitor.WSRecordResult(sqlType, false)
 		errStr := wrapper.TaosErrorStr(result.Res)
 		freeCPointer(result.Res)
-		return &BaseResponse{Code: code, Message: errStr}
+		return wsCommonErrorMsg(code, errStr)
 	}
 	monitor.WSRecordResult(sqlType, true)
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
@@ -539,12 +536,12 @@ func (h *messageHandler) handleFetch(_ context.Context, request Request, logger 
 	var req FetchRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal ws fetch request %s error: %s", request.Args, err)
-		return &BaseResponse{Code: 0xffff, Message: "unmarshal ws fetch request error"}
+		return wsCommonErrorMsg(0xffff, "unmarshal ws fetch request error")
 	}
 
 	item := h.queryResults.Get(req.ID)
 	if item == nil {
-		return &BaseResponse{Code: 0xffff, Message: "result is nil"}
+		return wsCommonErrorMsg(0xffff, "result is nil")
 	}
 
 	handler := async.GlobalAsync.HandlerPool.Get()
@@ -559,7 +556,7 @@ func (h *messageHandler) handleFetch(_ context.Context, request Request, logger 
 	if result.N < 0 {
 		errStr := wrapper.TaosErrorStr(result.Res)
 		h.queryResults.FreeResultByID(req.ID)
-		return &BaseResponse{Code: 0xffff, Message: errStr}
+		return wsCommonErrorMsg(0xffff, errStr)
 	}
 	length := wrapper.FetchLengths(item.TaosResult, item.FieldsCount)
 	logger.Debugln("fetch_lengths cost:", log.GetLogDuration(isDebug, s))
@@ -579,15 +576,15 @@ func (h *messageHandler) handleFetchBlock(ctx context.Context, request Request, 
 	var req FetchBlockRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal ws fetch block request %s error: %s", request.Args, err)
-		return &BaseResponse{Code: 0xffff, Message: "unmarshal ws fetch block request error"}
+		return wsCommonErrorMsg(0xffff, "unmarshal ws fetch block request error")
 	}
 
 	item := h.queryResults.Get(req.ID)
 	if item == nil {
-		return &BaseResponse{Code: 0xffff, Message: "result is nil"}
+		return wsCommonErrorMsg(0xffff, "result is nil")
 	}
 	if item.Block == nil {
-		return &BaseResponse{Code: 0xffff, Message: "block is nil"}
+		return wsCommonErrorMsg(0xffff, "block is nil")
 	}
 
 	item.Lock()
@@ -620,7 +617,7 @@ func (h *messageHandler) handleFreeResult(_ context.Context, request Request, lo
 	var req FreeResultRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal ws fetch request %s error: %s", request.Args, err)
-		return &BaseResponse{Code: 0xffff, Message: "unmarshal connect request error"}
+		return wsCommonErrorMsg(0xffff, "unmarshal connect request error")
 	}
 
 	h.queryResults.FreeResultByID(req.ID)
@@ -641,12 +638,12 @@ func (h *messageHandler) handleSchemalessWrite(_ context.Context, request Reques
 	var req SchemalessWriteRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal schemaless write request %s error: %s", request.Args, err)
-		return &BaseResponse{Code: 0xffff, Message: "unmarshal schemaless write request error"}
+		return wsCommonErrorMsg(0xffff, "unmarshal schemaless write request error")
 	}
 
 	if req.Protocol == 0 {
 		logger.Errorf("## schemaless write request %s args error. protocol is null", request.Args)
-		return &BaseResponse{Code: 0xffff, Message: "args error"}
+		return wsCommonErrorMsg(0xffff, "args error")
 	}
 
 	thread.Lock()
@@ -657,7 +654,7 @@ func (h *messageHandler) handleSchemalessWrite(_ context.Context, request Reques
 	defer freeCPointer(result)
 
 	if code := wrapper.TaosError(result); code != 0 {
-		return &BaseResponse{Code: code, Message: wrapper.TaosErrorStr(result)}
+		return wsCommonErrorMsg(code, wrapper.TaosErrorStr(result))
 	}
 	return &BaseResponse{}
 }
@@ -676,7 +673,7 @@ func (h *messageHandler) handleStmtInit(_ context.Context, request Request, logg
 	if stmtInit == nil {
 		errStr := wrapper.TaosStmtErrStr(stmtInit)
 		logger.Errorf("## stmt init error: %s", errStr)
-		return &BaseResponse{Code: 0xffff, Message: errStr}
+		return wsCommonErrorMsg(0xffff, errStr)
 	}
 	stmtItem := &StmtItem{stmt: stmtInit}
 	h.stmts.Add(stmtItem)
@@ -699,18 +696,12 @@ func (h *messageHandler) handleStmtPrepare(_ context.Context, request Request, l
 	var req StmtPrepareRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt prepare request %s error: %s", request.Args, err)
-		return &StmtPrepareResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "unmarshal connect request error"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "unmarshal connect request error", req.StmtID)
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
-		return &StmtPrepareResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "stmt is nil"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
@@ -720,10 +711,7 @@ func (h *messageHandler) handleStmtPrepare(_ context.Context, request Request, l
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
 		logger.Errorf("## stmt prepare error: %s", errStr)
-		return &StmtPrepareResponse{
-			BaseResponse: BaseResponse{Code: code, Message: errStr},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
 	thread.Lock()
 	isInsert, code := wrapper.TaosStmtIsInsert(stmtItem.stmt)
@@ -731,10 +719,7 @@ func (h *messageHandler) handleStmtPrepare(_ context.Context, request Request, l
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
 		logger.Errorf("## check stmt is insert error: %s", errStr)
-		return &StmtPrepareResponse{
-			BaseResponse: BaseResponse{Code: code, Message: errStr},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
 	stmtItem.isInsert = isInsert
 	return &StmtPrepareResponse{StmtID: req.StmtID, IsInsert: isInsert}
@@ -755,18 +740,12 @@ func (h *messageHandler) handleStmtSetTableName(_ context.Context, request Reque
 	var req StmtSetTableNameRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt set table name request %s error: %s", request.Args, err)
-		return &StmtSetTableNameResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "unmarshal stmt set table name request error"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt set table name request error", req.StmtID)
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
-		return &StmtSetTableNameResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "stmt is nil"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
@@ -776,10 +755,7 @@ func (h *messageHandler) handleStmtSetTableName(_ context.Context, request Reque
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
 		logger.Errorf("## stmt set table name error: %s", errStr)
-		return &StmtSetTableNameResponse{
-			BaseResponse: BaseResponse{Code: code, Message: errStr},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
 	return &StmtSetTableNameResponse{StmtID: req.StmtID}
 }
@@ -799,18 +775,12 @@ func (h *messageHandler) handleStmtSetTags(_ context.Context, request Request, l
 	var req StmtSetTagsRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt set tags request %s error: %s", request.Args, err)
-		return &StmtSetTagsResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "unmarshal stmt set tags request error"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt set tags request error", req.StmtID)
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
-		return &StmtSetTagsResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "stmt is nil"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 
 	thread.Lock()
@@ -821,10 +791,7 @@ func (h *messageHandler) handleStmtSetTags(_ context.Context, request Request, l
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
 		logger.Errorf("## stmt get tag fields error: %s", errStr)
-		return &StmtSetTagsResponse{
-			BaseResponse: BaseResponse{Code: code, Message: errStr},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
 	defer func() {
 		wrapper.TaosStmtReclaimFields(stmtItem.stmt, tagFields)
@@ -841,10 +808,7 @@ func (h *messageHandler) handleStmtSetTags(_ context.Context, request Request, l
 	data, err := stmt.StmtParseTag(req.Tags, fields)
 	logger.Debugln("stmt parse tag json cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		return &StmtSetTagsResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: fmt.Sprintf("stmt parse tag json:%s", err.Error())},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, fmt.Sprintf("stmt parse tag json:%s", err.Error()), req.StmtID)
 	}
 	thread.Lock()
 	logger.Debugln("stmt_set_tags get thread lock cost:", log.GetLogDuration(isDebug, s))
@@ -853,10 +817,7 @@ func (h *messageHandler) handleStmtSetTags(_ context.Context, request Request, l
 	thread.Unlock()
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
-		return &StmtSetTagsResponse{
-			BaseResponse: BaseResponse{Code: code, Message: errStr},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
 	return &StmtSetTagsResponse{StmtID: req.StmtID}
 }
@@ -876,18 +837,12 @@ func (h *messageHandler) handleStmtBind(_ context.Context, request Request, logg
 	var req StmtBindRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt bind tag request %s error: %s", request.Args, err)
-		return &StmtBindResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "unmarshal stmt bind request error"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt bind request error", req.StmtID)
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
-		return &StmtBindResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "stmt is nil"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 
 	thread.Lock()
@@ -898,10 +853,7 @@ func (h *messageHandler) handleStmtBind(_ context.Context, request Request, logg
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
 		logger.Errorf("## stmt get col fields error: %s", errStr)
-		return &StmtBindResponse{
-			BaseResponse: BaseResponse{Code: code, Message: errStr},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
 	defer func() {
 		wrapper.TaosStmtReclaimFields(stmtItem.stmt, colFields)
@@ -916,19 +868,13 @@ func (h *messageHandler) handleStmtBind(_ context.Context, request Request, logg
 	var err error
 	for i := 0; i < colNums; i++ {
 		if fieldTypes[i], err = fields[i].GetType(); err != nil {
-			return &StmtBindResponse{
-				BaseResponse: BaseResponse{Code: 0xffff, Message: fmt.Sprintf("stmt get column type error:%s", err.Error())},
-				StmtID:       req.StmtID,
-			}
+			return wsStmtErrorMsg(0xffff, fmt.Sprintf("stmt get column type error:%s", err.Error()), req.StmtID)
 		}
 	}
 	data, err := stmt.StmtParseColumn(req.Columns, fields, fieldTypes)
 	logger.Debugln("stmt parse column json cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		return &StmtBindResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: fmt.Sprintf("stmt parse column json:%s", err.Error())},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, fmt.Sprintf("stmt parse column json:%s", err.Error()), req.StmtID)
 	}
 	thread.Lock()
 	logger.Debugln("stmt_bind_param_batch get thread lock cost:", log.GetLogDuration(isDebug, s))
@@ -945,10 +891,7 @@ func (h *messageHandler) handleBindMessage(_ context.Context, req dealBinaryRequ
 
 	stmtItem := h.stmts.Get(req.id)
 	if stmtItem == nil {
-		return &StmtBindResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "stmt is nil"},
-			StmtID:       req.id,
-		}
+		return wsStmtErrorMsg(0xffff, "stmt is nil", req.id)
 	}
 
 	var data [][]driver.Value
@@ -961,10 +904,7 @@ func (h *messageHandler) handleBindMessage(_ context.Context, req dealBinaryRequ
 		thread.Unlock()
 		if code != httperror.SUCCESS {
 			errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
-			return &StmtBindResponse{
-				BaseResponse: BaseResponse{Code: code, Message: errStr},
-				StmtID:       req.id,
-			}
+			return wsStmtErrorMsg(code, errStr, req.id)
 		}
 		defer func() {
 			wrapper.TaosStmtReclaimFields(stmtItem.stmt, colFields)
@@ -979,17 +919,11 @@ func (h *messageHandler) handleBindMessage(_ context.Context, req dealBinaryRequ
 		for i := 0; i < colNums; i++ {
 			fieldTypes[i], err = fields[i].GetType()
 			if err != nil {
-				return &StmtBindResponse{
-					BaseResponse: BaseResponse{Code: 0xffff, Message: fmt.Sprintf("stmt get column type error:%s", err.Error())},
-					StmtID:       req.id,
-				}
+				return wsStmtErrorMsg(0xffff, fmt.Sprintf("stmt get column type error:%s", err.Error()), req.id)
 			}
 		}
 		if int(columns) != colNums {
-			return &StmtBindResponse{
-				BaseResponse: BaseResponse{Code: 0xffff, Message: "stmt column count not match"},
-				StmtID:       req.id,
-			}
+			return wsStmtErrorMsg(0xffff, "stmt column count not match", req.id)
 		}
 		data = stmt.BlockConvert(block, int(rows), fields, fieldTypes)
 		logger.Debugln("block convert cost:", log.GetLogDuration(isDebug, s))
@@ -998,10 +932,7 @@ func (h *messageHandler) handleBindMessage(_ context.Context, req dealBinaryRequ
 		var err error
 		fields, fieldTypes, err = parseRowBlockInfo(block, int(columns))
 		if err != nil {
-			return &StmtBindResponse{
-				BaseResponse: BaseResponse{Code: 0xffff, Message: fmt.Sprintf("parse row block info error:%s", err.Error())},
-				StmtID:       req.id,
-			}
+			return wsStmtErrorMsg(0xffff, fmt.Sprintf("parse row block info error:%s", err.Error()), req.id)
 		}
 		data = stmt.BlockConvert(block, int(rows), fields, fieldTypes)
 	}
@@ -1014,10 +945,7 @@ func (h *messageHandler) handleBindMessage(_ context.Context, req dealBinaryRequ
 	if code != 0 {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
 		logger.Errorf("## stmt bind param error: %s", errStr)
-		return &StmtBindResponse{
-			BaseResponse: BaseResponse{Code: code, Message: errStr},
-			StmtID:       req.id,
-		}
+		return wsStmtErrorMsg(code, errStr, req.id)
 	}
 
 	return &StmtBindResponse{StmtID: req.id}
@@ -1102,18 +1030,12 @@ func (h *messageHandler) handleStmtAddBatch(_ context.Context, request Request, 
 	var req StmtAddBatchRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt add batch request %s error: %s", request.Args, err)
-		return &StmtAddBatchResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "unmarshal stmt add batch request error"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt add batch request error", req.StmtID)
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
-		return &StmtAddBatchResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "stmt is nil"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 
 	thread.Lock()
@@ -1125,10 +1047,7 @@ func (h *messageHandler) handleStmtAddBatch(_ context.Context, request Request, 
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
 		logger.Errorf("## stmt add batch error: %s", errStr)
-		return &StmtAddBatchResponse{
-			BaseResponse: BaseResponse{Code: code, Message: errStr},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
 	return &StmtAddBatchResponse{StmtID: req.StmtID}
 }
@@ -1148,18 +1067,12 @@ func (h *messageHandler) handleStmtExec(_ context.Context, request Request, logg
 	var req StmtExecRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt add batch request %s error: %s", request.Args, err)
-		return &StmtExecResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "unmarshal stmt add batch request error"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt add batch request error", req.StmtID)
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
-		return &StmtExecResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "stmt is nil"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 	thread.Lock()
 	logger.Debugln("stmt_execute get thread lock cost:", log.GetLogDuration(isDebug, s))
@@ -1169,10 +1082,7 @@ func (h *messageHandler) handleStmtExec(_ context.Context, request Request, logg
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
 		logger.Errorf("## stmt execute error: %s", errStr)
-		return &StmtExecResponse{
-			BaseResponse: BaseResponse{Code: code, Message: errStr},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
 	affected := wrapper.TaosStmtAffectedRowsOnce(stmtItem.stmt)
 	logger.Debugln("stmt_affected_rows_once cost:", log.GetLogDuration(isDebug, s))
@@ -1193,10 +1103,7 @@ func (h *messageHandler) handleStmtClose(_ context.Context, request Request, log
 	var req StmtCloseRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt close request %s error: %s", request.Args, err)
-		return &StmtCloseResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "unmarshal stmt add batch request error"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt add batch request error", req.StmtID)
 	}
 
 	h.stmts.FreeStmtByID(req.StmtID)
@@ -1220,18 +1127,12 @@ func (h *messageHandler) handleStmtGetColFields(_ context.Context, request Reque
 	var req StmtGetColFieldsRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt get tags request %s error: %s", request.Args, err)
-		return &StmtGetColFieldsResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "unmarshal stmt get tags request error"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt get tags request error", req.StmtID)
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
-		return &StmtGetColFieldsResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "stmt is nil"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 
 	thread.Lock()
@@ -1242,10 +1143,7 @@ func (h *messageHandler) handleStmtGetColFields(_ context.Context, request Reque
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
 		logger.Errorf("## stmt get col fields error: %s", errStr)
-		return &StmtGetColFieldsResponse{
-			BaseResponse: BaseResponse{Code: code, Message: errStr},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
 	defer func() {
 		wrapper.TaosStmtReclaimFields(stmtItem.stmt, colFields)
@@ -1266,25 +1164,19 @@ type StmtGetTagFieldsRequest struct {
 type StmtGetTagFieldsResponse struct {
 	BaseResponse
 	StmtID uint64                  `json:"stmt_id"`
-	Fields []*stmtCommon.StmtField `json:"fields"`
+	Fields []*stmtCommon.StmtField `json:"fields,omitempty"`
 }
 
 func (h *messageHandler) handleStmtGetTagFields(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req StmtGetTagFieldsRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt get tags request %s error: %s", request.Args, err)
-		return &StmtGetTagFieldsResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "unmarshal stmt get tags request error"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt get tags request error", req.StmtID)
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
-		return &StmtGetTagFieldsResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "stmt is nil"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 	thread.Lock()
 	logger.Debugln("stmt_get_tag_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
@@ -1294,10 +1186,7 @@ func (h *messageHandler) handleStmtGetTagFields(_ context.Context, request Reque
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
 		logger.Errorf("## stmt get tag fields error: %s", errStr)
-		return &StmtGetTagFieldsResponse{
-			BaseResponse: BaseResponse{Code: code, Message: errStr},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
 	defer func() {
 		wrapper.TaosStmtReclaimFields(stmtItem.stmt, tagFields)
@@ -1329,27 +1218,18 @@ func (h *messageHandler) handleStmtUseResult(_ context.Context, request Request,
 	var req StmtUseResultRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt get tags request %s error: %s", request.Args, err)
-		return &StmtUseResultResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "unmarshal stmt get tags request error"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt get tags request error", req.StmtID)
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
-		return &StmtUseResultResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "stmt is nil"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 	result := wrapper.TaosStmtUseResult(stmtItem.stmt)
 	if result == nil {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
 		logger.Errorf("## stmt use result error: %s", errStr)
-		return &StmtUseResultResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: errStr},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, errStr, req.StmtID)
 	}
 
 	fieldsCount := wrapper.TaosNumFields(result)
@@ -1375,18 +1255,12 @@ func (h *messageHandler) handleSetTagsMessage(_ context.Context, req dealBinaryR
 	rows := parser.RawBlockGetNumOfRows(block)
 
 	if rows != 1 {
-		return &StmtSetTagsResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "rows not equal 1"},
-			StmtID:       req.id,
-		}
+		return wsStmtErrorMsg(0xffff, "rows not equal 1", req.id)
 	}
 
 	stmtItem := h.stmts.Get(req.id)
 	if stmtItem == nil {
-		return &StmtSetTagsResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "stmt is nil"},
-			StmtID:       req.id,
-		}
+		return wsStmtErrorMsg(0xffff, "stmt is nil", req.id)
 	}
 
 	thread.Lock()
@@ -1395,10 +1269,7 @@ func (h *messageHandler) handleSetTagsMessage(_ context.Context, req dealBinaryR
 	logger.Debugln("stmt_get_tag_fields cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != httperror.SUCCESS {
-		return &StmtSetTagsResponse{
-			BaseResponse: BaseResponse{Code: code, Message: wrapper.TaosStmtErrStr(stmtItem.stmt)},
-			StmtID:       req.id,
-		}
+		return wsStmtErrorMsg(code, wrapper.TaosStmtErrStr(stmtItem.stmt), req.id)
 	}
 	defer func() {
 		wrapper.TaosStmtReclaimFields(stmtItem.stmt, tagFields)
@@ -1407,10 +1278,7 @@ func (h *messageHandler) handleSetTagsMessage(_ context.Context, req dealBinaryR
 		return &StmtSetTagsResponse{StmtID: req.id}
 	}
 	if int(columns) != tagNums {
-		return &StmtSetTagsResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "stmt tags count not match"},
-			StmtID:       req.id,
-		}
+		return wsStmtErrorMsg(0xffff, "stmt tags count not match", req.id)
 	}
 	fields := wrapper.StmtParseFields(tagNums, tagFields)
 	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
@@ -1426,10 +1294,7 @@ func (h *messageHandler) handleSetTagsMessage(_ context.Context, req dealBinaryR
 	logger.Debugln("stmt_set_tags cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != httperror.SUCCESS {
-		return &StmtSetTagsResponse{
-			BaseResponse: BaseResponse{Code: code, Message: wrapper.TaosStmtErrStr(stmtItem.stmt)},
-			StmtID:       req.id,
-		}
+		return wsStmtErrorMsg(code, wrapper.TaosStmtErrStr(stmtItem.stmt), req.id)
 	}
 
 	return &StmtSetTagsResponse{StmtID: req.id}
@@ -1457,7 +1322,7 @@ func (h *messageHandler) handleTMQRawMessage(_ context.Context, req dealBinaryRe
 	if code != 0 {
 		errStr := wrapper.TaosErrorStr(nil)
 		logger.Errorf("## write raw meta error: %s", errStr)
-		return &BaseResponse{Code: int(code) & 0xffff, Message: errStr}
+		return wsCommonErrorMsg(int(code)&0xffff, errStr)
 	}
 
 	return &BaseResponse{}
@@ -1487,7 +1352,7 @@ func (h *messageHandler) handleRawBlockMessage(_ context.Context, req dealBinary
 	if code != 0 {
 		errStr := wrapper.TaosErrorStr(nil)
 		logger.Errorf("## write raw meta error: %s", errStr)
-		return &BaseResponse{Code: int(code) & 0xffff, Message: errStr}
+		return wsCommonErrorMsg(int(code)&0xffff, errStr)
 	}
 
 	return &BaseResponse{}
@@ -1521,7 +1386,7 @@ func (h *messageHandler) handleRawBlockMessageWithFields(_ context.Context, req 
 	if code != 0 {
 		errStr := wrapper.TaosErrorStr(nil)
 		logger.Errorf("## write raw meta error: %s", errStr)
-		return &BaseResponse{Code: int(code) & 0xffff, Message: errStr}
+		return wsCommonErrorMsg(int(code)&0xffff, errStr)
 	}
 	return &BaseResponse{}
 }
@@ -1539,7 +1404,7 @@ func (h *messageHandler) handleGetCurrentDB(_ context.Context, _ Request, logger
 		var taosErr *errors2.TaosError
 		errors.As(err, &taosErr)
 		logger.Errorf("## get current db error: %s", taosErr.Error())
-		return &BaseResponse{Code: int(taosErr.Code), Message: taosErr.Error()}
+		return wsCommonErrorMsg(int(taosErr.Code), taosErr.Error())
 	}
 	return &GetCurrentDBResponse{DB: db}
 }
@@ -1570,12 +1435,12 @@ func (h *messageHandler) handleNumFields(_ context.Context, request Request, log
 	var req NumFieldsRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt num params request %s error: %s", request.Args, err)
-		return &BaseResponse{Code: 0xffff, Message: "unmarshal stmt num params request error"}
+		return wsCommonErrorMsg(0xffff, "unmarshal stmt num params request error")
 	}
 
 	item := h.queryResults.Get(req.ResultID)
 	if item == nil {
-		return &BaseResponse{Code: 0xffff, Message: "result is nil"}
+		return wsCommonErrorMsg(0xffff, "result is nil")
 	}
 
 	thread.Lock()
@@ -1599,18 +1464,12 @@ func (h *messageHandler) handleStmtNumParams(_ context.Context, request Request,
 	var req StmtNumParamsRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt num params request %s error: %s", request.Args, err)
-		return &StmtNumParamsResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "unmarshal stmt num params request error"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt num params request error", req.StmtID)
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
-		return &StmtNumParamsResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "stmt is nil"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 
 	thread.Lock()
@@ -1621,10 +1480,7 @@ func (h *messageHandler) handleStmtNumParams(_ context.Context, request Request,
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
 		logger.Errorf("## stmt get col fields error: %s", errStr)
-		return &StmtNumParamsResponse{
-			BaseResponse: BaseResponse{Code: code, Message: errStr},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
 	return &StmtNumParamsResponse{StmtID: req.StmtID, NumParams: count}
 }
@@ -1647,18 +1503,12 @@ func (h *messageHandler) handleStmtGetParam(_ context.Context, request Request, 
 	var req StmtGetParamRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt get param request %s error: %s", request.Args, err)
-		return &StmtGetParamResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "unmarshal stmt get param request error"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt get param request error", req.StmtID)
 	}
 
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
-		return &StmtGetParamResponse{
-			BaseResponse: BaseResponse{Code: 0xffff, Message: "stmt is nil"},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 
 	thread.Lock()
@@ -1670,10 +1520,7 @@ func (h *messageHandler) handleStmtGetParam(_ context.Context, request Request, 
 		var taosErr *errors2.TaosError
 		errors.As(err, &taosErr)
 		logger.Errorf("## stmt get param error: %s", taosErr.Error())
-		return &StmtGetParamResponse{
-			BaseResponse: BaseResponse{Code: int(taosErr.Code), Message: taosErr.Error()},
-			StmtID:       req.StmtID,
-		}
+		return wsStmtErrorMsg(int(taosErr.Code), taosErr.Error(), req.StmtID)
 	}
 	return &StmtGetParamResponse{StmtID: req.StmtID, Index: req.Index, DataType: dataType, Length: length}
 }
@@ -1747,4 +1594,26 @@ type VersionResponse struct {
 type BinaryResponse struct {
 	BaseResponse
 	Data []byte
+}
+
+type WSStmtErrorResp struct {
+	BaseResponse
+	StmtID uint64 `json:"stmt_id"`
+}
+
+func wsStmtErrorMsg(code int, message string, stmtID uint64) *WSStmtErrorResp {
+	return &WSStmtErrorResp{
+		BaseResponse: BaseResponse{
+			Code:    code & 0xffff,
+			Message: message,
+		},
+		StmtID: stmtID,
+	}
+}
+
+func wsCommonErrorMsg(code int, message string) *BaseResponse {
+	return &BaseResponse{
+		Code:    code & 0xffff,
+		Message: message,
+	}
 }
