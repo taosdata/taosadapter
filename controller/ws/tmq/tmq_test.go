@@ -3,6 +3,7 @@ package tmq
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -373,6 +374,11 @@ func TestTMQ(t *testing.T) {
 					finish <- struct{}{}
 					return
 				}
+				var closeErr *websocket.CloseError
+				if errors.As(err, &closeErr) && closeErr.Code == websocket.CloseAbnormalClosure {
+					finish <- struct{}{}
+					return
+				}
 				t.Error(err)
 				finish <- struct{}{}
 				return
@@ -422,8 +428,8 @@ func TestTMQ(t *testing.T) {
 		return
 	}
 	<-finish
-	ws.Close()
-	time.Sleep(time.Second * 3)
+	ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	time.Sleep(time.Second * 5)
 
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop topic if exists test_tmq_ws_topic")
@@ -777,6 +783,11 @@ func TestMeta(t *testing.T) {
 					finish <- struct{}{}
 					return
 				}
+				var closeErr *websocket.CloseError
+				if errors.As(err, &closeErr) && closeErr.Code == websocket.CloseAbnormalClosure {
+					finish <- struct{}{}
+					return
+				}
 				t.Error(err)
 				finish <- struct{}{}
 				return
@@ -827,7 +838,8 @@ func TestMeta(t *testing.T) {
 	}
 
 	<-finish
-	ws.Close()
+	ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	time.Sleep(time.Second * 5)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("describe stb")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_meta_target", body)
@@ -994,6 +1006,7 @@ func writeRaw(t *testing.T, rawData []byte) {
 		return
 	}
 	<-finish
+	ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 }
 
 func TestTMQAutoCommit(t *testing.T) {
@@ -1304,6 +1317,11 @@ func TestTMQAutoCommit(t *testing.T) {
 					finish <- struct{}{}
 					return
 				}
+				var closeErr *websocket.CloseError
+				if errors.As(err, &closeErr) && closeErr.Code == websocket.CloseAbnormalClosure {
+					finish <- struct{}{}
+					return
+				}
 				t.Error(err)
 				finish <- struct{}{}
 				return
@@ -1353,9 +1371,9 @@ func TestTMQAutoCommit(t *testing.T) {
 		return
 	}
 	<-finish
+	ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	assert.Equal(t, true, expectError)
-	ws.Close()
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second * 5)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop topic if exists test_tmq_ws_auto_commit_topic")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
@@ -1883,6 +1901,11 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 					finish <- struct{}{}
 					return
 				}
+				var closeErr *websocket.CloseError
+				if errors.As(err, &closeErr) && closeErr.Code == websocket.CloseAbnormalClosure {
+					finish <- struct{}{}
+					return
+				}
 				t.Error(err)
 				finish <- struct{}{}
 				return
@@ -1932,8 +1955,8 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 		return
 	}
 	<-finish
-	ws.Close()
-	time.Sleep(time.Second * 3)
+	ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	time.Sleep(time.Second * 5)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop topic if exists test_tmq_ws_unsubscribe_topic")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
@@ -2028,6 +2051,7 @@ func TestTMQSeek(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	defer ws.Close()
 
 	//sub
 	{
@@ -2437,8 +2461,7 @@ func TestTMQSeek(t *testing.T) {
 	assert.NoError(t, err)
 	_, _, err = ws.ReadMessage()
 	assert.NoError(t, err)
-
-	ws.Close()
+	ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	time.Sleep(time.Second * 3)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop topic if exists " + topic)
@@ -2508,7 +2531,8 @@ func before(t *testing.T, dbName string, topic string) {
 func after(ws *websocket.Conn, dbName string, topic string) {
 	b, _ := json.Marshal(TMQUnsubscribeReq{ReqID: 0})
 	_, _ = doWebSocket(ws, TMQUnsubscribe, b)
-
+	ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	time.Sleep(time.Second * 5)
 	doHttpSql(fmt.Sprintf("drop topic if exists %s", topic))
 	doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
 }
@@ -2526,7 +2550,7 @@ func TestTMQ_Position_And_Committed(t *testing.T) {
 		t.Error(err)
 		return
 	}
-
+	defer ws.Close()
 	defer after(ws, dbName, topic)
 
 	// subscribe
@@ -2607,6 +2631,7 @@ func TestTMQ_ListTopics(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	defer ws.Close()
 
 	defer after(ws, dbName, topic)
 
@@ -2650,6 +2675,7 @@ func TestTMQ_CommitOffset(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	defer ws.Close()
 
 	defer after(ws, dbName, topic)
 
