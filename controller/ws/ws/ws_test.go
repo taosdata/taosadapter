@@ -118,6 +118,8 @@ func TestVersion(t *testing.T) {
 }
 
 func TestWsQuery(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
 	code, message := doRestful("drop database if exists test_ws_query", "")
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful("create database if not exists test_ws_query", "")
@@ -137,9 +139,6 @@ func TestWsQuery(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 
 	defer doRestful("drop database if exists test_ws_query", "")
-
-	s := httptest.NewServer(router)
-	defer s.Close()
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
 	if err != nil {
 		t.Error(err)
@@ -378,6 +377,8 @@ func checkBlockResult(t *testing.T, blockResult [][]driver.Value) {
 }
 
 func TestWsSchemaless(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
 	code, message := doRestful("drop database if exists test_ws_schemaless", "")
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful("create database if not exists test_ws_schemaless", "")
@@ -385,8 +386,6 @@ func TestWsSchemaless(t *testing.T) {
 
 	defer doRestful("drop database if exists test_ws_schemaless", "")
 
-	s := httptest.NewServer(router)
-	defer s.Close()
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
 	if err != nil {
 		t.Error(err)
@@ -511,6 +510,8 @@ func TestWsSchemaless(t *testing.T) {
 }
 
 func TestWsStmt(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
 	code, message := doRestful("drop database if exists test_ws_stmt_ws", "")
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful("create database if not exists test_ws_stmt_ws precision 'ns'", "")
@@ -523,8 +524,6 @@ func TestWsStmt(t *testing.T) {
 		"test_ws_stmt_ws")
 	assert.Equal(t, 0, code, message)
 
-	s := httptest.NewServer(router)
-	defer s.Close()
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
 	if err != nil {
 		t.Error(err)
@@ -1008,6 +1007,8 @@ func TestStmtQuery(t *testing.T) {
 }
 
 func StmtQuery(t *testing.T, db string, prepareDataSql []string) {
+	s := httptest.NewServer(router)
+	defer s.Close()
 	code, message := doRestful(fmt.Sprintf("drop database if exists %s", db), "")
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful(fmt.Sprintf("create database if not exists %s", db), "")
@@ -1020,8 +1021,6 @@ func StmtQuery(t *testing.T, db string, prepareDataSql []string) {
 		assert.Equal(t, 0, code, message)
 	}
 
-	s := httptest.NewServer(router)
-	defer s.Close()
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
 	if err != nil {
 		t.Error(err)
@@ -1154,6 +1153,8 @@ func StmtQuery(t *testing.T, db string, prepareDataSql []string) {
 }
 
 func TestStmtNumParams(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
 	db := "test_ws_stmt_num_params"
 	code, message := doRestful(fmt.Sprintf("drop database if exists %s", db), "")
 	assert.Equal(t, 0, code, message)
@@ -1164,8 +1165,6 @@ func TestStmtNumParams(t *testing.T) {
 
 	defer doRestful(fmt.Sprintf("drop database if exists %s", db), "")
 
-	s := httptest.NewServer(router)
-	defer s.Close()
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
 	if err != nil {
 		t.Error(err)
@@ -1223,6 +1222,8 @@ func TestStmtNumParams(t *testing.T) {
 }
 
 func TestStmtGetParams(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
 	db := "test_ws_stmt_get_params"
 	code, message := doRestful(fmt.Sprintf("drop database if exists %s", db), "")
 	assert.Equal(t, 0, code, message)
@@ -1233,8 +1234,6 @@ func TestStmtGetParams(t *testing.T) {
 
 	defer doRestful(fmt.Sprintf("drop database if exists %s", db), "")
 
-	s := httptest.NewServer(router)
-	defer s.Close()
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
 	if err != nil {
 		t.Error(err)
@@ -1294,6 +1293,8 @@ func TestStmtGetParams(t *testing.T) {
 }
 
 func TestGetCurrentDB(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
 	db := "test_current_db"
 	code, message := doRestful(fmt.Sprintf("drop database if exists %s", db), "")
 	assert.Equal(t, 0, code, message)
@@ -1302,8 +1303,6 @@ func TestGetCurrentDB(t *testing.T) {
 
 	defer doRestful(fmt.Sprintf("drop database if exists %s", db), "")
 
-	s := httptest.NewServer(router)
-	defer s.Close()
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
 	if err != nil {
 		t.Error(err)
@@ -1372,6 +1371,8 @@ func TestGetServerInfo(t *testing.T) {
 }
 
 func TestNumFields(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
 	db := "test_ws_num_fields"
 	code, message := doRestful(fmt.Sprintf("drop database if exists %s", db), db)
 	assert.Equal(t, 0, code, message)
@@ -1385,8 +1386,6 @@ func TestNumFields(t *testing.T) {
 
 	defer doRestful(fmt.Sprintf("drop database if exists %s", db), "")
 
-	s := httptest.NewServer(router)
-	defer s.Close()
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
 	if err != nil {
 		t.Error(err)
