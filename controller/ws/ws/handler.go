@@ -485,7 +485,6 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 
 	code := wrapper.TaosError(result.Res)
 	if code != httperror.SUCCESS {
-		freeCPointer(result.Res)
 		monitor.WSRecordResult(sqlType, false)
 		errStr := wrapper.TaosErrorStr(result.Res)
 		freeCPointer(result.Res)
