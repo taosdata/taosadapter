@@ -1,6 +1,6 @@
 # taosAdapter
 
-[中文版](https://github.com/taosdata/taosadapter/blob/develop/README-CN.md)
+[中文版](./README-CN.md)
 
 taosAdapter is a TDengine’s companion tool and is a bridge/adapter between TDengine cluster and application. It provides an easy-to-use and efficient way to ingest data from data collections agents(like Telegraf, StatsD, collectd) directly. It also provides InfluxDB/OpenTSDB compatible data ingestion interface to allow InfluxDB/OpenTSDB applications to immigrate to TDengine seamlessly.
 
@@ -22,7 +22,7 @@ taosAdapter provides the following functions.
 
 ### Install taosAdapter
 
-taosAdapter is part of the TDengine server from TDengine v2.4.0.0. You don't need any additional steps to install taosAdapter if you already installed TDengine server. You can download TDengine server package (taosAdapter be included in v2.4.0.0 and above version) from the [official website](https://docs.tdengine.com/releases/tdengine/). If you want to deploy taosAdapter on another server, you need to install official TDengine server installation package. If you want to build taosAdapter from source code, you can refer to the [How to build taosAdapter](https://github.com/taosdata/taosadapter/blob/develop/BUILD.md) instruction.
+taosAdapter is part of the TDengine server from TDengine v2.4.0.0. You don't need any additional steps to install taosAdapter if you already installed TDengine server. You can download TDengine server package (taosAdapter be included in v2.4.0.0 and above version) from the [official website](https://docs.tdengine.com/releases/tdengine/). If you want to deploy taosAdapter on another server, you need to install official TDengine server installation package. If you want to build taosAdapter from source code, you can refer to the [How to build taosAdapter](./BUILD.md) instruction.
 
 ### Start/Stop taosAdapter
 
@@ -153,12 +153,12 @@ If not, you don't need to configure them.
 
 Please visit the webpage [https://www.w3.org/wiki/CORS_Enabled](https://www.w3.org/wiki/CORS_Enabled) or [https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CORS](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CORS) for the detailed CORS protocol.
 
-For the default configuration file, see [example/config/taosadapter.toml](https://github.com/taosdata/taosadapter/blob/develop/example/config/taosadapter.toml)
+For the default configuration file, see [example/config/taosadapter.toml](./example/config/taosadapter.toml)
 
 ## Functions
 
 - Compatible with RESTful interface.
-  [https://docs.taosdata.com/reference/rest-api/](https://docs.taosdata.com/reference/rest-api/)
+  [https://docs.tdengine.com/reference/rest-api/](https://docs.tdengine.com/reference/rest-api/)
 - Compatible with InfluxDB v1 write interface.
   [https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/](https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/)
 - Compatible with opentsdb JSON and telnet format writing.
