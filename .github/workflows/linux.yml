@@ -234,18 +234,16 @@ jobs:
 
       - name: checkout
         uses: actions/checkout@v3
-        with:
-          path: 'taosadapter'
 
       - name: copy taos cfg
         run: |
           sudo mkdir -p /etc/taos
-          sudo cp ./taosadapter/.github/workflows/taos.cfg /etc/taos/taos.cfg
+          sudo cp ./.github/workflows/taos.cfg /etc/taos/taos.cfg
 
       - uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go }}
-          cache-dependency-path: taosadapter/go.sum
+          cache-dependency-path: go.sum
 
       - name: start shell
         run: |
@@ -258,7 +256,15 @@ jobs:
 
       - name: test
         id: test
-        run: cd ./taosadapter && sudo go test -v --count=1 ./...
+        run: sudo go test -v --count=1 -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Upload coverage to Codecov
+        if: ${{ matrix.go }} == '1.20'
+        uses: codecov/codecov-action@v4-beta
+        with:
+          files: ./coverage.txt
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_ORG_TOKEN }}
 
       - uses: actions/upload-artifact@v3
         if: always() && (steps.test.outcome == 'failure' || steps.test.outcome == 'cancelled')
