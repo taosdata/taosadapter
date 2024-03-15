@@ -542,7 +542,11 @@ func (h *messageHandler) handleFetch(_ context.Context, request Request, logger 
 	if item == nil {
 		return wsCommonErrorMsg(0xffff, "result is nil")
 	}
-
+	item.Lock()
+	defer item.Unlock()
+	if item.TaosResult == nil {
+		return wsCommonErrorMsg(0xffff, "result has been freed")
+	}
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
@@ -582,12 +586,15 @@ func (h *messageHandler) handleFetchBlock(ctx context.Context, request Request, 
 	if item == nil {
 		return wsCommonErrorMsg(0xffff, "result is nil")
 	}
+	item.Lock()
+	defer item.Unlock()
+	if item.TaosResult == nil {
+		return wsCommonErrorMsg(0xffff, "result has been freed")
+	}
 	if item.Block == nil {
 		return wsCommonErrorMsg(0xffff, "block is nil")
 	}
 
-	item.Lock()
-	defer item.Unlock()
 	blockLength := int(parser.RawBlockGetLength(item.Block))
 	if item.buffer == nil {
 		item.buffer = new(bytes.Buffer)
@@ -702,6 +709,11 @@ func (h *messageHandler) handleStmtPrepare(_ context.Context, request Request, l
 	if stmtItem == nil {
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
+	}
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	code := wrapper.TaosStmtPrepare(stmtItem.stmt, req.SQL)
@@ -746,6 +758,11 @@ func (h *messageHandler) handleStmtSetTableName(_ context.Context, request Reque
 	if stmtItem == nil {
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
+	}
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	code := wrapper.TaosStmtSetTBName(stmtItem.stmt, req.Name)
@@ -781,7 +798,11 @@ func (h *messageHandler) handleStmtSetTags(_ context.Context, request Request, l
 	if stmtItem == nil {
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
-
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
+	}
 	thread.Lock()
 	logger.Debugln("stmt_get_tag_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
 	code, tagNums, tagFields := wrapper.TaosStmtGetTagFields(stmtItem.stmt)
@@ -843,7 +864,11 @@ func (h *messageHandler) handleStmtBind(_ context.Context, request Request, logg
 	if stmtItem == nil {
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
-
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
+	}
 	thread.Lock()
 	logger.Debugln("stmt_get_col_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
 	code, colNums, colFields := wrapper.TaosStmtGetColFields(stmtItem.stmt)
@@ -892,7 +917,11 @@ func (h *messageHandler) handleBindMessage(_ context.Context, req dealBinaryRequ
 	if stmtItem == nil {
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.id)
 	}
-
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.id)
+	}
 	var data [][]driver.Value
 	var fieldTypes []*types.ColumnType
 	if stmtItem.isInsert {
@@ -1036,7 +1065,11 @@ func (h *messageHandler) handleStmtAddBatch(_ context.Context, request Request, 
 	if stmtItem == nil {
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
-
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
+	}
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	code := wrapper.TaosStmtAddBatch(stmtItem.stmt)
@@ -1072,6 +1105,11 @@ func (h *messageHandler) handleStmtExec(_ context.Context, request Request, logg
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
+	}
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
 	}
 	thread.Lock()
 	logger.Debugln("stmt_execute get thread lock cost:", log.GetLogDuration(isDebug, s))
@@ -1133,7 +1171,11 @@ func (h *messageHandler) handleStmtGetColFields(_ context.Context, request Reque
 	if stmtItem == nil {
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
-
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
+	}
 	thread.Lock()
 	logger.Debugln("stmt_get_col_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
 	code, colNums, colFields := wrapper.TaosStmtGetColFields(stmtItem.stmt)
@@ -1176,6 +1218,11 @@ func (h *messageHandler) handleStmtGetTagFields(_ context.Context, request Reque
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
+	}
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
 	}
 	thread.Lock()
 	logger.Debugln("stmt_get_tag_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
@@ -1224,6 +1271,11 @@ func (h *messageHandler) handleStmtUseResult(_ context.Context, request Request,
 	if stmtItem == nil {
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
+	}
 	result := wrapper.TaosStmtUseResult(stmtItem.stmt)
 	if result == nil {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
@@ -1261,7 +1313,11 @@ func (h *messageHandler) handleSetTagsMessage(_ context.Context, req dealBinaryR
 	if stmtItem == nil {
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.id)
 	}
-
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.id)
+	}
 	thread.Lock()
 	logger.Debugln("stmt_get_tag_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
 	code, tagNums, tagFields := wrapper.TaosStmtGetTagFields(stmtItem.stmt)
@@ -1441,7 +1497,11 @@ func (h *messageHandler) handleNumFields(_ context.Context, request Request, log
 	if item == nil {
 		return wsCommonErrorMsg(0xffff, "result is nil")
 	}
-
+	item.Lock()
+	defer item.Unlock()
+	if item.TaosResult == nil {
+		return wsCommonErrorMsg(0xffff, "result has been freed")
+	}
 	thread.Lock()
 	num := wrapper.TaosNumFields(item.TaosResult)
 	thread.Unlock()
@@ -1470,7 +1530,11 @@ func (h *messageHandler) handleStmtNumParams(_ context.Context, request Request,
 	if stmtItem == nil {
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
-
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
+	}
 	thread.Lock()
 	logger.Debugln("stmt_num_params get thread lock cost:", log.GetLogDuration(isDebug, s))
 	count, code := wrapper.TaosStmtNumParams(stmtItem.stmt)
@@ -1509,7 +1573,11 @@ func (h *messageHandler) handleStmtGetParam(_ context.Context, request Request, 
 	if stmtItem == nil {
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
-
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
+	}
 	thread.Lock()
 	logger.Debugln("stmt_get_param get thread lock cost:", log.GetLogDuration(isDebug, s))
 	dataType, length, err := wrapper.TaosStmtGetParam(stmtItem.stmt, req.Index)
