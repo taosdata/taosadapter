@@ -423,8 +423,8 @@ func (h *messageHandler) handleFetch(_ context.Context, request Request, logger 
 		return wsCommonErrorMsg(0xffff, "result is nil")
 	}
 	item.Lock()
-	defer item.Unlock()
 	if item.TaosResult == nil {
+		item.Unlock()
 		return wsCommonErrorMsg(0xffff, "result has been freed")
 	}
 	handler := async.GlobalAsync.HandlerPool.Get()
@@ -433,10 +433,12 @@ func (h *messageHandler) handleFetch(_ context.Context, request Request, logger 
 	result, _ := async.GlobalAsync.TaosFetchRawBlockA(item.TaosResult, handler)
 	logger.Debugln("fetch_raw_block_a cost:", log.GetLogDuration(isDebug, s))
 	if result.N == 0 {
+		item.Unlock()
 		h.queryResults.FreeResultByID(req.ID)
 		return &FetchResponse{ID: req.ID, Completed: true}
 	}
 	if result.N < 0 {
+		item.Unlock()
 		errStr := wrapper.TaosErrorStr(result.Res)
 		h.queryResults.FreeResultByID(req.ID)
 		return wsCommonErrorMsg(0xffff, errStr)
@@ -446,7 +448,7 @@ func (h *messageHandler) handleFetch(_ context.Context, request Request, logger 
 	item.Block = wrapper.TaosGetRawBlock(item.TaosResult)
 	logger.Debugln("get_raw_block cost:", log.GetLogDuration(isDebug, s))
 	item.Size = result.N
-
+	item.Unlock()
 	return &FetchResponse{ID: req.ID, Lengths: length, Rows: result.N}
 }
 

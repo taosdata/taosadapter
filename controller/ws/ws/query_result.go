@@ -35,6 +35,7 @@ func (r *QueryResult) free() {
 	}
 
 	if r.inStmt { // stmt result is no need to free
+		r.TaosResult = nil
 		return
 	}
 
