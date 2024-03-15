@@ -41,6 +41,7 @@ func (r *QueryResult) free() {
 	thread.Lock()
 	wrapper.TaosFreeResult(r.TaosResult)
 	thread.Unlock()
+	r.TaosResult = nil
 }
 
 type QueryResultHolder struct {
@@ -125,7 +126,7 @@ type StmtItem struct {
 	index    uint64
 	stmt     unsafe.Pointer
 	isInsert bool
-	sync.RWMutex
+	sync.Mutex
 }
 
 func (s *StmtItem) free() {
@@ -139,6 +140,7 @@ func (s *StmtItem) free() {
 	thread.Lock()
 	wrapper.TaosStmtClose(s.stmt)
 	thread.Unlock()
+	s.stmt = nil
 }
 
 type StmtHolder struct {
