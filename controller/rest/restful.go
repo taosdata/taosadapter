@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -29,6 +28,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/csv"
 	"github.com/taosdata/taosadapter/v3/tools/ctools"
+	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
 	"github.com/taosdata/taosadapter/v3/tools/layout"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
@@ -167,7 +167,7 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID in
 	if isDebug {
 		s = time.Now()
 	}
-	taosConnect, err := commonpool.GetConnection(user, password, net.ParseIP(c.RemoteIP()))
+	taosConnect, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
 	if isDebug {
 		logger.Debugln("connect server cost:", time.Since(s))
 	}
@@ -500,13 +500,14 @@ func (ctl *Restful) upload(c *gin.Context) {
 	user := c.MustGet(UserKey).(string)
 	password := c.MustGet(PasswordKey).(string)
 	s := log.GetLogNow(isDebug)
-	taosConnect, err := commonpool.GetConnection(user, password, net.ParseIP(c.RemoteIP()))
+	ip := iptool.GetRealIP(c.Request)
+	taosConnect, err := commonpool.GetConnection(user, password, ip)
 	if isDebug {
 		logger.Debugln("connect cost:", log.GetLogDuration(isDebug, s))
 	}
 
 	if err != nil {
-		logger.WithError(err).Error("connect server error")
+		logger.WithField("ip", ip).WithError(err).Error("connect server error")
 		var tError *tErrors.TaosError
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 			ForbiddenResponse(c, commonpool.ErrWhitelistForbidden.Error())
@@ -674,7 +675,7 @@ func (ctl *Restful) des(c *gin.Context) {
 		BadRequestResponse(c, httperror.HTTP_GEN_TAOSD_TOKEN_ERR)
 		return
 	}
-	conn, err := commonpool.GetConnection(user, password, net.ParseIP(c.RemoteIP()))
+	conn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
 	if err != nil {
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 			ForbiddenResponse(c, commonpool.ErrWhitelistForbidden.Error())

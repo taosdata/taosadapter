@@ -106,50 +106,52 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	}
 	p.Put(v)
 	go func() {
-		select {
-		case <-cp.changePassChan:
-			// password changed
-			cp.logger.Info("password changed")
-			connectionLocker.Lock()
-			defer connectionLocker.Unlock()
-			cp.Release()
-			return
-		case <-cp.dropUserChan:
-			// user dropped
-			cp.logger.Info("user dropped")
-			connectionLocker.Lock()
-			defer connectionLocker.Unlock()
-			cp.Release()
-			return
-		case <-cp.whitelistChan:
-			// whitelist changed
-			cp.logger.Info("whitelist change")
-			c := make(chan *wrapper.WhitelistResult, 1)
-			handler := cgo.NewHandle(c)
-			// fetch whitelist
-			thread.Lock()
-			wrapper.TaosFetchWhitelistA(v, handler)
-			thread.Unlock()
-			data := <-c
-			if data.ErrCode != 0 {
-				// fetch whitelist error
-				cp.logger.WithError(tErrors.NewError(int(data.ErrCode), wrapper.TaosErrorStr(nil))).Error("fetch whitelist error! release connection!")
+		for {
+			select {
+			case <-cp.changePassChan:
+				// password changed
+				cp.logger.Info("password changed")
 				connectionLocker.Lock()
 				defer connectionLocker.Unlock()
-				// release connection pool
 				cp.Release()
 				return
+			case <-cp.dropUserChan:
+				// user dropped
+				cp.logger.Info("user dropped")
+				connectionLocker.Lock()
+				defer connectionLocker.Unlock()
+				cp.Release()
+				return
+			case <-cp.whitelistChan:
+				// whitelist changed
+				cp.logger.Info("whitelist change")
+				c := make(chan *wrapper.WhitelistResult, 1)
+				handler := cgo.NewHandle(c)
+				// fetch whitelist
+				thread.Lock()
+				wrapper.TaosFetchWhitelistA(v, handler)
+				thread.Unlock()
+				data := <-c
+				if data.ErrCode != 0 {
+					// fetch whitelist error
+					cp.logger.WithError(tErrors.NewError(int(data.ErrCode), wrapper.TaosErrorStr(nil))).Error("fetch whitelist error! release connection!")
+					connectionLocker.Lock()
+					defer connectionLocker.Unlock()
+					// release connection pool
+					cp.Release()
+					return
+				}
+				cp.ipNetsLock.Lock()
+				cp.ipNets = data.IPNets
+				tmp := make([]string, len(cp.ipNets))
+				for _, ipNet := range cp.ipNets {
+					tmp = append(tmp, ipNet.String())
+				}
+				cp.logger.WithField("whitelist", strings.Join(tmp, ",")).Debugln("whitelist change")
+				cp.ipNetsLock.Unlock()
+			case <-cp.ctx.Done():
+				return
 			}
-			cp.ipNetsLock.Lock()
-			cp.ipNets = data.IPNets
-			tmp := make([]string, len(cp.ipNets))
-			for _, ipNet := range cp.ipNets {
-				tmp = append(tmp, ipNet.String())
-			}
-			cp.logger.WithField("whitelist", strings.Join(tmp, ",")).Debugln("whitelist change")
-			cp.ipNetsLock.Unlock()
-		case <-cp.ctx.Done():
-			return
 		}
 	}()
 

@@ -2,7 +2,6 @@ package prometheus
 
 import (
 	"errors"
-	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -17,6 +16,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/plugin"
 	prompbWrite "github.com/taosdata/taosadapter/v3/plugin/prometheus/proto/write"
+	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
 	"github.com/taosdata/taosadapter/v3/tools/web"
 )
@@ -98,7 +98,7 @@ func (p *Plugin) Read(c *gin.Context) {
 	}
 	logger.Debug("read protobuf unmarshal cost:", time.Since(start))
 	start = time.Now()
-	taosConn, err := commonpool.GetConnection(user, password, net.ParseIP(c.RemoteIP()))
+	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
 	if err != nil {
 		logger.WithError(err).Error("connect server error")
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
@@ -185,7 +185,7 @@ func (p *Plugin) Write(c *gin.Context) {
 		return
 	}
 	start = time.Now()
-	taosConn, err := commonpool.GetConnection(user, password, net.ParseIP(c.RemoteIP()))
+	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
 	if err != nil {
 		logger.WithError(err).Error("connect server error")
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {

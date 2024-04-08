@@ -2,7 +2,6 @@ package influxdb
 
 import (
 	"errors"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/plugin"
 	"github.com/taosdata/taosadapter/v3/schemaless/inserter"
 	"github.com/taosdata/taosadapter/v3/tools"
+	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/web"
 )
 
@@ -150,7 +150,7 @@ func (p *Influxdb) write(c *gin.Context) {
 		})
 		return
 	}
-	taosConn, err := commonpool.GetConnection(user, password, net.ParseIP(c.RemoteIP()))
+	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
 	if err != nil {
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 			p.commonResponse(c, http.StatusUnauthorized, &message{
