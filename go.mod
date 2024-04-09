@@ -12,7 +12,7 @@ require (
 	github.com/golang/snappy v0.0.4
 	github.com/gorilla/websocket v1.5.0
 	github.com/huskar-t/file-rotatelogs/v2 v2.4.1
-	github.com/huskar-t/melody v0.0.0-20220722113213-5f82fb933d2a
+	github.com/huskar-t/melody v0.0.0-20240407104517-11dcf4a47591
 	github.com/influxdata/telegraf v1.23.4
 	github.com/json-iterator/go v1.1.12
 	github.com/kardianos/service v1.2.2
