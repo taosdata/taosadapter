@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,6 +29,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools"
+	"github.com/taosdata/taosadapter/v3/tools/iptool"
 )
 
 type STMTController struct {
@@ -251,6 +251,7 @@ type TaosStmt struct {
 	dropUserNotify      chan struct{}
 	session             *melody.Session
 	ip                  net.IP
+	ipStr               string
 	wg                  sync.WaitGroup
 	sync.Mutex
 }
@@ -268,7 +269,7 @@ func (t *TaosStmt) waitSignal() {
 				return
 			}
 			logger := wstool.GetLogger(t.session)
-			logger.WithField("clientIP", t.session.Request.RemoteAddr).Info("user dropped! close connection!")
+			logger.WithField("clientIP", t.ipStr).Info("user dropped! close connection!")
 			t.session.Close()
 			t.Unlock()
 			t.Close()
@@ -281,7 +282,7 @@ func (t *TaosStmt) waitSignal() {
 			}
 			whitelist, err := tool.GetWhitelist(t.conn)
 			if err != nil {
-				wstool.GetLogger(t.session).WithField("clientIP", t.session.Request.RemoteAddr).WithError(err).Errorln("get whitelist error! close connection!")
+				wstool.GetLogger(t.session).WithField("clientIP", t.ipStr).WithError(err).Errorln("get whitelist error! close connection!")
 				t.session.Close()
 				t.Unlock()
 				t.Close()
@@ -289,7 +290,7 @@ func (t *TaosStmt) waitSignal() {
 			}
 			valid := tool.CheckWhitelist(whitelist, t.ip)
 			if !valid {
-				wstool.GetLogger(t.session).WithField("clientIP", t.session.Request.RemoteAddr).Errorln("ip not in whitelist! close connection!")
+				wstool.GetLogger(t.session).WithField("clientIP", t.ipStr).Errorln("ip not in whitelist! close connection!")
 				t.session.Close()
 				t.Unlock()
 				t.Close()
@@ -319,8 +320,7 @@ func (s *StmtItem) clean() {
 }
 
 func NewTaosStmt(session *melody.Session) *TaosStmt {
-	host, _, _ := net.SplitHostPort(strings.TrimSpace(session.Request.RemoteAddr))
-	ipAddr := net.ParseIP(host)
+	ipAddr := iptool.GetRealIP(session.Request)
 	return &TaosStmt{
 		StmtList:            list.New(),
 		exit:                make(chan struct{}),
@@ -328,6 +328,7 @@ func NewTaosStmt(session *melody.Session) *TaosStmt {
 		dropUserNotify:      make(chan struct{}, 1),
 		session:             session,
 		ip:                  ipAddr,
+		ipStr:               ipAddr.String(),
 	}
 }
 
