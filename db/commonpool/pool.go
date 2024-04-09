@@ -112,15 +112,15 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 				// password changed
 				cp.logger.Info("password changed")
 				connectionLocker.Lock()
-				defer connectionLocker.Unlock()
 				cp.Release()
+				connectionLocker.Unlock()
 				return
 			case <-cp.dropUserChan:
 				// user dropped
 				cp.logger.Info("user dropped")
 				connectionLocker.Lock()
-				defer connectionLocker.Unlock()
 				cp.Release()
+				connectionLocker.Unlock()
 				return
 			case <-cp.whitelistChan:
 				// whitelist changed
@@ -136,9 +136,9 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 					// fetch whitelist error
 					cp.logger.WithError(tErrors.NewError(int(data.ErrCode), wrapper.TaosErrorStr(nil))).Error("fetch whitelist error! release connection!")
 					connectionLocker.Lock()
-					defer connectionLocker.Unlock()
 					// release connection pool
 					cp.Release()
+					connectionLocker.Unlock()
 					return
 				}
 				cp.ipNetsLock.Lock()
