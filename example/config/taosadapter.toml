@@ -29,9 +29,9 @@ sqlRotationTime = "24h"
 sqlRotationSize = "1GB"
 
 [monitor]
-disable = false
+disable = true
 collectDuration = "3s"
-disableCollectClientIP = false
+disableCollectClientIP = true
 incgroup = false
 pauseQueryMemoryThreshold = 70
 pauseAllMemoryThreshold = 80

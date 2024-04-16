@@ -30,6 +30,8 @@ import (
 var router *gin.Engine
 
 func TestMain(m *testing.M) {
+	viper.Set("monitor.disable", false)
+	viper.Set("monitor.disableCollectClientIP", false)
 	viper.Set("monitor.writeToTD", true)
 	viper.Set("monitor.writeInterval", time.Second*5)
 	config.Init()
