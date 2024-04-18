@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -30,6 +29,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools"
+	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 	"github.com/taosdata/taosadapter/v3/version"
 )
@@ -53,8 +53,7 @@ type messageHandler struct {
 }
 
 func newHandler(session *melody.Session) *messageHandler {
-	host, _, _ := net.SplitHostPort(strings.TrimSpace(session.Request.RemoteAddr))
-	ipAddr := net.ParseIP(host)
+	ipAddr := iptool.GetRealIP(session.Request)
 	return &messageHandler{
 		queryResults:        NewQueryResultHolder(),
 		stmts:               NewStmtHolder(),
@@ -79,7 +78,7 @@ func (h *messageHandler) waitSignal() {
 				h.Unlock()
 				return
 			}
-			wstool.GetLogger(h.session).WithField("clientIP", h.session.Request.RemoteAddr).Info("user dropped! close connection!")
+			wstool.GetLogger(h.session).WithField("clientIP", h.ipStr).Info("user dropped! close connection!")
 			h.session.Close()
 			h.Unlock()
 			h.Close()
@@ -92,7 +91,7 @@ func (h *messageHandler) waitSignal() {
 			}
 			whitelist, err := tool.GetWhitelist(h.conn)
 			if err != nil {
-				wstool.GetLogger(h.session).WithField("clientIP", h.session.Request.RemoteAddr).WithError(err).Errorln("get whitelist error! close connection!")
+				wstool.GetLogger(h.session).WithField("clientIP", h.ipStr).WithError(err).Errorln("get whitelist error! close connection!")
 				h.session.Close()
 				h.Unlock()
 				h.Close()
@@ -100,7 +99,7 @@ func (h *messageHandler) waitSignal() {
 			}
 			valid := tool.CheckWhitelist(whitelist, h.ip)
 			if !valid {
-				wstool.GetLogger(h.session).WithField("clientIP", h.session.Request.RemoteAddr).Errorln("ip not in whitelist! close connection!")
+				wstool.GetLogger(h.session).WithField("clientIP", h.ipStr).Errorln("ip not in whitelist! close connection!")
 				h.session.Close()
 				h.Unlock()
 				h.Close()

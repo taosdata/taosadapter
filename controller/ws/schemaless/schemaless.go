@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net"
-	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -21,6 +20,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/tools/iptool"
 )
 
 type SchemalessController struct {
@@ -137,19 +137,20 @@ type TaosSchemaless struct {
 	dropUserNotify      chan struct{}
 	session             *melody.Session
 	ip                  net.IP
+	ipStr               string
 	wg                  sync.WaitGroup
 	sync.Mutex
 }
 
 func NewTaosSchemaless(session *melody.Session) *TaosSchemaless {
-	host, _, _ := net.SplitHostPort(strings.TrimSpace(session.Request.RemoteAddr))
-	ipAddr := net.ParseIP(host)
+	ipAddr := iptool.GetRealIP(session.Request)
 	return &TaosSchemaless{
 		exit:                make(chan struct{}),
 		whitelistChangeChan: make(chan int64, 1),
 		dropUserNotify:      make(chan struct{}, 1),
 		session:             session,
 		ip:                  ipAddr,
+		ipStr:               ipAddr.String(),
 	}
 }
 
@@ -166,7 +167,7 @@ func (t *TaosSchemaless) waitSignal() {
 				return
 			}
 			logger := wstool.GetLogger(t.session)
-			logger.WithField("clientIP", t.session.Request.RemoteAddr).Info("user dropped! close connection!")
+			logger.WithField("clientIP", t.ipStr).Info("user dropped! close connection!")
 			t.session.Close()
 			t.Unlock()
 			t.close()
@@ -179,14 +180,14 @@ func (t *TaosSchemaless) waitSignal() {
 			}
 			whitelist, err := tool.GetWhitelist(t.conn)
 			if err != nil {
-				wstool.GetLogger(t.session).WithField("clientIP", t.session.Request.RemoteAddr).WithError(err).Errorln("get whitelist error! close connection!")
+				wstool.GetLogger(t.session).WithField("clientIP", t.ipStr).WithError(err).Errorln("get whitelist error! close connection!")
 				t.session.Close()
 				t.Unlock()
 				return
 			}
 			valid := tool.CheckWhitelist(whitelist, t.ip)
 			if !valid {
-				wstool.GetLogger(t.session).WithField("clientIP", t.session.Request.RemoteAddr).Errorln("ip not in whitelist! close connection!")
+				wstool.GetLogger(t.session).WithField("clientIP", t.ipStr).Errorln("ip not in whitelist! close connection!")
 				t.session.Close()
 				t.Unlock()
 				t.close()

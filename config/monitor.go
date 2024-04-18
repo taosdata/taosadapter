@@ -24,17 +24,17 @@ type Monitor struct {
 }
 
 func initMonitor() {
-	viper.SetDefault("monitor.disable", false)
+	viper.SetDefault("monitor.disable", true)
 	_ = viper.BindEnv("monitor.disable", "TAOS_ADAPTER_MONITOR_DISABLE")
-	pflag.Bool("monitor.disable", false, `Whether to disable monitoring. Env "TAOS_ADAPTER_MONITOR_DISABLE"`)
+	pflag.Bool("monitor.disable", true, `Whether to disable monitoring. Env "TAOS_ADAPTER_MONITOR_DISABLE"`)
 
 	viper.SetDefault("monitor.collectDuration", time.Second*3)
 	_ = viper.BindEnv("monitor.collectDuration", "TAOS_ADAPTER_MONITOR_COLLECT_DURATION")
 	pflag.Duration("monitor.collectDuration", time.Second*3, `Set monitor duration. Env "TAOS_ADAPTER_MONITOR_COLLECT_DURATION"`)
 
-	viper.SetDefault("monitor.disableCollectClientIP", false)
+	viper.SetDefault("monitor.disableCollectClientIP", true)
 	_ = viper.BindEnv("monitor.disableCollectClientIP", "TAOS_ADAPTER_MONITOR_DISABLE_COLLECT_CLIENT_IP")
-	pflag.Bool("monitor.disableCollectClientIP", false, `Whether to disable collecting clientIP. Env "TAOS_ADAPTER_MONITOR_DISABLE_COLLECT_CLIENT_IP"`)
+	pflag.Bool("monitor.disableCollectClientIP", true, `Whether to disable collecting clientIP. Env "TAOS_ADAPTER_MONITOR_DISABLE_COLLECT_CLIENT_IP"`)
 
 	viper.SetDefault("monitor.incgroup", false)
 	_ = viper.BindEnv("monitor.incgroup", "TAOS_ADAPTER_MONITOR_INCGROUP")

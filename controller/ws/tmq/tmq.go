@@ -8,7 +8,6 @@ import (
 	"errors"
 	"net"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,6 +28,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 )
 
@@ -244,6 +244,7 @@ type TMQ struct {
 	whitelistChangeChan chan int64
 	session             *melody.Session
 	ip                  net.IP
+	ipStr               string
 	wg                  sync.WaitGroup
 	conn                unsafe.Pointer
 	sync.Mutex
@@ -260,8 +261,7 @@ type Message struct {
 }
 
 func NewTaosTMQ(session *melody.Session) *TMQ {
-	host, _, _ := net.SplitHostPort(strings.TrimSpace(session.Request.RemoteAddr))
-	ipAddr := net.ParseIP(host)
+	ipAddr := iptool.GetRealIP(session.Request)
 	return &TMQ{
 		tmpMessage:          &Message{buffer: &bytes.Buffer{}},
 		handler:             tmqhandle.GlobalTMQHandlerPoll.Get(),
@@ -273,6 +273,7 @@ func NewTaosTMQ(session *melody.Session) *TMQ {
 		dropUserNotify:      make(chan struct{}, 1),
 		session:             session,
 		ip:                  ipAddr,
+		ipStr:               ipAddr.String(),
 	}
 }
 
@@ -289,7 +290,7 @@ func (t *TMQ) waitSignal() {
 				return
 			}
 			logger := wstool.GetLogger(t.session)
-			logger.WithField("clientIP", t.session.Request.RemoteAddr).Info("user dropped! close connection!")
+			logger.WithField("clientIP", t.ipStr).Info("user dropped! close connection!")
 			t.session.Close()
 			t.Unlock()
 			t.Close(logger)
@@ -303,7 +304,7 @@ func (t *TMQ) waitSignal() {
 			whitelist, err := tool.GetWhitelist(t.conn)
 			if err != nil {
 				logger := wstool.GetLogger(t.session)
-				logger.WithField("clientIP", t.session.Request.RemoteAddr).WithError(err).Errorln("get whitelist error! close connection!")
+				logger.WithField("clientIP", t.ipStr).WithError(err).Errorln("get whitelist error! close connection!")
 				t.session.Close()
 				t.Unlock()
 				t.Close(logger)
@@ -312,7 +313,7 @@ func (t *TMQ) waitSignal() {
 			valid := tool.CheckWhitelist(whitelist, t.ip)
 			if !valid {
 				logger := wstool.GetLogger(t.session)
-				logger.WithField("clientIP", t.session.Request.RemoteAddr).Errorln("ip not in whitelist! close connection!")
+				logger.WithField("clientIP", t.ipStr).Errorln("ip not in whitelist! close connection!")
 				t.session.Close()
 				t.Unlock()
 				t.Close(logger)

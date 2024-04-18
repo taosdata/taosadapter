@@ -2,7 +2,6 @@ package rest
 
 import (
 	"errors"
-	"net"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +10,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/tools/iptool"
 )
 
 func (ctl *Restful) tableVgID(c *gin.Context) {
@@ -30,7 +30,7 @@ func (ctl *Restful) tableVgID(c *gin.Context) {
 	password := c.MustGet(PasswordKey).(string)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
-	taosConn, err := commonpool.GetConnection(user, password, net.ParseIP(c.RemoteIP()))
+	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
 	logger.Debugln("connect cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.WithError(err).Error("connect server error")
