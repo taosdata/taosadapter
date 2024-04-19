@@ -306,6 +306,10 @@ type BaseResponse struct {
 }
 
 func (h *messageHandler) writeResponse(ctx context.Context, session *melody.Session, response Response, action string, reqID uint64) {
+	if response == nil {
+		// session closed handle return nil
+		return
+	}
 	if response.IsNull() {
 		return
 	}
