@@ -123,7 +123,7 @@ func generateWriteSql(timeseries []prompbWrite.TimeSeries, sql *bytes.Buffer, tt
 		for _, sample := range timeseries[i].Samples {
 			sql.WriteString("('")
 			timeBuffer.Reset()
-			timeBuffer.B = time.Unix(0, sample.Timestamp*1e6).UTC().AppendFormat(timeBuffer.B, time.RFC3339Nano)
+			timeBuffer.B = time.Unix(sample.Timestamp/1e3, (sample.Timestamp%1e3)*1e6).UTC().AppendFormat(timeBuffer.B, time.RFC3339Nano)
 			sql.WriteString(bytesutil.ToUnsafeString(timeBuffer.B))
 			sql.WriteString("',")
 			if math.IsNaN(sample.Value) {
@@ -262,7 +262,7 @@ func generateReadSql(query *prompb.Query) (string, error) {
 }
 
 func ms2Time(ts int64) string {
-	return time.Unix(0, ts*1e6).UTC().Format(time.RFC3339Nano)
+	return time.Unix(ts/1e3, (ts%1e3)*1e6).UTC().Format(time.RFC3339Nano)
 }
 
 func escapeString(s string) string {
