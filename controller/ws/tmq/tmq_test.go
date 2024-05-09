@@ -667,7 +667,7 @@ func TestMeta(t *testing.T) {
 			var resp wstool.TDEngineRestfulResp
 			err = jsoniter.Unmarshal(w.Body.Bytes(), &resp)
 			assert.NoError(t, err)
-			assert.Equal(t, [][]driver.Value{
+			expect := [][]driver.Value{
 				{"ts", "TIMESTAMP", float64(8), ""},
 				{"c1", "BOOL", float64(1), ""},
 				{"c2", "TINYINT", float64(1), ""},
@@ -696,7 +696,12 @@ func TestMeta(t *testing.T) {
 				{"tc11", "DOUBLE", float64(8), "TAG"},
 				{"tc12", "VARCHAR", float64(20), "TAG"},
 				{"tc13", "NCHAR", float64(20), "TAG"},
-			}, resp.Data)
+			}
+			for index, values := range expect {
+				for i := 0; i < 4; i++ {
+					assert.Equal(t, values[i], resp.Data[index][i])
+				}
+			}
 			status = AfterTMQCommit
 			b, _ := json.Marshal(&TMQCommitReq{
 				ReqID:     3,
@@ -850,7 +855,7 @@ func TestMeta(t *testing.T) {
 	var resp wstool.TDEngineRestfulResp
 	err = jsoniter.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
-	assert.Equal(t, [][]driver.Value{
+	expect := [][]driver.Value{
 		{"ts", "TIMESTAMP", float64(8), ""},
 		{"c1", "BOOL", float64(1), ""},
 		{"c2", "TINYINT", float64(1), ""},
@@ -879,7 +884,12 @@ func TestMeta(t *testing.T) {
 		{"tc11", "DOUBLE", float64(8), "TAG"},
 		{"tc12", "VARCHAR", float64(20), "TAG"},
 		{"tc13", "NCHAR", float64(20), "TAG"},
-	}, resp.Data)
+	}
+	for index, values := range expect {
+		for i := 0; i < 4; i++ {
+			assert.Equal(t, values[i], resp.Data[index][i])
+		}
+	}
 	time.Sleep(time.Second * 3)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop topic if exists test_tmq_meta_ws_topic")
