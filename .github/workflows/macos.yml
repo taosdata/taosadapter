@@ -81,13 +81,6 @@ jobs:
           path: server.tar.gz
           key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ steps.get_commit_id.outputs.commit_id }}
 
-      - name: prepare install
-        if: >
-          (github.event_name == 'workflow_dispatch' && steps.cache-server-manually.outputs.cache-hit != 'true') ||
-          (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true') ||
-          (github.event_name == 'push' && steps.cache-server-push.outputs.cache-hit != 'true')
-        run: brew install argp-standalone pkgconfig geos
-
       - name: install TDengine
         if: >
           (github.event_name == 'workflow_dispatch' && steps.cache-server-manually.outputs.cache-hit != 'true') ||
@@ -162,7 +155,9 @@ jobs:
             ${{ runner.os }}-build-${{ inputs.tbBranch }}-
 
       - name: prepare install
-        run: brew install geos
+        run: |
+          sudo mkdir -p /usr/local/lib
+          sudo mkdir -p /usr/local/include
 
       - name: install
         run: |
@@ -180,7 +175,7 @@ jobs:
           cache-dependency-path: taosadapter/go.sum
 
       - name: build taosAdapter
-        run: cd ./taosadapter && go build
+        run: cd ./taosadapter && go build && ls -l
 
   test_go_test:
     runs-on: macos-latest
@@ -221,7 +216,9 @@ jobs:
             ${{ runner.os }}-build-${{ inputs.tbBranch }}-
 
       - name: prepare install
-        run: brew install geos
+        run: |
+          sudo mkdir -p /usr/local/lib
+          sudo mkdir -p /usr/local/include
 
       - name: install
         run: |
@@ -254,7 +251,9 @@ jobs:
 
       - name: test
         id: test
-        run: cd ./taosadapter && sudo go test -v --count=1 ./...
+        env:
+          DYLD_LIBRARY_PATH: /usr/local/lib:$DYLD_LIBRARY_PATH
+        run: cd ./taosadapter && sudo DYLD_LIBRARY_PATH=/usr/local/lib:$DYLD_LIBRARY_PATH go test -v --count=1 ./...
 
       - uses: actions/upload-artifact@v3
         if: always() && (steps.test.outcome == 'failure' || steps.test.outcome == 'cancelled')
