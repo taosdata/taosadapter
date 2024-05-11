@@ -454,7 +454,7 @@ func (t *Taos) writeRaw(ctx context.Context, session *melody.Session, reqID, mes
 	thread.Unlock()
 	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
 	if errCode != 0 {
-		errStr := wrapper.TaosErrorStr(nil)
+		errStr := wrapper.TMQErr2Str(errCode)
 		wsErrorMsg(ctx, session, int(errCode)&0xffff, errStr, WSWriteRaw, reqID)
 		return
 	}
@@ -489,7 +489,7 @@ func (t *Taos) writeRawBlock(ctx context.Context, session *melody.Session, reqID
 	thread.Unlock()
 	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
 	if errCode != 0 {
-		errStr := wrapper.TaosErrorStr(nil)
+		errStr := wrapper.TMQErr2Str(int32(errCode))
 		wsErrorMsg(ctx, session, errCode&0xffff, errStr, WSWriteRawBlock, reqID)
 		return
 	}
@@ -524,7 +524,7 @@ func (t *Taos) writeRawBlockWithFields(ctx context.Context, session *melody.Sess
 	thread.Unlock()
 	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
 	if errCode != 0 {
-		errStr := wrapper.TaosErrorStr(nil)
+		errStr := wrapper.TMQErr2Str(int32(errCode))
 		wsErrorMsg(ctx, session, errCode&0xffff, errStr, WSWriteRawBlockWithFields, reqID)
 		return
 	}
