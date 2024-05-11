@@ -119,9 +119,9 @@ func (ctl *Restful) sql(c *gin.Context) {
 		timeBuffer = timeBuffer[:0]
 		switch precision {
 		case common.PrecisionMilliSecond: // milli-second
-			timeBuffer = time.Unix(0, ts*1e6).In(location).AppendFormat(timeBuffer, layout.LayoutMillSecond)
+			timeBuffer = time.Unix(ts/1e3, (ts%1e3)*1e6).In(location).AppendFormat(timeBuffer, layout.LayoutMillSecond)
 		case common.PrecisionMicroSecond: // micro-second
-			timeBuffer = time.Unix(0, ts*1e3).In(location).AppendFormat(timeBuffer, layout.LayoutMicroSecond)
+			timeBuffer = time.Unix(ts/1e6, (ts%1e6)*1e3).In(location).AppendFormat(timeBuffer, layout.LayoutMicroSecond)
 		case common.PrecisionNanoSecond: // nano-second
 			timeBuffer = time.Unix(0, ts).In(location).AppendFormat(timeBuffer, layout.LayoutNanoSecond)
 		default:

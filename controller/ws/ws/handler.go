@@ -306,6 +306,10 @@ type BaseResponse struct {
 }
 
 func (h *messageHandler) writeResponse(ctx context.Context, session *melody.Session, response Response, action string, reqID uint64) {
+	if response == nil {
+		// session closed handle return nil
+		return
+	}
 	if response.IsNull() {
 		return
 	}
@@ -1376,7 +1380,7 @@ func (h *messageHandler) handleTMQRawMessage(_ context.Context, req dealBinaryRe
 	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
 
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(nil)
+		errStr := wrapper.TMQErr2Str(code)
 		logger.Errorf("## write raw meta error: %s", errStr)
 		return wsCommonErrorMsg(int(code)&0xffff, errStr)
 	}
@@ -1406,7 +1410,7 @@ func (h *messageHandler) handleRawBlockMessage(_ context.Context, req dealBinary
 	thread.Unlock()
 	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(nil)
+		errStr := wrapper.TMQErr2Str(int32(code))
 		logger.Errorf("## write raw meta error: %s", errStr)
 		return wsCommonErrorMsg(int(code)&0xffff, errStr)
 	}
@@ -1440,7 +1444,7 @@ func (h *messageHandler) handleRawBlockMessageWithFields(_ context.Context, req 
 	thread.Unlock()
 	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(nil)
+		errStr := wrapper.TMQErr2Str(int32(code))
 		logger.Errorf("## write raw meta error: %s", errStr)
 		return wsCommonErrorMsg(int(code)&0xffff, errStr)
 	}
