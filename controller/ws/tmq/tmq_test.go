@@ -1,6 +1,7 @@
 package tmq
 
 import (
+	"context"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -2751,4 +2753,125 @@ func TestTMQ_CommitOffset(t *testing.T) {
 	assert.Equal(t, 0, committedResp.Code, string(msg))
 	assert.Equal(t, 1, len(committedResp.Committed), string(msg))
 	assert.True(t, committedResp.Committed[0] > 0, string(msg))
+}
+
+func TestTMQ_PollAfterClose(t *testing.T) {
+	dbName := "test_ws_tmq_poll_after_close"
+	topic := "test_ws_tmq_poll_after_close_topic"
+
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/tmq", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer ws.Close()
+	before(t, dbName, topic)
+
+	defer after(ws, dbName, topic)
+
+	// subscribe
+	b, _ := json.Marshal(TMQSubscribeReq{
+		User:        "root",
+		Password:    "taosdata",
+		DB:          dbName,
+		GroupID:     "test",
+		Topics:      []string{topic},
+		AutoCommit:  "false",
+		OffsetReset: "earliest",
+	})
+	msg, err := doWebSocket(ws, TMQSubscribe, b)
+	assert.NoError(t, err)
+	var subscribeResp TMQSubscribeResp
+	err = json.Unmarshal(msg, &subscribeResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
+	go func() {
+		for i := 0; i < 100; i++ {
+			time.Sleep(time.Millisecond * 100)
+			code, message := doHttpSql(fmt.Sprintf("insert into %s.ct2 values (now, 1, 2, '3')", dbName))
+			assert.Equal(t, 0, code, message)
+		}
+	}()
+	// poll
+	b, _ = json.Marshal(TMQPollReq{ReqID: 0, BlockingTime: 500})
+	msg, err = doWebSocket(ws, TMQPoll, b)
+	assert.NoError(t, err)
+	var pollResp TMQPollResp
+	err = json.Unmarshal(msg, &pollResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, pollResp.Code, string(msg))
+	assert.True(t, pollResp.HaveMessage, string(msg))
+	type wsRespMsg struct {
+		messageType int
+		p           []byte
+	}
+	waitMap := make(map[uint64]chan *wsRespMsg)
+	type tmqResp struct {
+		ReqID uint64 `json:"req_id"`
+	}
+	go func() {
+		count := 0
+		for {
+			mt, p, err := ws.ReadMessage()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			t.Log(string(p))
+			count += 1
+			var resp tmqResp
+			err = json.Unmarshal(p, &resp)
+			if err != nil {
+				t.Error(err)
+			}
+			ch := waitMap[resp.ReqID]
+			ch <- &wsRespMsg{messageType: mt, p: p}
+			if count == 10 {
+				break
+			}
+		}
+	}()
+	wg := sync.WaitGroup{}
+	locker := sync.Mutex{}
+	wg.Add(10)
+	for i := 0; i < 10; i++ {
+		ch := make(chan *wsRespMsg, 1)
+		waitMap[uint64(i)] = ch
+		go func(index int) {
+			defer wg.Done()
+			b, _ := json.Marshal(TMQPollReq{ReqID: uint64(index), BlockingTime: 500})
+			t.Log(string(b))
+			locker.Lock()
+			a, _ := json.Marshal(&wstool.WSAction{Action: TMQPoll, Args: b})
+			err = ws.WriteMessage(websocket.TextMessage, a)
+			locker.Unlock()
+			if err != nil {
+				t.Log(index, "poll send failed", err)
+				return
+			}
+			timeout, cancel := context.WithTimeout(context.Background(), time.Second*20)
+			defer cancel()
+			select {
+			case <-timeout.Done():
+				t.Error(timeout)
+			case msg := <-ch:
+				var pollResp TMQPollResp
+				err = json.Unmarshal(msg.p, &pollResp)
+				assert.NoError(t, err)
+				assert.Equal(t, 0, pollResp.Code, string(msg.p))
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	// poll
+	b, _ = json.Marshal(TMQPollReq{ReqID: 0, BlockingTime: 500})
+	msg, err = doWebSocket(ws, TMQPoll, b)
+	assert.NoError(t, err)
+	t.Log(string(msg))
+	err = json.Unmarshal(msg, &pollResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, pollResp.Code, string(msg))
 }
