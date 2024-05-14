@@ -29,7 +29,7 @@ jobs:
     steps:
       - name: checkout TDengine by pr
         if: github.event_name == 'pull_request'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: 'taosdata/TDengine'
           path: 'TDengine'
@@ -37,7 +37,7 @@ jobs:
 
       - name: checkout TDengine by push
         if: github.event_name == 'push'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: 'taosdata/TDengine'
           path: 'TDengine'
@@ -45,7 +45,7 @@ jobs:
 
       - name: checkout TDengine manually
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: 'taosdata/TDengine'
           path: 'TDengine'
@@ -60,7 +60,7 @@ jobs:
       - name: Cache server by pr
         if: github.event_name == 'pull_request'
         id: cache-server-pr
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: server.tar.gz
           key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ steps.get_commit_id.outputs.commit_id }}
@@ -68,7 +68,7 @@ jobs:
       - name: Cache server by push
         if: github.event_name == 'push'
         id: cache-server-push
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: server.tar.gz
           key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ steps.get_commit_id.outputs.commit_id }}
@@ -76,17 +76,11 @@ jobs:
       - name: Cache server manually
         if: github.event_name == 'workflow_dispatch'
         id: cache-server-manually
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: server.tar.gz
           key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ steps.get_commit_id.outputs.commit_id }}
 
-      - name: prepare install
-        if: >
-          (github.event_name == 'workflow_dispatch' && steps.cache-server-manually.outputs.cache-hit != 'true') ||
-          (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true') ||
-          (github.event_name == 'push' && steps.cache-server-push.outputs.cache-hit != 'true')
-        run: brew install argp-standalone pkgconfig geos
 
       - name: install TDengine
         if: >
@@ -134,7 +128,7 @@ jobs:
       - name: get cache server by pr
         if: github.event_name == 'pull_request'
         id: get-cache-server-pr
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: server.tar.gz
           key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
@@ -144,7 +138,7 @@ jobs:
       - name: get cache server by push
         if: github.event_name == 'push'
         id: get-cache-server-push
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: server.tar.gz
           key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
@@ -154,7 +148,7 @@ jobs:
       - name: get cache server manually
         if: github.event_name == 'workflow_dispatch'
         id: get-cache-server-manually
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: server.tar.gz
           key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
@@ -162,7 +156,9 @@ jobs:
             ${{ runner.os }}-build-${{ inputs.tbBranch }}-
 
       - name: prepare install
-        run: brew install geos
+        run: |
+          sudo mkdir -p /usr/local/lib
+          sudo mkdir -p /usr/local/include
 
       - name: install
         run: |
@@ -170,7 +166,7 @@ jobs:
           cd release && sudo sh install.sh
 
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: 'taosadapter'
 
@@ -193,7 +189,7 @@ jobs:
       - name: get cache server by pr
         if: github.event_name == 'pull_request'
         id: get-cache-server-pr
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: server.tar.gz
           key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
@@ -203,7 +199,7 @@ jobs:
       - name: get cache server by push
         if: github.event_name == 'push'
         id: get-cache-server-push
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: server.tar.gz
           key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
@@ -213,7 +209,7 @@ jobs:
       - name: get cache server manually
         if: github.event_name == 'workflow_dispatch'
         id: get-cache-server-manually
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: server.tar.gz
           key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
@@ -221,7 +217,9 @@ jobs:
             ${{ runner.os }}-build-${{ inputs.tbBranch }}-
 
       - name: prepare install
-        run: brew install geos
+        run: |
+          sudo mkdir -p /usr/local/lib
+          sudo mkdir -p /usr/local/include
 
       - name: install
         run: |
@@ -229,7 +227,7 @@ jobs:
           cd release && sudo sh install.sh
 
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: 'taosadapter'
 
@@ -254,7 +252,9 @@ jobs:
 
       - name: test
         id: test
-        run: cd ./taosadapter && sudo go test -v --count=1 ./...
+        env:
+          DYLD_LIBRARY_PATH: /usr/local/lib:$DYLD_LIBRARY_PATH
+        run: cd ./taosadapter && sudo DYLD_LIBRARY_PATH=/usr/local/lib:$DYLD_LIBRARY_PATH go test -v --count=1 ./...
 
       - uses: actions/upload-artifact@v3
         if: always() && (steps.test.outcome == 'failure' || steps.test.outcome == 'cancelled')
