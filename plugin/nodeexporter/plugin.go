@@ -16,7 +16,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	tmetric "github.com/influxdata/telegraf/metric"
-	"github.com/influxdata/telegraf/plugins/inputs/prometheus"
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/log"
@@ -221,7 +220,7 @@ func (p *NodeExporter) requestSingle(conn unsafe.Pointer, req *Req) error {
 	if err != nil {
 		return fmt.Errorf("error reading body: %s", err)
 	}
-	metrics, err := prometheus.Parse(body, resp.Header, false)
+	metrics, err := Parse(body, resp.Header, false)
 	if err != nil {
 		return fmt.Errorf("error pase body: %s", err)
 	}
