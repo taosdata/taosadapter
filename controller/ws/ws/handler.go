@@ -1,9 +1,9 @@
 package ws
 
 import (
-	"bytes"
 	"context"
 	"database/sql/driver"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +13,7 @@ import (
 	"time"
 	"unsafe"
 
+	jsoniter "github.com/huskar-t/jsoniterator"
 	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/common"
@@ -29,6 +30,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools"
+	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 	"github.com/taosdata/taosadapter/v3/version"
 )
@@ -72,15 +74,32 @@ type Request struct {
 	Args   json.RawMessage `json:"args"`
 }
 
+var jsonI = jsoniter.ConfigCompatibleWithStandardLibrary
+
 func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 	logger.Debugln("get ws message data:", string(data))
 
 	var request Request
-	if err := json.Unmarshal(data, &request); err != nil {
-		logger.WithError(err).Errorln("unmarshal ws request")
+	iter := jsonI.BorrowIterator(data)
+
+	iter.ReadObjectCB(func(iter *jsoniter.Iterator, field string) bool {
+		switch field {
+		case "req_id":
+			request.ReqID = iter.ReadUint64()
+		case "action":
+			request.Action = iter.ReadString()
+		case "args":
+			request.Args = iter.SkipAndReturnBytesRef()
+		}
+		return iter.Error == nil
+	})
+	if iter.Error != nil {
+		logger.WithError(iter.Error).Errorln("unmarshal ws request")
+		jsonI.ReturnIterator(iter)
 		return
 	}
+	jsonI.ReturnIterator(iter)
 
 	var f dealFunc
 	switch request.Action {
@@ -194,9 +213,16 @@ func (h *messageHandler) deal(ctx context.Context, session *melody.Session, requ
 
 		reqID := request.ReqID
 		if reqID == 0 {
-			var req RequestID
-			_ = json.Unmarshal(request.Args, &req)
-			reqID = req.ReqID
+			iter := jsonI.BorrowIterator(request.Args)
+			iter.ReadObjectCB(func(iter *jsoniter.Iterator, field string) bool {
+				if field == "req_id" {
+					reqID = iter.ReadUint64()
+					return false
+				}
+				iter.Skip()
+				return true
+			})
+			jsonI.ReturnIterator(iter)
 		}
 		request.ReqID = reqID
 
@@ -351,16 +377,28 @@ type QueryResponse struct {
 }
 
 func (h *messageHandler) handleQuery(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
-	var req QueryRequest
-	if err := json.Unmarshal(request.Args, &req); err != nil {
-		logger.Errorf("## unmarshal ws query request %s error: %s", request.Args, err)
+	iter := jsonI.BorrowIterator(request.Args)
+	var sql []byte
+	iter.ReadObjectCB(func(iter *jsoniter.Iterator, field string) bool {
+		if field == "sql" {
+			sql = iter.SkipAndReturnBytesRef()
+			sql = sql[1 : len(sql)-1]
+			return false
+		}
+		iter.Skip()
+		return true
+	})
+	if iter.Error != nil {
+		logger.Errorf("## unmarshal ws query request %s error: %s", string(request.Args), iter.Error.Error())
+		jsonI.ReturnIterator(iter)
 		return wsCommonErrorMsg(0xffff, "unmarshal ws query request error")
 	}
-	sqlType := monitor.WSRecordRequest(req.Sql)
+	jsonI.ReturnIterator(iter)
+	sqlType := monitor.WSRecordRequest(bytesutil.ToUnsafeString(sql))
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
-	result, _ := async.GlobalAsync.TaosQuery(h.conn, req.Sql, handler, int64(request.ReqID))
+	result, _ := async.GlobalAsync.TaosQuery(h.conn, bytesutil.ToUnsafeString(sql), handler, int64(request.ReqID))
 	logger.Debugln("query cost ", log.GetLogDuration(isDebug, s))
 
 	code := wrapper.TaosError(result.Res)
@@ -478,20 +516,15 @@ func (h *messageHandler) handleFetchBlock(ctx context.Context, request Request, 
 	}
 
 	blockLength := int(parser.RawBlockGetLength(item.Block))
-	if item.buffer == nil {
-		item.buffer = new(bytes.Buffer)
-	} else {
-		item.buffer.Reset()
+	if cap(item.buf) < blockLength+16 {
+		item.buf = make([]byte, 0, blockLength+16)
 	}
-	item.buffer.Grow(blockLength + 16)
-	wstool.WriteUint64(item.buffer, uint64(wstool.GetDuration(ctx)))
-	wstool.WriteUint64(item.buffer, req.ID)
-	for offset := 0; offset < blockLength; offset++ {
-		item.buffer.WriteByte(*((*byte)(tools.AddPointer(item.Block, uintptr(offset)))))
-	}
-	b := item.buffer.Bytes()
+	item.buf = item.buf[:blockLength+16]
+	binary.LittleEndian.PutUint64(item.buf, uint64(wstool.GetDuration(ctx)))
+	binary.LittleEndian.PutUint64(item.buf[8:], req.ID)
+	bytesutil.Copy(item.Block, item.buf, 16, blockLength)
 	logger.Debugln("handle binary content cost:", log.GetLogDuration(isDebug, s))
-	resp = &BinaryResponse{Data: b}
+	resp = &BinaryResponse{Data: item.buf}
 	resp.SetBinary(true)
 	return resp
 }
