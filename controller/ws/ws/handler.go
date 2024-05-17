@@ -516,6 +516,9 @@ func (h *messageHandler) handleFetchBlock(ctx context.Context, request Request, 
 	}
 
 	blockLength := int(parser.RawBlockGetLength(item.Block))
+	if blockLength <= 0 {
+		return wsCommonErrorMsg(0xffff, "block length illegal")
+	}
 	if cap(item.buf) < blockLength+16 {
 		item.buf = make([]byte, 0, blockLength+16)
 	}
