@@ -12,9 +12,9 @@ require (
 	github.com/golang/snappy v0.0.4
 	github.com/gorilla/websocket v1.5.0
 	github.com/huskar-t/file-rotatelogs/v2 v2.4.1
+	github.com/huskar-t/jsoniterator v0.0.0-20240515033108-8155b3b08417
 	github.com/huskar-t/melody v0.0.0-20240407104517-11dcf4a47591
 	github.com/influxdata/telegraf v1.23.4
-	github.com/json-iterator/go v1.1.12
 	github.com/kardianos/service v1.2.2
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369
 	github.com/patrickmn/go-cache v2.1.0+incompatible
@@ -67,6 +67,7 @@ require (
 	github.com/influxdata/toml v0.0.0-20190415235208-270119a8ce65 // indirect
 	github.com/jonboulle/clockwork v0.2.2 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
+	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/lestrrat-go/strftime v1.0.5 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect

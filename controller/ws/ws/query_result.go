@@ -1,7 +1,6 @@
 package ws
 
 import (
-	"bytes"
 	"container/list"
 	"sync"
 	"sync/atomic"
@@ -20,7 +19,7 @@ type QueryResult struct {
 	Size        int
 	Block       unsafe.Pointer
 	precision   int
-	buffer      *bytes.Buffer
+	buf         []byte
 	inStmt      bool
 	sync.Mutex
 }
