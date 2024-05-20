@@ -1,7 +1,6 @@
 package ws
 
 import (
-	"bytes"
 	"context"
 	"database/sql/driver"
 	"encoding/binary"
@@ -82,25 +81,10 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	logger.Debugln("get ws message data:", string(data))
 
 	var request Request
-	iter := jsonI.BorrowIterator(data)
-
-	iter.ReadObjectCB(func(iter *jsoniter.Iterator, field string) bool {
-		switch field {
-		case "req_id":
-			request.ReqID = iter.ReadUint64()
-		case "action":
-			request.Action = iter.ReadString()
-		case "args":
-			request.Args = iter.SkipAndReturnBytesRef()
-		}
-		return iter.Error == nil
-	})
-	if iter.Error != nil {
-		logger.WithError(iter.Error).Errorln("unmarshal ws request")
-		jsonI.ReturnIterator(iter)
+	if err := json.Unmarshal(data, &request); err != nil {
+		logger.WithError(err).Errorln("unmarshal ws request")
 		return
 	}
-	jsonI.ReturnIterator(iter)
 
 	var f dealFunc
 	switch request.Action {
@@ -214,16 +198,9 @@ func (h *messageHandler) deal(ctx context.Context, session *melody.Session, requ
 
 		reqID := request.ReqID
 		if reqID == 0 {
-			iter := jsonI.BorrowIterator(request.Args)
-			iter.ReadObjectCB(func(iter *jsoniter.Iterator, field string) bool {
-				if field == "req_id" {
-					reqID = iter.ReadUint64()
-					return false
-				}
-				iter.Skip()
-				return true
-			})
-			jsonI.ReturnIterator(iter)
+			var req RequestID
+			_ = json.Unmarshal(request.Args, &req)
+			reqID = req.ReqID
 		}
 		request.ReqID = reqID
 
@@ -378,37 +355,16 @@ type QueryResponse struct {
 }
 
 func (h *messageHandler) handleQuery(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
-	iter := jsonI.BorrowIterator(request.Args)
-	var sql []byte
-	iter.ReadObjectCB(func(iter *jsoniter.Iterator, field string) bool {
-		if field == "sql" {
-			sql = iter.SkipAndReturnBytesRef()
-			if sql == nil {
-				iter.Error = errors.New("sql is nil")
-				return false
-			}
-			sql = bytes.TrimSpace(sql)
-			if len(sql) < 3 {
-				iter.Error = errors.New("sql is nil")
-				return false
-			}
-			sql = sql[1 : len(sql)-1]
-			return false
-		}
-		iter.Skip()
-		return true
-	})
-	if iter.Error != nil {
-		logger.Errorf("## unmarshal ws query request %s error: %s", string(request.Args), iter.Error.Error())
-		jsonI.ReturnIterator(iter)
+	var req QueryRequest
+	if err := json.Unmarshal(request.Args, &req); err != nil {
+		logger.Errorf("## unmarshal ws query request %s error: %s", request.Args, err)
 		return wsCommonErrorMsg(0xffff, "unmarshal ws query request error")
 	}
-	jsonI.ReturnIterator(iter)
-	sqlType := monitor.WSRecordRequest(bytesutil.ToUnsafeString(sql))
+	sqlType := monitor.WSRecordRequest(req.Sql)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
-	result, _ := async.GlobalAsync.TaosQuery(h.conn, bytesutil.ToUnsafeString(sql), handler, int64(request.ReqID))
+	result, _ := async.GlobalAsync.TaosQuery(h.conn, req.Sql, handler, int64(request.ReqID))
 	logger.Debugln("query cost ", log.GetLogDuration(isDebug, s))
 
 	code := wrapper.TaosError(result.Res)
