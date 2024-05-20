@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"bytes"
 	"context"
 	"database/sql/driver"
 	"encoding/binary"
@@ -382,6 +383,15 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 	iter.ReadObjectCB(func(iter *jsoniter.Iterator, field string) bool {
 		if field == "sql" {
 			sql = iter.SkipAndReturnBytesRef()
+			if sql == nil {
+				iter.Error = errors.New("sql is nil")
+				return false
+			}
+			sql = bytes.TrimSpace(sql)
+			if len(sql) < 3 {
+				iter.Error = errors.New("sql is nil")
+				return false
+			}
 			sql = sql[1 : len(sql)-1]
 			return false
 		}
