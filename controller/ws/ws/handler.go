@@ -1,9 +1,9 @@
 package ws
 
 import (
-	"bytes"
 	"context"
 	"database/sql/driver"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +12,7 @@ import (
 	"time"
 	"unsafe"
 
+	jsoniter "github.com/huskar-t/jsoniterator"
 	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/common"
@@ -29,6 +30,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools"
+	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 	"github.com/taosdata/taosadapter/v3/version"
@@ -131,6 +133,8 @@ type Request struct {
 	Action string          `json:"action"`
 	Args   json.RawMessage `json:"args"`
 }
+
+var jsonI = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
@@ -601,20 +605,18 @@ func (h *messageHandler) handleFetchBlock(ctx context.Context, request Request, 
 	}
 
 	blockLength := int(parser.RawBlockGetLength(item.Block))
-	if item.buffer == nil {
-		item.buffer = new(bytes.Buffer)
-	} else {
-		item.buffer.Reset()
+	if blockLength <= 0 {
+		return wsCommonErrorMsg(0xffff, "block length illegal")
 	}
-	item.buffer.Grow(blockLength + 16)
-	wstool.WriteUint64(item.buffer, uint64(wstool.GetDuration(ctx)))
-	wstool.WriteUint64(item.buffer, req.ID)
-	for offset := 0; offset < blockLength; offset++ {
-		item.buffer.WriteByte(*((*byte)(tools.AddPointer(item.Block, uintptr(offset)))))
+	if cap(item.buf) < blockLength+16 {
+		item.buf = make([]byte, 0, blockLength+16)
 	}
-	b := item.buffer.Bytes()
+	item.buf = item.buf[:blockLength+16]
+	binary.LittleEndian.PutUint64(item.buf, uint64(wstool.GetDuration(ctx)))
+	binary.LittleEndian.PutUint64(item.buf[8:], req.ID)
+	bytesutil.Copy(item.Block, item.buf, 16, blockLength)
 	logger.Debugln("handle binary content cost:", log.GetLogDuration(isDebug, s))
-	resp = &BinaryResponse{Data: b}
+	resp = &BinaryResponse{Data: item.buf}
 	resp.SetBinary(true)
 	return resp
 }

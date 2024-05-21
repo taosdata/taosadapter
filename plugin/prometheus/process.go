@@ -14,7 +14,7 @@ import (
 	"time"
 	"unsafe"
 
-	jsoniter "github.com/json-iterator/go"
+	jsoniter "github.com/huskar-t/jsoniterator"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/taosdata/driver-go/v3/common"
 	tErrors "github.com/taosdata/driver-go/v3/errors"

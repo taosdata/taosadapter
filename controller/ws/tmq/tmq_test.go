@@ -17,7 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	jsoniter "github.com/json-iterator/go"
+	jsoniter "github.com/huskar-t/jsoniterator"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/driver-go/v3/common/tmq"
