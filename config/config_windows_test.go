@@ -70,7 +70,7 @@ func TestInit(t *testing.T) {
 					WriteInterval:             30 * time.Second,
 				},
 				UploadKeeper: UploadKeeper{
-					Enable:        false,
+					Enable:        true,
 					Url:           "http://127.0.0.1:6043/adapter_report",
 					Interval:      15 * time.Second,
 					Timeout:       5 * time.Second,
