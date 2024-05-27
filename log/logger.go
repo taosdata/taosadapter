@@ -11,8 +11,6 @@ import (
 	"time"
 
 	rotatelogs "github.com/huskar-t/file-rotatelogs/v2"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/version"
@@ -44,16 +42,6 @@ func (p *defaultPool) Put(buf *bytes.Buffer) {
 func (p *defaultPool) Get() *bytes.Buffer {
 	return p.pool.Get().(*bytes.Buffer)
 }
-
-var (
-	TotalRequest *prometheus.GaugeVec
-
-	FailRequest *prometheus.GaugeVec
-
-	RequestInFlight prometheus.Gauge
-
-	RequestSummery *prometheus.SummaryVec
-)
 
 type FileHook struct {
 	formatter logrus.Formatter
@@ -151,41 +139,6 @@ func ConfigLog() {
 			sqlLogger.SetFormatter(&TaosSqlLogFormatter{})
 			sqlLogger.SetOutput(sqlWriter)
 		}
-
-		TotalRequest = promauto.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "taosadapter",
-				Subsystem: "restful",
-				Name:      "http_request_total",
-				Help:      "The total number of processed http requests",
-			}, []string{"status_code", "client_ip", "request_method", "request_uri"})
-
-		FailRequest = promauto.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "taosadapter",
-				Subsystem: "restful",
-				Name:      "http_request_fail",
-				Help:      "The number of failures of http request processing",
-			}, []string{"status_code", "client_ip", "request_method", "request_uri"})
-
-		RequestInFlight = promauto.NewGauge(
-			prometheus.GaugeOpts{
-				Namespace: "taosadapter",
-				Subsystem: "restful",
-				Name:      "http_request_in_flight",
-				Help:      "Current number of in-flight http requests",
-			},
-		)
-
-		RequestSummery = promauto.NewSummaryVec(
-			prometheus.SummaryOpts{
-				Namespace:  "taosadapter",
-				Subsystem:  "restful",
-				Name:       "http_request_summary_milliseconds",
-				Help:       "Summary of latencies for http requests in millisecond",
-				Objectives: map[float64]float64{0.1: 0.001, 0.2: 0.002, 0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-				MaxAge:     config.Conf.Monitor.WriteInterval,
-			}, []string{"request_method", "request_uri"})
 	})
 }
 
