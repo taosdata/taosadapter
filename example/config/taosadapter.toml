@@ -42,7 +42,7 @@ password = "taosdata"
 writeInterval = "30s"
 
 [uploadKeeper]
-enable = false
+enable = true
 url = "http://127.0.0.1:6043/adapter_report"
 interval = "15s"
 timeout = "5s"
