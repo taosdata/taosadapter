@@ -22,7 +22,6 @@ func TestMain(m *testing.M) {
 	viper.Set("monitor.writeToTD", true)
 	viper.Set("monitor.writeInterval", time.Second*5)
 	config.Init()
-	config.Conf.Monitor.WriteInterval = time.Second * 10
 	log.ConfigLog()
 	db.PrepareConnection()
 	gin.SetMode(gin.ReleaseMode)
