@@ -17,9 +17,9 @@ type UploadKeeper struct {
 }
 
 func initUploadKeeper() {
-	viper.SetDefault("uploadKeeper.enable", false)
+	viper.SetDefault("uploadKeeper.enable", true)
 	_ = viper.BindEnv("uploadKeeper.enable", "TAOS_ADAPTER_UPLOAD_KEEPER_ENABLE")
-	pflag.Bool("uploadKeeper.enable", false, `Whether to enable sending metrics to keeper. Env "TAOS_ADAPTER_UPLOAD_KEEPER_ENABLE"`)
+	pflag.Bool("uploadKeeper.enable", true, `Whether to enable sending metrics to keeper. Env "TAOS_ADAPTER_UPLOAD_KEEPER_ENABLE"`)
 
 	viper.SetDefault("uploadKeeper.url", "http://127.0.0.1:6043/adapter_report")
 	_ = viper.BindEnv("uploadKeeper.url", "TAOS_ADAPTER_UPLOAD_KEEPER_URL")

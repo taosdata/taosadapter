@@ -2,7 +2,6 @@ package log
 
 import (
 	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -14,9 +13,6 @@ func GinLog() gin.HandlerFunc {
 	logger := GetLogger("web")
 
 	return func(c *gin.Context) {
-		if !config.Conf.Monitor.Disable {
-			RequestInFlight.Inc()
-		}
 		startTime := time.Now()
 		c.Next()
 		latencyTime := time.Since(startTime)
@@ -35,19 +31,6 @@ func GinLog() gin.HandlerFunc {
 			if exist {
 				sqlLogger.Infof("%d '%s' '%s' '%s' %s", reqID, reqUri, reqMethod, clientIP, sql)
 			}
-		}
-		statusCodeStr := strconv.Itoa(statusCode)
-		if !config.Conf.Monitor.Disable {
-			if config.Conf.Monitor.DisableClientIP {
-				clientIP = "invisible"
-			}
-			RequestSummery.WithLabelValues(reqMethod, reqUri).Observe(latencyTime.Seconds() * 1e3)
-			TotalRequest.WithLabelValues(statusCodeStr, clientIP, reqMethod, reqUri).Inc()
-			_, exist := c.Get("taos_error_code")
-			if exist || (statusCode >= 400) {
-				FailRequest.WithLabelValues(statusCodeStr, clientIP, reqMethod, reqUri).Inc()
-			}
-			RequestInFlight.Dec()
 		}
 	}
 }

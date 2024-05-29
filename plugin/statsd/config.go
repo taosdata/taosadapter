@@ -48,8 +48,8 @@ func (c *Config) setValue() {
 
 func init() {
 	_ = viper.BindEnv("statsd.enable", "TAOS_ADAPTER_STATSD_ENABLE")
-	pflag.Bool("statsd.enable", true, `enable statsd. Env "TAOS_ADAPTER_STATSD_ENABLE"`)
-	viper.SetDefault("statsd.enable", true)
+	pflag.Bool("statsd.enable", false, `enable statsd. Env "TAOS_ADAPTER_STATSD_ENABLE"`)
+	viper.SetDefault("statsd.enable", false)
 
 	_ = viper.BindEnv("statsd.port", "TAOS_ADAPTER_STATSD_PORT")
 	pflag.Int("statsd.port", 6044, `statsd server port. Env "TAOS_ADAPTER_STATSD_PORT"`)
