@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 	"unsafe"
@@ -225,10 +226,14 @@ func (h *messageHandler) handleMessageBinary(session *melody.Session, bytes []by
 		f = h.handleRawBlockMessage
 	case RawBlockMessageWithFields:
 		f = h.handleRawBlockMessageWithFields
+	case BinaryQueryMessage:
+		f = h.handleBinaryQuery
+	case FetchRawBlockMessage:
+		f = h.handleFetchRawBlock
 	default:
 		f = h.handleDefaultBinary
 	}
-	h.dealBinary(ctx, session, mt, reqID, messageID, p0, f)
+	h.dealBinary(ctx, session, mt, reqID, messageID, p0, bytes, f)
 }
 
 type RequestID struct {
@@ -238,10 +243,11 @@ type RequestID struct {
 type dealFunc func(context.Context, Request, *logrus.Entry, bool, time.Time) Response
 
 type dealBinaryRequest struct {
-	action messageType
-	reqID  uint64
-	id     uint64 // messageID or stmtID
-	p0     unsafe.Pointer
+	action  messageType
+	reqID   uint64
+	id      uint64 // messageID or stmtID
+	p0      unsafe.Pointer
+	message []byte
 }
 type dealBinaryFunc func(context.Context, dealBinaryRequest, *logrus.Entry, bool, time.Time) Response
 
@@ -273,7 +279,7 @@ func (h *messageHandler) deal(ctx context.Context, session *melody.Session, requ
 	}()
 }
 
-func (h *messageHandler) dealBinary(ctx context.Context, session *melody.Session, action messageType, reqID uint64, messageID uint64, p0 unsafe.Pointer, f dealBinaryFunc) {
+func (h *messageHandler) dealBinary(ctx context.Context, session *melody.Session, action messageType, reqID uint64, messageID uint64, p0 unsafe.Pointer, message []byte, f dealBinaryFunc) {
 	h.wait.Add(1)
 	go func() {
 		defer h.wait.Done()
@@ -289,10 +295,11 @@ func (h *messageHandler) dealBinary(ctx context.Context, session *melody.Session
 		s := log.GetLogNow(isDebug)
 
 		req := dealBinaryRequest{
-			action: action,
-			reqID:  reqID,
-			id:     messageID,
-			p0:     p0,
+			action:  action,
+			reqID:   reqID,
+			id:      messageID,
+			p0:      p0,
+			message: message,
 		}
 		resp := f(ctx, req, logger, isDebug, s)
 		h.writeResponse(ctx, session, resp, action.String(), reqID)
@@ -1453,6 +1460,116 @@ func (h *messageHandler) handleRawBlockMessageWithFields(_ context.Context, req 
 	return &BaseResponse{}
 }
 
+func (h *messageHandler) handleBinaryQuery(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) Response {
+	message := req.message
+	if len(message) < 31 {
+		return wsCommonErrorMsg(0xffff, "message length is too short")
+	}
+	v := binary.LittleEndian.Uint16(message[24:])
+	var sql []byte
+	if v == 1 {
+		sqlLen := binary.LittleEndian.Uint32(message[26:])
+		remainMessageLength := len(message) - 30
+		if remainMessageLength < int(sqlLen) {
+			return wsCommonErrorMsg(0xffff, fmt.Sprintf("uncompleted message, sql length: %d, remainMessageLength: %d", sqlLen, remainMessageLength))
+		}
+		sql = message[30 : 30+sqlLen]
+	} else {
+		return wsCommonErrorMsg(0xffff, "unknown binary query version:"+strconv.Itoa(int(v)))
+	}
+	sqlType := monitor.WSRecordRequest(bytesutil.ToUnsafeString(sql))
+	handler := async.GlobalAsync.HandlerPool.Get()
+	defer async.GlobalAsync.HandlerPool.Put(handler)
+	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
+	result, _ := async.GlobalAsync.TaosQuery(h.conn, bytesutil.ToUnsafeString(sql), handler, int64(req.reqID))
+	logger.Debugln("query cost ", log.GetLogDuration(isDebug, s))
+	// keep sql alive
+	_ = sql
+	code := wrapper.TaosError(result.Res)
+	if code != httperror.SUCCESS {
+		monitor.WSRecordResult(sqlType, false)
+		errStr := wrapper.TaosErrorStr(result.Res)
+		freeCPointer(result.Res)
+		return wsCommonErrorMsg(code, errStr)
+	}
+	monitor.WSRecordResult(sqlType, true)
+	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
+	logger.Debugln("is_update_query cost:", log.GetLogDuration(isDebug, s))
+	if isUpdate {
+		affectRows := wrapper.TaosAffectedRows(result.Res)
+		logger.Debugln("affected_rows cost:", log.GetLogDuration(isDebug, s))
+		freeCPointer(result.Res)
+		return &QueryResponse{IsUpdate: true, AffectedRows: affectRows}
+	}
+	fieldsCount := wrapper.TaosNumFields(result.Res)
+	logger.Debugln("num_fields cost:", log.GetLogDuration(isDebug, s))
+	rowsHeader, _ := wrapper.ReadColumn(result.Res, fieldsCount)
+	logger.Debugln("read column cost:", log.GetLogDuration(isDebug, s))
+	precision := wrapper.TaosResultPrecision(result.Res)
+	logger.Debugln("result_precision cost:", log.GetLogDuration(isDebug, s))
+	queryResult := QueryResult{TaosResult: result.Res, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision}
+	idx := h.queryResults.Add(&queryResult)
+
+	return &QueryResponse{
+		ID:            idx,
+		FieldsCount:   fieldsCount,
+		FieldsNames:   rowsHeader.ColNames,
+		FieldsLengths: rowsHeader.ColLength,
+		FieldsTypes:   rowsHeader.ColTypes,
+		Precision:     precision,
+	}
+}
+
+func (h *messageHandler) handleFetchRawBlock(ctx context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) Response {
+	message := req.message
+	if len(message) < 26 {
+		return wsFetchRawBlockErrorMsg(0xffff, "message length is too short", req.reqID, req.id, uint64(wstool.GetDuration(ctx)))
+	}
+	v := binary.LittleEndian.Uint16(message[24:])
+	if v != 1 {
+		return wsFetchRawBlockErrorMsg(0xffff, "unknown fetch raw block version", req.reqID, req.id, uint64(wstool.GetDuration(ctx)))
+	}
+	item := h.queryResults.Get(req.id)
+	if item == nil {
+		return wsFetchRawBlockErrorMsg(0xffff, "result is nil", req.reqID, req.id, uint64(wstool.GetDuration(ctx)))
+	}
+	item.Lock()
+	if item.TaosResult == nil {
+		item.Unlock()
+		return wsFetchRawBlockErrorMsg(0xffff, "result has been freed", req.reqID, req.id, uint64(wstool.GetDuration(ctx)))
+	}
+	handler := async.GlobalAsync.HandlerPool.Get()
+	defer async.GlobalAsync.HandlerPool.Put(handler)
+	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
+	result, _ := async.GlobalAsync.TaosFetchRawBlockA(item.TaosResult, handler)
+	logger.Debugln("fetch_raw_block_a cost:", log.GetLogDuration(isDebug, s))
+	if result.N == 0 {
+		item.Unlock()
+		h.queryResults.FreeResultByID(req.id)
+		return wsFetchRawBlockFinish(req.reqID, req.id, uint64(wstool.GetDuration(ctx)))
+	}
+	if result.N < 0 {
+		item.Unlock()
+		errStr := wrapper.TaosErrorStr(result.Res)
+		h.queryResults.FreeResultByID(req.id)
+		return wsFetchRawBlockErrorMsg(result.N, errStr, req.reqID, req.id, uint64(wstool.GetDuration(ctx)))
+	}
+	item.Block = wrapper.TaosGetRawBlock(item.TaosResult)
+	logger.Debugln("get_raw_block cost:", log.GetLogDuration(isDebug, s))
+	item.Size = result.N
+	blockLength := int(parser.RawBlockGetLength(item.Block))
+	if blockLength <= 0 {
+		item.Unlock()
+		return wsFetchRawBlockErrorMsg(0xffff, "block length illegal", req.reqID, req.id, uint64(wstool.GetDuration(ctx)))
+	}
+	item.buf = wsFetchRawBlockMessage(item.buf, req.reqID, req.id, uint64(wstool.GetDuration(ctx)), int32(blockLength), item.Block)
+	logger.Debugln("handle binary content cost:", log.GetLogDuration(isDebug, s))
+	resp := &BinaryResponse{Data: item.buf}
+	resp.SetBinary(true)
+	item.Unlock()
+	return resp
+}
+
 type GetCurrentDBResponse struct {
 	BaseResponse
 	DB string `json:"db"`
@@ -1690,4 +1807,59 @@ func wsCommonErrorMsg(code int, message string) *BaseResponse {
 		Code:    code & 0xffff,
 		Message: message,
 	}
+}
+
+func wsFetchRawBlockErrorMsg(code int, message string, reqID uint64, resultID uint64, t uint64) *BinaryResponse {
+	bufLength := 8 + 8 + 2 + 8 + 8 + 4 + 4 + len(message) + 8 + 1
+	buf := make([]byte, bufLength)
+	binary.LittleEndian.PutUint64(buf, 0xffffffffffffffff)
+	binary.LittleEndian.PutUint64(buf[8:], uint64(FetchRawBlockMessage))
+	binary.LittleEndian.PutUint16(buf[16:], 1)
+	binary.LittleEndian.PutUint64(buf[18:], t)
+	binary.LittleEndian.PutUint64(buf[26:], reqID)
+	binary.LittleEndian.PutUint32(buf[34:], uint32(code&0xffff))
+	binary.LittleEndian.PutUint32(buf[38:], uint32(len(message)))
+	copy(buf[42:], message)
+	binary.LittleEndian.PutUint64(buf[42+len(message):], resultID)
+	buf[42+len(message)+8] = 1
+	resp := &BinaryResponse{Data: buf}
+	resp.SetBinary(true)
+	return resp
+}
+
+func wsFetchRawBlockFinish(reqID uint64, resultID uint64, t uint64) *BinaryResponse {
+	bufLength := 8 + 8 + 2 + 8 + 8 + 4 + 4 + 8 + 1
+	buf := make([]byte, bufLength)
+	binary.LittleEndian.PutUint64(buf, 0xffffffffffffffff)
+	binary.LittleEndian.PutUint64(buf[8:], uint64(FetchRawBlockMessage))
+	binary.LittleEndian.PutUint16(buf[16:], 1)
+	binary.LittleEndian.PutUint64(buf[18:], t)
+	binary.LittleEndian.PutUint64(buf[26:], reqID)
+	binary.LittleEndian.PutUint32(buf[34:], 0)
+	binary.LittleEndian.PutUint32(buf[38:], 0)
+	binary.LittleEndian.PutUint64(buf[42:], resultID)
+	buf[50] = 1
+	resp := &BinaryResponse{Data: buf}
+	resp.SetBinary(true)
+	return resp
+}
+
+func wsFetchRawBlockMessage(buf []byte, reqID uint64, resultID uint64, t uint64, blockLength int32, rawBlock unsafe.Pointer) []byte {
+	bufLength := 8 + 8 + 2 + 8 + 8 + 4 + 4 + 8 + 1 + 4 + int(blockLength)
+	if cap(buf) < bufLength {
+		buf = make([]byte, 0, bufLength)
+	}
+	buf = buf[:bufLength]
+	binary.LittleEndian.PutUint64(buf, 0xffffffffffffffff)
+	binary.LittleEndian.PutUint64(buf[8:], uint64(FetchRawBlockMessage))
+	binary.LittleEndian.PutUint16(buf[16:], 1)
+	binary.LittleEndian.PutUint64(buf[18:], t)
+	binary.LittleEndian.PutUint64(buf[26:], reqID)
+	binary.LittleEndian.PutUint32(buf[34:], 0)
+	binary.LittleEndian.PutUint32(buf[38:], 0)
+	binary.LittleEndian.PutUint64(buf[42:], resultID)
+	buf[50] = 0
+	binary.LittleEndian.PutUint32(buf[51:], uint32(blockLength))
+	bytesutil.Copy(rawBlock, buf, 55, int(blockLength))
+	return buf
 }
