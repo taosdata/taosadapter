@@ -44,6 +44,8 @@ const (
 	TMQRawMessage
 	RawBlockMessage
 	RawBlockMessageWithFields
+	BinaryQueryMessage
+	FetchRawBlockMessage
 )
 
 func (m messageType) String() string {
@@ -58,7 +60,15 @@ func (m messageType) String() string {
 		return "write_raw_block"
 	case RawBlockMessageWithFields:
 		return "write_raw_block_with_fields"
+	case BinaryQueryMessage:
+		return "binary_query"
+	case FetchRawBlockMessage:
+		return "fetch_raw_block"
 	default:
 		return "unknown"
 	}
 }
+
+const (
+	BinaryProtocolVersion1 uint16 = 1
+)
