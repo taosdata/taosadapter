@@ -1467,7 +1467,7 @@ func (h *messageHandler) handleBinaryQuery(_ context.Context, req dealBinaryRequ
 	}
 	v := binary.LittleEndian.Uint16(message[24:])
 	var sql []byte
-	if v == 1 {
+	if v == BinaryProtocolVersion1 {
 		sqlLen := binary.LittleEndian.Uint32(message[26:])
 		remainMessageLength := len(message) - 30
 		if remainMessageLength < int(sqlLen) {
@@ -1484,7 +1484,7 @@ func (h *messageHandler) handleBinaryQuery(_ context.Context, req dealBinaryRequ
 	result, _ := async.GlobalAsync.TaosQuery(h.conn, bytesutil.ToUnsafeString(sql), handler, int64(req.reqID))
 	logger.Debugln("query cost ", log.GetLogDuration(isDebug, s))
 	// keep sql alive
-	_ = sql
+	logger.Debugln("sql addr", &sql)
 	code := wrapper.TaosError(result.Res)
 	if code != httperror.SUCCESS {
 		monitor.WSRecordResult(sqlType, false)
@@ -1526,7 +1526,7 @@ func (h *messageHandler) handleFetchRawBlock(ctx context.Context, req dealBinary
 		return wsFetchRawBlockErrorMsg(0xffff, "message length is too short", req.reqID, req.id, uint64(wstool.GetDuration(ctx)))
 	}
 	v := binary.LittleEndian.Uint16(message[24:])
-	if v != 1 {
+	if v != BinaryProtocolVersion1 {
 		return wsFetchRawBlockErrorMsg(0xffff, "unknown fetch raw block version", req.reqID, req.id, uint64(wstool.GetDuration(ctx)))
 	}
 	item := h.queryResults.Get(req.id)

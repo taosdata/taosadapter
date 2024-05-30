@@ -68,3 +68,7 @@ func (m messageType) String() string {
 		return "unknown"
 	}
 }
+
+const (
+	BinaryProtocolVersion1 uint16 = 1
+)
