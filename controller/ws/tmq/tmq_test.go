@@ -450,6 +450,11 @@ func TestTMQ(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 }
 
+type MultiMeta struct {
+	TmqMetaVersion string     `json:"tmq_meta_version"`
+	Metas          []tmq.Meta `json:"metas"`
+}
+
 func TestMeta(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("create database if not exists test_ws_tmq_meta WAL_RETENTION_PERIOD 86400")
@@ -634,10 +639,17 @@ func TestMeta(t *testing.T) {
 			if d.Code != 0 {
 				return fmt.Errorf("%s %d,%s", TMQFetch, d.Code, d.Message)
 			}
+			t.Log(string(d.Data))
+			valid := jsoniter.Valid(d.Data)
+			assert.True(t, valid)
 			var meta tmq.Meta
 			err = jsoniter.Unmarshal(d.Data, &meta)
-			assert.NoError(t, err)
-			t.Log(meta)
+			if err != nil {
+				var multiMeta MultiMeta
+				err = jsoniter.Unmarshal(d.Data, &multiMeta)
+				assert.NoError(t, err)
+			}
+			//t.Log(meta)
 			status = AfterFetchRawMeta
 			b, _ := json.Marshal(&TMQFetchRawMetaReq{
 				ReqID:     3,
@@ -827,6 +839,7 @@ func TestMeta(t *testing.T) {
 		SnapshotEnable:       "true",
 		WithTableName:        "true",
 		OffsetReset:          "earliest",
+		EnableBatchMeta:      "true",
 	}
 
 	b, _ := json.Marshal(init)
