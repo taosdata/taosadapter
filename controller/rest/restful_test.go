@@ -38,6 +38,15 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
+type TDEngineRestfulObjectResp struct {
+	Code       int                      `json:"code,omitempty"`
+	Desc       string                   `json:"desc,omitempty"`
+	ColumnMeta [][]interface{}          `json:"column_meta,omitempty"`
+	Data       []map[string]interface{} `json:"data,omitempty"`
+	Rows       int                      `json:"rows,omitempty"`
+	Timing     uint64                   `json:"timing,omitempty"`
+}
+
 func BenchmarkRestful(b *testing.B) {
 	w := httptest.NewRecorder()
 	for i := 0; i < b.N; i++ {
@@ -139,24 +148,70 @@ func TestAllType(t *testing.T) {
 	var result TDEngineRestfulRespDoc
 	err := json.Unmarshal(w.Body.Bytes(), &result)
 	assert.NoError(t, err)
+	expect := [17]interface{}{
+		true,
+		float64(2),
+		float64(3),
+		float64(4),
+		float64(5),
+		float64(6),
+		float64(7),
+		float64(8),
+		float64(9),
+		float64(10.123),
+		float64(11.123),
+		"中文\"binary",
+		"中文nchar",
+		"aabbcc",
+		"010100000000000000000059400000000000005940",
+		map[string]interface{}{"table": "t1"},
+		"t1",
+	}
 	assert.Equal(t, 0, result.Code)
-	assert.Equal(t, true, result.Data[0][1])
-	assert.Equal(t, float64(2), result.Data[0][2])
-	assert.Equal(t, float64(3), result.Data[0][3])
-	assert.Equal(t, float64(4), result.Data[0][4])
-	assert.Equal(t, float64(5), result.Data[0][5])
-	assert.Equal(t, float64(6), result.Data[0][6])
-	assert.Equal(t, float64(7), result.Data[0][7])
-	assert.Equal(t, float64(8), result.Data[0][8])
-	assert.Equal(t, float64(9), result.Data[0][9])
-	assert.Equal(t, float64(10.123), result.Data[0][10])
-	assert.Equal(t, float64(11.123), result.Data[0][11])
-	assert.Equal(t, "中文\"binary", result.Data[0][12])
-	assert.Equal(t, "中文nchar", result.Data[0][13])
-	assert.Equal(t, "aabbcc", result.Data[0][14])
-	assert.Equal(t, "010100000000000000000059400000000000005940", result.Data[0][15])
-	assert.Equal(t, map[string]interface{}{"table": "t1"}, result.Data[0][16])
-	assert.Equal(t, "t1", result.Data[0][17])
+	for i := 0; i < 17; i++ {
+		assert.Equal(t, expect[i], result.Data[0][i+1])
+	}
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader(fmt.Sprintf(`select alltype.*,info->'table' from alltype where ts = %d`, now))
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype?return_obj=true", body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	var objResult TDEngineRestfulObjectResp
+	err = json.Unmarshal(w.Body.Bytes(), &objResult)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, result.Code)
+	for i := 0; i < 17; i++ {
+		colName := objResult.ColumnMeta[i+1][0].(string)
+		assert.Equal(t, expect[i], objResult.Data[0][colName])
+	}
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader(fmt.Sprintf(`insert into t2 using alltype tags('{"table":"t2"}') values (%d,true,2,3,4,5,6,7,8,9,10.123,11.123,'中文"binary','中文nchar','\xaabbcc','point(100 100)')`, now))
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype?return_obj=true", body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	err = json.Unmarshal(w.Body.Bytes(), &objResult)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte(`{"code":0,"column_meta":[["affected_rows","INT",4]],"data":[{"affected_rows":1}],"rows":1}`), w.Body.Bytes())
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader(fmt.Sprintf(`insert into t3 using alltype tags('{"table":"t3"}') values (%d,true,2,3,4,5,6,7,8,9,10.123,11.123,'中文"binary','中文nchar','\xaabbcc','point(100 100)')`, now))
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype?return_obj=true&timing=true", body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	err = json.Unmarshal(w.Body.Bytes(), &objResult)
+	assert.NoError(t, err)
+	assert.Greater(t, objResult.Timing, uint64(0))
+	expectRet := fmt.Sprintf(`{"code":0,"column_meta":[["affected_rows","INT",4]],"data":[{"affected_rows":1}],"rows":1,"timing":%d}`, objResult.Timing)
+	assert.Equal(t, []byte(expectRet), w.Body.Bytes())
+
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop database if exists test_alltype")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
