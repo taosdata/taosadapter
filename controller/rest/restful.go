@@ -114,9 +114,9 @@ func (ctl *Restful) sql(c *gin.Context) {
 	}
 	c.Set(config.ReqIDKey, reqID)
 	var returnObj bool
-	if returnObjStr := c.Query("return_obj"); len(returnObjStr) != 0 {
+	if returnObjStr := c.Query("row_with_meta"); len(returnObjStr) != 0 {
 		if returnObj, err = strconv.ParseBool(returnObjStr); err != nil {
-			BadRequestResponseWithMsg(c, 0xffff, fmt.Sprintf("illegal param, return_obj must be boolean %s", err.Error()))
+			BadRequestResponseWithMsg(c, 0xffff, fmt.Sprintf("illegal param, row_with_meta must be boolean %s", err.Error()))
 			return
 		}
 	}
