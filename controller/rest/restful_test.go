@@ -174,7 +174,7 @@ func TestAllType(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`select alltype.*,info->'table' from alltype where ts = %d`, now))
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype?return_obj=true", body)
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype?row_with_meta=true", body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -190,7 +190,7 @@ func TestAllType(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`insert into t2 using alltype tags('{"table":"t2"}') values (%d,true,2,3,4,5,6,7,8,9,10.123,11.123,'中文"binary','中文nchar','\xaabbcc','point(100 100)')`, now))
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype?return_obj=true", body)
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype?row_with_meta=true", body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -201,7 +201,7 @@ func TestAllType(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`insert into t3 using alltype tags('{"table":"t3"}') values (%d,true,2,3,4,5,6,7,8,9,10.123,11.123,'中文"binary','中文nchar','\xaabbcc','point(100 100)')`, now))
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype?return_obj=true&timing=true", body)
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype?row_with_meta=true&timing=true", body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
