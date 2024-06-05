@@ -1,7 +1,6 @@
 package tmq
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -26,6 +25,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/asynctmq/tmqhandle"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 )
 
@@ -116,13 +116,21 @@ func NewTMQController() *TMQController {
 				}
 				t.fetchJsonMeta(ctx, session, &req)
 			case TMQFetchRaw:
-				var req TMQFetchRawMetaReq
+				var req TMQFetchRawReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
 					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch raw meta args")
 					return
 				}
-				t.fetchRawMeta(ctx, session, &req)
+				t.fetchRawBlock(ctx, session, &req)
+			case TMQFetchRawNew:
+				var req TMQFetchRawReq
+				err = json.Unmarshal(action.Args, &req)
+				if err != nil {
+					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch raw meta args")
+					return
+				}
+				t.fetchRawBlockNew(ctx, session, &req)
 			case TMQUnsubscribe:
 				var req TMQUnsubscribeReq
 				err = json.Unmarshal(action.Args, &req)
@@ -254,13 +262,13 @@ type Message struct {
 	Offset   int64
 	Type     int32
 	CPointer unsafe.Pointer
-	buffer   *bytes.Buffer
+	buffer   []byte
 	sync.Mutex
 }
 
 func NewTaosTMQ() *TMQ {
 	return &TMQ{
-		tmpMessage:         &Message{buffer: &bytes.Buffer{}},
+		tmpMessage:         &Message{},
 		handler:            tmqhandle.GlobalTMQHandlerPoll.Get(),
 		thread:             asynctmq.InitTMQThread(),
 		autocommitInterval: time.Second * 5,
@@ -645,7 +653,6 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 				<-t.handler.Caller.FreeResult
 				t.asyncLocker.Unlock()
 			}
-			t.tmpMessage.buffer.Reset()
 			index := atomic.AddUint64(&t.tmpMessage.Index, 1)
 
 			t.tmpMessage.Index = index
@@ -768,15 +775,15 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 	resp.Precision = wrapper.TaosResultPrecision(message.CPointer)
 	logger.Debugln("result_precision cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
-	message.buffer.Reset()
 	blockLength := int(parser.RawBlockGetLength(block))
-	message.buffer.Grow(blockLength + 24)
-	wstool.WriteUint64(message.buffer, 0)
-	wstool.WriteUint64(message.buffer, req.ReqID)
-	wstool.WriteUint64(message.buffer, req.MessageID)
-	for offset := 0; offset < blockLength; offset++ {
-		message.buffer.WriteByte(*((*byte)(unsafe.Pointer(uintptr(block) + uintptr(offset)))))
+	if cap(message.buffer) < blockLength+24 {
+		message.buffer = make([]byte, 0, blockLength+24)
 	}
+	message.buffer = message.buffer[:blockLength+24]
+	binary.LittleEndian.PutUint64(message.buffer, 0)
+	binary.LittleEndian.PutUint64(message.buffer[8:], req.ReqID)
+	binary.LittleEndian.PutUint64(message.buffer[16:], req.MessageID)
+	bytesutil.Copy(block, message.buffer, 24, blockLength)
 	resp.Timing = wstool.GetDuration(ctx)
 	logger.Debugln("handle data cost:", log.GetLogDuration(isDebug, s))
 	wstool.WSWriteJson(session, resp)
@@ -811,23 +818,22 @@ func (t *TMQ) fetchBlock(ctx context.Context, session *melody.Session, req *TMQF
 		wsTMQErrorMsg(ctx, session, 0xffff, "message type is not data", TMQFetchBlock, req.ReqID, &req.MessageID)
 		return
 	}
-	if message.buffer == nil || message.buffer.Len() == 0 {
+	if message.buffer == nil || len(message.buffer) == 0 {
 		wsTMQErrorMsg(ctx, session, 0xffff, "no fetch data", TMQFetchBlock, req.ReqID, &req.MessageID)
 		return
 	}
 	s = log.GetLogNow(isDebug)
-	b := message.buffer.Bytes()
-	binary.LittleEndian.PutUint64(b, uint64(wstool.GetDuration(ctx)))
+	binary.LittleEndian.PutUint64(message.buffer, uint64(wstool.GetDuration(ctx)))
 	logger.Debugln("handle data cost:", log.GetLogDuration(isDebug, s))
-	session.WriteBinary(b)
+	session.WriteBinary(message.buffer)
 }
 
-type TMQFetchRawMetaReq struct {
+type TMQFetchRawReq struct {
 	ReqID     uint64 `json:"req_id"`
 	MessageID uint64 `json:"message_id"`
 }
 
-func (t *TMQ) fetchRawMeta(ctx context.Context, session *melody.Session, req *TMQFetchRawMetaReq) {
+func (t *TMQ) fetchRawBlock(ctx context.Context, session *melody.Session, req *TMQFetchRawReq) {
 	if t.consumer == nil {
 		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQFetchRaw, req.ReqID, &req.MessageID)
 		return
@@ -853,10 +859,10 @@ func (t *TMQ) fetchRawMeta(ctx context.Context, session *melody.Session, req *TM
 		return
 	}
 	logger.Debugln("tmq_get_raw get lock cost:", log.GetLogDuration(isDebug, s))
-	s = time.Now()
-	rawMeta := asynctmq.TaosaInitTMQRaw()
-	defer asynctmq.TaosaFreeTMQRaw(rawMeta)
-	asynctmq.TaosaTMQGetRawA(t.thread, message.CPointer, rawMeta, t.handler.Handler)
+	s = log.GetLogNow(isDebug)
+	rawData := asynctmq.TaosaInitTMQRaw()
+	defer asynctmq.TaosaFreeTMQRaw(rawData)
+	asynctmq.TaosaTMQGetRawA(t.thread, message.CPointer, rawData, t.handler.Handler)
 	errCode := <-t.handler.Caller.GetRawResult
 	logger.Debugln("tmq_get_raw cost:", log.GetLogDuration(isDebug, s))
 	t.asyncLocker.Unlock()
@@ -865,28 +871,74 @@ func (t *TMQ) fetchRawMeta(ctx context.Context, session *melody.Session, req *TM
 		wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQFetchRaw, req.ReqID, &req.MessageID)
 		return
 	}
-	s = time.Now()
-	length, metaType, data := wrapper.ParseRawMeta(rawMeta)
-	if message.buffer == nil {
-		message.buffer = new(bytes.Buffer)
-	} else {
-		message.buffer.Reset()
+	s = log.GetLogNow(isDebug)
+	length, metaType, data := wrapper.ParseRawMeta(rawData)
+	blockLength := int(length)
+	if cap(message.buffer) < blockLength+38 {
+		message.buffer = make([]byte, 0, blockLength+38)
 	}
-	message.buffer.Grow(int(length) + 38)
-	wstool.WriteUint64(message.buffer, uint64(wstool.GetDuration(ctx)))
-	wstool.WriteUint64(message.buffer, req.ReqID)
-	wstool.WriteUint64(message.buffer, req.MessageID)
-	wstool.WriteUint64(message.buffer, TMQRawMessage)
-	wstool.WriteUint32(message.buffer, length)
-	wstool.WriteUint16(message.buffer, metaType)
-	for offset := 0; offset < int(length); offset++ {
-		message.buffer.WriteByte(*((*byte)(unsafe.Pointer(uintptr(data) + uintptr(offset)))))
-	}
-	s1 := time.Now()
-	wrapper.TMQFreeRaw(rawMeta)
+	message.buffer = message.buffer[:blockLength+38]
+	binary.LittleEndian.PutUint64(message.buffer, uint64(wstool.GetDuration(ctx)))
+	binary.LittleEndian.PutUint64(message.buffer[8:], req.ReqID)
+	binary.LittleEndian.PutUint64(message.buffer[16:], req.MessageID)
+	binary.LittleEndian.PutUint64(message.buffer[24:], TMQRawMessage)
+	binary.LittleEndian.PutUint32(message.buffer[32:], length)
+	binary.LittleEndian.PutUint16(message.buffer[36:], metaType)
+	bytesutil.Copy(data, message.buffer, 38, blockLength)
+	s1 := log.GetLogNow(isDebug)
+	wrapper.TMQFreeRaw(rawData)
 	logger.Debugln("tmq_free_raw cost:", log.GetLogDuration(isDebug, s1))
 	logger.Debugln("handle binary data cost:", log.GetLogDuration(isDebug, s))
-	session.WriteBinary(message.buffer.Bytes())
+	session.WriteBinary(message.buffer)
+}
+
+func (t *TMQ) fetchRawBlockNew(ctx context.Context, session *melody.Session, req *TMQFetchRawReq) {
+	action := TMQFetchRawNew
+	if t.consumer == nil {
+		tmqFetchRawBlockErrorMsg(ctx, session, 0xffff, "tmq not init", req.ReqID, req.MessageID)
+		return
+	}
+	logger := wstool.GetLogger(session).WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
+	t.tmpMessage.Lock()
+	defer t.tmpMessage.Unlock()
+	if t.tmpMessage.CPointer == nil {
+		tmqFetchRawBlockErrorMsg(ctx, session, 0xffff, "message has been freed", req.ReqID, req.MessageID)
+		return
+	}
+	message := t.tmpMessage
+	if message.Index != req.MessageID {
+		tmqFetchRawBlockErrorMsg(ctx, session, 0xffff, "message ID is not equal", req.ReqID, req.MessageID)
+		return
+	}
+	s = log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	if t.isClosed() {
+		t.asyncLocker.Unlock()
+		return
+	}
+	logger.Debugln("tmq_get_raw get lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	rawData := asynctmq.TaosaInitTMQRaw()
+	defer asynctmq.TaosaFreeTMQRaw(rawData)
+	asynctmq.TaosaTMQGetRawA(t.thread, message.CPointer, rawData, t.handler.Handler)
+	errCode := <-t.handler.Caller.GetRawResult
+	logger.Debugln("tmq_get_raw cost:", log.GetLogDuration(isDebug, s))
+	t.asyncLocker.Unlock()
+	if errCode != 0 {
+		errStr := wrapper.TMQErr2Str(errCode)
+		tmqFetchRawBlockErrorMsg(ctx, session, int(errCode), errStr, req.ReqID, req.MessageID)
+		return
+	}
+	s = log.GetLogNow(isDebug)
+	length, metaType, data := wrapper.ParseRawMeta(rawData)
+	message.buffer = wsFetchRawBlockMessage(ctx, message.buffer, req.ReqID, req.MessageID, metaType, length, data)
+	s1 := log.GetLogNow(isDebug)
+	wrapper.TMQFreeRaw(rawData)
+	logger.Debugln("tmq_free_raw cost:", log.GetLogDuration(isDebug, s1))
+	logger.Debugln("handle binary data cost:", log.GetLogDuration(isDebug, s))
+	session.WriteBinary(message.buffer)
 }
 
 type TMQFetchJsonMetaReq struct {
@@ -1164,7 +1216,6 @@ func (t *TMQ) Close(logger logrus.FieldLogger) {
 func (t *TMQ) freeMessage(closing bool) {
 	t.tmpMessage.Lock()
 	defer t.tmpMessage.Unlock()
-	defer t.tmpMessage.buffer.Reset()
 	if t.tmpMessage.CPointer != nil {
 		t.asyncLocker.Lock()
 		if !closing && t.isClosed() {
@@ -1176,6 +1227,7 @@ func (t *TMQ) freeMessage(closing bool) {
 		t.asyncLocker.Unlock()
 		t.tmpMessage.CPointer = nil
 	}
+	t.tmpMessage.buffer = nil
 }
 
 type WSTMQErrorResp struct {
@@ -1422,6 +1474,56 @@ func (t *TMQ) commitOffset(ctx context.Context, session *melody.Session, req *TM
 		VgroupID: req.VgroupID,
 		Offset:   req.Offset,
 	})
+}
+
+/*
+	Flag           uint64 //8               0
+	Action         uint64 //8               8
+	Version        uint16 //2               16
+	Time           uint64 //8               18
+	ReqID          uint64 //8               26
+	Code           uint32 //4               34
+	MessageLen     uint32 //4               38
+	Message        string //MessageLen      42
+	MessageID      uint64 //8               42 + MessageLen
+	MetaType       uint16 //2               50 + MessageLen
+	RawBlockLength uint32 //4               52 + MessageLen
+	TMQRawBlock    []byte //RawBlockLength  56 + MessageLen + RawBlockLength
+*/
+
+func tmqFetchRawBlockErrorMsg(ctx context.Context, session *melody.Session, code int, message string, reqID uint64, messageID uint64) {
+	bufLength := 8 + 8 + 2 + 8 + 8 + 4 + 4 + len(message) + 8
+	buf := make([]byte, bufLength)
+	binary.LittleEndian.PutUint64(buf, 0xffffffffffffffff)
+	binary.LittleEndian.PutUint64(buf[8:], uint64(TMQFetchRawNewMessage))
+	binary.LittleEndian.PutUint16(buf[16:], 1)
+	binary.LittleEndian.PutUint64(buf[18:], uint64(wstool.GetDuration(ctx)))
+	binary.LittleEndian.PutUint64(buf[26:], reqID)
+	binary.LittleEndian.PutUint32(buf[34:], uint32(code&0xffff))
+	binary.LittleEndian.PutUint32(buf[38:], uint32(len(message)))
+	copy(buf[42:], message)
+	binary.LittleEndian.PutUint64(buf[42+len(message):], messageID)
+	session.WriteBinary(buf)
+}
+
+func wsFetchRawBlockMessage(ctx context.Context, buf []byte, reqID uint64, resultID uint64, MetaType uint16, blockLength uint32, rawBlock unsafe.Pointer) []byte {
+	bufLength := 8 + 8 + 2 + 8 + 8 + 4 + 4 + 8 + 2 + 4 + int(blockLength)
+	if cap(buf) < bufLength {
+		buf = make([]byte, 0, bufLength)
+	}
+	buf = buf[:bufLength]
+	binary.LittleEndian.PutUint64(buf, 0xffffffffffffffff)
+	binary.LittleEndian.PutUint64(buf[8:], uint64(TMQFetchRawNewMessage))
+	binary.LittleEndian.PutUint16(buf[16:], 1)
+	binary.LittleEndian.PutUint64(buf[18:], uint64(wstool.GetDuration(ctx)))
+	binary.LittleEndian.PutUint64(buf[26:], reqID)
+	binary.LittleEndian.PutUint32(buf[34:], 0)
+	binary.LittleEndian.PutUint32(buf[38:], 0)
+	binary.LittleEndian.PutUint64(buf[42:], resultID)
+	binary.LittleEndian.PutUint16(buf[50:], MetaType)
+	binary.LittleEndian.PutUint32(buf[52:], blockLength)
+	bytesutil.Copy(rawBlock, buf, 56, int(blockLength))
+	return buf
 }
 
 func init() {
