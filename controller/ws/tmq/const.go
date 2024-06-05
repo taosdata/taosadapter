@@ -16,7 +16,11 @@ const (
 	TMQCommitted          = "committed"
 	TMQPosition           = "position"
 	TMQListTopics         = "list_topics"
+	TMQFetchRawNew        = "fetch_raw_data"
 )
-const TMQRawMessage = 3
+const (
+	TMQRawMessage         = 3
+	TMQFetchRawNewMessage = 8
+)
 
 const OffsetInvalid = -2147467247
