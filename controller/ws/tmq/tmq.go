@@ -282,6 +282,7 @@ type TMQSubscribeReq struct {
 	AutoCommitIntervalMS string   `json:"auto_commit_interval_ms"`
 	SnapshotEnable       string   `json:"snapshot_enable"`
 	WithTableName        string   `json:"with_table_name"`
+	EnableBatchMeta      string   `json:"enable_batch_meta"`
 }
 
 type TMQSubscribeResp struct {
@@ -444,6 +445,14 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	}
 	if len(req.SnapshotEnable) != 0 {
 		errCode = wrapper.TMQConfSet(tmqConfig, "experimental.snapshot.enable", req.SnapshotEnable)
+		if errCode != httperror.SUCCESS {
+			errStr := wrapper.TMQErr2Str(errCode)
+			wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
+			return
+		}
+	}
+	if len(req.EnableBatchMeta) != 0 {
+		errCode = wrapper.TMQConfSet(tmqConfig, "msg.enable.batchmeta", req.SnapshotEnable)
 		if errCode != httperror.SUCCESS {
 			errStr := wrapper.TMQErr2Str(errCode)
 			wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
