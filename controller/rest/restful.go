@@ -394,6 +394,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 			thread.Unlock()
 			blockSize := result.N
 			nullBitMapOffset := uintptr(ctools.BitmapLen(blockSize))
+			version := parser.RawBlockGetVersion(block)
 			lengthOffset := parser.RawBlockGetColumnLengthOffset(fieldsCount)
 			tmpPHeader := tools.AddPointer(block, parser.RawBlockGetColDataOffset(fieldsCount))
 			tmpPStart := tmpPHeader
@@ -421,7 +422,7 @@ func execute(c *gin.Context, logger *logrus.Entry, taosConnect unsafe.Pointer, s
 					if returnObj {
 						builder.WriteObjectField(rowsHeader.ColNames[column])
 					}
-					ctools.JsonWriteRawBlock(builder, rowsHeader.ColTypes[column], pHeaderList[column], pStartList[column], row, precision, timeFormat)
+					ctools.JsonWriteRawBlock(builder, version, rowsHeader.ColTypes[column], pHeaderList[column], pStartList[column], row, precision, timeFormat)
 					if column != fieldsCount-1 {
 						builder.WriteMore()
 					}

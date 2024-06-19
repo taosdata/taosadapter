@@ -92,36 +92,47 @@ func WriteRawJsonTime(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row in
 	timeFormat(builder, value, precision)
 }
 
-func WriteRawJsonBinary(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
+func WriteRawJsonBinary(builder *jsonbuilder.Stream, version int32, pHeader, pStart unsafe.Pointer, row int) {
 	offset := *((*int32)(tools.AddPointer(pHeader, uintptr(row*4))))
 	if offset == -1 {
 		builder.WriteNil()
 		return
 	}
 	currentRow := tools.AddPointer(pStart, uintptr(offset))
-	clen := *((*uint16)(currentRow))
-	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
+	var clen uint32
+	if version >= 3 {
+		clen = *((*uint32)(currentRow))
+		currentRow = unsafe.Pointer(uintptr(currentRow) + 4)
+	} else {
+		clen = uint32(*((*uint16)(currentRow)))
+		currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
+	}
 
 	builder.WriteByte('"')
-	for index := uint16(0); index < clen; index++ {
+	for index := uint32(0); index < clen; index++ {
 		builder.WriteStringByte(*((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index)))))
 	}
 	builder.WriteByte('"')
 }
 
-func WriteRawJsonVarBinary(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
+func WriteRawJsonVarBinary(builder *jsonbuilder.Stream, version int32, pHeader, pStart unsafe.Pointer, row int) {
 	offset := *((*int32)(tools.AddPointer(pHeader, uintptr(row*4))))
 	if offset == -1 {
 		builder.WriteNil()
 		return
 	}
 	currentRow := tools.AddPointer(pStart, uintptr(offset))
-	clen := *((*uint16)(currentRow))
-	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
-
+	var clen uint32
+	if version >= 3 {
+		clen = *((*uint32)(currentRow))
+		currentRow = unsafe.Pointer(uintptr(currentRow) + 4)
+	} else {
+		clen = uint32(*((*uint16)(currentRow)))
+		currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
+	}
 	builder.WriteByte('"')
 	var b byte
-	for index := uint16(0); index < clen; index++ {
+	for index := uint32(0); index < clen; index++ {
 		b = *((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index))))
 		s := strconv.FormatInt(int64(b), 16)
 		if len(s) == 1 {
@@ -132,54 +143,66 @@ func WriteRawJsonVarBinary(builder *jsonbuilder.Stream, pHeader, pStart unsafe.P
 	builder.WriteByte('"')
 }
 
-func WriteRawJsonGeometry(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
-	WriteRawJsonVarBinary(builder, pHeader, pStart, row)
+func WriteRawJsonGeometry(builder *jsonbuilder.Stream, version int32, pHeader, pStart unsafe.Pointer, row int) {
+	WriteRawJsonVarBinary(builder, version, pHeader, pStart, row)
 }
 
-func WriteRawJsonNchar(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
+func WriteRawJsonNchar(builder *jsonbuilder.Stream, version int32, pHeader, pStart unsafe.Pointer, row int) {
 	offset := *((*int32)(tools.AddPointer(pHeader, uintptr(row*4))))
 	if offset == -1 {
 		builder.WriteNil()
 		return
 	}
 	currentRow := tools.AddPointer(pStart, uintptr(offset))
-	clen := *((*uint16)(currentRow)) / 4
-	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
+	var clen uint32
+	if version >= 3 {
+		clen = *((*uint32)(currentRow)) / 4
+		currentRow = unsafe.Pointer(uintptr(currentRow) + 4)
+	} else {
+		clen = uint32(*((*uint16)(currentRow))) / 4
+		currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
+	}
 	builder.WriteByte('"')
-	for index := uint16(0); index < clen; index++ {
+	for index := uint32(0); index < clen; index++ {
 		builder.WriteRuneString(*((*rune)(unsafe.Pointer(uintptr(currentRow) + uintptr(index*4)))))
 	}
 	builder.WriteByte('"')
 }
 
-func WriteRawJsonJson(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
+func WriteRawJsonJson(builder *jsonbuilder.Stream, version int32, pHeader, pStart unsafe.Pointer, row int) {
 	offset := *((*int32)(tools.AddPointer(pHeader, uintptr(row*4))))
 	if offset == -1 {
 		builder.WriteNil()
 		return
 	}
 	currentRow := tools.AddPointer(pStart, uintptr(offset))
-	clen := *((*uint16)(currentRow))
-	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
+	var clen uint32
+	if version >= 3 {
+		clen = *((*uint32)(currentRow))
+		currentRow = unsafe.Pointer(uintptr(currentRow) + 4)
+	} else {
+		clen = uint32(*((*uint16)(currentRow)))
+		currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
+	}
 
-	for index := uint16(0); index < clen; index++ {
+	for index := uint32(0); index < clen; index++ {
 		builder.WriteByte(*((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index)))))
 	}
 }
 
-func JsonWriteRawBlock(builder *jsonbuilder.Stream, colType uint8, pHeader, pStart unsafe.Pointer, row int, precision int, timeFormat FormatTimeFunc) {
+func JsonWriteRawBlock(builder *jsonbuilder.Stream, version int32, colType uint8, pHeader, pStart unsafe.Pointer, row int, precision int, timeFormat FormatTimeFunc) {
 	if IsVarDataType(colType) {
 		switch colType {
 		case uint8(common.TSDB_DATA_TYPE_BINARY):
-			WriteRawJsonBinary(builder, pHeader, pStart, row)
+			WriteRawJsonBinary(builder, version, pHeader, pStart, row)
 		case uint8(common.TSDB_DATA_TYPE_NCHAR):
-			WriteRawJsonNchar(builder, pHeader, pStart, row)
+			WriteRawJsonNchar(builder, version, pHeader, pStart, row)
 		case uint8(common.TSDB_DATA_TYPE_JSON):
-			WriteRawJsonJson(builder, pHeader, pStart, row)
+			WriteRawJsonJson(builder, version, pHeader, pStart, row)
 		case uint8(common.TSDB_DATA_TYPE_VARBINARY):
-			WriteRawJsonVarBinary(builder, pHeader, pStart, row)
+			WriteRawJsonVarBinary(builder, version, pHeader, pStart, row)
 		case uint8(common.TSDB_DATA_TYPE_GEOMETRY):
-			WriteRawJsonGeometry(builder, pHeader, pStart, row)
+			WriteRawJsonGeometry(builder, version, pHeader, pStart, row)
 		}
 	} else {
 		if ItemIsNull(pHeader, row) {

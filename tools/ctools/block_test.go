@@ -145,6 +145,7 @@ func TestJsonWriteRawBlock(t *testing.T) {
 	pStartList := make([]unsafe.Pointer, fieldsCount)
 	nullBitMapOffset := uintptr(BitmapLen(blockSize))
 	block := unsafe.Pointer(&raw[0])
+	version := parser.RawBlockGetVersion(block)
 	lengthOffset := parser.RawBlockGetColumnLengthOffset(fieldsCount)
 	tmpPHeader := tools.AddPointer(block, parser.RawBlockGetColDataOffset(fieldsCount))
 	tmpPStart := tmpPHeader
@@ -166,7 +167,7 @@ func TestJsonWriteRawBlock(t *testing.T) {
 	for row := 0; row < blockSize; row++ {
 		builder.WriteArrayStart()
 		for column := 0; column < fieldsCount; column++ {
-			JsonWriteRawBlock(builder, fieldTypes[column], pHeaderList[column], pStartList[column], row, precision, func(builder *jsonbuilder.Stream, ts int64, precision int) {
+			JsonWriteRawBlock(builder, version, fieldTypes[column], pHeaderList[column], pStartList[column], row, precision, func(builder *jsonbuilder.Stream, ts int64, precision int) {
 				timeBuffer = timeBuffer[:0]
 				switch precision {
 				case common.PrecisionMilliSecond: // milli-second
