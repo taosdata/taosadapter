@@ -2,6 +2,7 @@ package rest
 
 import (
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,6 +28,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/csv"
 	"github.com/taosdata/taosadapter/v3/tools/ctools"
+	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
 	"github.com/taosdata/taosadapter/v3/tools/layout"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
@@ -165,14 +167,19 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID in
 	if isDebug {
 		s = time.Now()
 	}
-	taosConnect, err := commonpool.GetConnection(user, password)
+	taosConnect, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
 	if isDebug {
 		logger.Debugln("connect server cost:", time.Since(s))
 	}
 	if err != nil {
 		monitor.RestRecordResult(sqlType, false)
 		logger.WithField("sql", sql).WithError(err).Error("connect server error")
-		if tError, is := err.(*tErrors.TaosError); is {
+		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
+			ForbiddenResponse(c, commonpool.ErrWhitelistForbidden.Error())
+			return
+		}
+		var tError *tErrors.TaosError
+		if errors.As(err, &tError) {
 			TaosErrorResponse(c, int(tError.Code), tError.ErrStr)
 			return
 		}
@@ -493,14 +500,20 @@ func (ctl *Restful) upload(c *gin.Context) {
 	user := c.MustGet(UserKey).(string)
 	password := c.MustGet(PasswordKey).(string)
 	s := log.GetLogNow(isDebug)
-	taosConnect, err := commonpool.GetConnection(user, password)
+	ip := iptool.GetRealIP(c.Request)
+	taosConnect, err := commonpool.GetConnection(user, password, ip)
 	if isDebug {
 		logger.Debugln("connect cost:", log.GetLogDuration(isDebug, s))
 	}
 
 	if err != nil {
-		logger.WithError(err).Error("connect server error")
-		if tError, is := err.(*tErrors.TaosError); is {
+		logger.WithField("ip", ip).WithError(err).Error("connect server error")
+		var tError *tErrors.TaosError
+		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
+			ForbiddenResponse(c, commonpool.ErrWhitelistForbidden.Error())
+			return
+		}
+		if errors.As(err, &tError) {
 			TaosErrorResponse(c, int(tError.Code), tError.ErrStr)
 			return
 		}
@@ -662,8 +675,12 @@ func (ctl *Restful) des(c *gin.Context) {
 		BadRequestResponse(c, httperror.HTTP_GEN_TAOSD_TOKEN_ERR)
 		return
 	}
-	conn, err := commonpool.GetConnection(user, password)
+	conn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
 	if err != nil {
+		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
+			ForbiddenResponse(c, commonpool.ErrWhitelistForbidden.Error())
+			return
+		}
 		UnAuthResponse(c, httperror.TSDB_CODE_RPC_AUTH_FAILURE)
 		return
 	}

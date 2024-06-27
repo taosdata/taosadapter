@@ -1,6 +1,6 @@
 # taosAdapter
 
-[English edition](https://github.com/taosdata/taosadapter/blob/develop/README.md)
+[English edition](./README.md)
 
 taosAdapter 是一个 TDengine 的配套工具，是 TDengine 集群和应用程序之间的桥梁和适配器。它提供了一种易于使用和高效的方式来直接从数据收集代理软件（如 Telegraf、StatsD、collectd 等）摄取数据。它还提供了 InfluxDB/OpenTSDB 兼容的数据摄取接口，允许 InfluxDB/OpenTSDB 应用程序无缝移植到 TDengine。
 
@@ -154,7 +154,7 @@ AllowWebSockets
 ## 功能列表
 
 - RESTful 接口
-  [https://docs.taosdata.com/reference/rest-api/](https://docs.taosdata.com/reference/rest-api/)
+  [https://docs.taosdata.com/connector/rest-api/](https://docs.taosdata.com/connector/rest-api/)
 - 兼容 InfluxDB v1 写接口
   [https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/](https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/)
 - 兼容 OpenTSDB JSON 和 telnet 格式写入

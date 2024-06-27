@@ -23,7 +23,7 @@ func GinLog() gin.HandlerFunc {
 		reqMethod := c.Request.Method
 		reqUri := url.QueryEscape(c.Request.RequestURI)
 		statusCode := c.Writer.Status()
-		clientIP := c.ClientIP()
+		clientIP := c.RemoteIP()
 		reqID, exist := c.Get(config.ReqIDKey)
 		if exist {
 			logger.WithField(config.ReqIDKey, reqID).Infof("| %3d | %13v | %15s | %s | %s ", statusCode, latencyTime, clientIP, reqMethod, reqUri)
