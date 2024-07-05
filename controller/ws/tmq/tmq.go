@@ -358,6 +358,7 @@ type TMQSubscribeReq struct {
 	SnapshotEnable       string   `json:"snapshot_enable"`
 	WithTableName        string   `json:"with_table_name"`
 	EnableBatchMeta      string   `json:"enable_batch_meta"`
+	MsgConsumeExcluded   string   `json:"msg_consume_excluded"`
 }
 
 type TMQSubscribeResp struct {
@@ -431,29 +432,15 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	defer func() {
 		wrapper.TMQConfDestroy(tmqConfig)
 	}()
+	var tmqOptions = make(map[string]string)
 	if len(req.GroupID) != 0 {
-		errCode := wrapper.TMQConfSet(tmqConfig, "group.id", req.GroupID)
-		if errCode != httperror.SUCCESS {
-			errStr := wrapper.TMQErr2Str(errCode)
-			wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
-			return
-		}
+		tmqOptions["group.id"] = req.GroupID
 	}
 	if len(req.ClientID) != 0 {
-		errCode := wrapper.TMQConfSet(tmqConfig, "client.id", req.ClientID)
-		if errCode != httperror.SUCCESS {
-			errStr := wrapper.TMQErr2Str(errCode)
-			wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
-			return
-		}
+		tmqOptions["client.id"] = req.ClientID
 	}
 	if len(req.DB) != 0 {
-		errCode := wrapper.TMQConfSet(tmqConfig, "td.connect.db", req.DB)
-		if errCode != httperror.SUCCESS {
-			errStr := wrapper.TMQErr2Str(errCode)
-			wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
-			return
-		}
+		tmqOptions["td.connect.db"] = req.DB
 	}
 	offsetReset := req.OffsetRest
 
@@ -461,41 +448,18 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		offsetReset = req.OffsetReset
 	}
 	if len(offsetReset) != 0 {
-		errCode := wrapper.TMQConfSet(tmqConfig, "auto.offset.reset", offsetReset)
-		if errCode != httperror.SUCCESS {
-			errStr := wrapper.TMQErr2Str(errCode)
-			wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
-			return
-		}
+		tmqOptions["auto.offset.reset"] = offsetReset
 	}
-
-	errCode := wrapper.TMQConfSet(tmqConfig, "td.connect.user", req.User)
-	if errCode != httperror.SUCCESS {
-		errStr := wrapper.TMQErr2Str(errCode)
-		wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
-		return
-	}
-	errCode = wrapper.TMQConfSet(tmqConfig, "td.connect.pass", req.Password)
-	if errCode != httperror.SUCCESS {
-		errStr := wrapper.TMQErr2Str(errCode)
-		wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
-		return
-	}
+	tmqOptions["td.connect.user"] = req.User
+	tmqOptions["td.connect.pass"] = req.Password
 	if len(req.WithTableName) != 0 {
-		errCode = wrapper.TMQConfSet(tmqConfig, "msg.with.table.name", req.WithTableName)
-		if errCode != httperror.SUCCESS {
-			errStr := wrapper.TMQErr2Str(errCode)
-			wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
-			return
-		}
+		tmqOptions["msg.with.table.name"] = req.WithTableName
+	}
+	if len(req.MsgConsumeExcluded) != 0 {
+		tmqOptions["msg.consume.excluded"] = req.MsgConsumeExcluded
 	}
 	// autocommit always false
-	errCode = wrapper.TMQConfSet(tmqConfig, "enable.auto.commit", "false")
-	if errCode != httperror.SUCCESS {
-		errStr := wrapper.TMQErr2Str(errCode)
-		wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
-		return
-	}
+	tmqOptions["enable.auto.commit"] = "false"
 	if len(req.AutoCommit) != 0 {
 		var err error
 		t.isAutoCommit, err = strconv.ParseBool(req.AutoCommit)
@@ -505,12 +469,6 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		}
 	}
 	if len(req.AutoCommitIntervalMS) != 0 {
-		errCode = wrapper.TMQConfSet(tmqConfig, "auto.commit.interval.ms", req.AutoCommitIntervalMS)
-		if errCode != httperror.SUCCESS {
-			errStr := wrapper.TMQErr2Str(errCode)
-			wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
-			return
-		}
 		autocommitIntervalMS, err := strconv.ParseInt(req.AutoCommitIntervalMS, 10, 64)
 		if err != nil {
 			wsTMQErrorMsg(ctx, session, 0xffff, err.Error(), TMQSubscribe, req.ReqID, nil)
@@ -519,15 +477,14 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		t.autocommitInterval = time.Duration(autocommitIntervalMS) * time.Millisecond
 	}
 	if len(req.SnapshotEnable) != 0 {
-		errCode = wrapper.TMQConfSet(tmqConfig, "experimental.snapshot.enable", req.SnapshotEnable)
-		if errCode != httperror.SUCCESS {
-			errStr := wrapper.TMQErr2Str(errCode)
-			wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
-			return
-		}
+		tmqOptions["experimental.snapshot.enable"] = req.SnapshotEnable
 	}
 	if len(req.EnableBatchMeta) != 0 {
-		errCode = wrapper.TMQConfSet(tmqConfig, "msg.enable.batchmeta", req.SnapshotEnable)
+		tmqOptions["msg.enable.batchmeta"] = req.EnableBatchMeta
+	}
+	var errCode int32
+	for k, v := range tmqOptions {
+		errCode = wrapper.TMQConfSet(tmqConfig, k, v)
 		if errCode != httperror.SUCCESS {
 			errStr := wrapper.TMQErr2Str(errCode)
 			wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
