@@ -3049,3 +3049,39 @@ func TestTMQ_FetchRawNew(t *testing.T) {
 	assert.Equal(t, 1, len(committedResp.Committed), string(msg))
 	assert.Equal(t, pollResp.Offset, committedResp.Committed[0], string(msg))
 }
+
+func TestTMQ_SetMsgConsumeExcluded(t *testing.T) {
+	dbName := "test_ws_tmq_set_msg_consume_excluded"
+	topic := "test_ws_tmq_set_msg_consume_excluded_topic"
+
+	before(t, dbName, topic)
+
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/tmq", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer ws.Close()
+
+	defer after(ws, dbName, topic)
+
+	// subscribe
+	b, _ := json.Marshal(TMQSubscribeReq{
+		User:               "root",
+		Password:           "taosdata",
+		DB:                 dbName,
+		GroupID:            "test",
+		Topics:             []string{topic},
+		AutoCommit:         "false",
+		OffsetReset:        "earliest",
+		MsgConsumeExcluded: "1",
+	})
+	msg, err := doWebSocket(ws, TMQSubscribe, b)
+	assert.NoError(t, err)
+	var subscribeResp TMQSubscribeResp
+	err = json.Unmarshal(msg, &subscribeResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
+}
