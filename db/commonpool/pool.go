@@ -11,12 +11,11 @@ import (
 	"unsafe"
 
 	"github.com/sirupsen/logrus"
-	"github.com/taosdata/driver-go/v3/common"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/driver-go/v3/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/config"
-	"github.com/taosdata/taosadapter/v3/db/whitelistwrapper"
+	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
@@ -25,28 +24,37 @@ import (
 )
 
 type ConnectorPool struct {
-	changePassChan chan int32
-	whitelistChan  chan int64
-	dropUserChan   chan struct{}
-	user           string
-	password       string
-	pool           *connectpool.ConnectPool
-	logger         *logrus.Entry
-	once           sync.Once
-	ctx            context.Context
-	cancel         context.CancelFunc
-	ipNetsLock     sync.RWMutex
-	ipNets         []*net.IPNet
+	changePassChan        chan int32
+	whitelistChan         chan int64
+	dropUserChan          chan struct{}
+	user                  string
+	password              string
+	pool                  *connectpool.ConnectPool
+	logger                *logrus.Entry
+	once                  sync.Once
+	ctx                   context.Context
+	cancel                context.CancelFunc
+	ipNetsLock            sync.RWMutex
+	ipNets                []*net.IPNet
+	changePassHandle      cgo.Handle
+	whitelistChangeHandle cgo.Handle
+	dropUserHandle        cgo.Handle
 }
 
 func NewConnectorPool(user, password string) (*ConnectorPool, error) {
+	changePassChan, changePassHandle := tool.GetRegisterChangePassHandle()
+	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
+	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
 	cp := &ConnectorPool{
-		user:           user,
-		password:       password,
-		changePassChan: make(chan int32, 1),
-		whitelistChan:  make(chan int64, 1),
-		dropUserChan:   make(chan struct{}, 1),
-		logger:         log.GetLogger("connect_pool").WithField("user", user),
+		user:                  user,
+		password:              password,
+		changePassChan:        changePassChan,
+		changePassHandle:      changePassHandle,
+		whitelistChan:         whitelistChangeChan,
+		whitelistChangeHandle: whitelistChangeHandle,
+		dropUserChan:          dropUserChan,
+		dropUserHandle:        dropUserHandle,
+		logger:                log.GetLogger("connect_pool").WithField("user", user),
 	}
 	maxConnect := config.Conf.Pool.MaxConnect
 	if maxConnect == 0 {
@@ -67,46 +75,44 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	v, _ := p.Get()
 	// notify modify
 	cp.ctx, cp.cancel = context.WithCancel(context.Background())
-	errCode := wrapper.TaosSetNotifyCB(v, cgo.NewHandle(cp.changePassChan), common.TAOS_NOTIFY_PASSVER)
-	if errCode != 0 {
-		errStr := wrapper.TaosErrorStr(nil)
+	err = tool.RegisterChangePass(v, cp.changePassHandle)
+	if err != nil {
 		p.Put(v)
 		p.Release()
-		return nil, tErrors.NewError(int(errCode), errStr)
+		cp.putHandle()
+		return nil, err
 	}
 	// notify drop
-	errCode = wrapper.TaosSetNotifyCB(v, cgo.NewHandle(cp.dropUserChan), common.TAOS_NOTIFY_USER_DROPPED)
-	if errCode != 0 {
-		errStr := wrapper.TaosErrorStr(nil)
+	err = tool.RegisterDropUser(v, cp.dropUserHandle)
+	if err != nil {
 		p.Put(v)
 		p.Release()
-		return nil, tErrors.NewError(int(errCode), errStr)
+		cp.putHandle()
+		return nil, err
 	}
 	// whitelist
-	c := make(chan *whitelistwrapper.WhitelistResult, 1)
-	handler := cgo.NewHandle(c)
-	// fetch whitelist
-	thread.Lock()
-	whitelistwrapper.TaosFetchWhitelistA(v, handler)
-	thread.Unlock()
-	data := <-c
-	if data.ErrCode != 0 {
-		errStr := wrapper.TaosErrorStr(nil)
+	ipNets, err := tool.GetWhitelist(v)
+	if err != nil {
 		p.Put(v)
 		p.Release()
-		return nil, tErrors.NewError(int(data.ErrCode), errStr)
+		cp.putHandle()
+		return nil, err
 	}
-	cp.ipNets = data.IPNets
+	cp.ipNets = ipNets
 	// register whitelist modify callback
-	errCode = wrapper.TaosSetNotifyCB(v, cgo.NewHandle(cp.whitelistChan), common.TAOS_NOTIFY_WHITELIST_VER)
-	if errCode != 0 {
-		errStr := wrapper.TaosErrorStr(nil)
+	err = tool.RegisterChangeWhitelist(v, cp.whitelistChangeHandle)
+	if err != nil {
 		p.Put(v)
 		p.Release()
-		return nil, tErrors.NewError(int(errCode), errStr)
+		cp.putHandle()
+		return nil, err
 	}
 	p.Put(v)
 	go func() {
+		defer func() {
+			cp.logger.Warnln("connector pool exit")
+			cp.putHandle()
+		}()
 		for {
 			select {
 			case <-cp.changePassChan:
@@ -126,16 +132,10 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 			case <-cp.whitelistChan:
 				// whitelist changed
 				cp.logger.Info("whitelist change")
-				c := make(chan *whitelistwrapper.WhitelistResult, 1)
-				handler := cgo.NewHandle(c)
-				// fetch whitelist
-				thread.Lock()
-				whitelistwrapper.TaosFetchWhitelistA(v, handler)
-				thread.Unlock()
-				data := <-c
-				if data.ErrCode != 0 {
+				ipNets, err = tool.GetWhitelist(v)
+				if err != nil {
 					// fetch whitelist error
-					cp.logger.WithError(tErrors.NewError(int(data.ErrCode), wrapper.TaosErrorStr(nil))).Error("fetch whitelist error! release connection!")
+					cp.logger.WithError(err).Error("fetch whitelist error! release connection!")
 					connectionLocker.Lock()
 					// release connection pool
 					cp.Release()
@@ -143,8 +143,8 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 					return
 				}
 				cp.ipNetsLock.Lock()
-				cp.ipNets = data.IPNets
-				tmp := make([]string, len(cp.ipNets))
+				cp.ipNets = ipNets
+				tmp := make([]string, 0, len(cp.ipNets))
 				for _, ipNet := range cp.ipNets {
 					tmp = append(tmp, ipNet.String())
 				}
@@ -219,12 +219,15 @@ func (cp *ConnectorPool) Release() {
 		if exist && v == cp {
 			connectionMap.Delete(cp.user)
 		}
-		close(cp.changePassChan)
-		close(cp.whitelistChan)
-		close(cp.dropUserChan)
 		cp.pool.Release()
 		cp.logger.Warnln("connector released")
 	})
+}
+
+func (cp *ConnectorPool) putHandle() {
+	tool.PutRegisterChangePassHandle(cp.changePassHandle)
+	tool.PutRegisterChangeWhiteListHandle(cp.whitelistChangeHandle)
+	tool.PutRegisterDropUserHandle(cp.dropUserHandle)
 }
 
 var connectionMap = sync.Map{}
