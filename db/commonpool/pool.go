@@ -132,16 +132,10 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 			case <-cp.whitelistChan:
 				// whitelist changed
 				cp.logger.Info("whitelist change")
-				c := make(chan *wrapper.WhitelistResult, 1)
-				handler := cgo.NewHandle(c)
-				// fetch whitelist
-				thread.Lock()
-				wrapper.TaosFetchWhitelistA(v, handler)
-				thread.Unlock()
-				data := <-c
-				if data.ErrCode != 0 {
+				ipNets, err = tool.GetWhitelist(v)
+				if err != nil {
 					// fetch whitelist error
-					cp.logger.WithError(tErrors.NewError(int(data.ErrCode), wrapper.TaosErrorStr(nil))).Error("fetch whitelist error! release connection!")
+					cp.logger.WithError(err).Error("fetch whitelist error! release connection!")
 					connectionLocker.Lock()
 					// release connection pool
 					cp.Release()
@@ -149,8 +143,8 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 					return
 				}
 				cp.ipNetsLock.Lock()
-				cp.ipNets = data.IPNets
-				tmp := make([]string, len(cp.ipNets))
+				cp.ipNets = ipNets
+				tmp := make([]string, 0, len(cp.ipNets))
 				for _, ipNet := range cp.ipNets {
 					tmp = append(tmp, ipNet.String())
 				}
@@ -220,8 +214,8 @@ func (cp *ConnectorPool) verifyIP(ip net.IP) bool {
 
 func (cp *ConnectorPool) Release() {
 	cp.once.Do(func() {
-		v, exist := connectionMap.Load(cp.user)
 		cp.cancel()
+		v, exist := connectionMap.Load(cp.user)
 		if exist && v == cp {
 			connectionMap.Delete(cp.user)
 		}
