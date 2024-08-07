@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/driver-go/v3/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
@@ -130,37 +131,44 @@ func (s *SchemalessController) Init(ctl gin.IRouter) {
 }
 
 type TaosSchemaless struct {
-	conn                unsafe.Pointer
-	closed              bool
-	exit                chan struct{}
-	whitelistChangeChan chan int64
-	dropUserNotify      chan struct{}
-	session             *melody.Session
-	ip                  net.IP
-	ipStr               string
-	wg                  sync.WaitGroup
+	conn                  unsafe.Pointer
+	closed                bool
+	exit                  chan struct{}
+	whitelistChangeChan   chan int64
+	dropUserChan          chan struct{}
+	session               *melody.Session
+	ip                    net.IP
+	ipStr                 string
+	wg                    sync.WaitGroup
+	whitelistChangeHandle cgo.Handle
+	dropUserHandle        cgo.Handle
 	sync.Mutex
 }
 
 func NewTaosSchemaless(session *melody.Session) *TaosSchemaless {
 	ipAddr := iptool.GetRealIP(session.Request)
+	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
+	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
 	return &TaosSchemaless{
-		exit:                make(chan struct{}),
-		whitelistChangeChan: make(chan int64, 1),
-		dropUserNotify:      make(chan struct{}, 1),
-		session:             session,
-		ip:                  ipAddr,
-		ipStr:               ipAddr.String(),
+		exit:                  make(chan struct{}),
+		whitelistChangeChan:   whitelistChangeChan,
+		whitelistChangeHandle: whitelistChangeHandle,
+		dropUserChan:          dropUserChan,
+		dropUserHandle:        dropUserHandle,
+		session:               session,
+		ip:                    ipAddr,
+		ipStr:                 ipAddr.String(),
 	}
 }
 
 func (t *TaosSchemaless) waitSignal() {
+	defer func() {
+		tool.PutRegisterChangeWhiteListHandle(t.whitelistChangeHandle)
+		tool.PutRegisterDropUserHandle(t.dropUserHandle)
+	}()
 	for {
-		if t.closed {
-			return
-		}
 		select {
-		case <-t.dropUserNotify:
+		case <-t.dropUserChan:
 			t.Lock()
 			if t.closed {
 				t.Unlock()
@@ -207,9 +215,6 @@ func (t *TaosSchemaless) close() {
 		return
 	}
 	t.closed = true
-	close(t.exit)
-	close(t.whitelistChangeChan)
-	close(t.dropUserNotify)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	done := make(chan struct{})
@@ -227,6 +232,7 @@ func (t *TaosSchemaless) close() {
 		thread.Unlock()
 		t.conn = nil
 	}
+	close(t.exit)
 }
 
 type schemalessConnReq struct {
@@ -285,7 +291,7 @@ func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, r
 		wstool.WSErrorMsg(ctx, session, 0xffff, "whitelist prohibits current IP access", SchemalessConn, req.ReqID)
 		return
 	}
-	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeChan)
+	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle)
 	if err != nil {
 		thread.Lock()
 		wrapper.TaosClose(conn)
@@ -293,7 +299,7 @@ func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, r
 		wstool.WSError(ctx, session, err, SchemalessConn, req.ReqID)
 		return
 	}
-	err = tool.RegisterDropUser(conn, t.dropUserNotify)
+	err = tool.RegisterDropUser(conn, t.dropUserHandle)
 	if err != nil {
 		thread.Lock()
 		wrapper.TaosClose(conn)
