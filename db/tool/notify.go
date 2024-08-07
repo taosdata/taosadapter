@@ -12,7 +12,9 @@ import (
 	"github.com/taosdata/taosadapter/v3/thread"
 )
 
-var whiteListHandleChan = make(chan cgo.Handle, 10000)
+const PoolSize = 10000
+
+var whiteListHandleChan = make(chan cgo.Handle, PoolSize)
 
 func getWhiteListHandle() (chan *whitelistwrapper.WhitelistResult, cgo.Handle) {
 	select {
@@ -64,7 +66,7 @@ func CheckWhitelist(whitelist []*net.IPNet, ip net.IP) bool {
 }
 
 // whitelist change
-var registerChangeWhiteListHandleChan = make(chan cgo.Handle, 10000)
+var registerChangeWhiteListHandleChan = make(chan cgo.Handle, PoolSize)
 
 func GetRegisterChangeWhiteListHandle() (chan int64, cgo.Handle) {
 	select {
@@ -101,7 +103,7 @@ func RegisterChangeWhitelist(conn unsafe.Pointer, handle cgo.Handle) error {
 }
 
 // drop user
-var registerDropUserHandleChan = make(chan cgo.Handle, 10000)
+var registerDropUserHandleChan = make(chan cgo.Handle, PoolSize)
 
 func GetRegisterDropUserHandle() (chan struct{}, cgo.Handle) {
 	select {
@@ -138,7 +140,7 @@ func RegisterDropUser(conn unsafe.Pointer, handle cgo.Handle) error {
 }
 
 // change password
-var registerChangePassHandleChan = make(chan cgo.Handle, 10000)
+var registerChangePassHandleChan = make(chan cgo.Handle, PoolSize)
 
 func GetRegisterChangePassHandle() (chan int32, cgo.Handle) {
 	select {
