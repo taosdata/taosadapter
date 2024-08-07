@@ -654,6 +654,12 @@ type SchemalessWriteRequest struct {
 	Data      string `json:"data"`
 }
 
+type SchemalessWriteResponse struct {
+	BaseResponse
+	AffectedRows int   `json:"affected_rows"`
+	TotalRows    int32 `json:"total_rows"`
+}
+
 func (h *messageHandler) handleSchemalessWrite(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req SchemalessWriteRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
@@ -665,18 +671,22 @@ func (h *messageHandler) handleSchemalessWrite(_ context.Context, request Reques
 		logger.Errorf("## schemaless write request %s args error. protocol is null", request.Args)
 		return wsCommonErrorMsg(0xffff, "args error")
 	}
-
+	var totalRows int32
+	var affectedRows int
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
-	_, result := wrapper.TaosSchemalessInsertRawTTLWithReqID(h.conn, req.Data, req.Protocol, req.Precision, req.TTL, int64(request.ReqID))
+	totalRows, result := wrapper.TaosSchemalessInsertRawTTLWithReqID(h.conn, req.Data, req.Protocol, req.Precision, req.TTL, int64(request.ReqID))
 	logger.Debugln("taos_schemaless_insert_raw_ttl_with_reqid cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	defer freeCPointer(result)
-
+	affectedRows = wrapper.TaosAffectedRows(result)
 	if code := wrapper.TaosError(result); code != 0 {
 		return wsCommonErrorMsg(code, wrapper.TaosErrorStr(result))
 	}
-	return &BaseResponse{}
+	return &SchemalessWriteResponse{
+		TotalRows:    totalRows,
+		AffectedRows: affectedRows,
+	}
 }
 
 type StmtInitResponse struct {
