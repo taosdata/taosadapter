@@ -21,6 +21,7 @@ import (
 	"github.com/taosdata/driver-go/v3/common/param"
 	"github.com/taosdata/driver-go/v3/common/parser"
 	"github.com/taosdata/driver-go/v3/common/serializer"
+	"github.com/taosdata/driver-go/v3/ws/schemaless"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller"
 	_ "github.com/taosdata/taosadapter/v3/controller/rest"
@@ -1286,27 +1287,31 @@ func TestWsSchemaless(t *testing.T) {
 	}()
 
 	cases := []struct {
-		name      string
-		protocol  int
-		precision string
-		data      string
-		ttl       int
-		code      int
+		name         string
+		protocol     int
+		precision    string
+		data         string
+		ttl          int
+		code         int
+		totalRows    int32
+		affectedRows int
 	}{
 		{
 			name:      "influxdb",
-			protocol:  1,
+			protocol:  schemaless.InfluxDBLineProtocol,
 			precision: "ms",
 			data: "measurement,host=host1 field1=2i,field2=2.0 1577837300000\n" +
 				"measurement,host=host1 field1=2i,field2=2.0 1577837400000\n" +
 				"measurement,host=host1 field1=2i,field2=2.0 1577837500000\n" +
 				"measurement,host=host1 field1=2i,field2=2.0 1577837600000",
-			ttl:  1000,
-			code: 0,
+			ttl:          1000,
+			code:         0,
+			totalRows:    4,
+			affectedRows: 4,
 		},
 		{
 			name:      "opentsdb_telnet",
-			protocol:  2,
+			protocol:  schemaless.OpenTSDBTelnetLineProtocol,
 			precision: "ms",
 			data: "meters.current 1648432611249 10.3 location=California.SanFrancisco group=2\n" +
 				"meters.current 1648432611250 12.6 location=California.SanFrancisco group=2\n" +
@@ -1316,12 +1321,14 @@ func TestWsSchemaless(t *testing.T) {
 				"meters.voltage 1648432611250 218 location=California.SanFrancisco group=2\n" +
 				"meters.voltage 1648432611249 221 location=California.LosAngeles group=3\n" +
 				"meters.voltage 1648432611250 217 location=California.LosAngeles group=3",
-			ttl:  1000,
-			code: 0,
+			ttl:          1000,
+			code:         0,
+			totalRows:    8,
+			affectedRows: 8,
 		},
 		{
 			name:      "opentsdb_json",
-			protocol:  3,
+			protocol:  schemaless.OpenTSDBJsonFormatProtocol,
 			precision: "ms",
 			data: `[
     {
@@ -1361,8 +1368,9 @@ func TestWsSchemaless(t *testing.T) {
         }
     }
 ]`,
-			ttl:  100,
-			code: 0,
+			ttl:          100,
+			code:         0,
+			affectedRows: 4,
 		},
 	}
 
@@ -1389,11 +1397,15 @@ func TestWsSchemaless(t *testing.T) {
 			}
 			resp, err = doWebSocket(ws, SchemalessWrite, &req)
 			assert.NoError(t, err)
-			var schemalessResp BaseResponse
+			var schemalessResp SchemalessWriteResponse
 			err = json.Unmarshal(resp, &schemalessResp)
-			assert.NoError(t, err)
+			assert.NoError(t, err, string(resp))
 			assert.Equal(t, reqID, schemalessResp.ReqID)
 			assert.Equal(t, 0, schemalessResp.Code, schemalessResp.Message)
+			if c.protocol != schemaless.OpenTSDBJsonFormatProtocol {
+				assert.Equal(t, c.totalRows, schemalessResp.TotalRows)
+			}
+			assert.Equal(t, c.affectedRows, schemalessResp.AffectedRows)
 		})
 	}
 }
