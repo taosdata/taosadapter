@@ -299,7 +299,7 @@ func TestRegisterDropUser(t *testing.T) {
 	defer wrapper.TaosClose(conn)
 	err = exec(conn, "create user test_drop_user pass 'notify'")
 	assert.NoError(t, err)
-	defer exec(conn, "drop user if exists test_drop_user")
+	defer exec(conn, "drop user test_drop_user")
 	conn2, err := wrapper.TaosConnect("", "test_drop_user", "notify", "", 0)
 	assert.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
