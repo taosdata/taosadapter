@@ -22,6 +22,7 @@ import (
 	errors2 "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/types"
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/driver-go/v3/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/controller/ws/stmt"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/async"
@@ -38,44 +39,51 @@ import (
 )
 
 type messageHandler struct {
-	conn           unsafe.Pointer
-	closed         bool
-	once           sync.Once
-	wait           sync.WaitGroup
-	dropUserNotify chan struct{}
+	conn         unsafe.Pointer
+	closed       bool
+	once         sync.Once
+	wait         sync.WaitGroup
+	dropUserChan chan struct{}
 	sync.RWMutex
 
 	queryResults *QueryResultHolder // ws query
 	stmts        *StmtHolder        // stmt bind message
 
-	exit                chan struct{}
-	whitelistChangeChan chan int64
-	session             *melody.Session
-	ip                  net.IP
-	ipStr               string
+	exit                  chan struct{}
+	whitelistChangeChan   chan int64
+	session               *melody.Session
+	ip                    net.IP
+	ipStr                 string
+	whitelistChangeHandle cgo.Handle
+	dropUserHandle        cgo.Handle
 }
 
 func newHandler(session *melody.Session) *messageHandler {
 	ipAddr := iptool.GetRealIP(session.Request)
+	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
+	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
 	return &messageHandler{
-		queryResults:        NewQueryResultHolder(),
-		stmts:               NewStmtHolder(),
-		exit:                make(chan struct{}),
-		whitelistChangeChan: make(chan int64, 1),
-		dropUserNotify:      make(chan struct{}, 1),
-		session:             session,
-		ip:                  ipAddr,
-		ipStr:               ipAddr.String(),
+		queryResults:          NewQueryResultHolder(),
+		stmts:                 NewStmtHolder(),
+		exit:                  make(chan struct{}),
+		whitelistChangeChan:   whitelistChangeChan,
+		whitelistChangeHandle: whitelistChangeHandle,
+		dropUserChan:          dropUserChan,
+		dropUserHandle:        dropUserHandle,
+		session:               session,
+		ip:                    ipAddr,
+		ipStr:                 ipAddr.String(),
 	}
 }
 
 func (h *messageHandler) waitSignal() {
+	defer func() {
+		tool.PutRegisterChangeWhiteListHandle(h.whitelistChangeHandle)
+		tool.PutRegisterDropUserHandle(h.dropUserHandle)
+	}()
 	for {
-		if h.closed {
-			return
-		}
 		select {
-		case <-h.dropUserNotify:
+		case <-h.dropUserChan:
 			h.Lock()
 			if h.closed {
 				h.Unlock()
@@ -123,10 +131,8 @@ func (h *messageHandler) Close() {
 		return
 	}
 	h.closed = true
-	close(h.exit)
-	close(h.whitelistChangeChan)
-	close(h.dropUserNotify)
 	h.stop()
+	close(h.exit)
 }
 
 type Request struct {
@@ -425,7 +431,7 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		thread.Unlock()
 		return wsCommonErrorMsg(0xffff, "whitelist prohibits current IP access")
 	}
-	err = tool.RegisterChangeWhitelist(conn, h.whitelistChangeChan)
+	err = tool.RegisterChangeWhitelist(conn, h.whitelistChangeHandle)
 	if err != nil {
 		thread.Lock()
 		wrapper.TaosClose(conn)
@@ -434,7 +440,7 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		errors.As(err, &taosErr)
 		return wsCommonErrorMsg(int(taosErr.Code), taosErr.ErrStr)
 	}
-	err = tool.RegisterDropUser(conn, h.dropUserNotify)
+	err = tool.RegisterDropUser(conn, h.dropUserHandle)
 	if err != nil {
 		thread.Lock()
 		wrapper.TaosClose(conn)
