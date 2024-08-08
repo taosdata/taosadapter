@@ -325,11 +325,13 @@ type schemalessWriteReq struct {
 }
 
 type schemalessResp struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	ReqID   uint64 `json:"req_id"`
-	Action  string `json:"action"`
-	Timing  int64  `json:"timing"`
+	Code         int    `json:"code"`
+	Message      string `json:"message"`
+	ReqID        uint64 `json:"req_id"`
+	Action       string `json:"action"`
+	Timing       int64  `json:"timing"`
+	AffectedRows int    `json:"affected_rows"`
+	TotalRows    int32  `json:"total_rows"`
 }
 
 func (t *TaosSchemaless) insert(ctx context.Context, session *melody.Session, req schemalessWriteReq) {
@@ -357,10 +359,12 @@ func (t *TaosSchemaless) insert(ctx context.Context, session *melody.Session, re
 		}
 	}()
 	var err error
+	var totalRows int32
+	var affectedRows int
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
-	_, result = wrapper.TaosSchemalessInsertRawTTLWithReqID(t.conn, req.Data, req.Protocol, req.Precision, req.TTL, int64(req.ReqID))
+	totalRows, result = wrapper.TaosSchemalessInsertRawTTLWithReqID(t.conn, req.Data, req.Protocol, req.Precision, req.TTL, int64(req.ReqID))
 	logger.Debugln("taos_schemaless_insert_raw_ttl_with_reqid cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 
@@ -371,7 +375,14 @@ func (t *TaosSchemaless) insert(ctx context.Context, session *melody.Session, re
 		wstool.WSError(ctx, session, err, SchemalessWrite, req.ReqID)
 		return
 	}
-	resp := &schemalessResp{Action: SchemalessWrite, ReqID: req.ReqID, Timing: wstool.GetDuration(ctx)}
+	affectedRows = wrapper.TaosAffectedRows(result)
+	resp := &schemalessResp{
+		ReqID:        req.ReqID,
+		Action:       SchemalessWrite,
+		Timing:       wstool.GetDuration(ctx),
+		AffectedRows: affectedRows,
+		TotalRows:    totalRows,
+	}
 	wstool.WSWriteJson(session, resp)
 }
 
