@@ -2808,6 +2808,10 @@ func TestTMQ_PollAfterClose(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			time.Sleep(time.Millisecond * 100)
 			code, message := doHttpSql(fmt.Sprintf("insert into %s.ct2 values (now, 1, 2, '3')", dbName))
+			if code == 902 {
+				// exited, db not exists
+				return
+			}
 			assert.Equal(t, 0, code, message)
 		}
 	}()
