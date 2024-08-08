@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
+	"path/filepath"
 	"sync"
 	"time"
 
-	rotatelogs "github.com/huskar-t/file-rotatelogs/v2"
 	"github.com/sirupsen/logrus"
+	rotatelogs "github.com/taosdata/file-rotatelogs/v2"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/version"
 )
@@ -50,7 +50,7 @@ type FileHook struct {
 	sync.Mutex
 }
 
-func NewFileHook(formatter logrus.Formatter, writer io.Writer) *FileHook {
+func NewFileHook(formatter logrus.Formatter, writer io.WriteCloser) *FileHook {
 	fh := &FileHook{formatter: formatter, writer: writer, buf: &bytes.Buffer{}}
 	ticker := time.NewTicker(time.Second * 5)
 	go func() {
@@ -67,6 +67,7 @@ func NewFileHook(formatter logrus.Formatter, writer io.Writer) *FileHook {
 				fh.Lock()
 				fh.flush()
 				fh.Unlock()
+				writer.Close()
 				ticker.Stop()
 				close(finish)
 				return
@@ -104,6 +105,9 @@ func (f *FileHook) Fire(entry *logrus.Entry) error {
 func (f *FileHook) flush() error {
 	_, err := f.writer.Write(f.buf.Bytes())
 	f.buf.Reset()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "write log error:", err)
+	}
 	return err
 }
 
@@ -116,22 +120,33 @@ func ConfigLog() {
 			panic(err)
 		}
 		writer, err := rotatelogs.New(
-			path.Join(config.Conf.Log.Path, fmt.Sprintf("%sadapter_%%Y_%%m_%%d_%%H_%%M.log", version.CUS_PROMPT)),
+			filepath.Join(config.Conf.Log.Path, fmt.Sprintf("%sadapter_%d_%%Y%%m%%d.log", version.CUS_PROMPT, config.Conf.InstanceID)),
 			rotatelogs.WithRotationCount(config.Conf.Log.RotationCount),
-			rotatelogs.WithRotationTime(config.Conf.Log.RotationTime),
+			rotatelogs.WithRotationTime(time.Hour*24),
 			rotatelogs.WithRotationSize(int64(config.Conf.Log.RotationSize)),
+			rotatelogs.WithReservedDiskSize(int64(config.Conf.Log.ReservedDiskSize)),
+			rotatelogs.WithRotateGlobPattern(filepath.Join(config.Conf.Log.Path, fmt.Sprintf("%sadapter_%d_*.log*", version.CUS_PROMPT, config.Conf.InstanceID))),
+			rotatelogs.WithCompress(config.Conf.Log.Compress),
+			rotatelogs.WithCleanLockFile(filepath.Join(config.Conf.Log.Path, fmt.Sprintf(".%sadapter_%d_rotate_lock", version.CUS_PROMPT, config.Conf.InstanceID))),
 		)
 		if err != nil {
 			panic(err)
 		}
+		fmt.Fprintln(writer, "==================================================")
+		fmt.Fprintln(writer, "                new log file")
+		fmt.Fprintln(writer, "==================================================")
 		hook := NewFileHook(globalLogFormatter, writer)
 		logger.AddHook(hook)
 		if config.Conf.Log.EnableRecordHttpSql {
 			sqlWriter, err := rotatelogs.New(
-				path.Join(config.Conf.Log.Path, "httpsql_%Y_%m_%d_%H_%M.log"),
+				filepath.Join(config.Conf.Log.Path, fmt.Sprintf("httpsql_%d_%%Y%%m%%d%%H%%M.log", config.Conf.InstanceID)),
 				rotatelogs.WithRotationCount(config.Conf.Log.SqlRotationCount),
 				rotatelogs.WithRotationTime(config.Conf.Log.SqlRotationTime),
 				rotatelogs.WithRotationSize(int64(config.Conf.Log.SqlRotationSize)),
+				rotatelogs.WithReservedDiskSize(int64(config.Conf.Log.ReservedDiskSize)),
+				rotatelogs.WithRotateGlobPattern(filepath.Join(config.Conf.Log.Path, fmt.Sprintf("httpsql_%d_*.log*", config.Conf.InstanceID))),
+				rotatelogs.WithCompress(config.Conf.Log.Compress),
+				rotatelogs.WithCleanLockFile(filepath.Join(config.Conf.Log.Path, fmt.Sprintf(".httpsql_%d_rotate_lock", config.Conf.InstanceID))),
 			)
 			if err != nil {
 				panic(err)
@@ -152,7 +167,7 @@ func SetLevel(level string) error {
 }
 
 func GetLogger(model string) *logrus.Entry {
-	return logger.WithFields(logrus.Fields{"model": model})
+	return logger.WithFields(logrus.Fields{config.ModelKey: model})
 }
 
 func init() {
@@ -180,31 +195,79 @@ func (t *TaosLogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	b.WriteByte(' ')
 	b.WriteString(ServerID)
 	b.WriteByte(' ')
-	b.WriteString(version.CUS_PROMPT)
-	b.WriteString("_ADAPTER ")
-	b.WriteString(entry.Level.String())
-	b.WriteString(` "`)
-	b.WriteString(entry.Message)
-	b.WriteByte('"')
-	for k, v := range entry.Data {
+	v, exist := entry.Data[config.ModelKey]
+	if exist && v != nil {
+		b.WriteString(v.(string))
+		b.WriteByte(' ')
+	} else {
+		b.WriteString("CLI ")
+	}
+	switch entry.Level {
+	case logrus.PanicLevel:
+		b.WriteString("PANIC ")
+	case logrus.FatalLevel:
+		b.WriteString("FATAL ")
+	case logrus.ErrorLevel:
+		b.WriteString("ERROR ")
+	case logrus.WarnLevel:
+		b.WriteString("WARN  ")
+	case logrus.InfoLevel:
+		b.WriteString("INFO  ")
+	case logrus.DebugLevel:
+		b.WriteString("DEBUG ")
+	case logrus.TraceLevel:
+		b.WriteString("TRACE ")
+	}
+
+	// ws session id
+	v, exist = entry.Data[config.SessionIDKey]
+	if exist && v != nil {
+		b.WriteString(config.SessionIDKey)
+		b.WriteByte(':')
+		fmt.Fprintf(b, "0x%x, ", v)
+	}
+
+	// request id
+	v, exist = entry.Data[config.ReqIDKey]
+	if exist && v != nil {
+		b.WriteString(config.ReqIDKey)
+		b.WriteByte(':')
+		fmt.Fprintf(b, "0x%x ", v)
+	}
+	if len(entry.Message) > 0 && entry.Message[len(entry.Message)-1] == '\n' {
+		b.WriteString(entry.Message[:len(entry.Message)-1])
+	} else {
+		b.WriteString(entry.Message)
+	}
+	// sort the keys
+	keys := make([]string, 0, len(entry.Data))
+	for k := range entry.Data {
+		if k == config.ModelKey || k == config.SessionIDKey || k == config.ReqIDKey {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	for _, k := range keys {
+		v := entry.Data[k]
 		if k == config.ReqIDKey && v == nil {
 			continue
 		}
-		b.WriteByte(' ')
+		b.WriteString(", ")
 		b.WriteString(k)
-		b.WriteByte('=')
-		if k == config.ReqIDKey {
-			b.WriteString(fmt.Sprintf("0x%x", v))
-		} else {
-			b.WriteString(fmt.Sprintf("%v", v))
-		}
+		b.WriteByte(':')
+		fmt.Fprintf(b, "%v", v)
 	}
+
 	b.WriteByte('\n')
 	return b.Bytes(), nil
 }
 
 func IsDebug() bool {
 	return logger.IsLevelEnabled(logrus.DebugLevel)
+}
+
+func GetLogLevel() logrus.Level {
+	return logger.Level
 }
 
 var zeroTime = time.Time{}
@@ -221,6 +284,15 @@ func GetLogDuration(isDebug bool, s time.Time) time.Duration {
 		return time.Since(s)
 	}
 	return zeroDuration
+}
+
+const MaxLogSqlLength = 1024
+
+func GetLogSql(sql string) string {
+	if len(sql) > MaxLogSqlLength {
+		return sql[:MaxLogSqlLength]
+	}
+	return sql
 }
 
 func Close(ctx context.Context) {

@@ -24,11 +24,11 @@ func LogWSError(session *melody.Session, err error) {
 	is := errors.As(err, &wsCloseErr)
 	if is {
 		if wsCloseErr.Code == websocket.CloseNormalClosure {
-			logger.Debugln("ws close normal")
+			logger.Debug("ws close normal")
 		} else {
-			logger.WithError(err).Debugln("ws close in error")
+			logger.Debugf("ws close in error, err:%s", wsCloseErr)
 		}
 	} else {
-		logger.WithError(err).Errorln("ws error")
+		logger.Errorf("ws error, err:%s", err)
 	}
 }

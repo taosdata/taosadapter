@@ -21,7 +21,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/web"
 )
 
-var logger = log.GetLogger("prometheus")
+var logger = log.GetLogger("PLG").WithField("mod", "prometheus")
 var bufferPool pool.ByteBufferPool
 
 type Plugin struct {

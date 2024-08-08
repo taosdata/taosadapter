@@ -8,7 +8,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/log"
 )
 
-var logger = log.GetLogger("monitor")
+var logger = log.GetLogger("MON")
 
 type SysStatus struct {
 	CollectTime     time.Time

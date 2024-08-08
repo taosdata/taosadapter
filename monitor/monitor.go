@@ -12,7 +12,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/monitor"
 )
 
-var logger = log.GetLogger("monitor")
+var logger = log.GetLogger("MON")
 
 const (
 	NormalStatus = uint32(0)

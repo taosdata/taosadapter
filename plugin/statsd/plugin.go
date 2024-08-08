@@ -10,14 +10,16 @@ import (
 	"github.com/influxdata/telegraf/agent"
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
 	"github.com/sirupsen/logrus"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/plugin"
 	"github.com/taosdata/taosadapter/v3/schemaless/inserter"
+	"github.com/taosdata/taosadapter/v3/tools/generator"
 )
 
-var logger = log.GetLogger("statsd")
+var logger = log.GetLogger("PLG").WithField("mod", "statsd")
 
 type Plugin struct {
 	conf       Config
@@ -133,13 +135,15 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metric telegraf.Me
 			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
-
-	start := time.Now()
-	logger.Debugln(start, "insert line", string(data))
-	err = inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns", p.conf.TTL, 0)
-	logger.Debugln("insert line finish cost:", time.Since(start), string(data))
+	isDebug := log.IsDebug()
+	start := log.GetLogNow(isDebug)
+	reqID := generator.GetReqID()
+	execLogger := logger.WithField(config.ReqIDKey, reqID)
+	execLogger.Debugf("insert line,req_id:0x%x,data: %s", reqID, string(data))
+	err = inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns", p.conf.TTL, uint64(reqID), execLogger)
+	execLogger.Debugf("insert line finish cost:%s", log.GetLogDuration(isDebug, start))
 	if err != nil {
-		logger.WithError(err).Errorln("insert lines error", string(data))
+		execLogger.WithError(err).Errorln("insert lines error", string(data))
 		return
 	}
 }

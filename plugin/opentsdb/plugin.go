@@ -7,10 +7,8 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/taosdata/driver-go/v3/common"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
@@ -18,12 +16,13 @@ import (
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/plugin"
 	"github.com/taosdata/taosadapter/v3/schemaless/inserter"
+	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
 	"github.com/taosdata/taosadapter/v3/tools/web"
 )
 
-var logger = log.GetLogger("opentsdb")
+var logger = log.GetLogger("PLG").WithField("mod", "opentsdb")
 
 type Plugin struct {
 	conf Config
@@ -88,7 +87,8 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		}
 	}
 	if reqID == 0 {
-		reqID = uint64(common.GetReqID())
+		reqID = uint64(generator.GetReqID())
+		logger.Debugf("req_id is 0, generate new req_id: 0x%x", reqID)
 	}
 	c.Set(config.ReqIDKey, reqID)
 
@@ -96,7 +96,7 @@ func (p *Plugin) insertJson(c *gin.Context) {
 	logger := logger.WithField(config.ReqIDKey, reqID)
 	db := c.Param("db")
 	if len(db) == 0 {
-		logger.Errorln("db required")
+		logger.Error("db required")
 		p.errorResponse(c, http.StatusBadRequest, errors.New("db required"))
 		return
 	}
@@ -138,13 +138,10 @@ func (p *Plugin) insertJson(c *gin.Context) {
 			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
-	var start time.Time
-	if isDebug {
-		start = time.Now()
-	}
+	var start = log.GetLogNow(isDebug)
 	logger.Debug(start, "insert json payload", string(data))
-	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db, ttl, reqID)
-	logger.Debug("insert json payload cost:", time.Since(start))
+	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db, ttl, reqID, logger)
+	logger.Debug("insert json payload cost:", log.GetLogDuration(isDebug, start))
 	if err != nil {
 		taosError, is := err.(*tErrors.TaosError)
 		if is {
@@ -180,7 +177,7 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 		}
 	}
 	if reqID == 0 {
-		reqID = uint64(common.GetReqID())
+		reqID = uint64(generator.GetReqID())
 	}
 	c.Set(config.ReqIDKey, reqID)
 
@@ -188,7 +185,7 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 	isDebug := log.IsDebug()
 	db := c.Param("db")
 	if len(db) == 0 {
-		logger.Errorln("db required")
+		logger.Error("db required")
 		p.errorResponse(c, http.StatusBadRequest, errors.New("db required"))
 		return
 	}
@@ -245,13 +242,10 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
-	var start time.Time
-	if isDebug {
-		start = time.Now()
-	}
+	var start = log.GetLogNow(isDebug)
 	logger.Debug(start, "insert telnet payload", lines)
-	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db, ttl, reqID)
-	logger.Debug("insert telnet payload cost:", time.Since(start))
+	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db, ttl, reqID, logger)
+	logger.Debug("insert telnet payload cost:", log.GetLogDuration(isDebug, start))
 	if err != nil {
 		logger.WithError(err).Error("insert telnet payload error", lines)
 		p.errorResponse(c, http.StatusInternalServerError, err)

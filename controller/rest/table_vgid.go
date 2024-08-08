@@ -5,24 +5,29 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/log"
-	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 )
 
 func (ctl *Restful) tableVgID(c *gin.Context) {
+	logger := c.MustGet(LoggerKey).(*logrus.Entry)
 	db := c.Param("db")
 	var tables []string
 	err := c.ShouldBindJSON(&tables)
 	if err != nil {
-		BadRequestResponseWithMsg(c, 0xffff, err.Error())
+		logger.Errorf("get json requeset error, %s", err.Error())
+		BadRequestResponseWithMsg(c, logger, 0xffff, err.Error())
 		return
 	}
+	logger.Tracef("get tableVgID, db:%s, tables:%v", db, tables)
 	if len(db) == 0 || len(tables) == 0 {
-		BadRequestResponseWithMsg(c, 0xffff, "illegal params")
+		logger.Errorf("illegal params, db:%s, tables:%v", db, tables)
+		BadRequestResponseWithMsg(c, logger, 0xffff, "illegal params")
 		return
 	}
 
@@ -31,39 +36,35 @@ func (ctl *Restful) tableVgID(c *gin.Context) {
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
-	logger.Debugln("connect cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugf("get connect cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		logger.WithError(err).Error("connect server error")
+		logger.Errorf("connect server error, err:%s", err)
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
-			ForbiddenResponse(c, commonpool.ErrWhitelistForbidden.Error())
+			ForbiddenResponse(c, logger, commonpool.ErrWhitelistForbidden.Error())
 			return
 		}
 		var tError *tErrors.TaosError
 		if errors.As(err, &tError) {
-			TaosErrorResponse(c, int(tError.Code), tError.ErrStr)
+			TaosErrorResponse(c, logger, int(tError.Code), tError.ErrStr)
 			return
 		}
-		CommonErrorResponse(c, err.Error())
+		CommonErrorResponse(c, logger, err.Error())
 		return
 	}
 	defer func() {
 		putErr := taosConn.Put()
 		if putErr != nil {
-			logger.WithError(putErr).Errorln("connect pool put error")
+			logger.Errorf("put connect error, err:%s", err)
 		}
 	}()
-	s = log.GetLogNow(isDebug)
-	thread.Lock()
-	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	vgIDs, code := wrapper.TaosGetTablesVgID(taosConn.TaosConnection, db, tables)
-	logger.Debugln("get_tables_vgId cost:", log.GetLogDuration(isDebug, s))
-	thread.Unlock()
+	vgIDs, code := syncinterface.TaosGetTablesVgID(taosConn.TaosConnection, db, tables, logger, isDebug)
 	if code != 0 {
-		TaosErrorResponse(c, code, wrapper.TaosErrorStr(nil))
+		errStr := wrapper.TaosErrorStr(nil)
+		logger.Errorf("get table vgID error, code:%d, msg:%s", code, errStr)
+		TaosErrorResponse(c, logger, code, errStr)
 		return
 	}
-
+	logger.Debugf("get table vgID cost:%s", log.GetLogDuration(isDebug, s))
 	c.JSON(http.StatusOK, tableVgIDResp{Code: 0, VgIDs: vgIDs})
 }
 

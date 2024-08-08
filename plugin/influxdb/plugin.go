@@ -5,10 +5,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/taosdata/driver-go/v3/common"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
@@ -17,11 +15,12 @@ import (
 	"github.com/taosdata/taosadapter/v3/plugin"
 	"github.com/taosdata/taosadapter/v3/schemaless/inserter"
 	"github.com/taosdata/taosadapter/v3/tools"
+	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/web"
 )
 
-var logger = log.GetLogger("influxdb")
+var logger = log.GetLogger("PLG").WithField("mod", "influxdb")
 
 type Influxdb struct {
 	conf Config
@@ -93,7 +92,7 @@ func (p *Influxdb) write(c *gin.Context) {
 		}
 	}
 	if reqID == 0 {
-		reqID = uint64(common.GetReqID())
+		reqID = uint64(generator.GetReqID())
 	}
 	c.Set(config.ReqIDKey, reqID)
 	logger := logger.WithField(config.ReqIDKey, reqID)
@@ -113,7 +112,7 @@ func (p *Influxdb) write(c *gin.Context) {
 	}
 	db := c.Query("db")
 	if len(db) == 0 {
-		logger.Errorln("db required")
+		logger.Error("db required")
 		p.badRequestResponse(c, &badRequest{
 			Code:    "not found",
 			Message: "db required",
@@ -170,13 +169,10 @@ func (p *Influxdb) write(c *gin.Context) {
 		}
 	}()
 	conn := taosConn.TaosConnection
-	var start time.Time
-	if isDebug {
-		start = time.Now()
-	}
-	logger.WithTime(start).Debugln("start insert influxdb:", string(data))
-	err = inserter.InsertInfluxdb(conn, data, db, precision, ttl, reqID)
-	logger.Debugln("finish insert influxdb cost:", time.Since(start))
+	start := log.GetLogNow(isDebug)
+	logger.Debugf("start insert influxdb,data: %s", data)
+	err = inserter.InsertInfluxdb(conn, data, db, precision, ttl, reqID, logger)
+	logger.Debugf("finish insert influxdb cost:%s", log.GetLogDuration(isDebug, start))
 	if err != nil {
 		taosError, is := err.(*tErrors.TaosError)
 		if is {

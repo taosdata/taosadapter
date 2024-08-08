@@ -12,6 +12,6 @@ import (
 func TestConfigLog(t *testing.T) {
 	config.Init()
 	ConfigLog()
-	logger := GetLogger("test")
+	logger := GetLogger("TST")
 	logger.Info("test config log")
 }
