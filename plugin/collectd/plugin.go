@@ -11,6 +11,8 @@ import (
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/parsers/collectd"
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
+	"github.com/taosdata/driver-go/v3/common"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
@@ -127,10 +129,13 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, clientIP net.IP, m
 			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
-	start := time.Now()
-	logger.Debugln(start, "insert lines", string(data))
-	err = inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns", p.conf.TTL, 0)
-	logger.Debugln("insert lines finish cost:", time.Since(start), string(data))
+	isDebug := log.IsDebug()
+	reqID := common.GetReqID()
+	execLogger := logger.WithField(config.ReqIDKey, reqID)
+	logger.Debugln("insert lines", string(data))
+	start := log.GetLogNow(isDebug)
+	err = inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns", p.conf.TTL, uint64(reqID), execLogger)
+	logger.Debugln("insert lines finish cost:", log.GetLogDuration(isDebug, start))
 	if err != nil {
 		logger.WithError(err).Errorln("insert lines error", string(data))
 		return

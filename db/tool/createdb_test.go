@@ -5,6 +5,7 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
@@ -51,7 +52,7 @@ func TestCreateDBWithConnection(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := CreateDBWithConnection(tt.args.connection, tt.args.db, 0); (err != nil) != tt.wantErr {
+			if err := CreateDBWithConnection(tt.args.connection, logrus.New().WithField("test", "TestCreateDBWithConnection"), false, tt.args.db, 0); (err != nil) != tt.wantErr {
 				t.Errorf("CreateDBWithConnection() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			code := wrapper.TaosSelectDB(tt.args.connection, tt.args.db)
@@ -106,7 +107,7 @@ func TestSchemalessSelectDB(t *testing.T) {
 				return
 			}
 			wrapper.TaosFreeResult(result)
-			if err := SchemalessSelectDB(tt.args.taosConnect, tt.args.db, 0); (err != nil) != tt.wantErr {
+			if err := SchemalessSelectDB(tt.args.taosConnect, logrus.New().WithField("test", "TestSchemalessSelectDB"), false, tt.args.db, 0); (err != nil) != tt.wantErr {
 				t.Errorf("selectDB() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			r := wrapper.TaosQuery(tt.args.taosConnect, fmt.Sprintf("drop database if exists %s", tt.args.db))

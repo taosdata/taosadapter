@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/taosdata/driver-go/v3/common"
@@ -170,13 +169,10 @@ func (p *Influxdb) write(c *gin.Context) {
 		}
 	}()
 	conn := taosConn.TaosConnection
-	var start time.Time
-	if isDebug {
-		start = time.Now()
-	}
-	logger.WithTime(start).Debugln("start insert influxdb:", string(data))
-	err = inserter.InsertInfluxdb(conn, data, db, precision, ttl, reqID)
-	logger.Debugln("finish insert influxdb cost:", time.Since(start))
+	start := log.GetLogNow(isDebug)
+	logger.Debugln("start insert influxdb:", string(data))
+	err = inserter.InsertInfluxdb(conn, data, db, precision, ttl, reqID, logger)
+	logger.Debugln("finish insert influxdb cost:", log.GetLogDuration(isDebug, start))
 	if err != nil {
 		taosError, is := err.(*tErrors.TaosError)
 		if is {

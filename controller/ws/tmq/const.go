@@ -24,3 +24,5 @@ const (
 )
 
 const OffsetInvalid = -2147467247
+
+const LoggerKey = "logger"

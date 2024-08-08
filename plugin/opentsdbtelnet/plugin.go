@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/taosdata/driver-go/v3/common"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
@@ -340,16 +342,16 @@ func (p *Plugin) handleData(connection *Connection, line []string, clientIP net.
 			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
-	var start time.Time
-	if log.IsDebug() {
-		start = time.Now()
-	}
+	isDebug := log.IsDebug()
+	var start = log.GetLogNow(isDebug)
+	reqID := common.GetReqID()
+	logger := logger.WithField(config.ReqIDKey, reqID)
 	logger.Debugln(start, " insert telnet payload ", line)
-	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, line, connection.db, p.conf.TTL, 0)
+	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, line, connection.db, p.conf.TTL, uint64(reqID), logger)
 	if err != nil {
 		logger.WithError(err).Errorln("insert telnet payload error :", line)
 	}
-	logger.Debug("insert telnet payload cost:", time.Since(start))
+	logger.Debug("insert telnet payload cost:", log.GetLogDuration(isDebug, start))
 }
 
 func init() {

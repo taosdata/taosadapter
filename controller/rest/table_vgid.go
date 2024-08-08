@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
@@ -14,15 +15,16 @@ import (
 )
 
 func (ctl *Restful) tableVgID(c *gin.Context) {
+	logger := c.MustGet(LoggerKey).(*logrus.Entry)
 	db := c.Param("db")
 	var tables []string
 	err := c.ShouldBindJSON(&tables)
 	if err != nil {
-		BadRequestResponseWithMsg(c, 0xffff, err.Error())
+		BadRequestResponseWithMsg(c, logger, 0xffff, err.Error())
 		return
 	}
 	if len(db) == 0 || len(tables) == 0 {
-		BadRequestResponseWithMsg(c, 0xffff, "illegal params")
+		BadRequestResponseWithMsg(c, logger, 0xffff, "illegal params")
 		return
 	}
 
@@ -35,15 +37,15 @@ func (ctl *Restful) tableVgID(c *gin.Context) {
 	if err != nil {
 		logger.WithError(err).Error("connect server error")
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
-			ForbiddenResponse(c, commonpool.ErrWhitelistForbidden.Error())
+			ForbiddenResponse(c, logger, commonpool.ErrWhitelistForbidden.Error())
 			return
 		}
 		var tError *tErrors.TaosError
 		if errors.As(err, &tError) {
-			TaosErrorResponse(c, int(tError.Code), tError.ErrStr)
+			TaosErrorResponse(c, logger, int(tError.Code), tError.ErrStr)
 			return
 		}
-		CommonErrorResponse(c, err.Error())
+		CommonErrorResponse(c, logger, err.Error())
 		return
 	}
 	defer func() {
@@ -60,7 +62,7 @@ func (ctl *Restful) tableVgID(c *gin.Context) {
 	logger.Debugln("get_tables_vgId cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != 0 {
-		TaosErrorResponse(c, code, wrapper.TaosErrorStr(nil))
+		TaosErrorResponse(c, logger, code, wrapper.TaosErrorStr(nil))
 		return
 	}
 

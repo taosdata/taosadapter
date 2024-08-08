@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/taosdata/driver-go/v3/common"
@@ -89,6 +88,7 @@ func (p *Plugin) insertJson(c *gin.Context) {
 	}
 	if reqID == 0 {
 		reqID = uint64(common.GetReqID())
+		logger.Debug("req_id is 0, generate new req_id:", reqID)
 	}
 	c.Set(config.ReqIDKey, reqID)
 
@@ -138,13 +138,10 @@ func (p *Plugin) insertJson(c *gin.Context) {
 			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
-	var start time.Time
-	if isDebug {
-		start = time.Now()
-	}
+	var start = log.GetLogNow(isDebug)
 	logger.Debug(start, "insert json payload", string(data))
-	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db, ttl, reqID)
-	logger.Debug("insert json payload cost:", time.Since(start))
+	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db, ttl, reqID, logger)
+	logger.Debug("insert json payload cost:", log.GetLogDuration(isDebug, start))
 	if err != nil {
 		taosError, is := err.(*tErrors.TaosError)
 		if is {
@@ -245,13 +242,10 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
-	var start time.Time
-	if isDebug {
-		start = time.Now()
-	}
+	var start = log.GetLogNow(isDebug)
 	logger.Debug(start, "insert telnet payload", lines)
-	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db, ttl, reqID)
-	logger.Debug("insert telnet payload cost:", time.Since(start))
+	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db, ttl, reqID, logger)
+	logger.Debug("insert telnet payload cost:", log.GetLogDuration(isDebug, start))
 	if err != nil {
 		logger.WithError(err).Error("insert telnet payload error", lines)
 		p.errorResponse(c, http.StatusInternalServerError, err)

@@ -11,6 +11,8 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/taosdata/driver-go/v3/common"
+
 	"github.com/gin-gonic/gin"
 	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
@@ -41,9 +43,10 @@ func NewQueryController() *QueryController {
 	queryM.Config.MaxMessageSize = 0
 
 	queryM.HandleConnect(func(session *melody.Session) {
-		logger := session.MustGet("logger").(*logrus.Entry)
-		logger.Debugln("ws connect")
-		session.Set(TaosSessionKey, NewTaos(session))
+		logger := wstool.GetLogger(session)
+		ipAddr := iptool.GetRealIP(session.Request)
+		logger.WithField("ip", ipAddr.String()).Debugln("ws connect")
+		session.Set(TaosSessionKey, NewTaos(session, logger))
 	})
 
 	queryM.HandleMessage(func(session *melody.Session, data []byte) {
@@ -58,7 +61,7 @@ func NewQueryController() *QueryController {
 		go func() {
 			defer t.wg.Done()
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
-			logger := session.MustGet("logger").(*logrus.Entry)
+			logger := wstool.GetLogger(session)
 			logger.Debugln("get ws message data:", string(data))
 			var action WSAction
 			err := json.Unmarshal(data, &action)
@@ -129,7 +132,7 @@ func NewQueryController() *QueryController {
 		go func() {
 			defer t.wg.Done()
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
-			logger := session.MustGet("logger").(*logrus.Entry)
+			logger := wstool.GetLogger(session)
 			logger.Debugln("get ws block message data:", data)
 			p0 := unsafe.Pointer(&data[0])
 			reqID := *(*uint64)(p0)
@@ -169,7 +172,7 @@ func NewQueryController() *QueryController {
 	queryM.HandleClose(func(session *melody.Session, i int, s string) error {
 		//message := melody.FormatCloseMessage(i, "")
 		//session.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
-		logger := session.MustGet("logger").(*logrus.Entry)
+		logger := wstool.GetLogger(session)
 		logger.Debugln("ws close", i, s)
 		t, exist := session.Get(TaosSessionKey)
 		if exist && t != nil {
@@ -187,7 +190,7 @@ func NewQueryController() *QueryController {
 	})
 
 	queryM.HandleDisconnect(func(session *melody.Session) {
-		logger := session.MustGet("logger").(*logrus.Entry)
+		logger := wstool.GetLogger(session)
 		logger.Debugln("ws disconnect")
 		t, exist := session.Get(TaosSessionKey)
 		if exist && t != nil {
@@ -199,7 +202,11 @@ func NewQueryController() *QueryController {
 
 func (s *QueryController) Init(ctl gin.IRouter) {
 	ctl.GET("rest/ws", func(c *gin.Context) {
-		logger := log.GetLogger("ws").WithField("wsType", "query")
+		// generate session id
+		sessionID := common.GetReqID()
+		logger := log.GetLogger("ws").WithFields(logrus.Fields{
+			"wsType":            "query",
+			config.SessionIDKey: sessionID})
 		_ = s.queryM.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": logger})
 	})
 }
@@ -209,6 +216,7 @@ type Taos struct {
 	resultLocker          sync.RWMutex
 	Results               *list.List
 	resultIndex           uint64
+	logger                *logrus.Entry
 	closed                bool
 	exit                  chan struct{}
 	whitelistChangeChan   chan int64
@@ -222,7 +230,7 @@ type Taos struct {
 	sync.Mutex
 }
 
-func NewTaos(session *melody.Session) *Taos {
+func NewTaos(session *melody.Session, logger *logrus.Entry) *Taos {
 	ipAddr := iptool.GetRealIP(session.Request)
 	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
 	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
@@ -236,48 +244,77 @@ func NewTaos(session *melody.Session) *Taos {
 		session:               session,
 		ip:                    ipAddr,
 		ipStr:                 ipAddr.String(),
+		logger:                logger,
 	}
 }
 
-func (t *Taos) waitSignal() {
+func (t *Taos) waitSignal(logger *logrus.Entry) {
 	defer func() {
+		logger.Traceln("exit wait signal")
 		tool.PutRegisterChangeWhiteListHandle(t.whitelistChangeHandle)
 		tool.PutRegisterDropUserHandle(t.dropUserHandle)
 	}()
 	for {
 		select {
 		case <-t.dropUserChan:
-			t.Lock()
+			logger.Info("get drop user signal")
+			isDebug := log.IsDebug()
+			t.lock(logger, isDebug)
 			if t.closed {
+				logger.Traceln("server closed")
 				t.Unlock()
 				return
 			}
-			logger := wstool.GetLogger(t.session)
 			logger.WithField("clientIP", t.ipStr).Info("user dropped! close connection!")
+			logger.Traceln("close session")
+			s := log.GetLogNow(isDebug)
 			t.session.Close()
+			logger.Debugln("close session cost:", log.GetLogDuration(isDebug, s))
 			t.Unlock()
+			logger.Traceln("close handler")
+			s = log.GetLogNow(isDebug)
 			t.Close()
+			logger.Debugln("close handler cost:", log.GetLogDuration(isDebug, s))
 			return
 		case <-t.whitelistChangeChan:
-			t.Lock()
+			logger.Info("get whitelist change signal")
+			isDebug := log.IsDebug()
+			s := log.GetLogNow(isDebug)
+			t.lock(logger, isDebug)
 			if t.closed {
+				logger.Traceln("server closed")
 				t.Unlock()
 				return
 			}
+			logger.Traceln("get whitelist")
+			s = log.GetLogNow(isDebug)
 			whitelist, err := tool.GetWhitelist(t.conn)
+			logger.Debugln("get whitelist cost:", log.GetLogDuration(isDebug, s))
 			if err != nil {
-				wstool.GetLogger(t.session).WithField("clientIP", t.ipStr).WithError(err).Errorln("get whitelist error! close connection!")
+				logger.WithField("clientIP", t.ipStr).WithError(err).Errorln("get whitelist error! close connection!")
+				s = log.GetLogNow(isDebug)
 				t.session.Close()
+				logger.Debugln("close session cost:", log.GetLogDuration(isDebug, s))
 				t.Unlock()
+				logger.Traceln("close handler")
+				s = log.GetLogNow(isDebug)
 				t.Close()
+				logger.Debugln("close handler cost:", log.GetLogDuration(isDebug, s))
 				return
 			}
+			logger.Tracef("check whitelist, ip: %d, whitelist: %s\n", t.ip, tool.IpNetSliceToString(whitelist))
 			valid := tool.CheckWhitelist(whitelist, t.ip)
 			if !valid {
-				wstool.GetLogger(t.session).WithField("clientIP", t.ipStr).Errorln("ip not in whitelist! close connection!")
+				logger.WithField("clientIP", t.ipStr).Errorln("ip not in whitelist! close connection!")
+				logger.Traceln("close session")
+				s = log.GetLogNow(isDebug)
 				t.session.Close()
+				logger.Debugln("close session cost:", log.GetLogDuration(isDebug, s))
 				t.Unlock()
+				logger.Traceln("close handler")
+				s = log.GetLogNow(isDebug)
 				t.Close()
+				logger.Debugln("close handler cost:", log.GetLogDuration(isDebug, s))
 				return
 			}
 			t.Unlock()
@@ -297,10 +334,11 @@ type Result struct {
 	Block       unsafe.Pointer
 	precision   int
 	buffer      *bytes.Buffer
+	logger      *logrus.Entry
 	sync.Mutex
 }
 
-func (r *Result) FreeResult() {
+func (r *Result) FreeResult(logger *logrus.Entry) {
 	r.Lock()
 	r.FieldsCount = 0
 	r.Header = nil
@@ -308,19 +346,27 @@ func (r *Result) FreeResult() {
 	r.Size = 0
 	r.precision = 0
 	r.Block = nil
-	if r.TaosResult != nil {
-		thread.Lock()
-		wrapper.TaosFreeResult(r.TaosResult)
-		thread.Unlock()
+	if logger == nil {
+		logger = r.logger
 	}
+	if r.TaosResult != nil {
+		tool.FreeResult(r.TaosResult, logger, log.IsDebug())
+	}
+	r.logger = nil
 	r.Unlock()
 }
 
 func (t *Taos) addResult(result *Result) {
 	index := atomic.AddUint64(&t.resultIndex, 1)
 	result.index = index
+	result.logger = t.logger.WithField("resultID", index)
+	t.logger.Traceln("get result locker")
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
 	t.resultLocker.Lock()
+	t.logger.Debugln("get result locker cost:", log.GetLogDuration(isDebug, s))
 	t.Results.PushBack(result)
+	t.logger.Traceln("add result to list finished")
 	t.resultLocker.Unlock()
 }
 
@@ -369,64 +415,77 @@ type WSConnectResp struct {
 }
 
 func (t *Taos) connect(ctx context.Context, session *melody.Session, req *WSConnectReq) {
-	logger := wstool.GetLogger(session).WithField("action", WSConnect)
+	logger := t.logger.WithFields(
+		logrus.Fields{"action": WSConnect, config.ReqIDKey: req.ReqID},
+	)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
-	t.Lock()
-	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
+	t.lock(logger, isDebug)
 	defer t.Unlock()
 	if t.closed {
+		logger.Traceln("server closed")
 		return
 	}
 	if t.conn != nil {
+		logger.Traceln("duplicate connections")
 		wsErrorMsg(ctx, session, 0xffff, "duplicate connections", WSConnect, req.ReqID)
 		return
 	}
 	s = log.GetLogNow(isDebug)
+	logger.Traceln("get thread lock for connect")
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
+	logger.Traceln("connect to TDengine")
 	conn, err := wrapper.TaosConnect("", req.User, req.Password, req.DB, 0)
 	logger.Debugln("connect cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if err != nil {
+		logger.WithError(err).Errorln("connect to TDengine error")
 		wstool.WSError(ctx, session, err, WSConnect, req.ReqID)
 		return
 	}
+	logger.Traceln("get whitelist")
+	s = log.GetLogNow(isDebug)
 	whitelist, err := tool.GetWhitelist(conn)
+	logger.Debugln("get whitelist cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		thread.Lock()
-		wrapper.TaosClose(conn)
-		thread.Unlock()
+		logger.WithError(err).Errorln("get whitelist error")
+		tool.TaosClose(conn, logger, isDebug)
 		wstool.WSError(ctx, session, err, WSConnect, req.ReqID)
 		return
 	}
+	logger.Tracef("check whitelist, ip: %d, whitelist: %s\n", t.ip, tool.IpNetSliceToString(whitelist))
 	valid := tool.CheckWhitelist(whitelist, t.ip)
 	if !valid {
-		thread.Lock()
-		wrapper.TaosClose(conn)
-		thread.Unlock()
+		logger.Errorf("ip not in whitelist, ip: %d, whitelist: %s\n", t.ip, tool.IpNetSliceToString(whitelist))
+		tool.TaosClose(conn, logger, isDebug)
 		wstool.WSErrorMsg(ctx, session, 0xffff, "whitelist prohibits current IP access", WSConnect, req.ReqID)
 		return
 	}
+	s = log.GetLogNow(isDebug)
+	logger.Traceln("register whitelist change")
 	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle)
+	logger.Debugln("register whitelist change cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		thread.Lock()
-		wrapper.TaosClose(conn)
-		thread.Unlock()
+		logger.WithError(err).Errorln("register whitelist change error")
+		tool.TaosClose(conn, logger, isDebug)
 		wstool.WSError(ctx, session, err, WSConnect, req.ReqID)
 		return
 	}
+	s = log.GetLogNow(isDebug)
+	logger.Traceln("register drop user")
 	err = tool.RegisterDropUser(conn, t.dropUserHandle)
+	logger.Debugln("register drop user cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		thread.Lock()
-		wrapper.TaosClose(conn)
-		thread.Unlock()
+		logger.WithError(err).Errorln("register drop user error")
+		tool.TaosClose(conn, logger, isDebug)
 		wstool.WSError(ctx, session, err, WSConnect, req.ReqID)
 		return
 	}
 	t.conn = conn
-	go t.waitSignal()
+	logger.Traceln("start wait signal goroutine")
+	go t.waitSignal(t.logger)
 	wstool.WSWriteJson(session, &WSConnectResp{
 		Action: WSConnect,
 		ReqID:  req.ReqID,
@@ -456,60 +515,60 @@ type WSQueryResult struct {
 }
 
 func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryReq) {
+	logger := t.logger.WithFields(
+		logrus.Fields{"action": WSQuery, config.ReqIDKey: req.ReqID},
+	)
 	if t.conn == nil {
+		logger.Traceln("server not connected")
 		wsErrorMsg(ctx, session, 0xffff, "server not connected", WSQuery, req.ReqID)
 		return
 	}
+	logger.Tracef("req_id: %d,query sql: %s\n", req.ReqID, req.SQL)
 	sqlType := monitor.WSRecordRequest(req.SQL)
-	logger := wstool.GetLogger(session).WithField("action", WSQuery)
 	isDebug := log.IsDebug()
+	logger.Traceln("get handler lock")
 	s := log.GetLogNow(isDebug)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
 	defer async.GlobalAsync.HandlerPool.Put(handler)
+	logger.Debugln("execute query")
 	s = log.GetLogNow(isDebug)
-	result, _ := async.GlobalAsync.TaosQuery(t.conn, req.SQL, handler, int64(req.ReqID))
+	result := async.GlobalAsync.TaosQuery(t.conn, logger, isDebug, req.SQL, handler, int64(req.ReqID))
 	logger.Debugln("query cost ", log.GetLogDuration(isDebug, s))
 	code := wrapper.TaosError(result.Res)
 	if code != httperror.SUCCESS {
 		monitor.WSRecordResult(sqlType, false)
 		errStr := wrapper.TaosErrorStr(result.Res)
+		logger.Errorf("query error, code: %d, message: %s\n", code, errStr)
 		s = log.GetLogNow(isDebug)
-		thread.Lock()
-		logger.Debugln("free result get lock cost:", log.GetLogDuration(isDebug, s))
-		s = log.GetLogNow(isDebug)
-		wrapper.TaosFreeResult(result.Res)
-		logger.Debugln("free result cost:", log.GetLogDuration(isDebug, s))
-		thread.Unlock()
+		logger.Traceln("get thread lock for free result")
+		tool.FreeResult(result.Res, logger, isDebug)
 		wsErrorMsg(ctx, session, code, errStr, WSQuery, req.ReqID)
 		return
 	}
 	monitor.WSRecordResult(sqlType, true)
+	logger.Traceln("check is_update_query")
 	s = log.GetLogNow(isDebug)
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
-	logger.Debugln("is_update_query cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugf("is_update_query %t cost: %s", isUpdate, log.GetLogDuration(isDebug, s))
 	queryResult := &WSQueryResult{Action: WSQuery, ReqID: req.ReqID}
 	if isUpdate {
 		var affectRows int
 		s = log.GetLogNow(isDebug)
 		affectRows = wrapper.TaosAffectedRows(result.Res)
-		logger.Debugln("affected_rows cost:", log.GetLogDuration(isDebug, s))
+		logger.Debugf("affected_rows %d cost: %s", affectRows, log.GetLogDuration(isDebug, s))
 		queryResult.IsUpdate = true
 		queryResult.AffectedRows = affectRows
 		s = log.GetLogNow(isDebug)
-		thread.Lock()
-		logger.Debugln("free_result get lock cost:", log.GetLogDuration(isDebug, s))
-		s = log.GetLogNow(isDebug)
-		wrapper.TaosFreeResult(result.Res)
-		logger.Debugln("free_result cost:", log.GetLogDuration(isDebug, s))
-		thread.Unlock()
+		logger.Traceln("get thread lock for free result")
+		tool.FreeResult(result.Res, logger, isDebug)
 		queryResult.Timing = wstool.GetDuration(ctx)
 		wstool.WSWriteJson(session, queryResult)
 		return
 	} else {
 		s = log.GetLogNow(isDebug)
 		fieldsCount := wrapper.TaosNumFields(result.Res)
-		logger.Debugln("num_fields cost:", log.GetLogDuration(isDebug, s))
+		logger.Debugf("num_fields %d cost: %s\n", fieldsCount, log.GetLogDuration(isDebug, s))
 		queryResult.FieldsCount = fieldsCount
 		s = log.GetLogNow(isDebug)
 		rowsHeader, _ := wrapper.ReadColumn(result.Res, fieldsCount)
@@ -519,7 +578,7 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 		queryResult.FieldsTypes = rowsHeader.ColTypes
 		s = log.GetLogNow(isDebug)
 		precision := wrapper.TaosResultPrecision(result.Res)
-		logger.Debugln("result_precision cost:", log.GetLogDuration(isDebug, s))
+		logger.Debugf("result_precision %d cost: %s \n", precision, log.GetLogDuration(isDebug, s))
 		queryResult.Precision = precision
 		result := &Result{
 			TaosResult:  result.Res,
@@ -527,6 +586,7 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 			Header:      rowsHeader,
 			precision:   precision,
 		}
+		logger.Traceln("add result to list")
 		t.addResult(result)
 		queryResult.ID = result.index
 		queryResult.Timing = wstool.GetDuration(ctx)
@@ -544,29 +604,35 @@ type WSWriteMetaResp struct {
 }
 
 func (t *Taos) writeRaw(ctx context.Context, session *melody.Session, reqID, messageID uint64, length uint32, metaType uint16, data unsafe.Pointer) {
-	logger := wstool.GetLogger(session).WithField("action", WSWriteRaw)
+	logger := t.logger.WithFields(
+		logrus.Fields{"action": WSWriteRaw, config.ReqIDKey: reqID},
+	)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
-	t.Lock()
-	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
+	t.lock(logger, isDebug)
 	defer t.Unlock()
 	if t.closed {
+		logger.Traceln("server closed")
 		return
 	}
 	if t.conn == nil {
+		logger.Errorln("server not connected")
 		wsTMQErrorMsg(ctx, session, 0xffff, "server not connected", WSWriteRaw, reqID, &messageID)
 		return
 	}
 	meta := wrapper.BuildRawMeta(length, metaType, data)
 	s = log.GetLogNow(isDebug)
+	logger.Traceln("get thread lock for write raw meta")
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
+	logger.Traceln("write raw meta")
 	errCode := wrapper.TMQWriteRaw(t.conn, meta)
-	thread.Unlock()
 	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
+	thread.Unlock()
 	if errCode != 0 {
 		errStr := wrapper.TMQErr2Str(errCode)
+		logger.Errorf("write raw meta error, code: %d, message: %s\n", errCode, errStr)
 		wsErrorMsg(ctx, session, int(errCode)&0xffff, errStr, WSWriteRaw, reqID)
 		return
 	}
@@ -583,28 +649,33 @@ type WSWriteRawBlockResp struct {
 }
 
 func (t *Taos) writeRawBlock(ctx context.Context, session *melody.Session, reqID uint64, numOfRows int, tableName string, rawBlock unsafe.Pointer) {
-	logger := wstool.GetLogger(session).WithField("action", WSWriteRawBlock)
+	logger := t.logger.WithFields(
+		logrus.Fields{"action": WSWriteRawBlock, config.ReqIDKey: reqID},
+	)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
-	t.Lock()
-	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
+	t.lock(logger, isDebug)
 	defer t.Unlock()
 	if t.closed {
+		logger.Traceln("server closed")
 		return
 	}
 	if t.conn == nil {
 		wsErrorMsg(ctx, session, 0xffff, "server not connected", WSWriteRawBlock, reqID)
 		return
 	}
+	logger.Traceln("get thread lock for write raw block")
 	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
+	logger.Traceln("write raw block")
 	errCode := wrapper.TaosWriteRawBlockWithReqID(t.conn, numOfRows, rawBlock, tableName, int64(reqID))
 	thread.Unlock()
-	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("write raw cost:", log.GetLogDuration(isDebug, s))
 	if errCode != 0 {
 		errStr := wrapper.TMQErr2Str(int32(errCode))
+		logger.Errorf("write raw block error, code: %d, message: %s\n", errCode, errStr)
 		wsErrorMsg(ctx, session, errCode&0xffff, errStr, WSWriteRawBlock, reqID)
 		return
 	}
@@ -621,28 +692,34 @@ type WSWriteRawBlockWithFieldsResp struct {
 }
 
 func (t *Taos) writeRawBlockWithFields(ctx context.Context, session *melody.Session, reqID uint64, numOfRows int, tableName string, rawBlock unsafe.Pointer, fields unsafe.Pointer, numFields int) {
-	logger := wstool.GetLogger(session).WithField("action", WSWriteRawBlockWithFields)
+	logger := t.logger.WithFields(
+		logrus.Fields{"action": WSWriteRawBlockWithFields, config.ReqIDKey: reqID},
+	)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
-	t.Lock()
-	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
+	t.lock(logger, isDebug)
 	defer t.Unlock()
 	if t.closed {
+		logger.Traceln("server closed")
 		return
 	}
 	if t.conn == nil {
+		logger.Errorf("server not connected")
 		wsErrorMsg(ctx, session, 0xffff, "server not connected", WSWriteRawBlockWithFields, reqID)
 		return
 	}
+	logger.Traceln("get thread lock for write raw block with fields")
 	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
+	logger.Traceln("write raw block with fields")
 	errCode := wrapper.TaosWriteRawBlockWithFieldsWithReqID(t.conn, numOfRows, rawBlock, tableName, fields, numFields, int64(reqID))
 	thread.Unlock()
-	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("write raw block with fields cost:", log.GetLogDuration(isDebug, s))
 	if errCode != 0 {
 		errStr := wrapper.TMQErr2Str(int32(errCode))
+		logger.Errorf("write raw block with fields error, code: %d, message: %s\n", errCode, errStr)
 		wsErrorMsg(ctx, session, errCode&0xffff, errStr, WSWriteRawBlockWithFields, reqID)
 		return
 	}
@@ -668,14 +745,18 @@ type WSFetchResp struct {
 }
 
 func (t *Taos) fetch(ctx context.Context, session *melody.Session, req *WSFetchReq) {
+	logger := t.logger.WithFields(
+		logrus.Fields{"action": WSFetch, config.ReqIDKey: req.ReqID},
+	)
 	if t.conn == nil {
+		logger.Errorf("server not connected")
 		wsErrorMsg(ctx, session, 0xffff, "server not connected", WSFetch, req.ReqID)
 		return
 	}
-	logger := wstool.GetLogger(session).WithField("action", WSFetch)
 	isDebug := log.IsDebug()
 	resultItem := t.getResult(req.ID)
 	if resultItem == nil {
+		logger.Errorf("result is nil")
 		wsErrorMsg(ctx, session, 0xffff, "result is nil", WSFetch, req.ReqID)
 		return
 	}
@@ -685,10 +766,12 @@ func (t *Taos) fetch(ctx context.Context, session *melody.Session, req *WSFetchR
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	s = log.GetLogNow(isDebug)
-	result, _ := async.GlobalAsync.TaosFetchRawBlockA(resultS.TaosResult, handler)
+	logger.Traceln("call fetch_raw_block_a")
+	result := async.GlobalAsync.TaosFetchRawBlockA(resultS.TaosResult, logger, isDebug, handler)
 	logger.Debugln("fetch_raw_block_a cost:", log.GetLogDuration(isDebug, s))
 	if result.N == 0 {
-		t.FreeResult(resultItem)
+		logger.Traceln("fetch raw block completed")
+		t.FreeResult(resultItem, logger)
 		wstool.WSWriteJson(session, &WSFetchResp{
 			Action:    WSFetch,
 			ReqID:     req.ReqID,
@@ -700,14 +783,16 @@ func (t *Taos) fetch(ctx context.Context, session *melody.Session, req *WSFetchR
 	}
 	if result.N < 0 {
 		errStr := wrapper.TaosErrorStr(result.Res)
-		t.FreeResult(resultItem)
+		logger.Errorf("fetch raw block error, code: %d, message: %s\n", result.N, errStr)
+		t.FreeResult(resultItem, logger)
 		wsErrorMsg(ctx, session, result.N&0xffff, errStr, WSFetch, req.ReqID)
 		return
 	}
 	s = log.GetLogNow(isDebug)
 	resultS.Lengths = wrapper.FetchLengths(resultS.TaosResult, resultS.FieldsCount)
-	logger.Debugln("fetch_lengths cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugf("fetch_lengths %d cost: %s", resultS.Lengths, log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
+	logger.Traceln("get raw block")
 	block := wrapper.TaosGetRawBlock(resultS.TaosResult)
 	logger.Debugln("get_raw_block cost:", log.GetLogDuration(isDebug, s))
 	resultS.Block = block
@@ -729,11 +814,14 @@ type WSFetchBlockReq struct {
 }
 
 func (t *Taos) fetchBlock(ctx context.Context, session *melody.Session, req *WSFetchBlockReq) {
+	logger := t.logger.WithFields(
+		logrus.Fields{"action": WSFetchBlock, config.ReqIDKey: req.ReqID},
+	)
 	if t.conn == nil {
+		logger.Error("server not connected")
 		wsErrorMsg(ctx, session, 0xffff, "server not connected", WSFetchBlock, req.ReqID)
 		return
 	}
-	logger := wstool.GetLogger(session).WithField("action", WSFetchBlock)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	resultItem := t.getResult(req.ID)
@@ -762,7 +850,7 @@ func (t *Taos) fetchBlock(ctx context.Context, session *melody.Session, req *WSF
 	b := resultS.buffer.Bytes()
 	resultS.Unlock()
 	logger.Debugln("handle binary content cost:", log.GetLogDuration(isDebug, s))
-	session.WriteBinary(b)
+	wstool.WSWriteBinary(session, b)
 }
 
 type WSFreeResultReq struct {
@@ -771,17 +859,22 @@ type WSFreeResultReq struct {
 }
 
 func (t *Taos) freeResult(session *melody.Session, req *WSFreeResultReq) {
+	logger := t.logger.WithFields(
+		logrus.Fields{"action": WSFreeResult, config.ReqIDKey: req.ReqID},
+	)
 	if t.conn == nil {
+		logger.Traceln("server not connected")
 		return
 	}
 	resultItem := t.getResult(req.ID)
 	if resultItem == nil {
+		logger.Traceln("result not found")
 		return
 	}
 	resultS, ok := resultItem.Value.(*Result)
 	if ok && resultS != nil {
 		t.removeResult(resultItem)
-		resultS.FreeResult()
+		resultS.FreeResult(logger)
 	}
 }
 
@@ -794,13 +887,13 @@ func (w *Writer) Write(p []byte) (int, error) {
 	return 0, err
 }
 
-func (t *Taos) FreeResult(element *list.Element) {
+func (t *Taos) FreeResult(element *list.Element, logger *logrus.Entry) {
 	if element == nil {
 		return
 	}
 	r := element.Value.(*Result)
 	if r != nil {
-		r.FreeResult()
+		r.FreeResult(logger)
 	}
 	t.removeResult(element)
 }
@@ -812,21 +905,24 @@ func (t *Taos) freeAllResult() {
 	if root == nil {
 		return
 	}
-	root.Value.(*Result).FreeResult()
+	root.Value.(*Result).FreeResult(t.logger)
 	item := root.Next()
 	for {
 		if item == nil || item == root {
 			return
 		}
-		item.Value.(*Result).FreeResult()
+		item.Value.(*Result).FreeResult(t.logger)
 		item = item.Next()
 	}
 }
 
 func (t *Taos) Close() {
-	t.Lock()
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
+	t.lock(t.logger, isDebug)
 	defer t.Unlock()
 	if t.closed {
+		t.logger.Traceln("server closed")
 		return
 	}
 	t.closed = true
@@ -834,21 +930,34 @@ func (t *Taos) Close() {
 	defer cancel()
 	done := make(chan struct{})
 	go func() {
+		t.logger.Traceln("wait task to finish")
 		t.wg.Wait()
 		close(done)
 	}()
 	select {
 	case <-ctx.Done():
+		t.logger.Warn("wait task to finish timeout! force close!")
 	case <-done:
+		t.logger.Traceln("all task finished")
 	}
+	t.logger.Traceln("free all result")
+	s = log.GetLogNow(isDebug)
 	t.freeAllResult()
+	t.logger.Debugln("free all result cost:", log.GetLogDuration(isDebug, s))
 	if t.conn != nil {
-		thread.Lock()
-		wrapper.TaosClose(t.conn)
-		thread.Unlock()
+		t.logger.Traceln("get thread lock for close")
+		tool.TaosClose(t.conn, t.logger, isDebug)
 		t.conn = nil
 	}
+	t.logger.Traceln("close exit channel")
 	close(t.exit)
+}
+
+func (t *Taos) lock(logger *logrus.Entry, isDebug bool) {
+	s := log.GetLogNow(isDebug)
+	logger.Traceln("get handler lock")
+	t.Lock()
+	logger.Debugln("get handler lock cost:", log.GetLogDuration(isDebug, s))
 }
 
 type WSAction struct {
@@ -879,6 +988,7 @@ func wsErrorMsg(ctx context.Context, session *melody.Session, code int, message 
 		ReqID:   reqID,
 		Timing:  wstool.GetDuration(ctx),
 	})
+	wstool.GetLogger(session).Tracef("write error message: %s", b)
 	session.Write(b)
 }
 
@@ -900,6 +1010,7 @@ func wsTMQErrorMsg(ctx context.Context, session *melody.Session, code int, messa
 		Timing:    wstool.GetDuration(ctx),
 		MessageID: messageID,
 	})
+	wstool.GetLogger(session).Tracef("write error message: %s", b)
 	session.Write(b)
 }
 

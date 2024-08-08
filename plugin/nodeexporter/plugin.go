@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	tmetric "github.com/influxdata/telegraf/metric"
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
+	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
@@ -175,9 +176,7 @@ func (p *NodeExporter) prepareUrls() error {
 			req, err = http.NewRequest(http.MethodGet, URL.String(), nil)
 			req.RemoteAddr = "127.0.0.1:33333"
 			if err != nil {
-				if err != nil {
-					return fmt.Errorf("unable to create new request '%s': %s", URL.String(), err)
-				}
+				return fmt.Errorf("unable to create new request '%s': %s", URL.String(), err)
 			}
 			if len(authToken) != 0 {
 				req.Header.Set("Authorization", authToken)
@@ -237,7 +236,9 @@ func (p *NodeExporter) requestSingle(conn unsafe.Pointer, req *Req) error {
 		if err != nil {
 			return err
 		}
-		err = inserter.InsertInfluxdb(conn, data, p.conf.DB, "ns", p.conf.TTL, 0)
+		reqID := common.GetReqID()
+		execLogger := logger.WithField(common.ReqIDKey, reqID)
+		err = inserter.InsertInfluxdb(conn, data, p.conf.DB, "ns", p.conf.TTL, uint64(reqID), execLogger)
 		if err != nil {
 			logger.WithError(err).Error("insert influxdb error", string(data))
 			return err
