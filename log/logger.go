@@ -186,17 +186,23 @@ func (t *TaosLogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	b.WriteString(` "`)
 	b.WriteString(entry.Message)
 	b.WriteByte('"')
-	for k, v := range entry.Data {
+	// sort the keys
+	keys := make([]string, 0, len(entry.Data))
+	for k := range entry.Data {
+		keys = append(keys, k)
+	}
+	for _, k := range keys {
+		v := entry.Data[k]
 		if k == config.ReqIDKey && v == nil {
 			continue
 		}
 		b.WriteByte(' ')
 		b.WriteString(k)
 		b.WriteByte('=')
-		if k == config.ReqIDKey {
-			b.WriteString(fmt.Sprintf("0x%x", v))
+		if k == config.ReqIDKey || k == config.SessionIDKey {
+			fmt.Fprintf(b, "0x%x", v)
 		} else {
-			b.WriteString(fmt.Sprintf("%v", v))
+			fmt.Fprintf(b, "%v", v)
 		}
 	}
 	b.WriteByte('\n')

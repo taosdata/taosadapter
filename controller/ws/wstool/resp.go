@@ -18,7 +18,15 @@ type TDEngineRestfulResp struct {
 
 func WSWriteJson(session *melody.Session, data interface{}) {
 	b, _ := json.Marshal(data)
+	logger := GetLogger(session)
+	logger.Tracef("write json: %s\n", b)
 	session.Write(b)
+}
+
+func WSWriteBinary(session *melody.Session, data []byte) {
+	logger := GetLogger(session)
+	logger.Tracef("write binary: %s\n", data)
+	session.WriteBinary(data)
 }
 
 type WSVersionResp struct {

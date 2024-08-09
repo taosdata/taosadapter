@@ -23,6 +23,7 @@ import (
 	"github.com/taosdata/driver-go/v3/types"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/driver-go/v3/wrapper/cgo"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller/ws/stmt"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/async"
@@ -40,6 +41,7 @@ import (
 
 type messageHandler struct {
 	conn         unsafe.Pointer
+	logger       *logrus.Entry
 	closed       bool
 	once         sync.Once
 	wait         sync.WaitGroup
@@ -59,6 +61,7 @@ type messageHandler struct {
 }
 
 func newHandler(session *melody.Session) *messageHandler {
+	logger := wstool.GetLogger(session)
 	ipAddr := iptool.GetRealIP(session.Request)
 	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
 	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
@@ -73,47 +76,75 @@ func newHandler(session *melody.Session) *messageHandler {
 		session:               session,
 		ip:                    ipAddr,
 		ipStr:                 ipAddr.String(),
+		logger:                logger,
 	}
 }
 
-func (h *messageHandler) waitSignal() {
+func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 	defer func() {
+		logger.Traceln("exit wait signal")
 		tool.PutRegisterChangeWhiteListHandle(h.whitelistChangeHandle)
 		tool.PutRegisterDropUserHandle(h.dropUserHandle)
 	}()
 	for {
 		select {
 		case <-h.dropUserChan:
-			h.Lock()
+			logger.Info("get drop user signal")
+			isDebug := log.IsDebug()
+			h.lock(logger, isDebug)
 			if h.closed {
+				logger.Traceln("server closed")
 				h.Unlock()
 				return
 			}
-			wstool.GetLogger(h.session).WithField("clientIP", h.ipStr).Info("user dropped! close connection!")
+			logger.WithField("clientIP", h.ipStr).Info("user dropped! close connection!")
+			logger.Traceln("close session")
+			s := log.GetLogNow(isDebug)
 			h.session.Close()
 			h.Unlock()
+			logger.Debugln("close session cost:", log.GetLogDuration(isDebug, s))
+			s = log.GetLogNow(isDebug)
 			h.Close()
+			logger.Debugln("close handler cost:", log.GetLogDuration(isDebug, s))
 			return
 		case <-h.whitelistChangeChan:
-			h.Lock()
+			logger.Info("get whitelist change signal")
+			isDebug := log.IsDebug()
+			s := log.GetLogNow(isDebug)
+			h.lock(logger, isDebug)
 			if h.closed {
+				logger.Traceln("server closed")
 				h.Unlock()
 				return
 			}
+			logger.Traceln("get whitelist")
+			s = log.GetLogNow(isDebug)
 			whitelist, err := tool.GetWhitelist(h.conn)
 			if err != nil {
-				wstool.GetLogger(h.session).WithField("clientIP", h.ipStr).WithError(err).Errorln("get whitelist error! close connection!")
+				logger.WithField("clientIP", h.ipStr).WithError(err).Errorln("get whitelist error! close connection!")
+				s = log.GetLogNow(isDebug)
 				h.session.Close()
+				logger.Debugln("close session cost:", log.GetLogDuration(isDebug, s))
 				h.Unlock()
+				logger.Traceln("close handler")
+				s = log.GetLogNow(isDebug)
 				h.Close()
+				logger.Debugln("close handler cost:", log.GetLogDuration(isDebug, s))
 				return
 			}
+			logger.Tracef("check whitelist, ip: %d, whitelist: %s\n", h.ip, tool.IpNetSliceToString(whitelist))
 			valid := tool.CheckWhitelist(whitelist, h.ip)
 			if !valid {
-				wstool.GetLogger(h.session).WithField("clientIP", h.ipStr).Errorln("ip not in whitelist! close connection!")
+				logger.WithField("clientIP", h.ipStr).Errorln("ip not in whitelist! close connection!")
+				logger.Traceln("close session")
+				s = log.GetLogNow(isDebug)
 				h.session.Close()
+				logger.Debugln("close session cost:", log.GetLogDuration(isDebug, s))
 				h.Unlock()
+				logger.Traceln("close handler")
+				s = log.GetLogNow(isDebug)
 				h.Close()
+				logger.Debugln("close handler cost:", log.GetLogDuration(isDebug, s))
 				return
 			}
 			h.Unlock()
@@ -123,11 +154,18 @@ func (h *messageHandler) waitSignal() {
 	}
 }
 
+func (h *messageHandler) lock(logger *logrus.Entry, isDebug bool) {
+	logger.Debugln("get handler lock")
+	h.Lock()
+	logger.Debugln("get handler lock cost:", log.GetLogDuration(isDebug, time.Now()))
+}
+
 func (h *messageHandler) Close() {
 	h.Lock()
 	defer h.Unlock()
 
 	if h.closed {
+		h.logger.Traceln("server closed")
 		return
 	}
 	h.closed = true
@@ -145,11 +183,11 @@ var jsonI = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
-	logger.Debugln("get ws message data:", string(data))
+	h.logger.Debugln("get ws message data:", string(data))
 
 	var request Request
 	if err := json.Unmarshal(data, &request); err != nil {
-		logger.WithError(err).Errorln("unmarshal ws request")
+		h.logger.WithError(err).Errorln("unmarshal ws request")
 		return
 	}
 
@@ -215,7 +253,7 @@ func (h *messageHandler) handleMessageBinary(session *melody.Session, bytes []by
 	reqID := *(*uint64)(p0)
 	messageID := *(*uint64)(tools.AddPointer(p0, uintptr(8)))
 	action := *(*uint64)(tools.AddPointer(p0, uintptr(16)))
-	logger.Debugln("get ws message binary reqID:", reqID, "messageID:", messageID, "action:", action)
+	h.logger.Debugln("get ws message binary reqID:", reqID, "messageID:", messageID, "action:", action)
 
 	ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 	mt := messageType(action)
@@ -261,13 +299,7 @@ func (h *messageHandler) deal(ctx context.Context, session *melody.Session, requ
 	h.wait.Add(1)
 	go func() {
 		defer h.wait.Done()
-
-		if h.conn == nil && request.Action != Connect && request.Action != wstool.ClientVersion {
-			resp := wsCommonErrorMsg(0xffff, "server not connected")
-			h.writeResponse(ctx, session, resp, request.Action, request.ReqID)
-			return
-		}
-
+		isDebug := log.IsDebug()
 		reqID := request.ReqID
 		if reqID == 0 {
 			var req RequestID
@@ -276,12 +308,22 @@ func (h *messageHandler) deal(ctx context.Context, session *melody.Session, requ
 		}
 		request.ReqID = reqID
 
-		logger := logger.WithField(actionKey, request.Action).WithField("req_id", reqID)
-		isDebug := log.IsDebug()
+		logger := h.logger.WithFields(logrus.Fields{
+			actionKey:       request.Action,
+			config.ReqIDKey: reqID,
+		})
+
+		if h.conn == nil && request.Action != Connect && request.Action != wstool.ClientVersion {
+			logger.Errorf("server not connected")
+			resp := wsCommonErrorMsg(0xffff, "server not connected")
+			h.writeResponse(ctx, session, resp, request.Action, request.ReqID, logger)
+			return
+		}
+
 		s := log.GetLogNow(isDebug)
 
 		resp := f(ctx, request, logger, isDebug, s)
-		h.writeResponse(ctx, session, resp, request.Action, reqID)
+		h.writeResponse(ctx, session, resp, request.Action, reqID, logger)
 	}()
 }
 
@@ -290,14 +332,14 @@ func (h *messageHandler) dealBinary(ctx context.Context, session *melody.Session
 	go func() {
 		defer h.wait.Done()
 
+		logger := h.logger.WithField(actionKey, action.String()).WithField("req_id", reqID)
+		isDebug := log.IsDebug()
 		if h.conn == nil {
 			resp := wsCommonErrorMsg(0xffff, "server not connected")
-			h.writeResponse(ctx, session, resp, action.String(), reqID)
+			h.writeResponse(ctx, session, resp, action.String(), reqID, logger)
 			return
 		}
 
-		logger := logger.WithField(actionKey, action.String()).WithField("req_id", reqID)
-		isDebug := log.IsDebug()
 		s := log.GetLogNow(isDebug)
 
 		req := dealBinaryRequest{
@@ -308,7 +350,7 @@ func (h *messageHandler) dealBinary(ctx context.Context, session *melody.Session
 			message: message,
 		}
 		resp := f(ctx, req, logger, isDebug, s)
-		h.writeResponse(ctx, session, resp, action.String(), reqID)
+		h.writeResponse(ctx, session, resp, action.String(), reqID, logger)
 	}()
 }
 
@@ -322,15 +364,18 @@ type BaseResponse struct {
 	null    bool
 }
 
-func (h *messageHandler) writeResponse(ctx context.Context, session *melody.Session, response Response, action string, reqID uint64) {
+func (h *messageHandler) writeResponse(ctx context.Context, session *melody.Session, response Response, action string, reqID uint64, logger *logrus.Entry) {
 	if response == nil {
+		logger.Traceln("response is nil")
 		// session closed handle return nil
 		return
 	}
 	if response.IsNull() {
+		logger.Traceln("no need to response")
 		return
 	}
 	if response.IsBinary() {
+		logger.Tracef("write binary response: %v\n", response)
 		_ = session.WriteBinary(response.(*BinaryResponse).Data)
 		return
 	}
@@ -339,6 +384,7 @@ func (h *messageHandler) writeResponse(ctx context.Context, session *melody.Sess
 	response.SetTiming(wstool.GetDuration(ctx))
 
 	respByte, _ := json.Marshal(response)
+	logger.Tracef("write json response: %s\n", respByte)
 	_ = session.Write(respByte)
 }
 
@@ -358,7 +404,7 @@ func (h *messageHandler) stop() {
 		case <-waitCh:
 		}
 		// clean query result and stmt
-		h.queryResults.FreeAll()
+		h.queryResults.FreeAll(h.logger)
 		h.stmts.FreeAll()
 		// clean connection
 		if h.conn != nil {
@@ -396,56 +442,68 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		return wsCommonErrorMsg(0xffff, "unmarshal connect request error")
 	}
 
-	h.Lock()
+	h.lock(logger, isDebug)
 	defer h.Unlock()
 	if h.closed {
+		logger.Traceln("server closed")
 		return
 	}
 	if h.conn != nil {
+		logger.Traceln("duplicate connections")
 		return wsCommonErrorMsg(0xffff, "duplicate connections")
 	}
 
+	logger.Traceln("get thread lock for connect")
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	logger.Traceln("connect to TDengine")
 	conn, err := wrapper.TaosConnect("", req.User, req.Password, req.DB, 0)
 	logger.Debugln("connect cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 
 	if err != nil {
+		logger.WithError(err).Errorln("connect to TDengine error")
 		var taosErr *errors2.TaosError
 		errors.As(err, &taosErr)
 		return wsCommonErrorMsg(int(taosErr.Code), taosErr.ErrStr)
 	}
+	logger.Traceln("get whitelist")
+	s = log.GetLogNow(isDebug)
 	whitelist, err := tool.GetWhitelist(conn)
+	logger.Debugln("get whitelist cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		thread.Lock()
-		wrapper.TaosClose(conn)
-		thread.Unlock()
+		logger.WithError(err).Errorln("get whitelist error")
+		tool.TaosClose(conn, logger, isDebug)
 		var taosErr *errors2.TaosError
 		errors.As(err, &taosErr)
 		return wsCommonErrorMsg(int(taosErr.Code), taosErr.ErrStr)
 	}
+	logger.Tracef("check whitelist, ip: %d, whitelist: %s\n", h.ip, tool.IpNetSliceToString(whitelist))
 	valid := tool.CheckWhitelist(whitelist, h.ip)
 	if !valid {
-		thread.Lock()
-		wrapper.TaosClose(conn)
-		thread.Unlock()
+		logger.Errorf("ip not in whitelist, ip: %d, whitelist: %s\n", h.ip, tool.IpNetSliceToString(whitelist))
+		tool.TaosClose(conn, logger, isDebug)
 		return wsCommonErrorMsg(0xffff, "whitelist prohibits current IP access")
 	}
+	s = log.GetLogNow(isDebug)
+	logger.Traceln("register whitelist change")
 	err = tool.RegisterChangeWhitelist(conn, h.whitelistChangeHandle)
+	logger.Debugln("register whitelist change cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		thread.Lock()
-		wrapper.TaosClose(conn)
-		thread.Unlock()
+		logger.WithError(err).Errorln("register whitelist change error")
+		tool.TaosClose(conn, logger, isDebug)
 		var taosErr *errors2.TaosError
 		errors.As(err, &taosErr)
 		return wsCommonErrorMsg(int(taosErr.Code), taosErr.ErrStr)
 	}
+	s = log.GetLogNow(isDebug)
+	logger.Traceln("register drop user")
 	err = tool.RegisterDropUser(conn, h.dropUserHandle)
+	logger.Debugln("register drop user cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		thread.Lock()
-		wrapper.TaosClose(conn)
-		thread.Unlock()
+		logger.WithError(err).Errorln("register drop user error")
+		tool.TaosClose(conn, logger, isDebug)
 		var taosErr *errors2.TaosError
 		errors.As(err, &taosErr)
 		return wsCommonErrorMsg(int(taosErr.Code), taosErr.ErrStr)
@@ -454,22 +512,23 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		switch *req.Mode {
 		case common.TAOS_CONN_MODE_BI:
 			// BI mode
+			logger.Traceln("set connection mode to BI")
 			code := wrapper.TaosSetConnMode(conn, common.TAOS_CONN_MODE_BI, 1)
+			logger.Traceln("set connection mode to BI done")
 			if code != 0 {
-				thread.Lock()
-				wrapper.TaosClose(conn)
-				thread.Unlock()
+				logger.Errorf("set connection mode to BI error: %s", wrapper.TaosErrorStr(nil))
+				tool.TaosClose(conn, logger, isDebug)
 				return wsCommonErrorMsg(code, wrapper.TaosErrorStr(nil))
 			}
 		default:
-			thread.Lock()
-			wrapper.TaosClose(conn)
-			thread.Unlock()
+			tool.TaosClose(conn, logger, isDebug)
+			logger.Traceln("unexpected mode:", *req.Mode)
 			return wsCommonErrorMsg(0xffff, fmt.Sprintf("unexpected mode: %d", req.Mode))
 		}
 	}
 	h.conn = conn
-	go h.waitSignal()
+	logger.Traceln("start wait signal goroutine")
+	go h.waitSignal(h.logger)
 	return &BaseResponse{}
 }
 
@@ -500,33 +559,44 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
-	result, _ := async.GlobalAsync.TaosQuery(h.conn, req.Sql, handler, int64(request.ReqID))
+	logger.Tracef("req_id: %d,query sql: %s\n", request.ReqID, req.Sql)
+	result := async.GlobalAsync.TaosQuery(h.conn, logger, isDebug, req.Sql, handler, int64(request.ReqID))
 	logger.Debugln("query cost ", log.GetLogDuration(isDebug, s))
 
 	code := wrapper.TaosError(result.Res)
 	if code != httperror.SUCCESS {
 		monitor.WSRecordResult(sqlType, false)
 		errStr := wrapper.TaosErrorStr(result.Res)
-		freeCPointer(result.Res)
+		logger.Errorf("query error, code: %d, message: %s\n", code, errStr)
+		tool.FreeResult(result.Res, logger, isDebug)
 		return wsCommonErrorMsg(code, errStr)
 	}
+
 	monitor.WSRecordResult(sqlType, true)
+	logger.Traceln("check is_update_query")
+	s = log.GetLogNow(isDebug)
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
-	logger.Debugln("is_update_query cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugf("is_update_query %t cost: %s", isUpdate, log.GetLogDuration(isDebug, s))
 	if isUpdate {
+		s = log.GetLogNow(isDebug)
 		affectRows := wrapper.TaosAffectedRows(result.Res)
-		logger.Debugln("affected_rows cost:", log.GetLogDuration(isDebug, s))
-		freeCPointer(result.Res)
+		logger.Debugf("affected_rows %d cost: %s", affectRows, log.GetLogDuration(isDebug, s))
+		tool.FreeResult(result.Res, logger, isDebug)
 		return &QueryResponse{IsUpdate: true, AffectedRows: affectRows}
 	}
+	s = log.GetLogNow(isDebug)
 	fieldsCount := wrapper.TaosNumFields(result.Res)
-	logger.Debugln("num_fields cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugf("num_fields %d cost: %s\n", fieldsCount, log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	rowsHeader, _ := wrapper.ReadColumn(result.Res, fieldsCount)
 	logger.Debugln("read column cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	precision := wrapper.TaosResultPrecision(result.Res)
-	logger.Debugln("result_precision cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugf("result_precision %d cost: %s \n", precision, log.GetLogDuration(isDebug, s))
 	queryResult := QueryResult{TaosResult: result.Res, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision}
+	logger.Traceln("add result to list")
 	idx := h.queryResults.Add(&queryResult)
+	logger.Traceln("add result to list done")
 
 	return &QueryResponse{
 		ID:            idx,
@@ -558,33 +628,44 @@ func (h *messageHandler) handleFetch(_ context.Context, request Request, logger 
 		return wsCommonErrorMsg(0xffff, "unmarshal ws fetch request error")
 	}
 
+	logger.Traceln("get result by id,id:", req.ID)
 	item := h.queryResults.Get(req.ID)
 	if item == nil {
+		logger.Errorf("result is nil")
 		return wsCommonErrorMsg(0xffff, "result is nil")
 	}
 	item.Lock()
 	if item.TaosResult == nil {
 		item.Unlock()
+		logger.Errorf("result has been freed")
 		return wsCommonErrorMsg(0xffff, "result has been freed")
 	}
+	s = log.GetLogNow(isDebug)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
-	result, _ := async.GlobalAsync.TaosFetchRawBlockA(item.TaosResult, handler)
+	logger.Traceln("call fetch_raw_block_a")
+	s = log.GetLogNow(isDebug)
+	result := async.GlobalAsync.TaosFetchRawBlockA(item.TaosResult, logger, isDebug, handler)
 	logger.Debugln("fetch_raw_block_a cost:", log.GetLogDuration(isDebug, s))
 	if result.N == 0 {
+		logger.Traceln("fetch raw block completed")
 		item.Unlock()
-		h.queryResults.FreeResultByID(req.ID)
+		h.queryResults.FreeResultByID(req.ID, logger)
 		return &FetchResponse{ID: req.ID, Completed: true}
 	}
 	if result.N < 0 {
 		item.Unlock()
 		errStr := wrapper.TaosErrorStr(result.Res)
-		h.queryResults.FreeResultByID(req.ID)
+		logger.Errorf("fetch raw block error, code: %d, message: %s\n", result.N, errStr)
+		h.queryResults.FreeResultByID(req.ID, logger)
 		return wsCommonErrorMsg(0xffff, errStr)
 	}
+	s = log.GetLogNow(isDebug)
 	length := wrapper.FetchLengths(item.TaosResult, item.FieldsCount)
-	logger.Debugln("fetch_lengths cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugf("fetch_lengths %d cost: %s", length, log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	logger.Traceln("get raw block")
 	item.Block = wrapper.TaosGetRawBlock(item.TaosResult)
 	logger.Debugln("get_raw_block cost:", log.GetLogDuration(isDebug, s))
 	item.Size = result.N
@@ -606,14 +687,17 @@ func (h *messageHandler) handleFetchBlock(ctx context.Context, request Request, 
 
 	item := h.queryResults.Get(req.ID)
 	if item == nil {
+		logger.Errorf("result is nil")
 		return wsCommonErrorMsg(0xffff, "result is nil")
 	}
 	item.Lock()
 	defer item.Unlock()
 	if item.TaosResult == nil {
+		logger.Traceln("result has been freed")
 		return wsCommonErrorMsg(0xffff, "result has been freed")
 	}
 	if item.Block == nil {
+		logger.Traceln("block is nil")
 		return wsCommonErrorMsg(0xffff, "block is nil")
 	}
 
@@ -645,8 +729,8 @@ func (h *messageHandler) handleFreeResult(_ context.Context, request Request, lo
 		logger.Errorf("## unmarshal ws fetch request %s error: %s", request.Args, err)
 		return wsCommonErrorMsg(0xffff, "unmarshal connect request error")
 	}
-
-	h.queryResults.FreeResultByID(req.ID)
+	logger.Tracef("free result by id,id: %d\n", req.ID)
+	h.queryResults.FreeResultByID(req.ID, logger)
 	resp = &BaseResponse{}
 	resp.SetNull(true)
 	return resp
@@ -679,16 +763,22 @@ func (h *messageHandler) handleSchemalessWrite(_ context.Context, request Reques
 	}
 	var totalRows int32
 	var affectedRows int
+	logger.Traceln("get thread lock")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Tracef("schemaless write data: %s\n", req.Data)
+	s = log.GetLogNow(isDebug)
 	totalRows, result := wrapper.TaosSchemalessInsertRawTTLWithReqID(h.conn, req.Data, req.Protocol, req.Precision, req.TTL, int64(request.ReqID))
 	logger.Debugln("taos_schemaless_insert_raw_ttl_with_reqid cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
-	defer freeCPointer(result)
+	defer tool.FreeResult(result, logger, isDebug)
 	affectedRows = wrapper.TaosAffectedRows(result)
 	if code := wrapper.TaosError(result); code != 0 {
+		logger.Errorf("schemaless write error: %s", wrapper.TaosErrorStr(result))
 		return wsCommonErrorMsg(code, wrapper.TaosErrorStr(result))
 	}
+	logger.Tracef("schemaless write total rows: %d, affected rows: %d\n", totalRows, affectedRows)
 	return &SchemalessWriteResponse{
 		TotalRows:    totalRows,
 		AffectedRows: affectedRows,
@@ -701,8 +791,11 @@ type StmtInitResponse struct {
 }
 
 func (h *messageHandler) handleStmtInit(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+	logger.Traceln("get thread lock for stmt init")
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("stmt init")
+	s = log.GetLogNow(isDebug)
 	stmtInit := wrapper.TaosStmtInitWithReqID(h.conn, int64(request.ReqID))
 	logger.Debugln("stmt_init cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
@@ -713,6 +806,7 @@ func (h *messageHandler) handleStmtInit(_ context.Context, request Request, logg
 	}
 	stmtItem := &StmtItem{stmt: stmtInit}
 	h.stmts.Add(stmtItem)
+	logger.Tracef("stmt init sucess, stmt_id: %d\n", stmtItem.index)
 	return &StmtInitResponse{StmtID: stmtItem.index}
 }
 
@@ -734,18 +828,27 @@ func (h *messageHandler) handleStmtPrepare(_ context.Context, request Request, l
 		logger.Errorf("## unmarshal stmt prepare request %s error: %s", request.Args, err)
 		return wsStmtErrorMsg(0xffff, "unmarshal connect request error", req.StmtID)
 	}
-
+	logger.Tracef("stmt prepare, stmt_id: %d, sql: %s\n", req.StmtID, req.SQL)
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
+		logger.Errorf("stmt is nil, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
+	s = log.GetLogNow(isDebug)
+	logger.Traceln("get stmt lock")
 	stmtItem.Lock()
+	logger.Debugln("get stmt lock cost:", log.GetLogDuration(isDebug, s))
 	defer stmtItem.Unlock()
 	if stmtItem.stmt == nil {
+		logger.Errorf("stmt has been freed, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
 	}
+	logger.Traceln("get thread lock for stmt prepare")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugln("call stmt_prepare")
+	s = log.GetLogNow(isDebug)
 	code := wrapper.TaosStmtPrepare(stmtItem.stmt, req.SQL)
 	logger.Debugln("stmt_prepare cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
@@ -754,6 +857,9 @@ func (h *messageHandler) handleStmtPrepare(_ context.Context, request Request, l
 		logger.Errorf("## stmt prepare error: %s", errStr)
 		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
+	logger.Tracef("stmt prepare success, stmt_id: %d\n", req.StmtID)
+	s = log.GetLogNow(isDebug)
+	logger.Traceln("check stmt is insert")
 	thread.Lock()
 	isInsert, code := wrapper.TaosStmtIsInsert(stmtItem.stmt)
 	thread.Unlock()
@@ -762,6 +868,7 @@ func (h *messageHandler) handleStmtPrepare(_ context.Context, request Request, l
 		logger.Errorf("## check stmt is insert error: %s", errStr)
 		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
+	logger.Tracef("stmt is insert: %t\n", isInsert)
 	stmtItem.isInsert = isInsert
 	return &StmtPrepareResponse{StmtID: req.StmtID, IsInsert: isInsert}
 }
@@ -786,15 +893,21 @@ func (h *messageHandler) handleStmtSetTableName(_ context.Context, request Reque
 
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
+		logger.Errorf("stmt is nil, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 	stmtItem.Lock()
 	defer stmtItem.Unlock()
 	if stmtItem.stmt == nil {
+		logger.Errorf("stmt has been freed, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
 	}
+	logger.Traceln("get thread lock for stmt set table name")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("call stmt_set_tbname")
+	s = log.GetLogNow(isDebug)
 	code := wrapper.TaosStmtSetTBName(stmtItem.stmt, req.Name)
 	logger.Debugln("stmt_set_tbname cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
@@ -803,6 +916,7 @@ func (h *messageHandler) handleStmtSetTableName(_ context.Context, request Reque
 		logger.Errorf("## stmt set table name error: %s", errStr)
 		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
+	logger.Tracef("stmt set table name success, stmt_id: %d\n", req.StmtID)
 	return &StmtSetTableNameResponse{StmtID: req.StmtID}
 }
 
@@ -823,18 +937,24 @@ func (h *messageHandler) handleStmtSetTags(_ context.Context, request Request, l
 		logger.Errorf("## unmarshal stmt set tags request %s error: %s", request.Args, err)
 		return wsStmtErrorMsg(0xffff, "unmarshal stmt set tags request error", req.StmtID)
 	}
-
+	logger.Tracef("stmt set tags, stmt_id: %d, tags: %s\n", req.StmtID, req.Tags)
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
+		logger.Errorf("stmt is nil, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 	stmtItem.Lock()
 	defer stmtItem.Unlock()
 	if stmtItem.stmt == nil {
+		logger.Errorf("stmt has been freed, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
 	}
+	logger.Traceln("get thread lock for stmt set tags")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("stmt_get_tag_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Tracef("call stmt_get_tag_fields")
+	s = log.GetLogNow(isDebug)
 	code, tagNums, tagFields := wrapper.TaosStmtGetTagFields(stmtItem.stmt)
 	logger.Debugln("stmt_get_tag_fields cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
@@ -846,9 +966,12 @@ func (h *messageHandler) handleStmtSetTags(_ context.Context, request Request, l
 	defer func() {
 		wrapper.TaosStmtReclaimFields(stmtItem.stmt, tagFields)
 	}()
+	logger.Tracef("stmt tag nums: %d\n", tagNums)
 	if tagNums == 0 {
+		logger.Traceln("no tags")
 		return &StmtSetTagsResponse{StmtID: req.StmtID}
 	}
+	s = log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(tagNums, tagFields)
 	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
 	tags := make([][]driver.Value, tagNums)
@@ -858,17 +981,24 @@ func (h *messageHandler) handleStmtSetTags(_ context.Context, request Request, l
 	data, err := stmt.StmtParseTag(req.Tags, fields)
 	logger.Debugln("stmt parse tag json cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
+		logger.Errorf("stmt parse tag json error: %s", err.Error())
 		return wsStmtErrorMsg(0xffff, fmt.Sprintf("stmt parse tag json:%s", err.Error()), req.StmtID)
 	}
+	logger.Traceln("get thread lock for stmt set tags")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("stmt_set_tags get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("call stmt_set_tags")
+	s = log.GetLogNow(isDebug)
 	code = wrapper.TaosStmtSetTags(stmtItem.stmt, data)
 	logger.Debugln("stmt_set_tags cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		logger.Errorf("## stmt set tags error: %s", errStr)
 		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
+	logger.Traceln("stmt set tags success")
 	return &StmtSetTagsResponse{StmtID: req.StmtID}
 }
 
@@ -892,15 +1022,21 @@ func (h *messageHandler) handleStmtBind(_ context.Context, request Request, logg
 
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
+		logger.Errorf("stmt is nil, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 	stmtItem.Lock()
 	defer stmtItem.Unlock()
 	if stmtItem.stmt == nil {
+		logger.Errorf("stmt has been freed, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
 	}
+	logger.Traceln("get thread lock for stmt bind")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("stmt_get_col_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("call stmt_get_col_fields")
+	s = log.GetLogNow(isDebug)
 	code, colNums, colFields := wrapper.TaosStmtGetColFields(stmtItem.stmt)
 	logger.Debugln("stmt_get_col_fields cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
@@ -909,12 +1045,15 @@ func (h *messageHandler) handleStmtBind(_ context.Context, request Request, logg
 		logger.Errorf("## stmt get col fields error: %s", errStr)
 		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
+	logger.Tracef("stmt col nums: %d\n", colNums)
 	defer func() {
 		wrapper.TaosStmtReclaimFields(stmtItem.stmt, colFields)
 	}()
 	if colNums == 0 {
+		logger.Traceln("no columns")
 		return &StmtBindResponse{StmtID: req.StmtID}
 	}
+	s = log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(colNums, colFields)
 	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
 	fieldTypes := make([]*types.ColumnType, colNums)
@@ -922,19 +1061,27 @@ func (h *messageHandler) handleStmtBind(_ context.Context, request Request, logg
 	var err error
 	for i := 0; i < colNums; i++ {
 		if fieldTypes[i], err = fields[i].GetType(); err != nil {
+			logger.Errorf("stmt get column type error: %s", err.Error())
 			return wsStmtErrorMsg(0xffff, fmt.Sprintf("stmt get column type error:%s", err.Error()), req.StmtID)
 		}
 	}
+	s = log.GetLogNow(isDebug)
 	data, err := stmt.StmtParseColumn(req.Columns, fields, fieldTypes)
 	logger.Debugln("stmt parse column json cost:", log.GetLogDuration(isDebug, s))
 	if err != nil {
+		logger.Errorf("stmt parse column json error: %s", err.Error())
 		return wsStmtErrorMsg(0xffff, fmt.Sprintf("stmt parse column json:%s", err.Error()), req.StmtID)
 	}
+	logger.Traceln("get thread lock for stmt bind")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("stmt_bind_param_batch get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("call stmt_bind_param_batch")
+	s = log.GetLogNow(isDebug)
 	wrapper.TaosStmtBindParamBatch(stmtItem.stmt, data, fieldTypes)
 	logger.Debugln("stmt_bind_param_batch cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
+	logger.Traceln("stmt bind success")
 	return &StmtBindResponse{StmtID: req.StmtID}
 }
 
@@ -942,34 +1089,44 @@ func (h *messageHandler) handleBindMessage(_ context.Context, req dealBinaryRequ
 	block := tools.AddPointer(req.p0, uintptr(24))
 	columns := parser.RawBlockGetNumOfCols(block)
 	rows := parser.RawBlockGetNumOfRows(block)
-
+	logger.Tracef("bind message,stmt_id: %d columns: %d, rows: %d\n", req.id, columns, rows)
 	stmtItem := h.stmts.Get(req.id)
 	if stmtItem == nil {
+		logger.Errorf("stmt is nil, stmt_id: %d", req.id)
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.id)
 	}
 	stmtItem.Lock()
 	defer stmtItem.Unlock()
 	if stmtItem.stmt == nil {
+		logger.Errorf("stmt has been freed, stmt_id: %d", req.id)
 		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.id)
 	}
 	var data [][]driver.Value
 	var fieldTypes []*types.ColumnType
 	if stmtItem.isInsert {
+		logger.Traceln("get thread lock for stmt get col fields")
+		s = log.GetLogNow(isDebug)
 		thread.Lock()
 		logger.Debugln("stmt_get_col_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
+		logger.Traceln("call stmt_get_col_fields")
+		s = log.GetLogNow(isDebug)
 		code, colNums, colFields := wrapper.TaosStmtGetColFields(stmtItem.stmt)
 		logger.Debugln("stmt_get_col_fields cost:", log.GetLogDuration(isDebug, s))
 		thread.Unlock()
 		if code != httperror.SUCCESS {
 			errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+			logger.Errorf("stmt get col fields error: %s", errStr)
 			return wsStmtErrorMsg(code, errStr, req.id)
 		}
+		logger.Traceln("stmt col nums:", colNums)
 		defer func() {
 			wrapper.TaosStmtReclaimFields(stmtItem.stmt, colFields)
 		}()
 		if colNums == 0 {
+			logger.Traceln("no columns")
 			return &StmtBindResponse{StmtID: req.id}
 		}
+		s = log.GetLogNow(isDebug)
 		fields := wrapper.StmtParseFields(colNums, colFields)
 		logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
 		fieldTypes = make([]*types.ColumnType, colNums)
@@ -977,26 +1134,37 @@ func (h *messageHandler) handleBindMessage(_ context.Context, req dealBinaryRequ
 		for i := 0; i < colNums; i++ {
 			fieldTypes[i], err = fields[i].GetType()
 			if err != nil {
+				logger.Errorf("stmt get column type error: %s", err.Error())
 				return wsStmtErrorMsg(0xffff, fmt.Sprintf("stmt get column type error:%s", err.Error()), req.id)
 			}
 		}
 		if int(columns) != colNums {
+			logger.Errorf("stmt column count not match %d != %d", columns, colNums)
 			return wsStmtErrorMsg(0xffff, "stmt column count not match", req.id)
 		}
+		s = log.GetLogNow(isDebug)
 		data = stmt.BlockConvert(block, int(rows), fields, fieldTypes)
 		logger.Debugln("block convert cost:", log.GetLogDuration(isDebug, s))
 	} else {
 		var fields []*stmtCommon.StmtField
 		var err error
+		logger.Traceln("parse row block info")
 		fields, fieldTypes, err = parseRowBlockInfo(block, int(columns))
 		if err != nil {
+			logger.Errorf("parse row block info error: %s", err.Error())
 			return wsStmtErrorMsg(0xffff, fmt.Sprintf("parse row block info error:%s", err.Error()), req.id)
 		}
+		logger.Traceln("convert block to data")
 		data = stmt.BlockConvert(block, int(rows), fields, fieldTypes)
+		logger.Traceln("convert block to data done")
 	}
 
+	logger.Tracef("get thread lock for stmt bind param batch")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("stmt_bind_param_batch get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("call stmt_bind_param_batch")
+	s = log.GetLogNow(isDebug)
 	code := wrapper.TaosStmtBindParamBatch(stmtItem.stmt, data, fieldTypes)
 	logger.Debugln("stmt_bind_param_batch cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
@@ -1005,7 +1173,7 @@ func (h *messageHandler) handleBindMessage(_ context.Context, req dealBinaryRequ
 		logger.Errorf("## stmt bind param error: %s", errStr)
 		return wsStmtErrorMsg(code, errStr, req.id)
 	}
-
+	logger.Traceln("stmt bind param success")
 	return &StmtBindResponse{StmtID: req.id}
 }
 
@@ -1093,15 +1261,21 @@ func (h *messageHandler) handleStmtAddBatch(_ context.Context, request Request, 
 
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
+		logger.Errorf("stmt is nil, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 	stmtItem.Lock()
 	defer stmtItem.Unlock()
 	if stmtItem.stmt == nil {
+		logger.Errorf("stmt has been freed, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
 	}
+	logger.Traceln("get thread lock for stmt add batch")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("call stmt_add_batch")
+	s = log.GetLogNow(isDebug)
 	code := wrapper.TaosStmtAddBatch(stmtItem.stmt)
 	logger.Debugln("stmt_add_batch cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
@@ -1111,6 +1285,7 @@ func (h *messageHandler) handleStmtAddBatch(_ context.Context, request Request, 
 		logger.Errorf("## stmt add batch error: %s", errStr)
 		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
+	logger.Traceln("stmt add batch success")
 	return &StmtAddBatchResponse{StmtID: req.StmtID}
 }
 
@@ -1131,18 +1306,24 @@ func (h *messageHandler) handleStmtExec(_ context.Context, request Request, logg
 		logger.Errorf("## unmarshal stmt add batch request %s error: %s", request.Args, err)
 		return wsStmtErrorMsg(0xffff, "unmarshal stmt add batch request error", req.StmtID)
 	}
-
+	logger.Traceln("stmt execute, stmt_id:", req.StmtID)
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
+		logger.Errorf("stmt is nil, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 	stmtItem.Lock()
 	defer stmtItem.Unlock()
 	if stmtItem.stmt == nil {
+		logger.Errorf("stmt has been freed, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
 	}
+	logger.Traceln("get thread lock for stmt execute")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("stmt_execute get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("call stmt_execute")
+	s = log.GetLogNow(isDebug)
 	code := wrapper.TaosStmtExecute(stmtItem.stmt)
 	logger.Debugln("stmt_execute cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
@@ -1151,8 +1332,9 @@ func (h *messageHandler) handleStmtExec(_ context.Context, request Request, logg
 		logger.Errorf("## stmt execute error: %s", errStr)
 		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
+	s = log.GetLogNow(isDebug)
 	affected := wrapper.TaosStmtAffectedRowsOnce(stmtItem.stmt)
-	logger.Debugln("stmt_affected_rows_once cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugf("stmt_affected_rows_once %d cost:", affected, log.GetLogDuration(isDebug, s))
 	return &StmtExecResponse{StmtID: req.StmtID, Affected: affected}
 }
 
@@ -1172,10 +1354,11 @@ func (h *messageHandler) handleStmtClose(_ context.Context, request Request, log
 		logger.Errorf("## unmarshal stmt close request %s error: %s", request.Args, err)
 		return wsStmtErrorMsg(0xffff, "unmarshal stmt add batch request error", req.StmtID)
 	}
-
+	logger.Tracef("stmt close, stmt_id: %d\n", req.StmtID)
 	h.stmts.FreeStmtByID(req.StmtID)
 	resp = &BaseResponse{}
 	resp.SetNull(true)
+	logger.Tracef("stmt close success, stmt_id: %d\n", req.StmtID)
 	return resp
 }
 
@@ -1196,18 +1379,24 @@ func (h *messageHandler) handleStmtGetColFields(_ context.Context, request Reque
 		logger.Errorf("## unmarshal stmt get tags request %s error: %s", request.Args, err)
 		return wsStmtErrorMsg(0xffff, "unmarshal stmt get tags request error", req.StmtID)
 	}
-
+	logger.Tracef("stmt get col fields, stmt_id: %d\n", req.StmtID)
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
+		logger.Errorf("stmt is nil, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 	stmtItem.Lock()
 	defer stmtItem.Unlock()
 	if stmtItem.stmt == nil {
+		logger.Errorf("stmt has been freed, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
 	}
+	logger.Traceln("get thread lock for stmt get col fields")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("stmt_get_col_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("call stmt_get_col_fields")
+	s = log.GetLogNow(isDebug)
 	code, colNums, colFields := wrapper.TaosStmtGetColFields(stmtItem.stmt)
 	logger.Debugln("stmt_get_col_fields cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
@@ -1216,12 +1405,14 @@ func (h *messageHandler) handleStmtGetColFields(_ context.Context, request Reque
 		logger.Errorf("## stmt get col fields error: %s", errStr)
 		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
+	logger.Tracef("stmt col nums: %d\n", colNums)
 	defer func() {
 		wrapper.TaosStmtReclaimFields(stmtItem.stmt, colFields)
 	}()
 	if colNums == 0 {
 		return &StmtGetColFieldsResponse{StmtID: req.StmtID}
 	}
+	s = log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(colNums, colFields)
 	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
 	return &StmtGetColFieldsResponse{StmtID: req.StmtID, Fields: fields}
@@ -1244,18 +1435,24 @@ func (h *messageHandler) handleStmtGetTagFields(_ context.Context, request Reque
 		logger.Errorf("## unmarshal stmt get tags request %s error: %s", request.Args, err)
 		return wsStmtErrorMsg(0xffff, "unmarshal stmt get tags request error", req.StmtID)
 	}
-
+	logger.Tracef("stmt get tag fields, stmt_id: %d\n", req.StmtID)
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
+		logger.Errorf("stmt is nil, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 	stmtItem.Lock()
 	defer stmtItem.Unlock()
 	if stmtItem.stmt == nil {
+		logger.Errorf("stmt has been freed, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
 	}
+	logger.Traceln("get thread lock for stmt get tag fields")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("stmt_get_tag_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("call stmt_get_tag_fields")
+	s = log.GetLogNow(isDebug)
 	code, tagNums, tagFields := wrapper.TaosStmtGetTagFields(stmtItem.stmt)
 	logger.Debugln("stmt_get_tag_fields cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
@@ -1264,14 +1461,17 @@ func (h *messageHandler) handleStmtGetTagFields(_ context.Context, request Reque
 		logger.Errorf("## stmt get tag fields error: %s", errStr)
 		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
+	logger.Tracef("stmt tag nums: %d\n", tagNums)
 	defer func() {
 		wrapper.TaosStmtReclaimFields(stmtItem.stmt, tagFields)
 	}()
 	if tagNums == 0 {
 		return &StmtGetTagFieldsResponse{StmtID: req.StmtID}
 	}
+	s = log.GetLogNow(isDebug)
+	fields := wrapper.StmtParseFields(tagNums, tagFields)
 	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
-	return &StmtGetTagFieldsResponse{StmtID: req.StmtID, Fields: wrapper.StmtParseFields(tagNums, tagFields)}
+	return &StmtGetTagFieldsResponse{StmtID: req.StmtID, Fields: fields}
 }
 
 type StmtUseResultRequest struct {
@@ -1296,16 +1496,19 @@ func (h *messageHandler) handleStmtUseResult(_ context.Context, request Request,
 		logger.Errorf("## unmarshal stmt get tags request %s error: %s", request.Args, err)
 		return wsStmtErrorMsg(0xffff, "unmarshal stmt get tags request error", req.StmtID)
 	}
-
+	logger.Tracef("stmt use result, stmt_id: %d\n", req.StmtID)
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
+		logger.Errorf("stmt is nil, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 	stmtItem.Lock()
 	defer stmtItem.Unlock()
 	if stmtItem.stmt == nil {
+		logger.Errorf("stmt has been freed, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
 	}
+	logger.Traceln("call stmt use result")
 	result := wrapper.TaosStmtUseResult(stmtItem.stmt)
 	if result == nil {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
@@ -1316,6 +1519,7 @@ func (h *messageHandler) handleStmtUseResult(_ context.Context, request Request,
 	fieldsCount := wrapper.TaosNumFields(result)
 	rowsHeader, _ := wrapper.ReadColumn(result, fieldsCount)
 	precision := wrapper.TaosResultPrecision(result)
+	logger.Tracef("stmt use result success, stmt_id: %d, fields_count: %d, precision: %d\n", req.StmtID, fieldsCount, precision)
 	queryResult := QueryResult{TaosResult: result, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision, inStmt: true}
 	idx := h.queryResults.Add(&queryResult)
 
@@ -1334,52 +1538,70 @@ func (h *messageHandler) handleSetTagsMessage(_ context.Context, req dealBinaryR
 	block := tools.AddPointer(req.p0, uintptr(24))
 	columns := parser.RawBlockGetNumOfCols(block)
 	rows := parser.RawBlockGetNumOfRows(block)
-
+	logger.Tracef("set tags message,stmt_id: %d columns: %d, rows: %d\n", req.id, columns, rows)
 	if rows != 1 {
 		return wsStmtErrorMsg(0xffff, "rows not equal 1", req.id)
 	}
 
 	stmtItem := h.stmts.Get(req.id)
 	if stmtItem == nil {
+		logger.Errorf("stmt is nil, stmt_id: %d", req.id)
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.id)
 	}
 	stmtItem.Lock()
 	defer stmtItem.Unlock()
 	if stmtItem.stmt == nil {
+		logger.Errorf("stmt has been freed, stmt_id: %d", req.id)
 		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.id)
 	}
+	logger.Traceln("get thread lock for stmt get tag fields")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("stmt_get_tag_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("call stmt_get_tag_fields")
+	s = log.GetLogNow(isDebug)
 	code, tagNums, tagFields := wrapper.TaosStmtGetTagFields(stmtItem.stmt)
 	logger.Debugln("stmt_get_tag_fields cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != httperror.SUCCESS {
-		return wsStmtErrorMsg(code, wrapper.TaosStmtErrStr(stmtItem.stmt), req.id)
+		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		logger.Errorf("stmt get tag fields error: %d %s", code, errStr)
+		return wsStmtErrorMsg(code, errStr, req.id)
 	}
 	defer func() {
 		wrapper.TaosStmtReclaimFields(stmtItem.stmt, tagFields)
 	}()
 	if tagNums == 0 {
+		logger.Traceln("no tags")
 		return &StmtSetTagsResponse{StmtID: req.id}
 	}
 	if int(columns) != tagNums {
+		logger.Tracef("stmt tags count not match %d != %d\n", columns, tagNums)
 		return wsStmtErrorMsg(0xffff, "stmt tags count not match", req.id)
 	}
+	s = log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(tagNums, tagFields)
 	logger.Debugln("stmt parse fields cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	tags := stmt.BlockConvert(block, int(rows), fields, nil)
 	logger.Debugln("block concert cost:", log.GetLogDuration(isDebug, s))
 	reTags := make([]driver.Value, tagNums)
 	for i := 0; i < tagNums; i++ {
 		reTags[i] = tags[i][0]
 	}
+	logger.Traceln("get thread lock for stmt set tags")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("stmt_set_tags get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("call stmt_set_tags")
+	s = log.GetLogNow(isDebug)
 	code = wrapper.TaosStmtSetTags(stmtItem.stmt, reTags)
 	logger.Debugln("stmt_set_tags cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if code != httperror.SUCCESS {
-		return wsStmtErrorMsg(code, wrapper.TaosStmtErrStr(stmtItem.stmt), req.id)
+		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		logger.Errorf("stmt set tags error: %d %s", code, errStr)
+		return wsStmtErrorMsg(code, errStr, req.id)
 	}
 
 	return &StmtSetTagsResponse{StmtID: req.id}
@@ -1389,17 +1611,22 @@ func (h *messageHandler) handleTMQRawMessage(_ context.Context, req dealBinaryRe
 	length := *(*uint32)(tools.AddPointer(req.p0, uintptr(24)))
 	metaType := *(*uint16)(tools.AddPointer(req.p0, uintptr(28)))
 	data := tools.AddPointer(req.p0, uintptr(30))
-
+	logger.Tracef("raw message, length: %d, metaType: %d\n", length, metaType)
+	logger.Traceln("get global lock for raw message")
 	h.Lock()
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer h.Unlock()
 	if h.closed {
+		logger.Traceln("server closed")
 		return
 	}
 	meta := wrapper.BuildRawMeta(length, metaType, data)
-
+	logger.Traceln("get thread lock for write raw meta")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("call write_raw_meta")
+	s = log.GetLogNow(isDebug)
 	code := wrapper.TMQWriteRaw(h.conn, meta)
 	thread.Unlock()
 	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
@@ -1409,6 +1636,7 @@ func (h *messageHandler) handleTMQRawMessage(_ context.Context, req dealBinaryRe
 		logger.Errorf("## write raw meta error: %s", errStr)
 		return wsCommonErrorMsg(int(code)&0xffff, errStr)
 	}
+	logger.Traceln("write raw meta success")
 
 	return &BaseResponse{}
 }
@@ -1421,25 +1649,31 @@ func (h *messageHandler) handleRawBlockMessage(_ context.Context, req dealBinary
 		tableName[i] = *(*byte)(tools.AddPointer(req.p0, uintptr(30+i)))
 	}
 	rawBlock := tools.AddPointer(req.p0, uintptr(30+tableNameLength))
-
+	logger.Tracef("raw block message, table: %s, rows: %d\n", tableName, numOfRows)
+	logger.Traceln("get global lock for raw block message")
+	s = log.GetLogNow(isDebug)
 	h.Lock()
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
 	defer h.Unlock()
 	if h.closed {
+		logger.Traceln("server closed")
 		return
 	}
-
+	logger.Traceln("get thread lock for write raw meta")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("call write_raw_meta")
+	s = log.GetLogNow(isDebug)
 	code := wrapper.TaosWriteRawBlockWithReqID(h.conn, int(numOfRows), rawBlock, string(tableName), int64(req.reqID))
-	thread.Unlock()
 	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
+	thread.Unlock()
 	if code != 0 {
 		errStr := wrapper.TMQErr2Str(int32(code))
 		logger.Errorf("## write raw meta error: %s", errStr)
 		return wsCommonErrorMsg(int(code)&0xffff, errStr)
 	}
-
+	logger.Traceln("write raw meta success")
 	return &BaseResponse{}
 }
 
@@ -1454,25 +1688,29 @@ func (h *messageHandler) handleRawBlockMessageWithFields(_ context.Context, req 
 	blockLength := int(parser.RawBlockGetLength(rawBlock))
 	numOfColumn := int(parser.RawBlockGetNumOfCols(rawBlock))
 	fieldsBlock := tools.AddPointer(req.p0, uintptr(30+tableNameLength+blockLength))
-
+	logger.Tracef("raw block message with fields, table: %s, rows: %d\n", tableName, numOfRows)
+	s = log.GetLogNow(isDebug)
 	h.Lock()
 	defer h.Unlock()
 	if h.closed {
+		logger.Traceln("server closed")
 		return
 	}
-
 	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("get thread lock for write raw meta")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	code := wrapper.TaosWriteRawBlockWithFieldsWithReqID(h.conn, int(numOfRows), rawBlock, string(tableName), fieldsBlock, numOfColumn, int64(req.reqID))
-	thread.Unlock()
 	logger.Debugln("write_raw_meta cost:", log.GetLogDuration(isDebug, s))
+	thread.Unlock()
 	if code != 0 {
 		errStr := wrapper.TMQErr2Str(int32(code))
 		logger.Errorf("## write raw meta error: %s", errStr)
 		return wsCommonErrorMsg(int(code)&0xffff, errStr)
 	}
+	logger.Traceln("write raw meta success")
 	return &BaseResponse{}
 }
 
@@ -1491,13 +1729,18 @@ func (h *messageHandler) handleBinaryQuery(_ context.Context, req dealBinaryRequ
 		}
 		sql = message[30 : 30+sqlLen]
 	} else {
+		logger.Errorf("unknown binary query version: %d", v)
 		return wsCommonErrorMsg(0xffff, "unknown binary query version:"+strconv.Itoa(int(v)))
 	}
+	logger.Tracef("binary query, sql: %s\n", sql)
 	sqlType := monitor.WSRecordRequest(bytesutil.ToUnsafeString(sql))
+	s = log.GetLogNow(isDebug)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
-	result, _ := async.GlobalAsync.TaosQuery(h.conn, bytesutil.ToUnsafeString(sql), handler, int64(req.reqID))
+	logger.Traceln("call taos_query")
+	s = log.GetLogNow(isDebug)
+	result := async.GlobalAsync.TaosQuery(h.conn, logger, isDebug, bytesutil.ToUnsafeString(sql), handler, int64(req.reqID))
 	logger.Debugln("query cost ", log.GetLogDuration(isDebug, s))
 	// keep sql alive
 	logger.Debugln("sql addr", &sql)
@@ -1505,27 +1748,33 @@ func (h *messageHandler) handleBinaryQuery(_ context.Context, req dealBinaryRequ
 	if code != httperror.SUCCESS {
 		monitor.WSRecordResult(sqlType, false)
 		errStr := wrapper.TaosErrorStr(result.Res)
-		freeCPointer(result.Res)
+		logger.Errorf("taos query error: %d %s\n", code, errStr)
+		tool.FreeResult(result.Res, logger, isDebug)
 		return wsCommonErrorMsg(code, errStr)
 	}
 	monitor.WSRecordResult(sqlType, true)
+	s = log.GetLogNow(isDebug)
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
-	logger.Debugln("is_update_query cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugf("is_update_query %t cost: %s", isUpdate, log.GetLogDuration(isDebug, s))
 	if isUpdate {
 		affectRows := wrapper.TaosAffectedRows(result.Res)
-		logger.Debugln("affected_rows cost:", log.GetLogDuration(isDebug, s))
-		freeCPointer(result.Res)
+		logger.Debugf("affected_rows %d cost: %s", affectRows, log.GetLogDuration(isDebug, s))
+		tool.FreeResult(result.Res, logger, isDebug)
 		return &QueryResponse{IsUpdate: true, AffectedRows: affectRows}
 	}
+	s = log.GetLogNow(isDebug)
 	fieldsCount := wrapper.TaosNumFields(result.Res)
 	logger.Debugln("num_fields cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	rowsHeader, _ := wrapper.ReadColumn(result.Res, fieldsCount)
+	s = log.GetLogNow(isDebug)
 	logger.Debugln("read column cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	precision := wrapper.TaosResultPrecision(result.Res)
 	logger.Debugln("result_precision cost:", log.GetLogDuration(isDebug, s))
 	queryResult := QueryResult{TaosResult: result.Res, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision}
 	idx := h.queryResults.Add(&queryResult)
-
+	logger.Traceln("query success")
 	return &QueryResponse{
 		ID:            idx,
 		FieldsCount:   fieldsCount,
@@ -1546,33 +1795,44 @@ func (h *messageHandler) handleFetchRawBlock(ctx context.Context, req dealBinary
 		return wsFetchRawBlockErrorMsg(0xffff, "unknown fetch raw block version", req.reqID, req.id, uint64(wstool.GetDuration(ctx)))
 	}
 	item := h.queryResults.Get(req.id)
+	logger.Tracef("fetch raw block, result_id: %d\n", req.id)
 	if item == nil {
+		logger.Errorf("result is nil, result_id: %d\n", req.id)
 		return wsFetchRawBlockErrorMsg(0xffff, "result is nil", req.reqID, req.id, uint64(wstool.GetDuration(ctx)))
 	}
 	item.Lock()
 	if item.TaosResult == nil {
 		item.Unlock()
+		logger.Errorf("result has been freed, result_id: %d\n", req.id)
 		return wsFetchRawBlockErrorMsg(0xffff, "result has been freed", req.reqID, req.id, uint64(wstool.GetDuration(ctx)))
 	}
+	s = log.GetLogNow(isDebug)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugln("get handler cost:", log.GetLogDuration(isDebug, s))
-	result, _ := async.GlobalAsync.TaosFetchRawBlockA(item.TaosResult, handler)
+	logger.Traceln("call taos_fetch_raw_block_a")
+	s = log.GetLogNow(isDebug)
+	result := async.GlobalAsync.TaosFetchRawBlockA(item.TaosResult, logger, isDebug, handler)
 	logger.Debugln("fetch_raw_block_a cost:", log.GetLogDuration(isDebug, s))
 	if result.N == 0 {
+		logger.Traceln("fetch raw block success")
 		item.Unlock()
-		h.queryResults.FreeResultByID(req.id)
+		h.queryResults.FreeResultByID(req.id, logger)
 		return wsFetchRawBlockFinish(req.reqID, req.id, uint64(wstool.GetDuration(ctx)))
 	}
 	if result.N < 0 {
 		item.Unlock()
 		errStr := wrapper.TaosErrorStr(result.Res)
-		h.queryResults.FreeResultByID(req.id)
+		logger.Errorf("fetch raw block error: %d %s\n", result.N, errStr)
+		h.queryResults.FreeResultByID(req.id, logger)
 		return wsFetchRawBlockErrorMsg(result.N, errStr, req.reqID, req.id, uint64(wstool.GetDuration(ctx)))
 	}
+	logger.Traceln("call taos_get_raw_block")
+	s = log.GetLogNow(isDebug)
 	item.Block = wrapper.TaosGetRawBlock(item.TaosResult)
 	logger.Debugln("get_raw_block cost:", log.GetLogDuration(isDebug, s))
 	item.Size = result.N
+	s = log.GetLogNow(isDebug)
 	blockLength := int(parser.RawBlockGetLength(item.Block))
 	if blockLength <= 0 {
 		item.Unlock()
@@ -1583,6 +1843,7 @@ func (h *messageHandler) handleFetchRawBlock(ctx context.Context, req dealBinary
 	resp := &BinaryResponse{Data: item.buf}
 	resp.SetBinary(true)
 	item.Unlock()
+	logger.Traceln("fetch raw block success")
 	return resp
 }
 
@@ -1591,9 +1852,14 @@ type GetCurrentDBResponse struct {
 	DB string `json:"db"`
 }
 
-func (h *messageHandler) handleGetCurrentDB(_ context.Context, _ Request, logger *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleGetCurrentDB(_ context.Context, _ Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+	logger.Traceln("get thread lock for get current db")
 	thread.Lock()
+	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("call taos_get_current_db")
+	s = log.GetLogNow(isDebug)
 	db, err := wrapper.TaosGetCurrentDB(h.conn)
+	logger.Debugln("get_current_db cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	if err != nil {
 		var taosErr *errors2.TaosError
@@ -1601,6 +1867,7 @@ func (h *messageHandler) handleGetCurrentDB(_ context.Context, _ Request, logger
 		logger.Errorf("## get current db error: %s", taosErr.Error())
 		return wsCommonErrorMsg(int(taosErr.Code), taosErr.Error())
 	}
+	logger.Tracef("current db: %s\n", db)
 	return &GetCurrentDBResponse{DB: db}
 }
 
@@ -1609,10 +1876,16 @@ type GetServerInfoResponse struct {
 	Info string `json:"info"`
 }
 
-func (h *messageHandler) handleGetServerInfo(_ context.Context, _ Request, _ *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleGetServerInfo(_ context.Context, _ Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+	logger.Traceln("get thread lock for get server info")
 	thread.Lock()
+	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("call taos_get_server_info")
+	s = log.GetLogNow(isDebug)
 	serverInfo := wrapper.TaosGetServerInfo(h.conn)
+	logger.Debugln("get_server_info cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
+	logger.Tracef("server info: %s\n", serverInfo)
 	return &GetServerInfoResponse{Info: serverInfo}
 }
 
@@ -1626,25 +1899,32 @@ type NumFieldsResponse struct {
 	NumFields int `json:"num_fields"`
 }
 
-func (h *messageHandler) handleNumFields(_ context.Context, request Request, logger *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleNumFields(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req NumFieldsRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("## unmarshal stmt num params request %s error: %s", request.Args, err)
 		return wsCommonErrorMsg(0xffff, "unmarshal stmt num params request error")
 	}
-
+	logger.Tracef("num fields, result_id: %d\n", req.ResultID)
 	item := h.queryResults.Get(req.ResultID)
 	if item == nil {
+		logger.Errorf("result is nil, result_id: %d", req.ResultID)
 		return wsCommonErrorMsg(0xffff, "result is nil")
 	}
 	item.Lock()
 	defer item.Unlock()
 	if item.TaosResult == nil {
+		logger.Errorf("result has been freed, result_id: %d", req.ResultID)
 		return wsCommonErrorMsg(0xffff, "result has been freed")
 	}
+	logger.Traceln("get thread lock for num fields")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
+	logger.Debugln("num_fields get thread lock cost:", log.GetLogDuration(isDebug, s))
 	num := wrapper.TaosNumFields(item.TaosResult)
+	logger.Debugln("num_fields cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
+	logger.Tracef("num fields: %d\n", num)
 	return &NumFieldsResponse{NumFields: num}
 }
 
@@ -1665,18 +1945,24 @@ func (h *messageHandler) handleStmtNumParams(_ context.Context, request Request,
 		logger.Errorf("## unmarshal stmt num params request %s error: %s", request.Args, err)
 		return wsStmtErrorMsg(0xffff, "unmarshal stmt num params request error", req.StmtID)
 	}
-
+	logger.Tracef("stmt num params, stmt_id: %d\n", req.StmtID)
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
+		logger.Errorf("stmt is nil, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 	stmtItem.Lock()
 	defer stmtItem.Unlock()
 	if stmtItem.stmt == nil {
+		logger.Errorf("stmt has been freed, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
 	}
+	logger.Traceln("get thread lock for stmt num params")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("stmt_num_params get thread lock cost:", log.GetLogDuration(isDebug, s))
+	logger.Traceln("call taos_stmt_num_params")
+	s = log.GetLogNow(isDebug)
 	count, code := wrapper.TaosStmtNumParams(stmtItem.stmt)
 	logger.Debugln("stmt_num_params cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
@@ -1685,6 +1971,7 @@ func (h *messageHandler) handleStmtNumParams(_ context.Context, request Request,
 		logger.Errorf("## stmt get col fields error: %s", errStr)
 		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
+	logger.Traceln("stmt num params success")
 	return &StmtNumParamsResponse{StmtID: req.StmtID, NumParams: count}
 }
 
@@ -1708,18 +1995,24 @@ func (h *messageHandler) handleStmtGetParam(_ context.Context, request Request, 
 		logger.Errorf("## unmarshal stmt get param request %s error: %s", request.Args, err)
 		return wsStmtErrorMsg(0xffff, "unmarshal stmt get param request error", req.StmtID)
 	}
+	logger.Tracef("stmt get param, stmt_id: %d, index: %d\n", req.StmtID, req.Index)
 
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
+		logger.Errorf("stmt is nil, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
 	stmtItem.Lock()
 	defer stmtItem.Unlock()
 	if stmtItem.stmt == nil {
+		logger.Errorf("stmt has been freed, stmt_id: %d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
 	}
+	logger.Traceln("get thread lock for stmt get param")
+	s = log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugln("stmt_get_param get thread lock cost:", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
 	dataType, length, err := wrapper.TaosStmtGetParam(stmtItem.stmt, req.Index)
 	logger.Debugln("stmt_get_param cost:", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
@@ -1729,20 +2022,8 @@ func (h *messageHandler) handleStmtGetParam(_ context.Context, request Request, 
 		logger.Errorf("## stmt get param error: %s", taosErr.Error())
 		return wsStmtErrorMsg(int(taosErr.Code), taosErr.Error(), req.StmtID)
 	}
+	logger.Tracef("stmt get param success, data_type: %d, length: %d\n", dataType, length)
 	return &StmtGetParamResponse{StmtID: req.StmtID, Index: req.Index, DataType: dataType, Length: length}
-}
-
-func freeCPointer(pointer unsafe.Pointer) {
-	if pointer == nil {
-		return
-	}
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(log.IsDebug())
-	thread.Lock()
-	logger.Debugln("free result get lock cost:", log.GetLogDuration(isDebug, s))
-	wrapper.TaosFreeResult(pointer)
-	logger.Debugln("free result cost:", log.GetLogDuration(isDebug, s))
-	thread.Unlock()
 }
 
 type Response interface {

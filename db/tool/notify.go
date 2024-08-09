@@ -2,6 +2,7 @@ package tool
 
 import (
 	"net"
+	"strings"
 	"unsafe"
 
 	"github.com/taosdata/driver-go/v3/common"
@@ -173,4 +174,15 @@ func RegisterChangePass(conn unsafe.Pointer, handle cgo.Handle) error {
 		return errors.NewError(int(errCode), wrapper.TaosErrorStr(nil))
 	}
 	return nil
+}
+
+func IpNetSliceToString(ipNets []*net.IPNet) string {
+	builder := strings.Builder{}
+	for i, ipNet := range ipNets {
+		builder.WriteString(ipNet.String())
+		if i != len(ipNets)-1 {
+			builder.WriteString(",")
+		}
+	}
+	return builder.String()
 }

@@ -4,18 +4,20 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/common"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/db/tool"
+	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
 )
 
-func InsertInfluxdb(conn unsafe.Pointer, data []byte, db, precision string, ttl int, reqID int64) error {
+func InsertInfluxdb(conn unsafe.Pointer, data []byte, db, precision string, ttl int, reqID int64, logger *logrus.Entry) error {
 	if reqID == 0 {
 		reqID = common.GetReqID()
 	}
-	err := tool.SchemalessSelectDB(conn, db, reqID)
+	err := tool.SchemalessSelectDB(conn, logger, log.IsDebug(), db, reqID)
 	if err != nil {
 		return err
 	}
