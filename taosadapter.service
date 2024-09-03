@@ -1,5 +1,5 @@
 [Unit]
-Description=adapter service
+Description=taosAdapter - RESTful and WebSocket gateway for accessing TDengine
 After=network-online.target
 Wants=network-online.target
 #Before=taosd.service
