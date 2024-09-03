@@ -23,7 +23,7 @@ func GinLog() gin.HandlerFunc {
 		clientIP := iptool.GetRealIP(c.Request)
 		reqID, exist := c.Get(config.ReqIDKey)
 		if exist {
-			logger.Infof("qid:0x%x, finish request, status_code:%3d, latency:%v, client_ip:%s, method:%s, uri:%s", reqID, statusCode, latencyTime, clientIP, reqMethod, reqUri)
+			logger.Infof("qid:0x%x finish request, status_code:%3d, latency:%v, client_ip:%s, method:%s, uri:%s", reqID, statusCode, latencyTime, clientIP, reqMethod, reqUri)
 		} else {
 			logger.Infof("finish request, status_code:%3d, latency:%v, client_ip:%s, method:%s, uri:%s", statusCode, latencyTime, clientIP, reqMethod, reqUri)
 		}

@@ -185,9 +185,7 @@ func (cp *ConnectorPool) Get() (unsafe.Pointer, error) {
 }
 
 func (cp *ConnectorPool) Put(c unsafe.Pointer) error {
-	s := log.GetLogNow(log.IsDebug())
 	wrapper.TaosResetCurrentDB(c)
-	cp.logger.Debugf("reset current db cost:%s", log.GetLogDuration(log.IsDebug(), s))
 	return cp.pool.Put(c)
 }
 

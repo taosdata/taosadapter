@@ -328,9 +328,10 @@ func upload(client *http.Client, reqID int64) error {
 	}
 	err = doRequest(client, jsonData, reqID)
 	if err != nil {
+		logger.Debugf("qid:0x%x, upload to keeper error, will retry in %s", reqID, config.Conf.UploadKeeper.RetryInterval)
 		for i := 0; i < int(config.Conf.UploadKeeper.RetryTimes); i++ {
 			time.Sleep(config.Conf.UploadKeeper.RetryInterval)
-			logger.Warnf("qid:0x%x, retry upload to keeper", reqID)
+			logger.Debugf("qid:0x%x, retry upload to keeper, retry times:%d", reqID, i+1)
 			err = doRequest(client, jsonData, reqID)
 			if err == nil {
 				return nil

@@ -84,7 +84,7 @@ func prepareCtx(c *gin.Context) {
 	}
 	if reqID == 0 {
 		reqID = generator.GetReqID()
-		logger.Tracef("request %s req_id not set, generate new req_id: 0x%x", c.Request.RequestURI, reqID)
+		logger.Tracef("request:%s, client_ip:%s, req_id not set, generate new req_id: 0x%x", c.Request.RequestURI, c.ClientIP(), reqID)
 	}
 	c.Set(config.ReqIDKey, reqID)
 	ctxLogger := logger.WithField(config.ReqIDKey, reqID)
@@ -334,7 +334,7 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 	defer jsonbuilder.ReturnStream(builder)
 	builder.WritePure(Query2)
 	for i := 0; i < fieldsCount; i++ {
-		logger.Tracef("write column meta %d: %s %s %d", i, rowsHeader.ColNames[i], rowsHeader.TypeDatabaseName(i), rowsHeader.ColLength[i])
+		logger.Tracef("write column meta to client, column:%d, name:%s, column_type:%s, column_len:%d", i, rowsHeader.ColNames[i], rowsHeader.TypeDatabaseName(i), rowsHeader.ColLength[i])
 		builder.WriteArrayStart()
 		builder.WriteString(rowsHeader.ColNames[i])
 		builder.WriteMore()
@@ -450,7 +450,7 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 	if err != nil {
 		logger.Errorf("force flush error:%s", err)
 	}
-	logger.Trace("response finished")
+	logger.Trace("send response finished")
 }
 
 func tryFlush(w gin.ResponseWriter, builder *jsonbuilder.Stream, calculateTiming bool) (int64, error) {
