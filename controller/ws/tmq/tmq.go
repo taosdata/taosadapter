@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"net"
 	"strconv"
 	"sync"
@@ -25,10 +24,13 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/asynctmq"
 	"github.com/taosdata/taosadapter/v3/db/asynctmq/tmqhandle"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
+	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 )
@@ -43,8 +45,8 @@ func NewTMQController() *TMQController {
 	tmqM.Config.MaxMessageSize = 0
 
 	tmqM.HandleConnect(func(session *melody.Session) {
-		logger := session.MustGet("logger").(*logrus.Entry)
-		logger.Debugln("ws connect")
+		logger := wstool.GetLogger(session)
+		logger.Debug("ws connect")
 		session.Set(TaosTMQKey, NewTaosTMQ(session))
 	})
 
@@ -60,12 +62,12 @@ func NewTMQController() *TMQController {
 		go func() {
 			defer t.wg.Done()
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
-			logger := session.MustGet("logger").(*logrus.Entry)
-			logger.Debugln("get ws message data:", string(data))
+			logger := wstool.GetLogger(session)
+			logger.Debugf("get ws message data:%s", data)
 			var action wstool.WSAction
 			err := json.Unmarshal(data, &action)
 			if err != nil {
-				logger.WithError(err).Errorln("unmarshal ws request")
+				logger.Errorf("unmarshal ws request error, err:%s", err)
 				return
 			}
 			switch action.Action {
@@ -75,7 +77,7 @@ func NewTMQController() *TMQController {
 				var req TMQSubscribeReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
-					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal subscribe args")
+					logger.Errorf("unmarshal subscribe args, err:%s, args:%s", err.Error(), action.Args)
 					return
 				}
 				t.subscribe(ctx, session, &req)
@@ -83,7 +85,7 @@ func NewTMQController() *TMQController {
 				var req TMQPollReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
-					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal pool args")
+					logger.Errorf("unmarshal poll args, err:%s, args:%s", err.Error(), action.Args)
 					return
 				}
 				t.poll(ctx, session, &req)
@@ -91,7 +93,7 @@ func NewTMQController() *TMQController {
 				var req TMQFetchReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
-					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch args")
+					logger.Errorf("unmarshal fetch args, err:%s, args:%s", err, action.Args)
 					return
 				}
 				t.fetch(ctx, session, &req)
@@ -99,7 +101,7 @@ func NewTMQController() *TMQController {
 				var req TMQFetchBlockReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
-					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch block args")
+					logger.Errorf("unmarshal fetch_block args, err:%s, args:%s", err, action.Args)
 					return
 				}
 				t.fetchBlock(ctx, session, &req)
@@ -107,7 +109,7 @@ func NewTMQController() *TMQController {
 				var req TMQCommitReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
-					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal commit args")
+					logger.Errorf("unmarshal commit args, err:%s, args:%s", err, action.Args)
 					return
 				}
 				t.commit(ctx, session, &req)
@@ -115,7 +117,7 @@ func NewTMQController() *TMQController {
 				var req TMQFetchJsonMetaReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
-					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch json meta args")
+					logger.Errorf("unmarshal fetch_json_meta args, err:%s, args:%s", err, action.Args)
 					return
 				}
 				t.fetchJsonMeta(ctx, session, &req)
@@ -123,7 +125,7 @@ func NewTMQController() *TMQController {
 				var req TMQFetchRawReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
-					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch raw meta args")
+					logger.Errorf("unmarshal fetch_raw args, err:%s, args:%s", err, action.Args)
 					return
 				}
 				t.fetchRawBlock(ctx, session, &req)
@@ -131,7 +133,7 @@ func NewTMQController() *TMQController {
 				var req TMQFetchRawReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
-					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal fetch raw meta args")
+					logger.Errorf("unmarshal fetch_raw_data args, err:%s, args:%s", err, action.Args)
 					return
 				}
 				t.fetchRawBlockNew(ctx, session, &req)
@@ -139,7 +141,7 @@ func NewTMQController() *TMQController {
 				var req TMQUnsubscribeReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
-					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal unsubscribe args")
+					logger.Errorf("unmarshal unsubscribe args, err:%s, args:%s", err, action.Args)
 					return
 				}
 				t.unsubscribe(ctx, session, &req)
@@ -147,7 +149,7 @@ func NewTMQController() *TMQController {
 				var req TMQGetTopicAssignmentReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
-					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal unsubscribe args")
+					logger.Errorf("unmarshal assignment args, err:%s, args:%s", err, action.Args)
 					return
 				}
 				t.assignment(ctx, session, &req)
@@ -155,7 +157,7 @@ func NewTMQController() *TMQController {
 				var req TMQOffsetSeekReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
-					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal unsubscribe args")
+					logger.Errorf("unmarshal seek args, err:%s, args:%s", err, action.Args)
 					return
 				}
 				t.offsetSeek(ctx, session, &req)
@@ -163,7 +165,7 @@ func NewTMQController() *TMQController {
 				var req TMQCommittedReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
-					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal committed args")
+					logger.Errorf("unmarshal committed args, err:%s, args:%s", err, action.Args)
 					return
 				}
 				session.MustGet(TaosTMQKey).(*TMQ).committed(ctx, session, &req)
@@ -171,7 +173,7 @@ func NewTMQController() *TMQController {
 				var req TMQPositionReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
-					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal position args")
+					logger.Errorf("unmarshal position args, err:%s, args:%s", err, action.Args)
 					return
 				}
 				session.MustGet(TaosTMQKey).(*TMQ).position(ctx, session, &req)
@@ -179,7 +181,7 @@ func NewTMQController() *TMQController {
 				var req TMQListTopicsReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
-					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal list topics args")
+					logger.Errorf("unmarshal list_topics args, err:%s, args:%s", err, action.Args)
 					return
 				}
 				session.MustGet(TaosTMQKey).(*TMQ).listTopics(ctx, session, &req)
@@ -187,12 +189,12 @@ func NewTMQController() *TMQController {
 				var req TMQCommitOffsetReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
-					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal commit offset args")
+					logger.Errorf("unmarshal commit_offset args, err:%s, args:%s", err, action.Args)
 					return
 				}
 				session.MustGet(TaosTMQKey).(*TMQ).commitOffset(ctx, session, &req)
 			default:
-				logger.WithError(err).Errorln("unknown action: " + action.Action)
+				logger.Errorf("unknown action:%s", action.Action)
 				return
 			}
 		}()
@@ -200,8 +202,8 @@ func NewTMQController() *TMQController {
 	tmqM.HandleClose(func(session *melody.Session, i int, s string) error {
 		//message := melody.FormatCloseMessage(i, "")
 		//session.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
-		logger := session.MustGet("logger").(*logrus.Entry)
-		logger.Debugln("ws close", i, s)
+		logger := wstool.GetLogger(session)
+		logger.Debugf("ws close, code:%d, msg %s", i, s)
 		t, exist := session.Get(TaosTMQKey)
 		if exist && t != nil {
 			t.(*TMQ).Close(logger)
@@ -219,8 +221,8 @@ func NewTMQController() *TMQController {
 	})
 
 	tmqM.HandleDisconnect(func(session *melody.Session) {
-		logger := session.MustGet("logger").(*logrus.Entry)
-		logger.Debugln("ws disconnect")
+		logger := wstool.GetLogger(session)
+		logger.Debug("ws disconnect")
 		t, exist := session.Get(TaosTMQKey)
 		if exist && t != nil {
 			t.(*TMQ).Close(logger)
@@ -231,7 +233,9 @@ func NewTMQController() *TMQController {
 
 func (s *TMQController) Init(ctl gin.IRouter) {
 	ctl.GET("rest/tmq", func(c *gin.Context) {
-		logger := log.GetLogger("ws").WithField("wsType", "tmq")
+		sessionID := generator.GetSessionID()
+		logger := log.GetLogger("TMQ").WithFields(logrus.Fields{
+			config.SessionIDKey: sessionID})
 		_ = s.tmqM.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": logger})
 	})
 }
@@ -239,6 +243,7 @@ func (s *TMQController) Init(ctl gin.IRouter) {
 type TMQ struct {
 	Session               *melody.Session
 	consumer              unsafe.Pointer
+	logger                *logrus.Entry
 	tmpMessage            *Message
 	asyncLocker           sync.Mutex
 	thread                unsafe.Pointer
@@ -280,6 +285,7 @@ type Message struct {
 }
 
 func NewTaosTMQ(session *melody.Session) *TMQ {
+	logger := wstool.GetLogger(session)
 	ipAddr := iptool.GetRealIP(session.Request)
 	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
 	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
@@ -297,50 +303,72 @@ func NewTaosTMQ(session *melody.Session) *TMQ {
 		session:               session,
 		ip:                    ipAddr,
 		ipStr:                 ipAddr.String(),
+		logger:                logger,
 	}
 }
 
-func (t *TMQ) waitSignal() {
+func (t *TMQ) waitSignal(logger *logrus.Entry) {
 	defer func() {
+		logger.Trace("exit wait signal")
 		tool.PutRegisterChangeWhiteListHandle(t.whitelistChangeHandle)
 		tool.PutRegisterDropUserHandle(t.dropUserHandle)
 	}()
 	for {
 		select {
 		case <-t.dropUserChan:
-			t.Lock()
+			logger.Info("get drop user signal")
+			isDebug := log.IsDebug()
+			t.lock(logger, isDebug)
 			if t.isClosed() {
+				logger.Trace("server closed")
 				t.Unlock()
 				return
 			}
-			logger := wstool.GetLogger(t.session)
-			logger.WithField("clientIP", t.ipStr).Info("user dropped! close connection!")
+			logger.Info("user dropped! close connection!")
+			s := log.GetLogNow(isDebug)
 			t.session.Close()
+			logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
 			t.Unlock()
+			s = log.GetLogNow(isDebug)
 			t.Close(logger)
+			logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
 			return
 		case <-t.whitelistChangeChan:
-			t.Lock()
+			logger.Info("get whitelist change signal")
+			isDebug := log.IsDebug()
+			s := log.GetLogNow(isDebug)
+			t.lock(logger, isDebug)
 			if t.isClosed() {
+				logger.Trace("server closed")
 				t.Unlock()
 				return
 			}
+			logger.Trace("get whitelist")
+			s = log.GetLogNow(isDebug)
 			whitelist, err := tool.GetWhitelist(t.conn)
+			logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 			if err != nil {
-				logger := wstool.GetLogger(t.session)
-				logger.WithField("clientIP", t.ipStr).WithError(err).Errorln("get whitelist error! close connection!")
+				logger.Errorf("get whitelist error, close connection, err:%s", err)
+				s = log.GetLogNow(isDebug)
 				t.session.Close()
+				logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
 				t.Unlock()
-				t.Close(logger)
+				s = log.GetLogNow(isDebug)
+				t.Close(t.logger)
+				logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
 				return
 			}
+			logger.Tracef("check whitelist, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
 			valid := tool.CheckWhitelist(whitelist, t.ip)
 			if !valid {
-				logger := wstool.GetLogger(t.session)
-				logger.WithField("clientIP", t.ipStr).Errorln("ip not in whitelist! close connection!")
+				logger.Errorf("ip not in whitelist, close connection, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
+				s = log.GetLogNow(isDebug)
 				t.session.Close()
+				logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
 				t.Unlock()
-				t.Close(logger)
+				s = log.GetLogNow(isDebug)
+				t.Close(t.logger)
+				logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
 				return
 			}
 			t.Unlock()
@@ -348,6 +376,13 @@ func (t *TMQ) waitSignal() {
 			return
 		}
 	}
+}
+
+func (t *TMQ) lock(logger *logrus.Entry, isDebug bool) {
+	s := log.GetLogNow(isDebug)
+	logger.Trace("get handler lock")
+	t.Lock()
+	logger.Debugf("get handler lock cost:%s", log.GetLogDuration(isDebug, s))
 }
 
 type TMQSubscribeReq struct {
@@ -377,19 +412,22 @@ type TMQSubscribeResp struct {
 }
 
 func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSubscribeReq) {
-	logger := wstool.GetLogger(session).WithField("action", TMQSubscribe).WithField(config.ReqIDKey, req.ReqID)
+	action := TMQSubscribe
+	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
+	ctx = context.WithValue(ctx, LoggerKey, logger)
 	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
+	logger.Tracef("subscribe request:%+v", req)
 	// lock for consumer and unsubscribed
-	// used for subscribe,unsubscribe and close
-	t.Lock()
-	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
+	// used for subscribe,unsubscribe and
+	t.lock(logger, isDebug)
 	defer t.Unlock()
 	if t.isClosed() {
+		logger.Trace("server closed")
 		return
 	}
 	if t.consumer != nil {
 		if t.unsubscribed {
+			logger.Trace("tmq resubscribe")
 			topicList := wrapper.TMQListNew()
 			defer func() {
 				wrapper.TMQListDestroy(topicList)
@@ -397,41 +435,28 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 			for _, topic := range req.Topics {
 				errCode := wrapper.TMQListAppend(topicList, topic)
 				if errCode != 0 {
-					s = log.GetLogNow(isDebug)
-					t.asyncLocker.Lock()
-					logger.Debugln("tmq_consumer_close get thread lock cost:", log.GetLogDuration(isDebug, s))
-					s = log.GetLogNow(isDebug)
-					asynctmq.TaosaTMQConsumerCloseA(t.thread, t.consumer, t.handler.Handler)
-					<-t.handler.Caller.ConsumerCloseResult
-					logger.Debugln("tmq_consumer_close cost:", log.GetLogDuration(isDebug, s))
-					t.asyncLocker.Unlock()
 					errStr := wrapper.TMQErr2Str(errCode)
-					wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
+					logger.Errorf("tmq list append error, code:%d, msg:%s", errCode, errStr)
+					wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
 					return
 				}
 			}
-			s = log.GetLogNow(isDebug)
-			t.asyncLocker.Lock()
-			logger.Debugln("tmq_subscribe get thread lock cost:", log.GetLogDuration(isDebug, s))
-			s = log.GetLogNow(isDebug)
-			asynctmq.TaosaTMQSubscribeA(t.thread, t.consumer, topicList, t.handler.Handler)
-			errCode := <-t.handler.Caller.SubscribeResult
-			logger.Debugln("tmq_subscribe cost:", log.GetLogDuration(isDebug, s))
-			t.asyncLocker.Unlock()
+			errCode := t.wrapperSubscribe(logger, isDebug, t.consumer, topicList)
 			if errCode != 0 {
 				errStr := wrapper.TMQErr2Str(errCode)
-				wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
+				wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
 				return
 			}
 			t.unsubscribed = false
-			wstool.WSWriteJson(session, &TMQSubscribeResp{
-				Action: TMQSubscribe,
+			wstool.WSWriteJson(session, logger, &TMQSubscribeResp{
+				Action: action,
 				ReqID:  req.ReqID,
 				Timing: wstool.GetDuration(ctx),
 			})
 			return
 		} else {
-			wsTMQErrorMsg(ctx, session, 0xffff, "tmq should have unsubscribed first", TMQSubscribe, req.ReqID, nil)
+			logger.Errorf("tmq should have unsubscribed first")
+			wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq should have unsubscribed first", action, req.ReqID, nil)
 			return
 		}
 	}
@@ -471,14 +496,16 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		var err error
 		t.isAutoCommit, err = strconv.ParseBool(req.AutoCommit)
 		if err != nil {
-			wsTMQErrorMsg(ctx, session, 0xffff, err.Error(), TMQSubscribe, req.ReqID, nil)
+			logger.Errorf("parse auto commit:%s as bool error:%s", req.AutoCommit, err)
+			wsTMQErrorMsg(ctx, session, logger, 0xffff, err.Error(), action, req.ReqID, nil)
 			return
 		}
 	}
 	if len(req.AutoCommitIntervalMS) != 0 {
 		autocommitIntervalMS, err := strconv.ParseInt(req.AutoCommitIntervalMS, 10, 64)
 		if err != nil {
-			wsTMQErrorMsg(ctx, session, 0xffff, err.Error(), TMQSubscribe, req.ReqID, nil)
+			logger.Errorf("parse auto commit interval:%s as int error:%s", req.AutoCommitIntervalMS, err)
+			wsTMQErrorMsg(ctx, session, logger, 0xffff, err.Error(), action, req.ReqID, nil)
 			return
 		}
 		t.autocommitInterval = time.Duration(autocommitIntervalMS) * time.Millisecond
@@ -494,129 +521,80 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		errCode = wrapper.TMQConfSet(tmqConfig, k, v)
 		if errCode != httperror.SUCCESS {
 			errStr := wrapper.TMQErr2Str(errCode)
-			wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
+			logger.Errorf("tmq conf set error, k:%s, v:%s, code:%d, msg:%s", k, v, errCode, errStr)
+			wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
 			return
 		}
 	}
-	s = log.GetLogNow(isDebug)
-	t.asyncLocker.Lock()
-	logger.Debugln("tmq_consumer_new get thread lock cost:", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	asynctmq.TaosaTMQNewConsumerA(t.thread, tmqConfig, t.handler.Handler)
-	result := <-t.handler.Caller.NewConsumerResult
-	var err error
-	if len(result.ErrStr) > 0 {
-		err = taoserrors.NewError(-1, result.ErrStr)
-	}
-	if result.Consumer == nil {
-		err = taoserrors.NewError(-1, "new consumer return nil")
-	}
-	logger.Debugln("tmq_consumer_new cost:", log.GetLogDuration(isDebug, s))
-	t.asyncLocker.Unlock()
+	cPointer, err := t.wrapperConsumerNew(logger, isDebug, tmqConfig)
 	if err != nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, err.Error(), TMQSubscribe, req.ReqID, nil)
+		logger.Errorf("tmq consumer new error:%s", err)
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, err.Error(), action, req.ReqID, nil)
 		return
 	}
-	cPointer := result.Consumer
 	conn := wrapper.TMQGetConnect(cPointer)
+	logger.Trace("get whitelist")
 	whitelist, err := tool.GetWhitelist(conn)
 	if err != nil {
-		s = log.GetLogNow(isDebug)
-		t.asyncLocker.Lock()
-		logger.Debugln("tmq_consumer_close get thread lock cost:", log.GetLogDuration(isDebug, s))
-		s = log.GetLogNow(isDebug)
-		asynctmq.TaosaTMQConsumerCloseA(t.thread, t.consumer, t.handler.Handler)
-		<-t.handler.Caller.ConsumerCloseResult
-		logger.Debugln("tmq_consumer_close cost:", log.GetLogDuration(isDebug, s))
-		t.asyncLocker.Unlock()
-		wstool.WSError(ctx, session, err, TMQSubscribe, req.ReqID)
+		logger.Errorf("get whitelist error:%s", err.Error())
+		t.wrapperCloseConsumer(logger, isDebug, cPointer)
+		wstool.WSError(ctx, session, err, action, req.ReqID)
 		return
 	}
+	logger.Tracef("check whitelist, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
 	valid := tool.CheckWhitelist(whitelist, t.ip)
 	if !valid {
-		s = log.GetLogNow(isDebug)
-		t.asyncLocker.Lock()
-		logger.Debugln("tmq_consumer_close get thread lock cost:", log.GetLogDuration(isDebug, s))
-		s = log.GetLogNow(isDebug)
-		asynctmq.TaosaTMQConsumerCloseA(t.thread, t.consumer, t.handler.Handler)
-		<-t.handler.Caller.ConsumerCloseResult
-		logger.Debugln("tmq_consumer_close cost:", log.GetLogDuration(isDebug, s))
-		t.asyncLocker.Unlock()
-		wstool.WSErrorMsg(ctx, session, 0xffff, "whitelist prohibits current IP access", TMQSubscribe, req.ReqID)
+		logger.Errorf("whitelist prohibits current IP access, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
+		t.wrapperCloseConsumer(logger, isDebug, cPointer)
+		wstool.WSErrorMsg(ctx, session, 0xffff, "whitelist prohibits current IP access", action, req.ReqID)
 		return
 	}
+	logger.Trace("register change whitelist")
 	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle)
 	if err != nil {
-		s = log.GetLogNow(isDebug)
-		t.asyncLocker.Lock()
-		logger.Debugln("tmq_consumer_close get thread lock cost:", log.GetLogDuration(isDebug, s))
-		s = log.GetLogNow(isDebug)
-		asynctmq.TaosaTMQConsumerCloseA(t.thread, t.consumer, t.handler.Handler)
-		<-t.handler.Caller.ConsumerCloseResult
-		logger.Debugln("tmq_consumer_close cost:", log.GetLogDuration(isDebug, s))
-		t.asyncLocker.Unlock()
-		wstool.WSError(ctx, session, err, TMQSubscribe, req.ReqID)
+		logger.Errorf("register change whitelist error:%s", err)
+		t.wrapperCloseConsumer(logger, isDebug, cPointer)
+		wstool.WSError(ctx, session, err, action, req.ReqID)
 		return
 	}
+	logger.Trace("register drop user")
 	err = tool.RegisterDropUser(conn, t.dropUserHandle)
 	if err != nil {
-		s = log.GetLogNow(isDebug)
-		t.asyncLocker.Lock()
-		logger.Debugln("tmq_consumer_close get thread lock cost:", log.GetLogDuration(isDebug, s))
-		s = log.GetLogNow(isDebug)
-		asynctmq.TaosaTMQConsumerCloseA(t.thread, t.consumer, t.handler.Handler)
-		<-t.handler.Caller.ConsumerCloseResult
-		logger.Debugln("tmq_consumer_close cost:", log.GetLogDuration(isDebug, s))
-		t.asyncLocker.Unlock()
-		wstool.WSError(ctx, session, err, TMQSubscribe, req.ReqID)
+		logger.Errorf("register drop user error:%s", err)
+		t.wrapperCloseConsumer(logger, isDebug, cPointer)
+		wstool.WSError(ctx, session, err, action, req.ReqID)
 		return
 	}
 	t.conn = conn
-	go t.waitSignal()
+	logger.Trace("start to wait signal")
+	go t.waitSignal(t.logger)
 	topicList := wrapper.TMQListNew()
 	defer func() {
 		wrapper.TMQListDestroy(topicList)
 	}()
 	for _, topic := range req.Topics {
-		errCode := wrapper.TMQListAppend(topicList, topic)
+		logger.Tracef("tmq append topic:%s", topic)
+		errCode = wrapper.TMQListAppend(topicList, topic)
 		if errCode != 0 {
 			errStr := wrapper.TMQErr2Str(errCode)
-			s = log.GetLogNow(isDebug)
-			t.asyncLocker.Lock()
-			logger.Debugln("tmq_consumer_close get thread lock cost:", log.GetLogDuration(isDebug, s))
-			s = log.GetLogNow(isDebug)
-			asynctmq.TaosaTMQConsumerCloseA(t.thread, t.consumer, t.handler.Handler)
-			<-t.handler.Caller.ConsumerCloseResult
-			logger.Debugln("tmq_consumer_close cost:", log.GetLogDuration(isDebug, s))
-			t.asyncLocker.Unlock()
-			wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
+			logger.Errorf("tmq list append error, tpic:%s, code:%d, msg:%s", topic, errCode, errStr)
+			t.wrapperCloseConsumer(logger, isDebug, cPointer)
+			wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
 			return
 		}
 	}
-	s = log.GetLogNow(isDebug)
-	t.asyncLocker.Lock()
-	logger.Debugln("tmq_subscribe get thread lock cost:", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	asynctmq.TaosaTMQSubscribeA(t.thread, cPointer, topicList, t.handler.Handler)
-	errCode = <-t.handler.Caller.SubscribeResult
-	logger.Debugln("tmq_subscribe cost:", log.GetLogDuration(isDebug, s))
-	t.asyncLocker.Unlock()
+
+	errCode = t.wrapperSubscribe(logger, isDebug, cPointer, topicList)
 	if errCode != 0 {
 		errStr := wrapper.TMQErr2Str(errCode)
-		s = log.GetLogNow(isDebug)
-		t.asyncLocker.Lock()
-		logger.Debugln("tmq_consumer_close get thread lock cost:", log.GetLogDuration(isDebug, s))
-		s = log.GetLogNow(isDebug)
-		asynctmq.TaosaTMQConsumerCloseA(t.thread, cPointer, t.handler.Handler)
-		<-t.handler.Caller.ConsumerCloseResult
-		logger.Debugln("tmq_consumer_close cost:", log.GetLogDuration(isDebug, s))
-		t.asyncLocker.Unlock()
-		wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSubscribe, req.ReqID, nil)
+		logger.Errorf("tmq subscribe error:%d %s", errCode, errStr)
+		t.wrapperCloseConsumer(logger, isDebug, cPointer)
+		wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
 		return
 	}
 	t.consumer = cPointer
-	wstool.WSWriteJson(session, &TMQSubscribeResp{
-		Action: TMQSubscribe,
+	wstool.WSWriteJson(session, logger, &TMQSubscribeResp{
+		Action: action,
 		ReqID:  req.ReqID,
 		Timing: wstool.GetDuration(ctx),
 	})
@@ -637,38 +615,33 @@ type TMQCommitResp struct {
 }
 
 func (t *TMQ) commit(ctx context.Context, session *melody.Session, req *TMQCommitReq) {
+	action := TMQCommit
+	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
+	logger.Tracef("commit request:%+v", req)
 	if t.consumer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQCommit, req.ReqID, nil)
+		logger.Error("tmq not init")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq not init", action, req.ReqID, nil)
 		return
 	}
 	// commit all
-	logger := wstool.GetLogger(session).WithField("action", TMQCommit).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-	t.asyncLocker.Lock()
-	// check if closed
-	if t.isClosed() {
-		t.asyncLocker.Unlock()
+	errCode, closed := t.wrapperCommit(logger, isDebug)
+	if closed {
+		logger.Trace("server closed")
 		return
 	}
-	logger.Debugln("get async lock cost:", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	asynctmq.TaosaTMQCommitA(t.thread, t.consumer, nil, t.handler.Handler)
-	errCode := <-t.handler.Caller.CommitResult
-	t.asyncLocker.Unlock()
-	logger.Debugln("tmq_commit_sync cost:", log.GetLogDuration(isDebug, s))
 	if errCode != 0 {
 		errStr := wrapper.TMQErr2Str(errCode)
-		wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQCommit, req.ReqID, nil)
+		wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
 		return
 	}
 	resp := &TMQCommitResp{
-		Action:    TMQCommit,
+		Action:    action,
 		ReqID:     req.ReqID,
 		MessageID: req.MessageID,
 		Timing:    wstool.GetDuration(ctx),
 	}
-	wstool.WSWriteJson(session, resp)
+	wstool.WSWriteJson(session, logger, resp)
 }
 
 type TMQPollReq struct {
@@ -692,61 +665,50 @@ type TMQPollResp struct {
 }
 
 func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq) {
+	action := TMQPoll
+	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
+	logger.Tracef("poll request:%+v", req)
 	if t.consumer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQPoll, req.ReqID, nil)
+		logger.Error("tmq not init")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq not init", action, req.ReqID, nil)
 		return
 	}
 	now := time.Now()
 	isDebug := log.IsDebug()
-	logger := wstool.GetLogger(session).WithField("action", TMQPoll).WithField(config.ReqIDKey, req.ReqID)
 	if t.isAutoCommit && now.After(t.nextTime) {
-		t.asyncLocker.Lock()
-		if t.isClosed() {
-			t.asyncLocker.Unlock()
+		errCode, closed := t.wrapperCommit(logger, isDebug)
+		if closed {
+			logger.Trace("server closed")
 			return
 		}
-		s := log.GetLogNow(isDebug)
-		logger.Debugln("get commit async lock cost:", log.GetLogDuration(isDebug, s))
-		s = log.GetLogNow(isDebug)
-		asynctmq.TaosaTMQCommitA(t.thread, t.consumer, nil, t.handler.Handler)
-		errCode := <-t.handler.Caller.CommitResult
-		logger.Debugln("tmq_commit_sync cost:", log.GetLogDuration(isDebug, s))
-		t.asyncLocker.Unlock()
 		if errCode != 0 {
 			errStr := wrapper.TMQErr2Str(errCode)
-			logger.Errorln("tmq autocommit error:", taoserrors.NewError(int(errCode), errStr))
+			logger.Errorf("tmq autocommit error:%s", taoserrors.NewError(int(errCode), errStr))
 		}
 		t.nextTime = now.Add(t.autocommitInterval)
 	}
-	s := log.GetLogNow(isDebug)
-	t.asyncLocker.Lock()
-	if t.isClosed() {
-		t.asyncLocker.Unlock()
-		return
+	message, closed := t.wrapperPoll(logger, isDebug, req.BlockingTime)
+	if closed {
+		logger.Trace("server closed")
 	}
-	logger.Debugln("get async lock cost:", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	asynctmq.TaosaTMQPollA(t.thread, t.consumer, req.BlockingTime, t.handler.Handler)
-	message := <-t.handler.Caller.PollResult
-	logger.Debugln("tmq_poll cost:", log.GetLogDuration(isDebug, s))
-	t.asyncLocker.Unlock()
 	resp := &TMQPollResp{
-		Action: TMQPoll,
+		Action: action,
 		ReqID:  req.ReqID,
 	}
 	if message != nil {
-		s = log.GetLogNow(isDebug)
-		logger.Debugln("free message cost:", log.GetLogDuration(isDebug, s))
 		messageType := wrapper.TMQGetResType(message)
 		if messageTypeIsValid(messageType) {
-			s = log.GetLogNow(isDebug)
 			t.tmpMessage.Lock()
 			defer t.tmpMessage.Unlock()
 			if t.tmpMessage.CPointer != nil {
-				t.asyncLocker.Lock()
-				asynctmq.TaosaTMQFreeResultA(t.thread, t.tmpMessage.CPointer, t.handler.Handler)
-				<-t.handler.Caller.FreeResult
-				t.asyncLocker.Unlock()
+				logger.Tracef("free old message, p:%p", t.tmpMessage.CPointer)
+				closed = t.wrapperFreeResult(logger, isDebug)
+				if closed {
+					logger.Tracef("server closed, free result directly, message:%p", message)
+					syncinterface.FreeResult(message, logger, isDebug)
+					logger.Trace("free result directly finish")
+					return
+				}
 			}
 			index := atomic.AddUint64(&t.tmpMessage.Index, 1)
 
@@ -764,15 +726,18 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 			resp.MessageID = t.tmpMessage.Index
 			resp.MessageType = messageType
 			resp.Offset = t.tmpMessage.Offset
-			logger.Debugln("get message cost:", log.GetLogDuration(isDebug, s))
+			logger.Tracef("get message %d, topic:%s, vgroup:%d, offset:%d, db:%s", uintptr(message), t.tmpMessage.Topic, t.tmpMessage.VGroupID, t.tmpMessage.Offset, resp.Database)
 		} else {
-			wsTMQErrorMsg(ctx, session, 0xffff, "unavailable tmq type:"+strconv.Itoa(int(messageType)), TMQPoll, req.ReqID, nil)
+			logger.Errorf("unavailable tmq type:%d", messageType)
+			syncinterface.FreeResult(message, logger, isDebug)
+			logger.Trace("free result directly finish")
+			wsTMQErrorMsg(ctx, session, logger, 0xffff, "unavailable tmq type:"+strconv.Itoa(int(messageType)), action, req.ReqID, nil)
 			return
 		}
 	}
 
 	resp.Timing = wstool.GetDuration(ctx)
-	wstool.WSWriteJson(session, resp)
+	wstool.WSWriteJson(session, logger, resp)
 }
 
 type TMQFetchReq struct {
@@ -797,78 +762,76 @@ type TMQFetchResp struct {
 }
 
 func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchReq) {
+	action := TMQFetch
+	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
+	logger.Tracef("fetch request:%+v", req)
 	if t.consumer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQFetch, req.ReqID, &req.MessageID)
+		logger.Error("tmq not init")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq not init", action, req.ReqID, &req.MessageID)
 		return
 	}
-	logger := wstool.GetLogger(session).WithField("action", TMQFetch).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
-	logger.Debugln("get list lock cost:", log.GetLogDuration(isDebug, s))
 	t.tmpMessage.Lock()
 	defer t.tmpMessage.Unlock()
+	logger.Debugf("get message lock cost:%s", log.GetLogDuration(isDebug, s))
 	if t.tmpMessage.CPointer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "message has been freed", TMQFetch, req.ReqID, &req.MessageID)
+		logger.Error("message has been freed")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "message has been freed", action, req.ReqID, &req.MessageID)
 		return
 	}
 	message := t.tmpMessage
 	if message.Index != req.MessageID {
-		wsTMQErrorMsg(ctx, session, 0xffff, "message ID are not equal", TMQFetch, req.ReqID, &req.MessageID)
+		logger.Errorf("message ID are not equal, req:%d, message:%d", req.MessageID, message.Index)
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "message ID are not equal", action, req.ReqID, &req.MessageID)
 		return
 	}
 
 	if !canGetData(message.Type) {
-		wsTMQErrorMsg(ctx, session, 0xffff, "message type is not data", TMQFetch, req.ReqID, &req.MessageID)
+		logger.Errorf("message type is not data, type:%d", message.Type)
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "message type is not data", action, req.ReqID, &req.MessageID)
 		return
 	}
-	s = log.GetLogNow(isDebug)
-	logger.Debugln("get message lock cost:", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	t.asyncLocker.Lock()
-	if t.isClosed() {
-		t.asyncLocker.Unlock()
+	rawBlock, closed := t.wrapperFetchRawBlock(logger, isDebug, message.CPointer)
+	if closed {
+		logger.Trace("server closed")
 		return
 	}
-	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	asynctmq.TaosaTMQFetchRawBlockA(t.thread, message.CPointer, t.handler.Handler)
-	rawBlock := <-t.handler.Caller.FetchRawBlockResult
 	errCode := rawBlock.Code
 	blockSize := rawBlock.BlockSize
 	block := rawBlock.Block
-	logger.Debugln("fetch_raw_block cost:", log.GetLogDuration(isDebug, s))
-	t.asyncLocker.Unlock()
 	if errCode != 0 {
 		errStr := wrapper.TMQErr2Str(int32(errCode))
-		wsTMQErrorMsg(ctx, session, errCode, errStr, TMQFetch, req.ReqID, &req.MessageID)
+		logger.Errorf("tmq fetch raw block error, code:%d, msg:%s", errCode, errStr)
+		wsTMQErrorMsg(ctx, session, logger, errCode, errStr, action, req.ReqID, &req.MessageID)
 		return
 	}
 	resp := &TMQFetchResp{
-		Action:    TMQFetch,
+		Action:    action,
 		ReqID:     req.ReqID,
 		MessageID: req.MessageID,
 	}
 	if blockSize == 0 {
 		resp.Completed = true
-		wstool.WSWriteJson(session, resp)
+		wstool.WSWriteJson(session, logger, resp)
 		return
 	}
 	s = log.GetLogNow(isDebug)
 	resp.TableName = wrapper.TMQGetTableName(message.CPointer)
-	logger.Debugln("tmq_get_table_name cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugf("tmq_get_table_name cost:%s", log.GetLogDuration(isDebug, s))
 	resp.Rows = blockSize
 	s = log.GetLogNow(isDebug)
 	resp.FieldsCount = wrapper.TaosNumFields(message.CPointer)
-	logger.Debugln("num_fields cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugf("num_fields cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	rowsHeader, _ := wrapper.ReadColumn(message.CPointer, resp.FieldsCount)
-	logger.Debugln("read column cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugf("read column cost:%s", log.GetLogDuration(isDebug, s))
 	resp.FieldsNames = rowsHeader.ColNames
 	resp.FieldsTypes = rowsHeader.ColTypes
 	resp.FieldsLengths = rowsHeader.ColLength
 	s = log.GetLogNow(isDebug)
 	resp.Precision = wrapper.TaosResultPrecision(message.CPointer)
-	logger.Debugln("result_precision cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugf("result_precision cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	blockLength := int(parser.RawBlockGetLength(block))
 	if cap(message.buffer) < blockLength+24 {
@@ -880,8 +843,8 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 	binary.LittleEndian.PutUint64(message.buffer[16:], req.MessageID)
 	bytesutil.Copy(block, message.buffer, 24, blockLength)
 	resp.Timing = wstool.GetDuration(ctx)
-	logger.Debugln("handle data cost:", log.GetLogDuration(isDebug, s))
-	wstool.WSWriteJson(session, resp)
+	logger.Debugf("handle data cost:%s", log.GetLogDuration(isDebug, s))
+	wstool.WSWriteJson(session, logger, resp)
 }
 
 type TMQFetchBlockReq struct {
@@ -890,36 +853,43 @@ type TMQFetchBlockReq struct {
 }
 
 func (t *TMQ) fetchBlock(ctx context.Context, session *melody.Session, req *TMQFetchBlockReq) {
+	action := TMQFetchBlock
+	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
+	logger.Tracef("fetch block request:%+v", req)
 	if t.consumer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQFetchBlock, req.ReqID, &req.MessageID)
+		logger.Error("tmq not init")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq not init", action, req.ReqID, &req.MessageID)
 		return
 	}
-	logger := wstool.GetLogger(session).WithField("action", TMQFetchBlock).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
-	logger.Debugln("get list lock cost:", log.GetLogDuration(isDebug, s))
 	t.tmpMessage.Lock()
 	defer t.tmpMessage.Unlock()
+	logger.Debugf("get message lock cost:%s", log.GetLogDuration(isDebug, s))
 	if t.tmpMessage.CPointer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "message has been freed", TMQFetchBlock, req.ReqID, &req.MessageID)
+		logger.Error("message has been freed")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "message has been freed", action, req.ReqID, &req.MessageID)
 		return
 	}
 	message := t.tmpMessage
 	if message.Index != req.MessageID {
-		wsTMQErrorMsg(ctx, session, 0xffff, "message is nil", TMQFetchBlock, req.ReqID, &req.MessageID)
+		logger.Errorf("message ID are not equal, req:%d, message:%d", req.MessageID, message.Index)
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "message is nil", action, req.ReqID, &req.MessageID)
 		return
 	}
 	if !canGetData(message.Type) {
-		wsTMQErrorMsg(ctx, session, 0xffff, "message type is not data", TMQFetchBlock, req.ReqID, &req.MessageID)
+		logger.Errorf("message type is not data, type:%d", message.Type)
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "message type is not data", action, req.ReqID, &req.MessageID)
 		return
 	}
 	if message.buffer == nil || len(message.buffer) == 0 {
-		wsTMQErrorMsg(ctx, session, 0xffff, "no fetch data", TMQFetchBlock, req.ReqID, &req.MessageID)
+		logger.Errorf("no fetch data")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "no fetch data", action, req.ReqID, &req.MessageID)
 		return
 	}
 	s = log.GetLogNow(isDebug)
 	binary.LittleEndian.PutUint64(message.buffer, uint64(wstool.GetDuration(ctx)))
-	logger.Debugln("handle data cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugf("handle data cost:%s", log.GetLogDuration(isDebug, s))
 	session.WriteBinary(message.buffer)
 }
 
@@ -929,41 +899,41 @@ type TMQFetchRawReq struct {
 }
 
 func (t *TMQ) fetchRawBlock(ctx context.Context, session *melody.Session, req *TMQFetchRawReq) {
+	action := TMQFetchRaw
+	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
+	logger.Tracef("fetch raw request:%+v", req)
 	if t.consumer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQFetchRaw, req.ReqID, &req.MessageID)
+		logger.Error("tmq not init")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq not init", action, req.ReqID, &req.MessageID)
 		return
 	}
-	logger := wstool.GetLogger(session).WithField("action", TMQFetchRaw).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.tmpMessage.Lock()
 	defer t.tmpMessage.Unlock()
+	logger.Debugf("get message lock cost:%s", log.GetLogDuration(isDebug, s))
 	if t.tmpMessage.CPointer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "message has been freed", TMQFetchRaw, req.ReqID, &req.MessageID)
+		logger.Error("message has been freed")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "message has been freed", action, req.ReqID, &req.MessageID)
 		return
 	}
 	message := t.tmpMessage
 	if message.Index != req.MessageID {
-		wsTMQErrorMsg(ctx, session, 0xffff, "message ID is not equal", TMQFetchRaw, req.ReqID, &req.MessageID)
+		logger.Errorf("message ID are not equal, req:%d, message:%d", req.MessageID, message.Index)
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "message ID is not equal", action, req.ReqID, &req.MessageID)
 		return
 	}
-	s = log.GetLogNow(isDebug)
-	t.asyncLocker.Lock()
-	if t.isClosed() {
-		t.asyncLocker.Unlock()
-		return
-	}
-	logger.Debugln("tmq_get_raw get lock cost:", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
 	rawData := asynctmq.TaosaInitTMQRaw()
 	defer asynctmq.TaosaFreeTMQRaw(rawData)
-	asynctmq.TaosaTMQGetRawA(t.thread, message.CPointer, rawData, t.handler.Handler)
-	errCode := <-t.handler.Caller.GetRawResult
-	logger.Debugln("tmq_get_raw cost:", log.GetLogDuration(isDebug, s))
-	t.asyncLocker.Unlock()
+	errCode, closed := t.wrapperGetRaw(logger, isDebug, message.CPointer, rawData)
+	if closed {
+		logger.Trace("server closed")
+		return
+	}
 	if errCode != 0 {
 		errStr := wrapper.TMQErr2Str(errCode)
-		wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQFetchRaw, req.ReqID, &req.MessageID)
+		logger.Errorf("tmq get raw error, code:%d, msg:%s", errCode, errStr)
+		wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, &req.MessageID)
 		return
 	}
 	s = log.GetLogNow(isDebug)
@@ -982,47 +952,47 @@ func (t *TMQ) fetchRawBlock(ctx context.Context, session *melody.Session, req *T
 	bytesutil.Copy(data, message.buffer, 38, blockLength)
 	s1 := log.GetLogNow(isDebug)
 	wrapper.TMQFreeRaw(rawData)
-	logger.Debugln("tmq_free_raw cost:", log.GetLogDuration(isDebug, s1))
-	logger.Debugln("handle binary data cost:", log.GetLogDuration(isDebug, s))
-	session.WriteBinary(message.buffer)
+	logger.Debugf("tmq_free_raw cost:%s", log.GetLogDuration(isDebug, s1))
+	logger.Debugf("handle binary data cost:%s", log.GetLogDuration(isDebug, s))
+	wstool.WSWriteBinary(session, message.buffer, logger)
 }
 
 func (t *TMQ) fetchRawBlockNew(ctx context.Context, session *melody.Session, req *TMQFetchRawReq) {
 	action := TMQFetchRawNew
+	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
+	logger.Tracef("fetch raw request:%+v", req)
 	if t.consumer == nil {
+		logger.Trace("tmq not init")
 		tmqFetchRawBlockErrorMsg(ctx, session, 0xffff, "tmq not init", req.ReqID, req.MessageID)
 		return
 	}
-	logger := wstool.GetLogger(session).WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.tmpMessage.Lock()
 	defer t.tmpMessage.Unlock()
+	logger.Debugf("get message lock cost:%s", log.GetLogDuration(isDebug, s))
 	if t.tmpMessage.CPointer == nil {
+		logger.Error("message has been freed")
 		tmqFetchRawBlockErrorMsg(ctx, session, 0xffff, "message has been freed", req.ReqID, req.MessageID)
 		return
 	}
 	message := t.tmpMessage
 	if message.Index != req.MessageID {
+		logger.Errorf("message ID are not equal, req:%d, message:%d", req.MessageID, message.Index)
 		tmqFetchRawBlockErrorMsg(ctx, session, 0xffff, "message ID is not equal", req.ReqID, req.MessageID)
 		return
 	}
 	s = log.GetLogNow(isDebug)
-	t.asyncLocker.Lock()
-	if t.isClosed() {
-		t.asyncLocker.Unlock()
-		return
-	}
-	logger.Debugln("tmq_get_raw get lock cost:", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
 	rawData := asynctmq.TaosaInitTMQRaw()
 	defer asynctmq.TaosaFreeTMQRaw(rawData)
-	asynctmq.TaosaTMQGetRawA(t.thread, message.CPointer, rawData, t.handler.Handler)
-	errCode := <-t.handler.Caller.GetRawResult
-	logger.Debugln("tmq_get_raw cost:", log.GetLogDuration(isDebug, s))
-	t.asyncLocker.Unlock()
+	errCode, closed := t.wrapperGetRaw(logger, isDebug, message.CPointer, rawData)
+	if closed {
+		logger.Trace("server closed")
+		return
+	}
 	if errCode != 0 {
 		errStr := wrapper.TMQErr2Str(errCode)
+		logger.Errorf("tmq get raw error, code:%d, msg:%s", errCode, errStr)
 		tmqFetchRawBlockErrorMsg(ctx, session, int(errCode), errStr, req.ReqID, req.MessageID)
 		return
 	}
@@ -1031,9 +1001,9 @@ func (t *TMQ) fetchRawBlockNew(ctx context.Context, session *melody.Session, req
 	message.buffer = wsFetchRawBlockMessage(ctx, message.buffer, req.ReqID, req.MessageID, metaType, length, data)
 	s1 := log.GetLogNow(isDebug)
 	wrapper.TMQFreeRaw(rawData)
-	logger.Debugln("tmq_free_raw cost:", log.GetLogDuration(isDebug, s1))
-	logger.Debugln("handle binary data cost:", log.GetLogDuration(isDebug, s))
-	session.WriteBinary(message.buffer)
+	logger.Debugf("tmq_free_raw cost:%s", log.GetLogDuration(isDebug, s1))
+	logger.Debugf("handle binary data cost:%s", log.GetLogDuration(isDebug, s))
+	wstool.WSWriteBinary(session, message.buffer, logger)
 }
 
 type TMQFetchJsonMetaReq struct {
@@ -1051,40 +1021,37 @@ type TMQFetchJsonMetaResp struct {
 }
 
 func (t *TMQ) fetchJsonMeta(ctx context.Context, session *melody.Session, req *TMQFetchJsonMetaReq) {
+	action := TMQFetchJsonMeta
+	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
+	logger.Tracef("fetch json meta request:%+v", req)
 	if t.consumer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQFetchJsonMeta, req.ReqID, &req.MessageID)
+		logger.Error("tmq not init")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq not init", action, req.ReqID, &req.MessageID)
 		return
 	}
-	logger := wstool.GetLogger(session).WithField("action", TMQFetchJsonMeta).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	t.tmpMessage.Lock()
 	defer t.tmpMessage.Unlock()
+	logger.Debugf("get message lock cost:%s", log.GetLogDuration(isDebug, s))
 	if t.tmpMessage.CPointer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "message has been freed", TMQFetchJsonMeta, req.ReqID, &req.MessageID)
+		logger.Error("message has been freed")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "message has been freed", action, req.ReqID, &req.MessageID)
 		return
 	}
 	message := t.tmpMessage
 	if message.Index != req.MessageID {
-		wsTMQErrorMsg(ctx, session, 0xffff, "message ID is not equal", TMQFetchJsonMeta, req.ReqID, &req.MessageID)
+		logger.Errorf("message ID are not equal, req:%d, message:%d", req.MessageID, message.Index)
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "message ID is not equal", action, req.ReqID, &req.MessageID)
 		return
 	}
-
-	logger.Debugln("get message lock cost:", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	t.asyncLocker.Lock()
-	if t.isClosed() {
-		t.asyncLocker.Unlock()
+	jsonMeta, closed := t.wrapperGetJsonMeta(logger, isDebug, message.CPointer)
+	if closed {
+		logger.Trace("server closed")
 		return
 	}
-	logger.Debugln("get thread lock cost:", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	asynctmq.TaosaTMQGetJsonMetaA(t.thread, message.CPointer, t.handler.Handler)
-	jsonMeta := <-t.handler.Caller.GetJsonMetaResult
-	logger.Debugln("tmq_get_json_meta cost:", log.GetLogDuration(isDebug, s))
-	t.asyncLocker.Unlock()
 	resp := TMQFetchJsonMetaResp{
-		Action:    TMQFetchJsonMeta,
+		Action:    action,
 		ReqID:     req.ReqID,
 		MessageID: req.MessageID,
 	}
@@ -1107,9 +1074,9 @@ func (t *TMQ) fetchJsonMeta(ctx context.Context, session *melody.Session, req *T
 	}
 	s = log.GetLogNow(isDebug)
 	wrapper.TMQFreeJsonMeta(jsonMeta)
-	logger.Debugln("tmq_free_json_meta cost:", log.GetLogDuration(isDebug, s))
+	logger.Debugf("tmq_free_json_meta cost:%s", log.GetLogDuration(isDebug, s))
 	resp.Timing = wstool.GetDuration(ctx)
-	wstool.WSWriteJson(session, resp)
+	wstool.WSWriteJson(session, logger, resp)
 }
 
 type TMQUnsubscribeReq struct {
@@ -1125,33 +1092,38 @@ type TMQUnsubscribeResp struct {
 }
 
 func (t *TMQ) unsubscribe(ctx context.Context, session *melody.Session, req *TMQUnsubscribeReq) {
-	logger := wstool.GetLogger(session).WithField("action", TMQUnsubscribe).WithField(config.ReqIDKey, req.ReqID)
+	action := TMQUnsubscribe
+	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
+	logger.Tracef("unsubscribe request:%+v", req)
 	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-	t.Lock()
-	logger.Debugln("get global lock cost:", log.GetLogDuration(isDebug, s))
+	t.lock(logger, isDebug)
 	defer t.Unlock()
 	if t.isClosed() {
+		logger.Trace("server closed")
 		return
 	}
 	if t.consumer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQUnsubscribe, req.ReqID, nil)
+		logger.Error("tmq not init")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq not init", action, req.ReqID, nil)
 		return
 	}
-	t.asyncLocker.Lock()
-	asynctmq.TaosaTMQUnsubscribeA(t.thread, t.consumer, t.handler.Handler)
-	errCode := <-t.handler.Caller.UnsubscribeResult
-	t.asyncLocker.Unlock()
+	errCode, closed := t.wrapperUnsubscribe(logger, isDebug)
+	if closed {
+		logger.Trace("server closed")
+		return
+	}
 	if errCode != 0 {
 		errStr := wrapper.TMQErr2Str(errCode)
-		logger.WithError(taoserrors.NewError(int(errCode), errStr)).Error("tmq unsubscribe consumer")
-		wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQUnsubscribe, req.ReqID, nil)
+		logger.Errorf("tmq unsubscribe error,consumer:%p, code:%d, msg:%s", t.consumer, errCode, errStr)
+		wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
 		return
 	}
+	logger.Trace("free all result")
 	t.freeMessage(false)
+	logger.Trace("free all result finished")
 	t.unsubscribed = true
-	wstool.WSWriteJson(session, &TMQUnsubscribeResp{
-		Action: TMQUnsubscribe,
+	wstool.WSWriteJson(session, logger, &TMQUnsubscribeResp{
+		Action: action,
 		ReqID:  req.ReqID,
 		Timing: wstool.GetDuration(ctx),
 	})
@@ -1172,32 +1144,27 @@ type TMQGetTopicAssignmentResp struct {
 }
 
 func (t *TMQ) assignment(ctx context.Context, session *melody.Session, req *TMQGetTopicAssignmentReq) {
+	action := TMQGetTopicAssignment
+	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
+	logger.Tracef("assignment request:%+v", req)
 	if t.consumer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQGetTopicAssignment, req.ReqID, nil)
+		logger.Error("tmq not init")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq not init", action, req.ReqID, nil)
 		return
 	}
-	logger := wstool.GetLogger(session).WithField("action", TMQGetTopicAssignment).WithField(config.ReqIDKey, req.ReqID)
-	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-	t.asyncLocker.Lock()
-	if t.isClosed() {
-		t.asyncLocker.Unlock()
+	result, closed := t.wrapperGetTopicAssignment(logger, log.IsDebug(), req.Topic)
+	if closed {
+		logger.Trace("server closed")
 		return
 	}
-	logger.Debugln("get_topic_assignment get thread lock cost:", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	asynctmq.TaosaTMQGetTopicAssignmentA(t.thread, t.consumer, req.Topic, t.handler.Handler)
-	result := <-t.handler.Caller.GetTopicAssignmentResult
-	t.asyncLocker.Unlock()
-	logger.Debugln("get_topic_assignment cost:", log.GetLogDuration(isDebug, s))
 	if result.Code != 0 {
 		errStr := wrapper.TMQErr2Str(result.Code)
-		logger.WithError(taoserrors.NewError(int(result.Code), errStr)).Error("tmq assignment")
-		wsTMQErrorMsg(ctx, session, int(result.Code), errStr, TMQGetTopicAssignment, req.ReqID, nil)
+		logger.Errorf("tmq assignment error,consumer:%p, code:%d, msg:%s", t.consumer, result.Code, errStr)
+		wsTMQErrorMsg(ctx, session, logger, int(result.Code), errStr, action, req.ReqID, nil)
 		return
 	}
-	wstool.WSWriteJson(session, TMQGetTopicAssignmentResp{
-		Action:     TMQGetTopicAssignment,
+	wstool.WSWriteJson(session, logger, TMQGetTopicAssignmentResp{
+		Action:     action,
 		ReqID:      req.ReqID,
 		Timing:     wstool.GetDuration(ctx),
 		Assignment: result.Assignment,
@@ -1220,38 +1187,34 @@ type TMQOffsetSeekResp struct {
 }
 
 func (t *TMQ) offsetSeek(ctx context.Context, session *melody.Session, req *TMQOffsetSeekReq) {
+	action := TMQSeek
+	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
+	logger.Tracef("offset seek request:%+v", req)
 	if t.consumer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQSeek, req.ReqID, nil)
+		logger.Error("tmq not init")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq not init", action, req.ReqID, nil)
 		return
 	}
-	logger := wstool.GetLogger(session).WithField("action", TMQSeek).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
-	s := log.GetLogNow(isDebug)
-	t.asyncLocker.Lock()
-	if t.isClosed() {
-		t.asyncLocker.Unlock()
+	errCode, closed := t.wrapperOffsetSeek(logger, isDebug, req.Topic, req.VgroupID, req.Offset)
+	if closed {
+		logger.Trace("server closed")
 		return
 	}
-	logger.Debugln("offset_seek get thread lock cost:", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	asynctmq.TaosaTMQOffsetSeekA(t.thread, t.consumer, req.Topic, req.VgroupID, req.Offset, t.handler.Handler)
-	errCode := <-t.handler.Caller.OffsetSeekResult
-	t.asyncLocker.Unlock()
-	logger.Debugln("offset_seek cost:", log.GetLogDuration(isDebug, s))
 	if errCode != 0 {
 		errStr := wrapper.TMQErr2Str(errCode)
-		logger.WithError(taoserrors.NewError(int(errCode), errStr)).Error("tmq offset seek")
-		wsTMQErrorMsg(ctx, session, int(errCode), errStr, TMQSeek, req.ReqID, nil)
+		logger.Errorf("tmq offset seek error, consumer:%p, code:%d, msg:%s", t.consumer, errCode, errStr)
+		wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
 		return
 	}
-	wstool.WSWriteJson(session, TMQOffsetSeekResp{
-		Action: TMQSeek,
+	wstool.WSWriteJson(session, logger, TMQOffsetSeekResp{
+		Action: action,
 		ReqID:  req.ReqID,
 		Timing: wstool.GetDuration(ctx),
 	})
 }
 
-func (t *TMQ) Close(logger logrus.FieldLogger) {
+func (t *TMQ) Close(logger *logrus.Entry) {
 	t.Lock()
 	defer t.Unlock()
 	if t.isClosed() {
@@ -1260,10 +1223,10 @@ func (t *TMQ) Close(logger logrus.FieldLogger) {
 	t.closedLock.Lock()
 	t.closed = true
 	t.closedLock.Unlock()
-	s := time.Now()
+	start := time.Now()
 	logger.Info("tmq close")
 	defer func() {
-		logger.Info("tmq close end, cost:", time.Since(s).String())
+		logger.Infof("tmq close end, cost:%s", time.Since(start).String())
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -1274,39 +1237,42 @@ func (t *TMQ) Close(logger logrus.FieldLogger) {
 	}()
 	select {
 	case <-ctx.Done():
+		logger.Error("wait for all goroutines to exit timeout")
 	case <-done:
+		logger.Debug("all goroutines exit")
 	}
+	isDebug := log.IsDebug()
+
 	defer func() {
+		s := log.GetLogNow(isDebug)
 		t.asyncLocker.Lock()
 		asynctmq.DestroyTMQThread(t.thread)
 		t.asyncLocker.Unlock()
+		logger.Tracef("destroy tmq thread cost:%s", log.GetLogDuration(isDebug, s))
 		tmqhandle.GlobalTMQHandlerPoll.Put(t.handler)
 	}()
 
 	defer func() {
 		if t.consumer != nil {
 			if !t.unsubscribed {
-				t.asyncLocker.Lock()
-				asynctmq.TaosaTMQUnsubscribeA(t.thread, t.consumer, t.handler.Handler)
-				errCode := <-t.handler.Caller.UnsubscribeResult
-				t.asyncLocker.Unlock()
+				errCode, _ := t.wrapperUnsubscribe(logger, isDebug)
 				if errCode != 0 {
 					errMsg := wrapper.TMQErr2Str(errCode)
-					logger.WithError(taoserrors.NewError(int(errCode), errMsg)).Error("tmq unsubscribe consumer")
+					logger.Errorf("tmq unsubscribe consumer error, consumer:%p, code:%d, msg:%s", t.consumer, errCode, errMsg)
 				}
 			}
-			t.asyncLocker.Lock()
-			asynctmq.TaosaTMQConsumerCloseA(t.thread, t.consumer, t.handler.Handler)
-			errCode := <-t.handler.Caller.ConsumerCloseResult
-			t.asyncLocker.Unlock()
+			errCode := t.wrapperCloseConsumer(logger, log.IsDebug(), t.consumer)
 			if errCode != 0 {
 				errMsg := wrapper.TMQErr2Str(errCode)
-				logger.WithError(taoserrors.NewError(int(errCode), errMsg)).Error("tmq close consumer")
+				logger.Errorf("tmq close consumer error, consumer:%p, code:%d, msg:%s", t.consumer, errCode, errMsg)
 			}
 		}
 		close(t.exit)
 	}()
+	logger.Trace("start to free message")
+	s := log.GetLogNow(isDebug)
 	t.freeMessage(true)
+	logger.Debugf("free message cost:%s", log.GetLogDuration(isDebug, s))
 }
 
 func (t *TMQ) freeMessage(closing bool) {
@@ -1335,7 +1301,7 @@ type WSTMQErrorResp struct {
 	MessageID *uint64 `json:"message_id,omitempty"`
 }
 
-func wsTMQErrorMsg(ctx context.Context, session *melody.Session, code int, message string, action string, reqID uint64, messageID *uint64) {
+func wsTMQErrorMsg(ctx context.Context, session *melody.Session, logger *logrus.Entry, code int, message string, action string, reqID uint64, messageID *uint64) {
 	b, _ := json.Marshal(&WSTMQErrorResp{
 		Code:      code & 0xffff,
 		Message:   message,
@@ -1344,6 +1310,7 @@ func wsTMQErrorMsg(ctx context.Context, session *melody.Session, code int, messa
 		Timing:    wstool.GetDuration(ctx),
 		MessageID: messageID,
 	})
+	logger.Tracef("write json:%s", b)
 	session.Write(b)
 }
 
@@ -1378,38 +1345,32 @@ type TMQCommittedResp struct {
 }
 
 func (t *TMQ) committed(ctx context.Context, session *melody.Session, req *TMQCommittedReq) {
+	action := TMQCommitted
+	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
+	logger.Tracef("committed request:%+v", req)
 	if t.consumer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQCommitted, req.ReqID, nil)
+		logger.Error("tmq not init")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq not init", action, req.ReqID, nil)
 		return
 	}
-	logger := wstool.GetLogger(session).WithField("action", TMQCommitted).WithField(config.ReqIDKey, req.ReqID)
-	s := log.GetLogNow(log.IsDebug())
-	logger.Debugln("tmq committed get thread lock cost:", log.GetLogDuration(log.IsDebug(), s))
-
+	isDebug := log.IsDebug()
 	offsets := make([]int64, 0, len(req.TopicVgroupIDs))
 	for _, tv := range req.TopicVgroupIDs {
-		t.asyncLocker.Lock()
-		if t.isClosed() {
-			t.asyncLocker.Unlock()
+		res, closed := t.wrapperCommitted(logger, isDebug, tv.Topic, tv.VgroupID)
+		if closed {
+			logger.Trace("server closed")
 			return
 		}
-		asynctmq.TaosaTMQCommitted(t.thread, t.consumer, tv.Topic, int32(tv.VgroupID), t.handler.Handler)
-		res := <-t.handler.Caller.CommittedResult
-		t.asyncLocker.Unlock()
 		if res < 0 && res != OffsetInvalid {
-			err := taoserrors.NewError(int(res), wrapper.TMQErr2Str(int32(res)))
-			logger.WithError(err).Error("tmq get committed")
-			var taosErr *taoserrors.TaosError
-			errors.As(err, &taosErr)
-			wsTMQErrorMsg(ctx, session, int(taosErr.Code), taosErr.ErrStr, TMQCommitted, req.ReqID, nil)
+			errStr := wrapper.TMQErr2Str(int32(res))
+			logger.Errorf("tmq get committed error, code:%d, msg:%s", res, errStr)
+			wsTMQErrorMsg(ctx, session, logger, int(res), errStr, action, req.ReqID, nil)
 			return
 		}
 		offsets = append(offsets, res)
 	}
-
-	logger.Debugln("tmq get committed cost:", log.GetLogDuration(log.IsDebug(), s))
-	wstool.WSWriteJson(session, TMQCommittedResp{
-		Action:    TMQCommitted,
+	wstool.WSWriteJson(session, logger, TMQCommittedResp{
+		Action:    action,
 		ReqID:     req.ReqID,
 		Timing:    wstool.GetDuration(ctx),
 		Committed: offsets,
@@ -1436,40 +1397,33 @@ type TMQPositionResp struct {
 }
 
 func (t *TMQ) position(ctx context.Context, session *melody.Session, req *TMQPositionReq) {
+	action := TMQPosition
+	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
+	logger.Tracef("position request:%+v", req)
 	if t.consumer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQPosition, req.ReqID, nil)
+		logger.Error("tmq not init")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq not init", action, req.ReqID, nil)
 		return
 	}
-	logger := wstool.GetLogger(session).WithField("action", TMQPosition).WithField(config.ReqIDKey, req.ReqID)
-	s := log.GetLogNow(log.IsDebug())
-
-	logger.Debugln("tmq get position get thread lock cost:", log.GetLogDuration(log.IsDebug(), s))
-
+	isDebug := log.IsDebug()
 	positions := make([]int64, 0, len(req.TopicVgroupIDs))
 	for _, tv := range req.TopicVgroupIDs {
-		t.asyncLocker.Lock()
-		if t.isClosed() {
-			t.asyncLocker.Unlock()
+		res, closed := t.wrapperPosition(logger, isDebug, tv.Topic, tv.VgroupID)
+		if closed {
+			logger.Trace("server closed")
 			return
 		}
-		asynctmq.TaosaTMQPosition(t.thread, t.consumer, tv.Topic, int32(tv.VgroupID), t.handler.Handler)
-		res := <-t.handler.Caller.PositionResult
-		t.asyncLocker.Unlock()
-
 		if res < 0 && res != OffsetInvalid {
-			err := taoserrors.NewError(int(res), wrapper.TMQErr2Str(int32(res)))
-			logger.WithError(err).Error("tmq get position")
-			var taosErr *taoserrors.TaosError
-			errors.As(err, &taosErr)
-			wsTMQErrorMsg(ctx, session, int(taosErr.Code), taosErr.ErrStr, TMQPosition, req.ReqID, nil)
+			errStr := wrapper.TMQErr2Str(int32(res))
+			logger.Errorf("get position error, code:%d, msg:%s", res, errStr)
+			wsTMQErrorMsg(ctx, session, logger, int(res), errStr, action, req.ReqID, nil)
 			return
 		}
 		positions = append(positions, res)
 	}
-	logger.Debugln("tmq get position cost:", log.GetLogDuration(log.IsDebug(), s))
 
-	wstool.WSWriteJson(session, TMQPositionResp{
-		Action:   TMQPosition,
+	wstool.WSWriteJson(session, logger, TMQPositionResp{
+		Action:   action,
 		ReqID:    req.ReqID,
 		Timing:   wstool.GetDuration(ctx),
 		Position: positions,
@@ -1490,30 +1444,44 @@ type TMQListTopicsResp struct {
 }
 
 func (t *TMQ) listTopics(ctx context.Context, session *melody.Session, req *TMQListTopicsReq) {
+	action := TMQListTopics
+	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
+	logger.Tracef("list topics request:%+v", req)
 	if t.consumer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQListTopics, req.ReqID, nil)
+		logger.Error("tmq not init")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq not init", action, req.ReqID, nil)
 		return
 	}
-	logger := wstool.GetLogger(session).WithField("action", TMQListTopics).WithField(config.ReqIDKey, req.ReqID)
-	s := log.GetLogNow(log.IsDebug())
-	t.asyncLocker.Lock()
 	if t.isClosed() {
-		t.asyncLocker.Unlock()
+		logger.Trace("server closed")
 		return
 	}
+	isDebug := log.IsDebug()
+	s := log.GetLogNow(isDebug)
+	logger.Trace("subscription get thread lock")
+	thread.Lock()
+	logger.Debugf("subscription get thread lock cost:%s", log.GetLogDuration(isDebug, s))
+	if t.isClosed() {
+		thread.Unlock()
+		logger.Trace("server closed")
+		return
+	}
+	s = log.GetLogNow(isDebug)
 	code, topicsPointer := wrapper.TMQSubscription(t.consumer)
-	t.asyncLocker.Unlock()
+	thread.Unlock()
+	logger.Debugf("subscription cost:%s", log.GetLogDuration(isDebug, s))
 	defer wrapper.TMQListDestroy(topicsPointer)
 	if code != 0 {
 		errStr := wrapper.TMQErr2Str(code)
-		logger.WithError(taoserrors.NewError(int(code), errStr)).Error("tmq list topic")
-		wsTMQErrorMsg(ctx, session, int(code), errStr, TMQListTopics, req.ReqID, nil)
+		logger.Errorf("tmq list topic error, code:%d, msg:%s", code, errStr)
+		wsTMQErrorMsg(ctx, session, logger, int(code), errStr, action, req.ReqID, nil)
 		return
 	}
+	s = log.GetLogNow(isDebug)
 	topics := wrapper.TMQListToCArray(topicsPointer, int(wrapper.TMQListGetSize(topicsPointer)))
-	logger.Debugln("tmq list topic cost:", log.GetLogDuration(log.IsDebug(), s))
-	wstool.WSWriteJson(session, TMQListTopicsResp{
-		Action: TMQListTopics,
+	logger.Debugf("tmq list topic cost:%s", log.GetLogDuration(log.IsDebug(), s))
+	wstool.WSWriteJson(session, logger, TMQListTopicsResp{
+		Action: action,
 		ReqID:  req.ReqID,
 		Timing: wstool.GetDuration(ctx),
 		Topics: topics,
@@ -1539,37 +1507,288 @@ type TMQCommitOffsetResp struct {
 }
 
 func (t *TMQ) commitOffset(ctx context.Context, session *melody.Session, req *TMQCommitOffsetReq) {
+	action := TMQCommitOffset
+	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
+	logger.Tracef("commit offset request:%+v", req)
 	if t.consumer == nil {
-		wsTMQErrorMsg(ctx, session, 0xffff, "tmq not init", TMQCommitOffset, req.ReqID, nil)
+		logger.Error("tmq not init")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq not init", action, req.ReqID, nil)
 		return
 	}
-	logger := wstool.GetLogger(session).WithField("action", TMQCommitOffset).WithField(config.ReqIDKey, req.ReqID)
-	logger.Debugln("tmq commit offset get thread lock cost:",
-		log.GetLogDuration(log.IsDebug(), log.GetLogNow(log.IsDebug())))
 
-	t.asyncLocker.Lock()
-	if t.isClosed() {
-		t.asyncLocker.Unlock()
+	code, closed := t.wrapperCommitOffset(logger, log.IsDebug(), req.Topic, req.VgroupID, req.Offset)
+	if closed {
+		logger.Trace("server closed")
 		return
 	}
-	asynctmq.TaosaTMQCommitOffset(t.thread, t.consumer, req.Topic, req.VgroupID, req.Offset, t.handler.Handler)
-	code := <-t.handler.Caller.CommitResult
-	t.asyncLocker.Unlock()
 	if code != 0 {
-		errMsg := wrapper.TMQErr2Str(code)
-		logger.WithError(taoserrors.NewError(int(code), errMsg)).Error("tmq commit offset")
-		wsTMQErrorMsg(ctx, session, int(code), errMsg, TMQCommitOffset, req.ReqID, nil)
+		errStr := wrapper.TMQErr2Str(code)
+		logger.Errorf("tmq commit offset error, code:%d, msg:%s", code, errStr)
+		wsTMQErrorMsg(ctx, session, logger, int(code), errStr, action, req.ReqID, nil)
 		return
 	}
 
-	wstool.WSWriteJson(session, TMQCommitOffsetResp{
-		Action:   TMQCommitOffset,
+	wstool.WSWriteJson(session, logger, TMQCommitOffsetResp{
+		Action:   action,
 		ReqID:    req.ReqID,
 		Timing:   wstool.GetDuration(ctx),
 		Topic:    req.Topic,
 		VgroupID: req.VgroupID,
 		Offset:   req.Offset,
 	})
+}
+
+func (t *TMQ) wrapperCloseConsumer(logger *logrus.Entry, isDebug bool, consumer unsafe.Pointer) int32 {
+	logger.Tracef("call tmq_consumer_close, consumer:%p", consumer)
+	s := log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	logger.Debugf("tmq_consumer_close get async locker cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQConsumerCloseA(t.thread, consumer, t.handler.Handler)
+	code := <-t.handler.Caller.ConsumerCloseResult
+	t.asyncLocker.Unlock()
+	logger.Debugf("tmq_consumer_close finish, code:%d, cost:%s", code, log.GetLogDuration(isDebug, s))
+	return code
+}
+
+func (t *TMQ) wrapperSubscribe(logger *logrus.Entry, isDebug bool, consumer, topicList unsafe.Pointer) int32 {
+	logger.Tracef("call tmq_subscribe, consumer:%p", consumer)
+	s := log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	logger.Debugf("tmq_subscribe get async lock cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQSubscribeA(t.thread, consumer, topicList, t.handler.Handler)
+	errCode := <-t.handler.Caller.SubscribeResult
+	t.asyncLocker.Unlock()
+	logger.Debugf("tmq_subscribe finish, code:%d, cost:%s", errCode, log.GetLogDuration(isDebug, s))
+	return errCode
+}
+
+func (t *TMQ) wrapperConsumerNew(logger *logrus.Entry, isDebug bool, tmqConfig unsafe.Pointer) (consumer unsafe.Pointer, err error) {
+	logger.Tracef("call tmq_consumer_new, tmqConfig:%p", tmqConfig)
+	s := log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	logger.Debugf("tmq_consumer_new get async lock cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQNewConsumerA(t.thread, tmqConfig, t.handler.Handler)
+	result := <-t.handler.Caller.NewConsumerResult
+	logger.Tracef("new consumer result %x", uintptr(result.Consumer))
+	if len(result.ErrStr) > 0 {
+		err = taoserrors.NewError(-1, result.ErrStr)
+	}
+	if result.Consumer == nil {
+		err = taoserrors.NewError(-1, "new consumer return nil")
+	}
+	t.asyncLocker.Unlock()
+	logger.Debugf("tmq_consumer_new finish, consumer:%p, err:%v, cost:%s", result.Consumer, err, log.GetLogDuration(isDebug, s))
+	return result.Consumer, err
+}
+
+func (t *TMQ) wrapperCommit(logger *logrus.Entry, isDebug bool) (int32, bool) {
+	logger.Tracef("call tmq_commit_sync, consumer:%p", t.consumer)
+	t.asyncLocker.Lock()
+	if t.isClosed() {
+		t.asyncLocker.Unlock()
+		return 0, true
+	}
+	s := log.GetLogNow(isDebug)
+	logger.Debugf("tmq_commit_sync get async lock cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQCommitA(t.thread, t.consumer, nil, t.handler.Handler)
+	errCode := <-t.handler.Caller.CommitResult
+	t.asyncLocker.Unlock()
+	logger.Debugf("tmq_commit_sync finish, code:%d, cost:%s", errCode, log.GetLogDuration(isDebug, s))
+	return errCode, false
+}
+
+func (t *TMQ) wrapperPoll(logger *logrus.Entry, isDebug bool, blockingTime int64) (unsafe.Pointer, bool) {
+	logger.Tracef("call tmq_poll, consumer:%p", t.consumer)
+	s := log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	if t.isClosed() {
+		t.asyncLocker.Unlock()
+		return nil, true
+	}
+	logger.Debugf("tmq_poll get async lock cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQPollA(t.thread, t.consumer, blockingTime, t.handler.Handler)
+	message := <-t.handler.Caller.PollResult
+	t.asyncLocker.Unlock()
+	logger.Debugf("tmq_poll finish, res:%p, cost:%s", message, log.GetLogDuration(isDebug, s))
+	return message, false
+}
+
+func (t *TMQ) wrapperFreeResult(logger *logrus.Entry, isDebug bool) bool {
+	logger.Tracef("call free result, consumer:%p", t.consumer)
+	s := log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	if t.isClosed() {
+		t.asyncLocker.Unlock()
+		return true
+	}
+	if t.tmpMessage.CPointer == nil {
+		return false
+	}
+	logger.Debugf("free result get async lock cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQFreeResultA(t.thread, t.tmpMessage.CPointer, t.handler.Handler)
+	<-t.handler.Caller.FreeResult
+	t.asyncLocker.Unlock()
+	logger.Debugf("free result finish, cost:%s", log.GetLogDuration(isDebug, s))
+	return false
+}
+
+func (t *TMQ) wrapperFetchRawBlock(logger *logrus.Entry, isDebug bool, res unsafe.Pointer) (*tmqhandle.FetchRawBlockResult, bool) {
+	logger.Tracef("call fetch_raw_block, res:%p", res)
+	s := log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	if t.isClosed() {
+		t.asyncLocker.Unlock()
+		return nil, true
+	}
+	logger.Debugf("fetch_raw_block get async lock cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQFetchRawBlockA(t.thread, res, t.handler.Handler)
+	rawBlock := <-t.handler.Caller.FetchRawBlockResult
+	t.asyncLocker.Unlock()
+	logger.Debugf("fetch_raw_block finish, code:%d, block_size:%d, block:%p, cost:%s", rawBlock.Code, rawBlock.BlockSize, rawBlock.Block, log.GetLogDuration(isDebug, s))
+	return rawBlock, false
+}
+
+func (t *TMQ) wrapperGetRaw(logger *logrus.Entry, isDebug bool, res unsafe.Pointer, rawData unsafe.Pointer) (int32, bool) {
+	logger.Tracef("call tmq_get_raw, res:%p, rawData:%p", res, rawData)
+	s := log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	if t.isClosed() {
+		t.asyncLocker.Unlock()
+		return 0, true
+	}
+	logger.Debugf("tmq_get_raw get async lock cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQGetRawA(t.thread, res, rawData, t.handler.Handler)
+	errCode := <-t.handler.Caller.GetRawResult
+	t.asyncLocker.Unlock()
+	logger.Debugf("tmq_get_raw finish, code:%d, cost:%s", errCode, log.GetLogDuration(isDebug, s))
+	return errCode, false
+}
+
+func (t *TMQ) wrapperGetJsonMeta(logger *logrus.Entry, isDebug bool, res unsafe.Pointer) (unsafe.Pointer, bool) {
+	logger.Tracef("call tmq_get_json_meta, result:%p", res)
+	s := log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	if t.isClosed() {
+		t.asyncLocker.Unlock()
+		return nil, true
+	}
+	logger.Debugf("tmq_get_json_meta get async lock cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQGetJsonMetaA(t.thread, res, t.handler.Handler)
+	jsonMeta := <-t.handler.Caller.GetJsonMetaResult
+	t.asyncLocker.Unlock()
+	logger.Debugf("tmq_get_json_meta finish, result:%p, cost:%s", jsonMeta, log.GetLogDuration(isDebug, s))
+	return jsonMeta, false
+}
+
+func (t *TMQ) wrapperUnsubscribe(logger *logrus.Entry, isDebug bool) (int32, bool) {
+	logger.Tracef("call tmq_unsubscribe, consumer:%p", t.consumer)
+	s := log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	if t.isClosed() {
+		t.asyncLocker.Unlock()
+		return 0, true
+	}
+	logger.Debugf("unsubscribe get async lock cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQUnsubscribeA(t.thread, t.consumer, t.handler.Handler)
+	errCode := <-t.handler.Caller.UnsubscribeResult
+	t.asyncLocker.Unlock()
+	logger.Debugf("tmq_unsubscribe finish, code:%d, cost:%s", errCode, log.GetLogDuration(isDebug, s))
+	return errCode, false
+}
+
+func (t *TMQ) wrapperGetTopicAssignment(logger *logrus.Entry, isDebug bool, topic string) (*tmqhandle.GetTopicAssignmentResult, bool) {
+	logger.Tracef("call get_topic_assignment, consumer:%p, topic:%s", t.consumer, topic)
+	s := log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	if t.isClosed() {
+		t.asyncLocker.Unlock()
+		return nil, true
+	}
+	logger.Debugf("get_topic_assignment get async lock cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQGetTopicAssignmentA(t.thread, t.consumer, topic, t.handler.Handler)
+	result := <-t.handler.Caller.GetTopicAssignmentResult
+	t.asyncLocker.Unlock()
+	logger.Debugf("get_topic_assignment finish, result:%+v, cost:%s", result, log.GetLogDuration(isDebug, s))
+	return result, false
+}
+
+func (t *TMQ) wrapperOffsetSeek(logger *logrus.Entry, isDebug bool, topic string, vgroupID int32, offset int64) (int32, bool) {
+	logger.Tracef("call offset_seek, comsumer:%p, topic:%s, vgroup_id:%d, offset:%d", t.consumer, topic, vgroupID, offset)
+	s := log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	if t.isClosed() {
+		t.asyncLocker.Unlock()
+		return 0, true
+	}
+	logger.Debugf("offset_seek get async lock cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQOffsetSeekA(t.thread, t.consumer, topic, vgroupID, offset, t.handler.Handler)
+	errCode := <-t.handler.Caller.OffsetSeekResult
+	t.asyncLocker.Unlock()
+	logger.Debugf("offset_seek finish, code:%d, cost:%s", errCode, log.GetLogDuration(isDebug, s))
+	return errCode, false
+}
+
+func (t *TMQ) wrapperCommitted(logger *logrus.Entry, isDebug bool, topic string, vgroupID int32) (int64, bool) {
+	logger.Tracef("call tmq_committed, consumer:%p, topic:%s, vgroup_id:%d", t.consumer, topic, vgroupID)
+	s := log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	if t.isClosed() {
+		t.asyncLocker.Unlock()
+		return 0, true
+	}
+	logger.Debugf("tmq_committed get async lock cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQCommitted(t.thread, t.consumer, topic, vgroupID, t.handler.Handler)
+	offset := <-t.handler.Caller.CommittedResult
+	t.asyncLocker.Unlock()
+	logger.Debugf("tmq_committed finish, offset:%d, cost:%s", offset, log.GetLogDuration(isDebug, s))
+	return offset, false
+}
+
+func (t *TMQ) wrapperPosition(logger *logrus.Entry, isDebug bool, topic string, vgroupID int32) (int64, bool) {
+	logger.Tracef("call tmq_position, consumer:%p, topic:%s, vgroup_id:%d", t.consumer, topic, vgroupID)
+	s := log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	if t.isClosed() {
+		t.asyncLocker.Unlock()
+		return 0, true
+	}
+	logger.Debugf("tmq_position get async lock cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQPosition(t.thread, t.consumer, topic, vgroupID, t.handler.Handler)
+	res := <-t.handler.Caller.PositionResult
+	t.asyncLocker.Unlock()
+	logger.Debugf("tmq_position finish, position:%d, cost:%s", res, log.GetLogDuration(isDebug, s))
+	return res, false
+}
+
+func (t *TMQ) wrapperCommitOffset(logger *logrus.Entry, isDebug bool, topic string, vgroupID int32, offset int64) (int32, bool) {
+	logger.Tracef("call commit_offset, consumer:%p, topic:%s, vgroup_id:%d, offset:%d", t.consumer, topic, vgroupID, offset)
+	s := log.GetLogNow(isDebug)
+	t.asyncLocker.Lock()
+	if t.isClosed() {
+		t.asyncLocker.Unlock()
+		return 0, true
+	}
+	logger.Debugf("commit_offset get async lock cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	asynctmq.TaosaTMQCommitOffset(t.thread, t.consumer, topic, vgroupID, offset, t.handler.Handler)
+	code := <-t.handler.Caller.CommitResult
+	t.asyncLocker.Unlock()
+	logger.Debugf("commit_offset finish, code:%d, cost:%s", code, log.GetLogDuration(isDebug, s))
+	return code, false
 }
 
 /*

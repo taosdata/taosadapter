@@ -26,7 +26,7 @@ var router *gin.Engine
 func TestMain(m *testing.M) {
 	viper.Set("pool.maxConnect", 10000)
 	viper.Set("pool.maxIdle", 10000)
-	viper.Set("logLevel", "debug")
+	viper.Set("logLevel", "trace")
 	viper.Set("uploadKeeper.enable", false)
 	config.Init()
 	db.PrepareConnection()
@@ -35,6 +35,8 @@ func TestMain(m *testing.M) {
 	router = gin.New()
 	var ctl Restful
 	ctl.Init(router)
+	var configCtl = &ConfigController{}
+	configCtl.Init(router)
 	m.Run()
 }
 
@@ -289,7 +291,7 @@ func TestUpload(t *testing.T) {
 	data := `2022-08-30 11:45:30.754,123,123.123000000,"abcd,abcd"
 2022-08-30 11:45:40.871,123,123.123000000,"a""bcd,abcd"
 2022-08-30 11:45:47.039,123,123.123000000,"abcd"",""abcd"
-2022-08-30 11:47:22.607,123,123.123000000,"abcd"",""abcd",""""
+2022-08-30 11:47:22.607,123,123.123000000,"abcd"",""abcd"
 2022-08-30 11:52:40.548,123,123.123000000,"abcd','abcd"
 2022-08-30 11:52:40.549,123,123.123000000,
 `

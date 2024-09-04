@@ -1,9 +1,9 @@
 debug = true
 taosConfigDir = ""
 port = 6041
-logLevel = "info"
 httpCodeServerError = false
 SMLAutoCreateDB = false
+instanceId = 32
 
 [cors]
 allowAllOrigins = true
@@ -20,9 +20,13 @@ keyFile = ""
 
 [log]
 #path = "/var/log/taos"
+level = "info"
 rotationCount = 30
 rotationTime = "24h"
 rotationSize = "1GB"
+compress = false
+reservedDiskSize = "1GB"
+
 enableRecordHttpSql = false
 sqlRotationCount = 2
 sqlRotationTime = "24h"

@@ -8,7 +8,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/log"
 )
 
-var logger = log.GetLogger("plugin")
+var logger = log.GetLogger("PLG")
 
 type Plugin interface {
 	Init(r gin.IRouter) error
@@ -37,7 +37,7 @@ func Init(r gin.IRouter) {
 			logger.WithError(err).Panicf("init plugin %s", name)
 		}
 	}
-	logger.Infoln("all plugin init finish")
+	logger.Info("all plugin init finish")
 }
 
 func Start() {
@@ -47,7 +47,7 @@ func Start() {
 			logger.WithError(err).Panicf("start plugin %s", name)
 		}
 	}
-	logger.Infoln("all plugin start finish")
+	logger.Info("all plugin start finish")
 }
 
 func Stop() {

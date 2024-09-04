@@ -9,7 +9,7 @@ import (
 	"time"
 	"unsafe"
 
-	jsoniter "github.com/huskar-t/jsoniterator"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/common/parser"
 	stmtCommon "github.com/taosdata/driver-go/v3/common/stmt"

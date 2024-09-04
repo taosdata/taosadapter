@@ -4,6 +4,7 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/schemaless/capi"
@@ -80,7 +81,8 @@ func TestInsertInfluxdb(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := capi.InsertInfluxdb(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.precision, tt.args.ttl, 0)
+			logger := logrus.New().WithField("test", "TestInsertInfluxdb")
+			err := capi.InsertInfluxdb(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.precision, tt.args.ttl, 0, logger)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("InsertInfluxdb() error = %v, wantErr %v", err, tt.wantErr)
 				return

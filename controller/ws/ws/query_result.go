@@ -6,8 +6,10 @@ import (
 	"sync/atomic"
 	"unsafe"
 
+	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/wrapper"
-	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
+	"github.com/taosdata/taosadapter/v3/log"
 )
 
 type QueryResult struct {
@@ -24,7 +26,7 @@ type QueryResult struct {
 	sync.Mutex
 }
 
-func (r *QueryResult) free() {
+func (r *QueryResult) free(logger *logrus.Entry) {
 	r.Lock()
 	defer r.Unlock()
 
@@ -34,13 +36,12 @@ func (r *QueryResult) free() {
 	}
 
 	if r.inStmt { // stmt result is no need to free
+		logger.Trace("stmt result is no need to free")
 		r.TaosResult = nil
 		return
 	}
-
-	thread.Lock()
-	wrapper.TaosFreeResult(r.TaosResult)
-	thread.Unlock()
+	logger.Tracef("free result:%d", r.index)
+	syncinterface.FreeResult(r.TaosResult, logger, log.IsDebug())
 	r.TaosResult = nil
 }
 
@@ -82,7 +83,7 @@ func (h *QueryResultHolder) Get(index uint64) *QueryResult {
 	}
 }
 
-func (h *QueryResultHolder) FreeResultByID(index uint64) {
+func (h *QueryResultHolder) FreeResultByID(index uint64, logger *logrus.Entry) {
 	h.Lock()
 	defer h.Unlock()
 
@@ -93,7 +94,7 @@ func (h *QueryResultHolder) FreeResultByID(index uint64) {
 		}
 
 		if result := node.Value.(*QueryResult); result.index == index {
-			result.free()
+			result.free(logger)
 			h.results.Remove(node)
 			return
 		}
@@ -101,7 +102,7 @@ func (h *QueryResultHolder) FreeResultByID(index uint64) {
 	}
 }
 
-func (h *QueryResultHolder) FreeAll() {
+func (h *QueryResultHolder) FreeAll(logger *logrus.Entry) {
 	h.Lock()
 	defer h.Unlock()
 
@@ -116,7 +117,7 @@ func (h *QueryResultHolder) FreeAll() {
 		}
 		next := node.Next()
 		result := node.Value.(*QueryResult)
-		result.free()
+		result.free(logger)
 		h.results.Remove(node)
 		node = next
 	}
@@ -129,17 +130,15 @@ type StmtItem struct {
 	sync.Mutex
 }
 
-func (s *StmtItem) free() {
+func (s *StmtItem) free(logger *logrus.Entry) {
 	s.Lock()
 	defer s.Unlock()
 
 	if s.stmt == nil {
 		return
 	}
+	syncinterface.TaosStmtClose(s.stmt, logger, log.IsDebug())
 
-	thread.Lock()
-	wrapper.TaosStmtClose(s.stmt)
-	thread.Unlock()
 	s.stmt = nil
 }
 
@@ -181,7 +180,7 @@ func (h *StmtHolder) Get(index uint64) *StmtItem {
 	}
 }
 
-func (h *StmtHolder) FreeStmtByID(index uint64) {
+func (h *StmtHolder) FreeStmtByID(index uint64, logger *logrus.Entry) {
 	h.Lock()
 	defer h.Unlock()
 
@@ -196,7 +195,7 @@ func (h *StmtHolder) FreeStmtByID(index uint64) {
 		}
 		result := node.Value.(*StmtItem)
 		if result.index == index {
-			result.free()
+			result.free(logger)
 			h.results.Remove(node)
 			return
 		}
@@ -204,7 +203,7 @@ func (h *StmtHolder) FreeStmtByID(index uint64) {
 	}
 }
 
-func (h *StmtHolder) FreeAll() {
+func (h *StmtHolder) FreeAll(logger *logrus.Entry) {
 	h.Lock()
 	defer h.Unlock()
 
@@ -219,7 +218,7 @@ func (h *StmtHolder) FreeAll() {
 		}
 		next := node.Next()
 		result := node.Value.(*StmtItem)
-		result.free()
+		result.free(logger)
 		h.results.Remove(node)
 		node = next
 	}

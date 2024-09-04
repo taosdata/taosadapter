@@ -1,3 +1,5 @@
 package config
 
-const ReqIDKey = "req_id"
+const ReqIDKey = "qid"
+const SessionIDKey = "sid"
+const ModelKey = "model"

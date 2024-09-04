@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/patrickmn/go-cache"
+	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
@@ -98,9 +99,10 @@ const (
 )
 
 func CheckAuth(c *gin.Context) {
+	logger := c.MustGet(LoggerKey).(*logrus.Entry)
 	auth := c.GetHeader("Authorization")
 	if len(auth) == 0 {
-		UnAuthResponse(c, httperror.HTTP_NO_AUTH_INFO)
+		UnAuthResponse(c, logger, httperror.HTTP_NO_AUTH_INFO)
 		return
 	}
 	auth = strings.TrimSpace(auth)
@@ -114,11 +116,11 @@ func CheckAuth(c *gin.Context) {
 	if strings.HasPrefix(auth, "Basic") {
 		user, password, err := tools.DecodeBasic(auth[6:])
 		if err != nil {
-			UnAuthResponse(c, httperror.HTTP_INVALID_BASIC_AUTH)
+			UnAuthResponse(c, logger, httperror.HTTP_INVALID_BASIC_AUTH)
 			return
 		}
 		if len(user) == 0 || len(password) == 0 {
-			UnAuthResponse(c, httperror.HTTP_INVALID_BASIC_AUTH)
+			UnAuthResponse(c, logger, httperror.HTTP_INVALID_BASIC_AUTH)
 			return
 		}
 		authCache.SetDefault(auth, &authInfo{
@@ -130,11 +132,11 @@ func CheckAuth(c *gin.Context) {
 	} else if strings.HasPrefix(auth, "Taosd") {
 		user, password, err := DecodeDes(auth[6:])
 		if err != nil {
-			UnAuthResponse(c, httperror.HTTP_INVALID_TAOSD_AUTH)
+			UnAuthResponse(c, logger, httperror.HTTP_INVALID_TAOSD_AUTH)
 			return
 		}
 		if len(user) == 0 || len(password) == 0 {
-			UnAuthResponse(c, httperror.HTTP_INVALID_TAOSD_AUTH)
+			UnAuthResponse(c, logger, httperror.HTTP_INVALID_TAOSD_AUTH)
 			return
 		}
 		authCache.SetDefault(auth, &authInfo{
@@ -144,7 +146,7 @@ func CheckAuth(c *gin.Context) {
 		c.Set(UserKey, user)
 		c.Set(PasswordKey, password)
 	} else {
-		UnAuthResponse(c, httperror.HTTP_INVALID_AUTH_TYPE)
+		UnAuthResponse(c, logger, httperror.HTTP_INVALID_AUTH_TYPE)
 		return
 	}
 }

@@ -5,8 +5,17 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/log"
 )
+
+func TestMain(m *testing.M) {
+	config.Init()
+	log.SetLevel("trace")
+	m.Run()
+}
 
 // @author: xftan
 // @date: 2021/12/14 15:02
@@ -89,12 +98,13 @@ func TestAsync_TaosExec(t *testing.T) {
 			wantErr: true,
 		},
 	}
+	var logger = logrus.New().WithField("test", "async_test")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &Async{
 				HandlerPool: tt.fields.handlerPool,
 			}
-			got, err := a.TaosExec(tt.args.taosConnect, tt.args.sql, tt.args.timeFormat, 0)
+			got, err := a.TaosExec(tt.args.taosConnect, logger, false, tt.args.sql, tt.args.timeFormat, 0)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("TaosExec() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -167,12 +177,13 @@ func TestAsync_TaosExecWithoutResult(t *testing.T) {
 			wantErr: true,
 		},
 	}
+	var logger = logrus.New().WithField("test", "TaosExecWithoutResult")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &Async{
 				HandlerPool: tt.fields.handlerPool,
 			}
-			if err := a.TaosExecWithoutResult(tt.args.taosConnect, tt.args.sql, 0); (err != nil) != tt.wantErr {
+			if err := a.TaosExecWithoutResult(tt.args.taosConnect, logger, false, tt.args.sql, 0); (err != nil) != tt.wantErr {
 				t.Errorf("TaosExecWithoutResult() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

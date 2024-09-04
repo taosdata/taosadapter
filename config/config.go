@@ -12,6 +12,7 @@ import (
 )
 
 type Config struct {
+	InstanceID          uint8
 	Cors                CorsConfig
 	TaosConfigDir       string
 	Debug               bool
@@ -80,6 +81,7 @@ func Init() {
 		RestfulRowLimit:     viper.GetInt("restfulRowLimit"),
 		HttpCodeServerError: viper.GetBool("httpCodeServerError"),
 		SMLAutoCreateDB:     viper.GetBool("smlAutoCreateDB"),
+		InstanceID:          uint8(viper.GetInt("instanceId")),
 	}
 	Conf.Log.setValue()
 	Conf.Cors.setValue()
@@ -87,6 +89,9 @@ func Init() {
 	Conf.Monitor.setValue()
 	Conf.UploadKeeper.setValue()
 	Conf.TMQ.setValue()
+	if viper.IsSet("log.level") {
+		Conf.LogLevel = Conf.Log.Level
+	}
 }
 
 // arg > file > env
@@ -106,7 +111,7 @@ func init() {
 
 	viper.SetDefault("logLevel", "info")
 	_ = viper.BindEnv("logLevel", "TAOS_ADAPTER_LOG_LEVEL")
-	pflag.String("logLevel", "info", `log level (panic fatal error warn warning info debug trace). Env "TAOS_ADAPTER_LOG_LEVEL"`)
+	pflag.String("logLevel", "info", `log level (trace debug info warning error). Env "TAOS_ADAPTER_LOG_LEVEL"`)
 
 	viper.SetDefault("taosConfigDir", "")
 	_ = viper.BindEnv("taosConfigDir", "TAOS_ADAPTER_TAOS_CONFIG_FILE")
@@ -119,6 +124,10 @@ func init() {
 	viper.SetDefault("smlAutoCreateDB", false)
 	_ = viper.BindEnv("smlAutoCreateDB", "TAOS_ADAPTER_SML_AUTO_CREATE_DB")
 	pflag.Bool("smlAutoCreateDB", false, `Whether to automatically create db when writing with schemaless. Env "TAOS_ADAPTER_SML_AUTO_CREATE_DB"`)
+
+	viper.SetDefault("instanceId", 32)
+	_ = viper.BindEnv("instanceId", "TAOS_ADAPTER_INSTANCE_ID")
+	pflag.Int("instanceId", 32, `instance ID. Env "TAOS_ADAPTER_INSTANCE_ID"`)
 
 	initLog()
 	initCors()

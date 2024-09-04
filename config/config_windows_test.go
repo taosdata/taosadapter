@@ -26,6 +26,7 @@ func TestInit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			Init()
 			assert.Equal(t, &Config{
+				InstanceID: 32,
 				Cors: CorsConfig{
 					AllowAllOrigins:  true,
 					AllowOrigins:     []string{},
@@ -42,10 +43,13 @@ func TestInit(t *testing.T) {
 				HttpCodeServerError: false,
 				SMLAutoCreateDB:     false,
 				Log: Log{
+					Level:               "info",
 					Path:                "C:\\TDengine\\log",
 					RotationCount:       30,
 					RotationTime:        time.Hour * 24,
 					RotationSize:        1 * 1024 * 1024 * 1024, // 1G
+					Compress:            false,
+					ReservedDiskSize:    1 * 1024 * 1024 * 1024,
 					EnableRecordHttpSql: false,
 					SqlRotationCount:    2,
 					SqlRotationTime:     time.Hour * 24,

@@ -19,7 +19,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	jsoniter "github.com/huskar-t/jsoniterator"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/driver-go/v3/common/parser"
@@ -39,7 +39,7 @@ var router *gin.Engine
 func TestMain(m *testing.M) {
 	viper.Set("pool.maxConnect", 10000)
 	viper.Set("pool.maxIdle", 10000)
-	viper.Set("logLevel", "debug")
+	viper.Set("logLevel", "trace")
 	viper.Set("uploadKeeper.enable", false)
 	config.Init()
 	db.PrepareConnection()

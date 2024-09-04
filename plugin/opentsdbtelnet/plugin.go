@@ -12,14 +12,16 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/plugin"
 	"github.com/taosdata/taosadapter/v3/schemaless/inserter"
+	"github.com/taosdata/taosadapter/v3/tools/generator"
 )
 
-var logger = log.GetLogger("opentsdb_telnet")
+var logger = log.GetLogger("PLG").WithField("mod", "telnet")
 var versionCommand = "version"
 
 type Plugin struct {
@@ -340,16 +342,16 @@ func (p *Plugin) handleData(connection *Connection, line []string, clientIP net.
 			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
-	var start time.Time
-	if log.IsDebug() {
-		start = time.Now()
-	}
-	logger.Debugln(start, " insert telnet payload ", line)
-	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, line, connection.db, p.conf.TTL, 0)
+	isDebug := log.IsDebug()
+	var start = log.GetLogNow(isDebug)
+	reqID := generator.GetReqID()
+	logger := logger.WithField(config.ReqIDKey, reqID)
+	logger.Debugf("insert telnet payload, lines:%s", line)
+	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, line, connection.db, p.conf.TTL, uint64(reqID), logger)
 	if err != nil {
 		logger.WithError(err).Errorln("insert telnet payload error :", line)
 	}
-	logger.Debug("insert telnet payload cost:", time.Since(start))
+	logger.Debug("insert telnet payload cost:", log.GetLogDuration(isDebug, start))
 }
 
 func init() {

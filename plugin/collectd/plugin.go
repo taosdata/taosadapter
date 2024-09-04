@@ -11,14 +11,16 @@ import (
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/parsers/collectd"
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/plugin"
 	"github.com/taosdata/taosadapter/v3/schemaless/inserter"
+	"github.com/taosdata/taosadapter/v3/tools/generator"
 )
 
-var logger = log.GetLogger("collectd")
+var logger = log.GetLogger("PLG").WithField("mod", "collectd")
 
 type MetricWithClientIP struct {
 	ClientIP net.IP
@@ -109,30 +111,34 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, clientIP net.IP, m
 	}
 	data, err := serializer.SerializeBatch(metrics)
 	if err != nil {
-		logger.WithError(err).Error("serialize collectd error")
+		logger.Errorf("serialize collectd error, err:%s", err)
 		return
 	}
 	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, clientIP)
 	if err != nil {
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
-			logger.WithError(err).WithField("user", p.conf.User).WithField("clientIP", clientIP.String()).Errorln("whitelist forbidden")
+			logger.Errorf("whitelist forbidden, user:%s, clientIP:%s", p.conf.User, clientIP.String())
 			return
 		}
-		logger.WithError(err).Errorln("connect server error")
+		logger.Errorf("connect server error, err:%s", err)
 		return
 	}
 	defer func() {
+		logger.Tracef("put connection")
 		putErr := taosConn.Put()
 		if putErr != nil {
 			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
-	start := time.Now()
-	logger.Debugln(start, "insert lines", string(data))
-	err = inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns", p.conf.TTL, 0)
-	logger.Debugln("insert lines finish cost:", time.Since(start), string(data))
+	isDebug := log.IsDebug()
+	reqID := generator.GetReqID()
+	execLogger := logger.WithField(config.ReqIDKey, reqID)
+	execLogger.Debugf("insert lines, data:%s, db:%s, ttl:%d", data, p.conf.DB, p.conf.TTL)
+	start := log.GetLogNow(isDebug)
+	err = inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns", p.conf.TTL, uint64(reqID), execLogger)
+	logger.Debugf("insert lines finish, cost:%s", log.GetLogDuration(isDebug, start))
 	if err != nil {
-		logger.WithError(err).Errorln("insert lines error", string(data))
+		logger.Errorf("insert lines error, err:%s, data:%s", err, data)
 		return
 	}
 }
