@@ -275,7 +275,7 @@ func StartUpload() {
 				reqID := generator.GetUploadKeeperReqID()
 				err := upload(client, reqID)
 				if err != nil {
-					logger.Errorf("qid:0x%x, upload to keeper error, err:%s", reqID, err)
+					logger.Errorf("upload_id:0x%x, upload to keeper error, err:%s", reqID, err)
 				}
 			}()
 			ticker := time.NewTicker(config.Conf.UploadKeeper.Interval)
@@ -284,7 +284,7 @@ func StartUpload() {
 					reqID := generator.GetUploadKeeperReqID()
 					err := upload(client, reqID)
 					if err != nil {
-						logger.Errorf("qid:0x%x, upload to keeper error, err:%s", reqID, err)
+						logger.Errorf("upload_id:0x%x, upload to keeper error, err:%s", reqID, err)
 					}
 				}()
 			}
@@ -328,10 +328,10 @@ func upload(client *http.Client, reqID int64) error {
 	}
 	err = doRequest(client, jsonData, reqID)
 	if err != nil {
-		logger.Debugf("qid:0x%x, upload to keeper error, will retry in %s", reqID, config.Conf.UploadKeeper.RetryInterval)
 		for i := 0; i < int(config.Conf.UploadKeeper.RetryTimes); i++ {
+			logger.Debugf("upload_id:0x%x, upload to keeper error, will retry in %s", reqID, config.Conf.UploadKeeper.RetryInterval)
 			time.Sleep(config.Conf.UploadKeeper.RetryInterval)
-			logger.Debugf("qid:0x%x, retry upload to keeper, retry times:%d", reqID, i+1)
+			logger.Debugf("upload_id:0x%x, retry upload to keeper, retry times:%d", reqID, i+1)
 			err = doRequest(client, jsonData, reqID)
 			if err == nil {
 				return nil
@@ -347,15 +347,15 @@ func doRequest(client *http.Client, data []byte, reqID int64) error {
 		return fmt.Errorf("create new request error: %s", err)
 	}
 	req.Header.Set("X-QID", fmt.Sprintf("0x%x", reqID))
-	logger.Debugf("qid:0x%x, upload to keeper, url:%s, data:%s", reqID, config.Conf.UploadKeeper.Url, data)
+	logger.Tracef("upload_id:0x%x, upload to keeper, url:%s, data:%s", reqID, config.Conf.UploadKeeper.Url, data)
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
 	resp.Body.Close()
-	logger.Debugf("qid:0x%x, upload to keeper success", reqID)
+	logger.Debugf("upload_id:0x%x, upload to keeper success", reqID)
 	if resp.StatusCode != http.StatusOK {
-		logger.Errorf("qid:0x%x, upload keeper error, code: %d", reqID, resp.StatusCode)
+		logger.Errorf("upload_id:0x%x, upload keeper error, code: %d", reqID, resp.StatusCode)
 		return fmt.Errorf("upload keeper error, code: %d", resp.StatusCode)
 	}
 	return nil

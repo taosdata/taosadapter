@@ -69,7 +69,7 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, logger *logrus.Entry, isDeb
 	logger.Tracef("get precision:%d", precision)
 	for {
 		result = a.TaosFetchRowsA(res, logger, isDebug, handler)
-		logger.Tracef("get fetch result rows:%d", result.N)
+		logger.Tracef("get fetch result, rows:%d", result.N)
 		if result.N == 0 {
 			logger.Trace("fetch finished")
 			return execResult, nil
@@ -118,12 +118,12 @@ func (a *Async) TaosQuery(taosConnect unsafe.Pointer, logger *logrus.Entry, isDe
 	logger.Debugf("get thread lock for taos_query_a cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	wrapper.TaosQueryAWithReqID(taosConnect, sql, handler.Handler, reqID)
-	logger.Debugf("taos_query_a cost:%s", log.GetLogDuration(isDebug, s))
+	logger.Debugf("taos_query_a finish, cost:%s", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	logger.Trace("wait for query result")
 	s = log.GetLogNow(isDebug)
 	r := <-handler.Caller.QueryResult
-	logger.Debugf("get query result, res:%v, cost:%s", r, log.GetLogDuration(isDebug, s))
+	logger.Debugf("get query result, res:%p, n:%d, cost:%s", r.Res, r.N, log.GetLogDuration(isDebug, s))
 	return r
 }
 
@@ -134,12 +134,12 @@ func (a *Async) TaosFetchRowsA(res unsafe.Pointer, logger *logrus.Entry, isDebug
 	logger.Debugf("get thread lock for fetch_rows_a cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	wrapper.TaosFetchRowsA(res, handler.Handler)
-	logger.Debugf("taos_fetch_rows_a cost:%s", log.GetLogDuration(isDebug, s))
+	logger.Debugf("taos_fetch_rows_a finish, cost:%s", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	logger.Trace("wait for fetch rows result")
 	s = log.GetLogNow(isDebug)
 	r := <-handler.Caller.FetchResult
-	logger.Debugf("get fetch rows result, res:%v, cost:%s", r, log.GetLogDuration(isDebug, s))
+	logger.Debugf("get fetch rows result finish, res:%p, n:%d, cost:%s", r.Res, r.N, log.GetLogDuration(isDebug, s))
 	return r
 }
 
@@ -151,12 +151,12 @@ func (a *Async) TaosFetchRawBlockA(res unsafe.Pointer, logger *logrus.Entry, isD
 	s = log.GetLogNow(isDebug)
 	logger.Trace("start fetch_raw_block_a")
 	wrapper.TaosFetchRawBlockA(res, handler.Handler)
-	logger.Debugf("taos_fetch_raw_block_a cost:%s", log.GetLogDuration(isDebug, s))
+	logger.Debugf("taos_fetch_raw_block_a finish, cost:%s", log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	logger.Trace("wait for fetch raw block result")
 	s = log.GetLogNow(isDebug)
 	r := <-handler.Caller.FetchResult
-	logger.Debugf("get fetch raw block result, res:%v, cost:%s", r, log.GetLogDuration(isDebug, s))
+	logger.Debugf("get fetch raw block result, res:%p, n:%d, cost:%s", r.Res, r.N, log.GetLogDuration(isDebug, s))
 	return r
 }
 

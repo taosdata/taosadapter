@@ -54,7 +54,7 @@ func (ctl *Restful) tableVgID(c *gin.Context) {
 	defer func() {
 		putErr := taosConn.Put()
 		if putErr != nil {
-			logger.Errorf("put connect error, err:%s", err)
+			logger.Errorf("put connection error, err:%s", err)
 		}
 	}()
 	vgIDs, code := syncinterface.TaosGetTablesVgID(taosConn.TaosConnection, db, tables, logger, isDebug)

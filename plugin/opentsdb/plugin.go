@@ -79,8 +79,9 @@ func (p *Plugin) Stop() error {
 func (p *Plugin) insertJson(c *gin.Context) {
 	var reqID uint64
 	var err error
-	if reqIDStr := c.Query(config.ReqIDKey); len(reqIDStr) > 0 {
+	if reqIDStr := c.Query("req_id"); len(reqIDStr) > 0 {
 		if reqID, err = strconv.ParseUint(reqIDStr, 10, 64); err != nil {
+			logger.Errorf("illegal param, req_id must be numeric, err:%s, req_id:%s", err, reqIDStr)
 			p.errorResponse(c, http.StatusBadRequest,
 				fmt.Errorf("illegal param, req_id must be numeric %s", err.Error()))
 			return
@@ -88,13 +89,14 @@ func (p *Plugin) insertJson(c *gin.Context) {
 	}
 	if reqID == 0 {
 		reqID = uint64(generator.GetReqID())
-		logger.Debugf("req_id is 0, generate new req_id: 0x%x", reqID)
+		logger.Tracef("req_id is 0, generate new req_id, qid:0x%x", reqID)
 	}
 	c.Set(config.ReqIDKey, reqID)
 
 	isDebug := log.IsDebug()
 	logger := logger.WithField(config.ReqIDKey, reqID)
 	db := c.Param("db")
+	logger.Tracef("request db:%s", db)
 	if len(db) == 0 {
 		logger.Error("db required")
 		p.errorResponse(c, http.StatusBadRequest, errors.New("db required"))
@@ -102,29 +104,34 @@ func (p *Plugin) insertJson(c *gin.Context) {
 	}
 	data, err := c.GetRawData()
 	if err != nil {
-		logger.WithError(err).Error("get request body error")
+		logger.Errorf("get request body error, err:%s", err)
 		p.errorResponse(c, http.StatusBadRequest, err)
 		return
 	}
+	logger.Debugf("request data:%s", data)
 	user, password, err := plugin.GetAuth(c)
 	if err != nil {
-		logger.WithError(err).Error("get auth error")
+		logger.Errorf("get auth error, err:%s", err)
 		p.errorResponse(c, http.StatusBadRequest, err)
 		return
 	}
 	var ttl int
 	ttlStr := c.Query("ttl")
 	if len(ttlStr) > 0 {
+		logger.Tracef("request ttl:%s", ttlStr)
 		ttl, err = strconv.Atoi(ttlStr)
 		if err != nil {
+			logger.Errorf("illegal param, ttl must be numeric, err:%s, ttl:%s", err, ttlStr)
 			p.errorResponse(c, http.StatusBadRequest, fmt.Errorf("illegal param, ttl must be numeric %v", err))
 			return
 		}
 	}
 
+	s := log.GetLogNow(isDebug)
 	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
+	logger.Debugf("get connection finish, cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		logger.WithError(err).Error("connect server error")
+		logger.Errorf("connect server error, err:%s", err)
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 			p.errorResponse(c, http.StatusForbidden, err)
 			return
@@ -133,24 +140,26 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		return
 	}
 	defer func() {
+		logger.Tracef("put connection")
 		putErr := taosConn.Put()
 		if putErr != nil {
 			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
-	var start = log.GetLogNow(isDebug)
-	logger.Debug(start, "insert json payload", string(data))
+	s = log.GetLogNow(isDebug)
+	logger.Debugf("insert json payload, data:%s, db:%s, ttl:%d,", data, db, ttl)
 	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db, ttl, reqID, logger)
-	logger.Debug("insert json payload cost:", log.GetLogDuration(isDebug, start))
+	logger.Debugf("insert json payload finish, cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
+		logger.Errorf("insert json payload error, err:%s, data:%s", err, data)
 		taosError, is := err.(*tErrors.TaosError)
 		if is {
 			web.SetTaosErrorCode(c, int(taosError.Code))
 		}
-		logger.WithError(err).Error("insert json payload error", string(data))
 		p.errorResponse(c, http.StatusInternalServerError, err)
 		return
 	}
+	logger.Tracef("insert json payload success")
 	p.successResponse(c)
 }
 
@@ -169,8 +178,9 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 	var ttl int
 	var err error
 	var reqID uint64
-	if reqIDStr := c.Query(config.ReqIDKey); len(reqIDStr) > 0 {
+	if reqIDStr := c.Query("req_id"); len(reqIDStr) > 0 {
 		if reqID, err = strconv.ParseUint(reqIDStr, 10, 64); err != nil {
+			logger.Errorf("illegal param, req_id must be numeric, err:%s, req_id:%s", err, reqIDStr)
 			p.errorResponse(c, http.StatusBadRequest,
 				fmt.Errorf("illegal param, req_id must be numeric %s", err.Error()))
 			return
@@ -178,12 +188,14 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 	}
 	if reqID == 0 {
 		reqID = uint64(generator.GetReqID())
+		logger.Tracef("req_id is 0, generate new req_id, qid:0x%x", reqID)
 	}
 	c.Set(config.ReqIDKey, reqID)
 
 	logger := logger.WithField(config.ReqIDKey, reqID)
 	isDebug := log.IsDebug()
 	db := c.Param("db")
+	logger.Tracef("request db:%s", db)
 	if len(db) == 0 {
 		logger.Error("db required")
 		p.errorResponse(c, http.StatusBadRequest, errors.New("db required"))
@@ -192,8 +204,10 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 
 	ttlStr := c.Query("ttl")
 	if len(ttlStr) > 0 {
+		logger.Tracef("request ttl:%s", ttlStr)
 		ttl, err = strconv.Atoi(ttlStr)
 		if err != nil {
+			logger.Errorf("illegal param, ttl must be numeric, err:%s, ttl:%s", err, ttlStr)
 			p.errorResponse(c, http.StatusBadRequest, fmt.Errorf("illegal param, ttl must be numeric %v", err))
 			return
 		}
@@ -209,6 +223,7 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 			if err == io.EOF {
 				break
 			} else {
+				logger.Errorf("read line error, err:%s", err)
 				p.errorResponse(c, http.StatusBadRequest, err)
 				return
 			}
@@ -219,16 +234,18 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 			tmp.Reset()
 		}
 	}
-
+	logger.Debugf("request lines:%v", lines)
 	user, password, err := plugin.GetAuth(c)
 	if err != nil {
-		logger.WithError(err).Error("get auth error")
+		logger.Errorf("get auth error, err:%s", err)
 		p.errorResponse(c, http.StatusBadRequest, err)
 		return
 	}
+	s := log.GetLogNow(isDebug)
 	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
+	logger.Debugf("get connection finish, cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		logger.WithError(err).Error("connect server error")
+		logger.Errorf("connect server error, err:%s", err)
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 			p.errorResponse(c, http.StatusForbidden, err)
 			return
@@ -237,17 +254,18 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 		return
 	}
 	defer func() {
+		logger.Tracef("put connection")
 		putErr := taosConn.Put()
 		if putErr != nil {
 			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
-	var start = log.GetLogNow(isDebug)
-	logger.Debug(start, "insert telnet payload", lines)
+	s = log.GetLogNow(isDebug)
+	logger.Debugf("insert telnet payload, lines:%v, db:%s, ttl:%d", lines, db, ttl)
 	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db, ttl, reqID, logger)
-	logger.Debug("insert telnet payload cost:", log.GetLogDuration(isDebug, start))
+	logger.Debugf("insert telnet payload finish, cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		logger.WithError(err).Error("insert telnet payload error", lines)
+		logger.Errorf("insert telnet payload error, err:%s, lines:%v", err, lines)
 		p.errorResponse(c, http.StatusInternalServerError, err)
 		return
 	}

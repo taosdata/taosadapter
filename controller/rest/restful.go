@@ -84,7 +84,7 @@ func prepareCtx(c *gin.Context) {
 	}
 	if reqID == 0 {
 		reqID = generator.GetReqID()
-		logger.Tracef("request:%s, client_ip:%s, req_id not set, generate new req_id: 0x%x", c.Request.RequestURI, c.ClientIP(), reqID)
+		logger.Tracef("request:%s, client_ip:%s, req_id not set, generate new qid: 0x%x", c.Request.RequestURI, c.ClientIP(), reqID)
 	}
 	c.Set(config.ReqIDKey, reqID)
 	ctxLogger := logger.WithField(config.ReqIDKey, reqID)
@@ -212,7 +212,7 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID in
 		if err != nil {
 			panic(err)
 		}
-		logger.Debugf("put connect cost:%s", log.GetLogDuration(isDebug, s))
+		logger.Debugf("put connection finish, cost:%s", log.GetLogDuration(isDebug, s))
 	}()
 
 	if len(db) > 0 {
@@ -379,7 +379,7 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 			} else {
 				fetched = true
 			}
-			logger.Tracef("get fetch result rows:%d", result.N)
+			logger.Tracef("get fetch result, rows:%d", result.N)
 			block := wrapper.TaosGetRawBlock(res)
 			logger.Trace("start parse block")
 			blockSize := result.N
@@ -541,7 +541,7 @@ func (ctl *Restful) upload(c *gin.Context) {
 		if err != nil {
 			panic(err)
 		}
-		logger.Debugf("put connect cost:%s", log.GetLogDuration(isDebug, s))
+		logger.Debugf("put connection cost:%s", log.GetLogDuration(isDebug, s))
 	}()
 	s = log.GetLogNow(isDebug)
 	logger.Tracef("exec sql: %s", sql)

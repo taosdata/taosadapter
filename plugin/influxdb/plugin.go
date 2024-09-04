@@ -80,8 +80,9 @@ func (p *Influxdb) Stop() error {
 func (p *Influxdb) write(c *gin.Context) {
 	var reqID uint64
 	var err error
-	if reqIDStr := c.Query(config.ReqIDKey); len(reqIDStr) > 0 {
+	if reqIDStr := c.Query("req_id"); len(reqIDStr) > 0 {
 		if reqID, err = strconv.ParseUint(reqIDStr, 10, 64); err != nil {
+			logger.Errorf("illegal param, req_id must be numeric %s, req_id:%s", err.Error(), reqIDStr)
 			p.badRequestResponse(c, &badRequest{
 				Code:    "illegal param",
 				Message: "req_id must be numeric",
@@ -93,6 +94,7 @@ func (p *Influxdb) write(c *gin.Context) {
 	}
 	if reqID == 0 {
 		reqID = uint64(generator.GetReqID())
+		logger.Tracef("req_id is 0, generate new req_id, qid:0x%x", reqID)
 	}
 	c.Set(config.ReqIDKey, reqID)
 	logger := logger.WithField(config.ReqIDKey, reqID)
@@ -102,8 +104,10 @@ func (p *Influxdb) write(c *gin.Context) {
 	if len(precision) == 0 {
 		precision = "ns"
 	}
+	logger.Debugf("request precision:%s", precision)
 	user, password, err := plugin.GetAuth(c)
 	if err != nil {
+		logger.Errorf("get user and password error:%s", err.Error())
 		p.commonResponse(c, http.StatusUnauthorized, &message{
 			Code:    "forbidden",
 			Message: err.Error(),
@@ -111,6 +115,7 @@ func (p *Influxdb) write(c *gin.Context) {
 		return
 	}
 	db := c.Query("db")
+	logger.Tracef("request db:%s", db)
 	if len(db) == 0 {
 		logger.Error("db required")
 		p.badRequestResponse(c, &badRequest{
@@ -125,8 +130,10 @@ func (p *Influxdb) write(c *gin.Context) {
 	var ttl int
 	ttlStr := c.Query("ttl")
 	if len(ttlStr) > 0 {
+		logger.Tracef("request ttl %s", ttlStr)
 		ttl, err = strconv.Atoi(ttlStr)
 		if err != nil {
+			logger.Errorf("illegal param, ttl must be numeric %s, ttl:%s", err, ttlStr)
 			p.badRequestResponse(c, &badRequest{
 				Code:    "illegal param",
 				Message: "ttl must be numeric",
@@ -139,7 +146,7 @@ func (p *Influxdb) write(c *gin.Context) {
 
 	data, err := c.GetRawData()
 	if err != nil {
-		logger.WithError(err).Errorln("read line error")
+		logger.Errorf("read line error, err:%s", err)
 		p.badRequestResponse(c, &badRequest{
 			Code:    "internal error",
 			Message: "read line error",
@@ -149,8 +156,12 @@ func (p *Influxdb) write(c *gin.Context) {
 		})
 		return
 	}
+	logger.Debugf("request data:%s", data)
+	s := log.GetLogNow(isDebug)
 	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
+	logger.Debugf("get connection finish, cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
+		logger.Errorf("connect server error, err:%s", err)
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 			p.commonResponse(c, http.StatusUnauthorized, &message{
 				Code:    "forbidden",
@@ -158,31 +169,31 @@ func (p *Influxdb) write(c *gin.Context) {
 			})
 			return
 		}
-		logger.WithError(err).Errorln("connect server error")
 		p.commonResponse(c, http.StatusInternalServerError, &message{Code: "internal error", Message: err.Error()})
 		return
 	}
 	defer func() {
+		logger.Tracef("put connection")
 		putErr := taosConn.Put()
 		if putErr != nil {
-			logger.WithError(putErr).Errorln("connect pool put error")
+			logger.Errorf("connect pool put error, err:%s", putErr)
 		}
 	}()
 	conn := taosConn.TaosConnection
-	start := log.GetLogNow(isDebug)
-	logger.Debugf("start insert influxdb,data: %s", data)
+	s = log.GetLogNow(isDebug)
+	logger.Tracef("start insert influxdb, data:%s", data)
 	err = inserter.InsertInfluxdb(conn, data, db, precision, ttl, reqID, logger)
-	logger.Debugf("finish insert influxdb cost:%s", log.GetLogDuration(isDebug, start))
+	logger.Debugf("finish insert influxdb, cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
+		logger.Errorf("insert line error, data:%s, err:%s", data, err)
 		taosError, is := err.(*tErrors.TaosError)
 		if is {
 			web.SetTaosErrorCode(c, int(taosError.Code))
 		}
-		logger.WithError(err).Errorln("insert line error", string(data))
 		p.commonResponse(c, http.StatusInternalServerError, &message{Code: "internal error", Message: err.Error()})
 		return
 	}
-
+	logger.Debugf("insert line success")
 	c.Status(http.StatusNoContent)
 }
 

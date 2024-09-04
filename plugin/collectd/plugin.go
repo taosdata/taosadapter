@@ -111,19 +111,20 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, clientIP net.IP, m
 	}
 	data, err := serializer.SerializeBatch(metrics)
 	if err != nil {
-		logger.WithError(err).Error("serialize collectd error")
+		logger.Errorf("serialize collectd error, err:%s", err)
 		return
 	}
 	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, clientIP)
 	if err != nil {
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
-			logger.WithError(err).WithField("user", p.conf.User).WithField("clientIP", clientIP.String()).Errorln("whitelist forbidden")
+			logger.Errorf("whitelist forbidden, user:%s, clientIP:%s", p.conf.User, clientIP.String())
 			return
 		}
-		logger.WithError(err).Errorln("connect server error")
+		logger.Errorf("connect server error, err:%s", err)
 		return
 	}
 	defer func() {
+		logger.Tracef("put connection")
 		putErr := taosConn.Put()
 		if putErr != nil {
 			logger.WithError(putErr).Errorln("connect pool put error")
@@ -132,12 +133,12 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, clientIP net.IP, m
 	isDebug := log.IsDebug()
 	reqID := generator.GetReqID()
 	execLogger := logger.WithField(config.ReqIDKey, reqID)
-	logger.Debug("insert lines", string(data))
+	execLogger.Debugf("insert lines, data:%s, db:%s, ttl:%d", data, p.conf.DB, p.conf.TTL)
 	start := log.GetLogNow(isDebug)
 	err = inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns", p.conf.TTL, uint64(reqID), execLogger)
-	logger.Debugf("insert lines finish cost:%s", log.GetLogDuration(isDebug, start))
+	logger.Debugf("insert lines finish, cost:%s", log.GetLogDuration(isDebug, start))
 	if err != nil {
-		logger.WithError(err).Errorln("insert lines error", string(data))
+		logger.Errorf("insert lines error, err:%s, data:%s", err, data)
 		return
 	}
 }

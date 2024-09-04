@@ -31,7 +31,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/swaggo/swag v1.8.8
 	github.com/taosdata/driver-go/v3 v3.5.1-0.20240829061127-2a7d73120e08
-	github.com/taosdata/file-rotatelogs/v2 v2.4.2-0.20240902095728-4d2fc56eb8f5
+	github.com/taosdata/file-rotatelogs/v2 v2.5.0
 	go.uber.org/automaxprocs v1.5.1
 	golang.org/x/sync v0.1.0
 )

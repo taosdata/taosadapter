@@ -232,7 +232,7 @@ func (t *TaosLogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	if exist && v != nil {
 		b.WriteString(config.ReqIDKey)
 		b.WriteByte(':')
-		fmt.Fprintf(b, "0x%x ", v)
+		fmt.Fprintf(b, "0x%x, ", v)
 	}
 	if len(entry.Message) > 0 && entry.Message[len(entry.Message)-1] == '\n' {
 		b.WriteString(entry.Message[:len(entry.Message)-1])

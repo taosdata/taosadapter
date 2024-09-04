@@ -251,7 +251,7 @@ func (h *messageHandler) handleMessageBinary(session *melody.Session, bytes []by
 	reqID := *(*uint64)(p0)
 	messageID := *(*uint64)(tools.AddPointer(p0, uintptr(8)))
 	action := *(*uint64)(tools.AddPointer(p0, uintptr(16)))
-	h.logger.Debugf("get ws message binary reqID:0x%x, messageID:%d, action:%d", reqID, messageID, action)
+	h.logger.Debugf("get ws message binary qid:0x%x, messageID:%d, action:%d", reqID, messageID, action)
 
 	ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 	mt := messageType(action)
@@ -545,6 +545,7 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 		return wsCommonErrorMsg(0xffff, "unmarshal ws query request error")
 	}
 	sqlType := monitor.WSRecordRequest(req.Sql)
+	logger.Errorf("get query request, sql:%s", req.Sql)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugf("get handler cost:%s", log.GetLogDuration(isDebug, s))
@@ -798,7 +799,7 @@ func (h *messageHandler) handleStmtPrepare(_ context.Context, request Request, l
 		logger.Errorf("unmarshal stmt prepare request %s error, err:%s", request.Args, err)
 		return wsStmtErrorMsg(0xffff, "unmarshal connect request error", req.StmtID)
 	}
-	logger.Tracef("stmt prepare, stmt_id:%d, sql:%s", req.StmtID, req.SQL)
+	logger.Debugf("stmt prepare, stmt_id:%d, sql:%s", req.StmtID, req.SQL)
 	stmtItem := h.stmts.Get(req.StmtID)
 	if stmtItem == nil {
 		logger.Errorf("stmt is nil, stmt_id:%d", req.StmtID)
@@ -1560,7 +1561,7 @@ func (h *messageHandler) handleBinaryQuery(_ context.Context, req dealBinaryRequ
 		logger.Errorf("unknown binary query version:%d", v)
 		return wsCommonErrorMsg(0xffff, "unknown binary query version:"+strconv.Itoa(int(v)))
 	}
-	logger.Tracef("binary query, sql:%s", sql)
+	logger.Debugf("binary query, sql:%s", log.GetLogSql(bytesutil.ToUnsafeString(sql)))
 	sqlType := monitor.WSRecordRequest(bytesutil.ToUnsafeString(sql))
 	s = log.GetLogNow(isDebug)
 	handler := async.GlobalAsync.HandlerPool.Get()
@@ -1569,8 +1570,6 @@ func (h *messageHandler) handleBinaryQuery(_ context.Context, req dealBinaryRequ
 	s = log.GetLogNow(isDebug)
 	result := async.GlobalAsync.TaosQuery(h.conn, logger, isDebug, bytesutil.ToUnsafeString(sql), handler, int64(req.reqID))
 	logger.Debugf("query cost:%s", log.GetLogDuration(isDebug, s))
-	// keep sql alive
-	logger.Debugf("sql addr:%p", &sql)
 	code := wrapper.TaosError(result.Res)
 	if code != httperror.SUCCESS {
 		monitor.WSRecordResult(sqlType, false)
