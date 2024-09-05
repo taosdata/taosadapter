@@ -401,6 +401,8 @@ type TMQSubscribeReq struct {
 	WithTableName        string   `json:"with_table_name"`
 	EnableBatchMeta      string   `json:"enable_batch_meta"`
 	MsgConsumeExcluded   string   `json:"msg_consume_excluded"`
+	SessionTimeoutMS     string   `json:"session_timeout_ms"`
+	MaxPollIntervalMS    string   `json:"max_poll_interval_ms"`
 }
 
 type TMQSubscribeResp struct {
@@ -515,6 +517,12 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	}
 	if len(req.EnableBatchMeta) != 0 {
 		tmqOptions["msg.enable.batchmeta"] = req.EnableBatchMeta
+	}
+	if len(req.SessionTimeoutMS) != 0 {
+		tmqOptions["session.timeout.ms"] = req.SessionTimeoutMS
+	}
+	if len(req.MaxPollIntervalMS) != 0 {
+		tmqOptions["max.poll.interval.ms"] = req.MaxPollIntervalMS
 	}
 	var errCode int32
 	for k, v := range tmqOptions {
