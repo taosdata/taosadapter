@@ -1274,7 +1274,7 @@ func TestWsSchemaless(t *testing.T) {
 	code, message = doRestful("create database if not exists test_ws_schemaless", "")
 	assert.Equal(t, 0, code, message)
 
-	defer doRestful("drop database if exists test_ws_schemaless", "")
+	//defer doRestful("drop database if exists test_ws_schemaless", "")
 
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
 	if err != nil {
@@ -1295,6 +1295,7 @@ func TestWsSchemaless(t *testing.T) {
 		code         int
 		totalRows    int32
 		affectedRows int
+		tableNameKey string
 	}{
 		{
 			name:      "influxdb",
@@ -1372,6 +1373,20 @@ func TestWsSchemaless(t *testing.T) {
 			code:         0,
 			affectedRows: 4,
 		},
+		{
+			name:      "influxdb_tbnamekey",
+			protocol:  schemaless.InfluxDBLineProtocol,
+			precision: "ms",
+			data: "measurement,host=host1 field1=2i,field2=2.0 1577837300000\n" +
+				"measurement,host=host1 field1=2i,field2=2.0 1577837400000\n" +
+				"measurement,host=host1 field1=2i,field2=2.0 1577837500000\n" +
+				"measurement,host=host1 field1=2i,field2=2.0 1577837600000",
+			ttl:          1000,
+			code:         0,
+			totalRows:    4,
+			affectedRows: 4,
+			tableNameKey: "host",
+		},
 	}
 
 	// connect
@@ -1389,11 +1404,12 @@ func TestWsSchemaless(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			reqID += 1
 			req := SchemalessWriteRequest{
-				ReqID:     reqID,
-				Protocol:  c.protocol,
-				Precision: c.precision,
-				TTL:       c.ttl,
-				Data:      c.data,
+				ReqID:        reqID,
+				Protocol:     c.protocol,
+				Precision:    c.precision,
+				TTL:          c.ttl,
+				Data:         c.data,
+				TableNameKey: c.tableNameKey,
 			}
 			resp, err = doWebSocket(ws, SchemalessWrite, &req)
 			assert.NoError(t, err)
