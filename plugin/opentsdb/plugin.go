@@ -126,7 +126,8 @@ func (p *Plugin) insertJson(c *gin.Context) {
 			return
 		}
 	}
-
+	tableNameKey := c.Query("table_name_key")
+	logger.Tracef("request table_name_key:%s", tableNameKey)
 	s := log.GetLogNow(isDebug)
 	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
 	logger.Debugf("get connection finish, cost:%s", log.GetLogDuration(isDebug, s))
@@ -147,8 +148,8 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		}
 	}()
 	s = log.GetLogNow(isDebug)
-	logger.Debugf("insert json payload, data:%s, db:%s, ttl:%d,", data, db, ttl)
-	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db, ttl, reqID, logger)
+	logger.Debugf("insert json payload, data:%s, db:%s, ttl:%d, table_name_key:%s", data, db, ttl, tableNameKey)
+	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db, ttl, reqID, tableNameKey, logger)
 	logger.Debugf("insert json payload finish, cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.Errorf("insert json payload error, err:%s, data:%s", err, data)
@@ -213,6 +214,8 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 		}
 	}
 
+	tableNameKey := c.Query("table_name_key")
+	logger.Tracef("request table_name_key:%s", tableNameKey)
 	rd := bufio.NewReader(c.Request.Body)
 	var lines []string
 	tmp := pool.BytesPoolGet()
@@ -261,8 +264,8 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 		}
 	}()
 	s = log.GetLogNow(isDebug)
-	logger.Debugf("insert telnet payload, lines:%v, db:%s, ttl:%d", lines, db, ttl)
-	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db, ttl, reqID, logger)
+	logger.Debugf("insert telnet payload, lines:%v, db:%s, ttl:%d, table_name_key: %s", lines, db, ttl, tableNameKey)
+	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db, ttl, reqID, tableNameKey, logger)
 	logger.Debugf("insert telnet payload finish, cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.Errorf("insert telnet payload error, err:%s, lines:%v", err, lines)

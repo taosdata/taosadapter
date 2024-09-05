@@ -13,7 +13,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 )
 
-func InsertInfluxdb(conn unsafe.Pointer, data []byte, db, precision string, ttl int, reqID int64, logger *logrus.Entry) error {
+func InsertInfluxdb(conn unsafe.Pointer, data []byte, db, precision string, ttl int, reqID int64, tableNameKey string, logger *logrus.Entry) error {
 	if reqID == 0 {
 		reqID = generator.GetReqID()
 	}
@@ -26,7 +26,7 @@ func InsertInfluxdb(conn unsafe.Pointer, data []byte, db, precision string, ttl 
 
 	var result unsafe.Pointer
 
-	_, result = syncinterface.TaosSchemalessInsertRawTTLWithReqID(conn, d, wrapper.InfluxDBLineProtocol, precision, ttl, reqID, logger, log.IsDebug())
+	_, result = syncinterface.TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn, d, wrapper.InfluxDBLineProtocol, precision, ttl, reqID, tableNameKey, logger, log.IsDebug())
 
 	defer func() {
 		syncinterface.FreeResult(result, logger, log.IsDebug())

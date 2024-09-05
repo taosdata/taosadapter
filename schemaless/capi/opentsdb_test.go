@@ -97,7 +97,7 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 	logger := logrus.New().WithField("test", "TestInsertOpentsdbTelnet")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := capi.InsertOpentsdbTelnet(tt.args.taosConnect, []string{tt.args.data}, tt.args.db, tt.args.ttl, 0, logger); (err != nil) != tt.wantErr {
+			if err := capi.InsertOpentsdbTelnet(tt.args.taosConnect, []string{tt.args.data}, tt.args.db, tt.args.ttl, 0, "", logger); (err != nil) != tt.wantErr {
 				t.Errorf("InsertOpentsdbTelnet() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -125,7 +125,7 @@ func BenchmarkTelnet(b *testing.B) {
 		//`sys.if.bytes.out`,`host`=web01,`interface`=eth0
 		//t_98df8453856519710bfc2f1b5f8202cf
 		//t_98df8453856519710bfc2f1b5f8202cf
-		err := capi.InsertOpentsdbTelnet(conn, []string{`put sys.if.bytes.out 1479496100 1.3E3 host=web01 interface=eth0`}, "test", 0, 0, logger)
+		err := capi.InsertOpentsdbTelnet(conn, []string{`put sys.if.bytes.out 1479496100 1.3E3 host=web01 interface=eth0`}, "test", 0, 0, "", logger)
 		if err != nil {
 			b.Error(err)
 		}
@@ -237,7 +237,7 @@ func TestInsertOpentsdbJson(t *testing.T) {
 	logger := logrus.New().WithField("test", "TestInsertOpentsdbJson")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := capi.InsertOpentsdbJson(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.ttl, 0, logger); (err != nil) != tt.wantErr {
+			if err := capi.InsertOpentsdbJson(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.ttl, 0, "", logger); (err != nil) != tt.wantErr {
 				t.Errorf("InsertOpentsdbJson() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -295,7 +295,7 @@ func TestInsertOpentsdbTelnetBatch(t *testing.T) {
 	logger := logrus.New().WithField("test", "TestInsertOpentsdbTelnetBatch")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := capi.InsertOpentsdbTelnet(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.ttl, 0, logger); (err != nil) != tt.wantErr {
+			if err := capi.InsertOpentsdbTelnet(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.ttl, 0, "", logger); (err != nil) != tt.wantErr {
 				t.Errorf("InsertOpentsdbTelnet() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

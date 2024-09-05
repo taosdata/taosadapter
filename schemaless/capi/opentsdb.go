@@ -13,7 +13,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 )
 
-func InsertOpentsdbJson(conn unsafe.Pointer, data []byte, db string, ttl int, reqID int64, logger *logrus.Entry) error {
+func InsertOpentsdbJson(conn unsafe.Pointer, data []byte, db string, ttl int, reqID int64, tableNameKey string, logger *logrus.Entry) error {
 	if len(data) == 0 {
 		return nil
 	}
@@ -22,8 +22,8 @@ func InsertOpentsdbJson(conn unsafe.Pointer, data []byte, db string, ttl int, re
 	}
 
 	var result unsafe.Pointer
-	_, result = syncinterface.TaosSchemalessInsertRawTTLWithReqID(conn, string(data), wrapper.OpenTSDBJsonFormatProtocol,
-		"", ttl, getReqID(reqID), logger, log.IsDebug())
+	_, result = syncinterface.TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn, string(data), wrapper.OpenTSDBJsonFormatProtocol,
+		"", ttl, getReqID(reqID), tableNameKey, logger, log.IsDebug())
 
 	defer func() {
 		syncinterface.FreeResult(result, logger, log.IsDebug())
@@ -34,7 +34,7 @@ func InsertOpentsdbJson(conn unsafe.Pointer, data []byte, db string, ttl int, re
 	return nil
 }
 
-func InsertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string, ttl int, reqID int64, logger *logrus.Entry) error {
+func InsertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string, ttl int, reqID int64, tableNameKey string, logger *logrus.Entry) error {
 	trimData := make([]string, 0, len(data))
 	for i := 0; i < len(data); i++ {
 		if len(data[i]) == 0 {
@@ -50,8 +50,8 @@ func InsertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string, ttl int
 	}
 
 	var result unsafe.Pointer
-	_, result = syncinterface.TaosSchemalessInsertRawTTLWithReqID(conn, strings.Join(trimData, "\n"),
-		wrapper.OpenTSDBTelnetLineProtocol, "", ttl, getReqID(reqID), logger, log.IsDebug())
+	_, result = syncinterface.TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn, strings.Join(trimData, "\n"),
+		wrapper.OpenTSDBTelnetLineProtocol, "", ttl, getReqID(reqID), tableNameKey, logger, log.IsDebug())
 	defer func() {
 		syncinterface.FreeResult(result, logger, log.IsDebug())
 	}()

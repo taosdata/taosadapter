@@ -140,7 +140,7 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metric telegraf.Me
 	reqID := generator.GetReqID()
 	execLogger := logger.WithField(config.ReqIDKey, reqID)
 	execLogger.Debugf("insert line,req_id:0x%x,data: %s", reqID, string(data))
-	err = inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns", p.conf.TTL, uint64(reqID), execLogger)
+	err = inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns", p.conf.TTL, uint64(reqID), "", execLogger)
 	execLogger.Debugf("insert line finish cost:%s", log.GetLogDuration(isDebug, start))
 	if err != nil {
 		execLogger.WithError(err).Errorln("insert lines error", string(data))

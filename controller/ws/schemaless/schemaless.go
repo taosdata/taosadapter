@@ -346,11 +346,12 @@ func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, r
 }
 
 type schemalessWriteReq struct {
-	ReqID     uint64 `json:"req_id"`
-	Protocol  int    `json:"protocol"`
-	Precision string `json:"precision"`
-	TTL       int    `json:"ttl"`
-	Data      string `json:"data"`
+	ReqID        uint64 `json:"req_id"`
+	Protocol     int    `json:"protocol"`
+	Precision    string `json:"precision"`
+	TTL          int    `json:"ttl"`
+	Data         string `json:"data"`
+	TableNameKey string `json:"table_name_key"`
 }
 
 type schemalessResp struct {
@@ -387,13 +388,14 @@ func (t *TaosSchemaless) insert(ctx context.Context, session *melody.Session, re
 	var err error
 	var totalRows int32
 	var affectedRows int
-	totalRows, result = syncinterface.TaosSchemalessInsertRawTTLWithReqID(
+	totalRows, result = syncinterface.TaosSchemalessInsertRawTTLWithReqIDTBNameKey(
 		t.conn,
 		req.Data,
 		req.Protocol,
 		req.Precision,
 		req.TTL,
 		int64(req.ReqID),
+		req.TableNameKey,
 		logger,
 		isDebug,
 	)

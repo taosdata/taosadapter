@@ -722,11 +722,12 @@ func (h *messageHandler) handleFreeResult(_ context.Context, request Request, lo
 }
 
 type SchemalessWriteRequest struct {
-	ReqID     uint64 `json:"req_id"`
-	Protocol  int    `json:"protocol"`
-	Precision string `json:"precision"`
-	TTL       int    `json:"ttl"`
-	Data      string `json:"data"`
+	ReqID        uint64 `json:"req_id"`
+	Protocol     int    `json:"protocol"`
+	Precision    string `json:"precision"`
+	TTL          int    `json:"ttl"`
+	Data         string `json:"data"`
+	TableNameKey string `json:"table_name_key"`
 }
 
 type SchemalessWriteResponse struct {
@@ -748,7 +749,7 @@ func (h *messageHandler) handleSchemalessWrite(_ context.Context, request Reques
 	}
 	var totalRows int32
 	var affectedRows int
-	totalRows, result := syncinterface.TaosSchemalessInsertRawTTLWithReqID(h.conn, req.Data, req.Protocol, req.Precision, req.TTL, int64(request.ReqID), logger, isDebug)
+	totalRows, result := syncinterface.TaosSchemalessInsertRawTTLWithReqIDTBNameKey(h.conn, req.Data, req.Protocol, req.Precision, req.TTL, int64(request.ReqID), req.TableNameKey, logger, isDebug)
 	logger.Tracef("total_rows:%d, result:%p", totalRows, result)
 	defer syncinterface.FreeResult(result, logger, isDebug)
 	affectedRows = wrapper.TaosAffectedRows(result)

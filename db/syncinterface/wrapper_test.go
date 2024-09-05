@@ -53,9 +53,9 @@ func TestTaosSelectDB(t *testing.T) {
 	assert.NotEqual(t, 0, code)
 }
 
-func TestTaosSchemalessInsertRawTTLWithReqID(t *testing.T) {
+func TestTaosSchemalessInsertRawTTLWithReqIDTBNameKey(t *testing.T) {
 	reqID := generator.GetReqID()
-	var logger = logger.WithField("test", "TaosSchemalessInsertRawTTLWithReqID").WithField(config.ReqIDKey, reqID)
+	var logger = logger.WithField("test", "TestTaosSchemalessInsertRawTTLWithReqIDTBNameKey").WithField(config.ReqIDKey, reqID)
 	conn, err := TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	if !assert.NoError(t, err) {
 		return
@@ -69,7 +69,7 @@ func TestTaosSchemalessInsertRawTTLWithReqID(t *testing.T) {
 	}()
 	code := TaosSelectDB(conn, "syncinterface_test_sml", logger, isDebug)
 	assert.Equal(t, 0, code)
-	errCode, result := TaosSchemalessInsertRawTTLWithReqID(conn, "measurement,host=host1 field1=2i,field2=2.0 1577836800000000000", wrapper.InfluxDBLineProtocol, "", 0, reqID, logger, isDebug)
+	errCode, result := TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn, "measurement,host=host1 field1=2i,field2=2.0 1577836800000000000", wrapper.InfluxDBLineProtocol, "", 0, reqID, "", logger, isDebug)
 	assert.Equal(t, int32(1), errCode)
 	assert.NotNil(t, result)
 	FreeResult(result, logger, isDebug)
