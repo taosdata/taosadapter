@@ -843,6 +843,8 @@ func TestMeta(t *testing.T) {
 		WithTableName:        "true",
 		OffsetReset:          "earliest",
 		EnableBatchMeta:      "true",
+		SessionTimeoutMS:     "12000",
+		MaxPollIntervalMS:    "300000",
 	}
 
 	b, _ := json.Marshal(init)
