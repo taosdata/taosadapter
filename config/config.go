@@ -24,7 +24,6 @@ type Config struct {
 	Pool                Pool
 	Monitor             Monitor
 	UploadKeeper        UploadKeeper
-	TMQ                 TMQ
 }
 
 var (
@@ -86,7 +85,6 @@ func Init() {
 	Conf.Pool.setValue()
 	Conf.Monitor.setValue()
 	Conf.UploadKeeper.setValue()
-	Conf.TMQ.setValue()
 }
 
 // arg > file > env
@@ -125,7 +123,6 @@ func init() {
 	initPool()
 	initMonitor()
 	initUploadKeeper()
-	initTMQ()
 	err := viper.BindPFlags(pflag.CommandLine)
 	if err != nil {
 		panic(err)
