@@ -7,6 +7,7 @@ import (
 	"net"
 	"runtime"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/sirupsen/logrus"
@@ -59,11 +60,21 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	if maxConnect == 0 {
 		maxConnect = runtime.GOMAXPROCS(0) * 2
 	}
+	maxWait := config.Conf.Pool.MaxWait
+	if maxWait < 0 {
+		maxWait = 0
+	}
+	waitTimeout := config.Conf.Pool.WaitTimeout
+	if waitTimeout < 0 {
+		waitTimeout = config.DefaultWaitTimeout
+	}
 	poolConfig := &connectpool.Config{
-		InitialCap: 1,
-		MaxCap:     maxConnect,
-		Factory:    cp.factory,
-		Close:      cp.close,
+		InitialCap:  1,
+		MaxWait:     maxWait,
+		WaitTimeout: time.Second * time.Duration(waitTimeout),
+		MaxCap:      maxConnect,
+		Factory:     cp.factory,
+		Close:       cp.close,
 	}
 	p, err := connectpool.NewConnectPool(poolConfig)
 
