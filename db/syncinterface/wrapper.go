@@ -324,3 +324,15 @@ func TaosStmtGetParam(stmt unsafe.Pointer, index int, logger *logrus.Entry, isDe
 	thread.Unlock()
 	return dataType, dataLength, err
 }
+
+func TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn unsafe.Pointer, lines string, protocol int, precision string, ttl int, reqID int64, tbNameKey string, logger *logrus.Entry, isDebug bool) (int32, unsafe.Pointer) {
+	logger.Tracef("call taos_schemaless_insert_raw_ttl_with_reqid_tbname_key, conn:%p, lines:%s, protocol:%d, precision:%s, ttl:%d, reqID:%d, tbnameKey ", conn, lines, protocol, precision, ttl, reqID)
+	s := log.GetLogNow(isDebug)
+	thread.Lock()
+	logger.Debugf("get thread lock for taos_schemaless_insert_raw_ttl_with_reqid_tbname_key cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	rows, result := wrapper.TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn, lines, protocol, precision, ttl, reqID, tbNameKey)
+	logger.Debugf("taos_schemaless_insert_raw_ttl_with_reqid_tbname_key finish, rows:%d, result:%p, cost:%s", rows, result, log.GetLogDuration(isDebug, s))
+	thread.Unlock()
+	return rows, result
+}

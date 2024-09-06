@@ -239,7 +239,7 @@ func (p *NodeExporter) requestSingle(conn unsafe.Pointer, req *Req) error {
 		}
 		reqID := generator.GetReqID()
 		execLogger := logger.WithField(common.ReqIDKey, reqID)
-		err = inserter.InsertInfluxdb(conn, data, p.conf.DB, "ns", p.conf.TTL, uint64(reqID), execLogger)
+		err = inserter.InsertInfluxdb(conn, data, p.conf.DB, "ns", p.conf.TTL, uint64(reqID), "", execLogger)
 		if err != nil {
 			logger.WithError(err).Error("insert influxdb error", string(data))
 			return err

@@ -143,7 +143,7 @@ func (p *Influxdb) write(c *gin.Context) {
 			return
 		}
 	}
-
+	tableNameKey := c.Query("table_name_key")
 	data, err := c.GetRawData()
 	if err != nil {
 		logger.Errorf("read line error, err:%s", err)
@@ -182,7 +182,7 @@ func (p *Influxdb) write(c *gin.Context) {
 	conn := taosConn.TaosConnection
 	s = log.GetLogNow(isDebug)
 	logger.Tracef("start insert influxdb, data:%s", data)
-	err = inserter.InsertInfluxdb(conn, data, db, precision, ttl, reqID, logger)
+	err = inserter.InsertInfluxdb(conn, data, db, precision, ttl, reqID, tableNameKey, logger)
 	logger.Debugf("finish insert influxdb, cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.Errorf("insert line error, data:%s, err:%s", data, err)

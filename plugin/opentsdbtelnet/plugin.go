@@ -347,7 +347,7 @@ func (p *Plugin) handleData(connection *Connection, line []string, clientIP net.
 	reqID := generator.GetReqID()
 	logger := logger.WithField(config.ReqIDKey, reqID)
 	logger.Debugf("insert telnet payload, lines:%s", line)
-	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, line, connection.db, p.conf.TTL, uint64(reqID), logger)
+	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, line, connection.db, p.conf.TTL, uint64(reqID), "", logger)
 	if err != nil {
 		logger.WithError(err).Errorln("insert telnet payload error :", line)
 	}

@@ -135,7 +135,7 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, clientIP net.IP, m
 	execLogger := logger.WithField(config.ReqIDKey, reqID)
 	execLogger.Debugf("insert lines, data:%s, db:%s, ttl:%d", data, p.conf.DB, p.conf.TTL)
 	start := log.GetLogNow(isDebug)
-	err = inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns", p.conf.TTL, uint64(reqID), execLogger)
+	err = inserter.InsertInfluxdb(taosConn.TaosConnection, data, p.conf.DB, "ns", p.conf.TTL, uint64(reqID), "", execLogger)
 	logger.Debugf("insert lines finish, cost:%s", log.GetLogDuration(isDebug, start))
 	if err != nil {
 		logger.Errorf("insert lines error, err:%s, data:%s", err, data)
