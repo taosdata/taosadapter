@@ -37,7 +37,6 @@ func initLog() {
 		pflag.String("log.path", fmt.Sprintf("/var/log/%s", version.CUS_PROMPT), `log path. Env "TAOS_ADAPTER_LOG_PATH"`)
 	}
 
-	viper.SetDefault("log.level", "info")
 	_ = viper.BindEnv("log.level", "TAOS_ADAPTER_LOG_LEVEL")
 	pflag.String("log.level", "info", `log level (trace debug info warning error). Env "TAOS_ADAPTER_LOG_LEVEL"`)
 
