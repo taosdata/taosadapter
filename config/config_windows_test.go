@@ -59,6 +59,8 @@ func TestInit(t *testing.T) {
 					MaxConnect:  0,
 					MaxIdle:     0,
 					IdleTimeout: 0,
+					WaitTimeout: 60,
+					MaxWait:     0,
 				},
 				Monitor: Monitor{
 					Disable:                   true,
@@ -75,9 +77,6 @@ func TestInit(t *testing.T) {
 					Timeout:       5 * time.Second,
 					RetryTimes:    3,
 					RetryInterval: 5 * time.Second,
-				},
-				TMQ: TMQ{
-					ReleaseIntervalMultiplierForAutocommit: 2,
 				},
 			}, Conf)
 			corsC := Conf.Cors.GetConfig()

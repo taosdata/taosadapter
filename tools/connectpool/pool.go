@@ -1,21 +1,26 @@
 package connectpool
 
 import (
+	"context"
 	"errors"
 	"sync"
+	"time"
 	"unsafe"
 )
 
 var (
-	ErrMaxActiveConnReached = errors.New("MaxActiveConnReached")
-	ErrClosed               = errors.New("pool is closed")
+	ErrClosed  = errors.New("pool is closed")
+	ErrTimeout = errors.New("get connection timeout")
+	ErrMaxWait = errors.New("exceeded connection pool max wait")
 )
 
 type Config struct {
-	InitialCap int
-	MaxCap     int
-	Factory    func() (unsafe.Pointer, error)
-	Close      func(pointer unsafe.Pointer) error
+	InitialCap  int
+	MaxCap      int
+	MaxWait     int
+	WaitTimeout time.Duration
+	Factory     func() (unsafe.Pointer, error)
+	Close       func(pointer unsafe.Pointer) error
 }
 
 type connReq struct {
@@ -29,6 +34,8 @@ type ConnectPool struct {
 	close        func(pointer unsafe.Pointer) error
 	maxActive    int
 	openingConns int
+	maxWait      int
+	waitTimeout  time.Duration
 	connReqs     []chan connReq
 	released     bool
 	releasedOnce sync.Once
@@ -50,6 +57,8 @@ func NewConnectPool(poolConfig *Config) (*ConnectPool, error) {
 		factory:      poolConfig.Factory,
 		close:        poolConfig.Close,
 		maxActive:    poolConfig.MaxCap,
+		maxWait:      poolConfig.MaxWait,
+		waitTimeout:  poolConfig.WaitTimeout,
 		openingConns: 0,
 		released:     false,
 	}
@@ -79,6 +88,15 @@ func (c *ConnectPool) getConns() chan unsafe.Pointer {
 }
 
 func (c *ConnectPool) Get() (unsafe.Pointer, error) {
+	if c.waitTimeout > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), c.waitTimeout)
+		defer cancel()
+		return c.GetWithContext(ctx)
+	}
+	return c.GetWithContext(context.Background())
+}
+
+func (c *ConnectPool) GetWithContext(ctx context.Context) (unsafe.Pointer, error) {
 	conns := c.getConns()
 	if conns == nil {
 		return nil, ErrClosed
@@ -92,15 +110,52 @@ func (c *ConnectPool) Get() (unsafe.Pointer, error) {
 			return wrapConn, nil
 		default:
 			c.mu.Lock()
+			if c.released {
+				c.mu.Unlock()
+				return nil, ErrClosed
+			}
 			if c.openingConns >= c.maxActive {
+				if c.maxWait > 0 && len(c.connReqs) >= c.maxWait {
+					c.mu.Unlock()
+					return nil, ErrMaxWait
+				}
 				req := make(chan connReq, 1)
 				c.connReqs = append(c.connReqs, req)
 				c.mu.Unlock()
-				ret, ok := <-req
-				if !ok {
-					return nil, ErrMaxActiveConnReached
+				select {
+				case ret, ok := <-req:
+					if !ok {
+						return nil, ErrClosed
+					}
+					return ret.idleConn, nil
+				case <-ctx.Done():
+					c.mu.Lock()
+					if c.released {
+						c.mu.Unlock()
+						return nil, ErrClosed
+					}
+					gotReq := false
+					for i, r := range c.connReqs {
+						// remove the request from the queue
+						if r == req {
+							gotReq = true
+							copy(c.connReqs[i:], c.connReqs[i+1:])
+							c.connReqs = c.connReqs[:len(c.connReqs)-1]
+							c.mu.Unlock()
+							break
+						}
+					}
+					if !gotReq {
+						c.mu.Unlock()
+						ret, ok := <-req
+						if !ok {
+							return nil, ErrClosed
+						}
+						return ret.idleConn, nil
+					}
+					return nil, ErrTimeout
 				}
-				return ret.idleConn, nil
+
 			}
 			if c.factory == nil {
 				c.mu.Unlock()
@@ -125,9 +180,13 @@ func (c *ConnectPool) Put(conn unsafe.Pointer) error {
 
 	c.mu.Lock()
 
-	if c.conns == nil {
+	if c.released {
 		c.mu.Unlock()
-		return c.Close(conn)
+		c.Close(conn)
+		if c.openingConns == 0 {
+			c.close = nil
+		}
+		return nil
 	}
 
 	if l := len(c.connReqs); l > 0 {
@@ -140,15 +199,6 @@ func (c *ConnectPool) Put(conn unsafe.Pointer) error {
 		c.mu.Unlock()
 		return nil
 	} else {
-		if c.released {
-			c.mu.Unlock()
-			c.Close(conn)
-			c.doRelease()
-			if c.openingConns == 0 {
-				c.close = nil
-			}
-			return nil
-		}
 		select {
 		case c.conns <- conn:
 			c.mu.Unlock()
@@ -180,17 +230,16 @@ func (c *ConnectPool) Release() {
 		return
 	}
 	c.released = true
-	if len(c.connReqs) == 0 {
-		c.doRelease()
+	for i := 0; i < len(c.connReqs); i++ {
+		close(c.connReqs[i])
 	}
+	c.connReqs = nil
+	c.doRelease()
 }
 
 func (c *ConnectPool) doRelease() {
 	c.releasedOnce.Do(func() {
 		c.factory = nil
-		if c.conns == nil {
-			return
-		}
 		close(c.conns)
 		for conn := range c.conns {
 			c.openingConns--
