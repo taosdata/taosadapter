@@ -87,8 +87,17 @@ func Init() {
 	Conf.Pool.setValue()
 	Conf.Monitor.setValue()
 	Conf.UploadKeeper.setValue()
+	// set log level default value: info
+	if Conf.LogLevel == "" {
+		Conf.LogLevel = "info"
+	}
 	if viper.IsSet("log.level") {
 		Conf.LogLevel = Conf.Log.Level
+	} else {
+		viper.Set("log.level", "")
+	}
+	if !viper.IsSet("logLevel") {
+		viper.Set("logLevel", "")
 	}
 }
 
@@ -107,7 +116,6 @@ func init() {
 	_ = viper.BindEnv("port", "TAOS_ADAPTER_PORT")
 	pflag.IntP("port", "P", 6041, `http port. Env "TAOS_ADAPTER_PORT"`)
 
-	viper.SetDefault("logLevel", "info")
 	_ = viper.BindEnv("logLevel", "TAOS_ADAPTER_LOG_LEVEL")
 	pflag.String("logLevel", "info", `log level (trace debug info warning error). Env "TAOS_ADAPTER_LOG_LEVEL"`)
 
