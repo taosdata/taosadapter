@@ -8,10 +8,18 @@ SMLAutoCreateDB = false
 [cors]
 allowAllOrigins = true
 
-#[pool]
-#maxConnect = 0
-#maxIdle = 0
-#idleTimeout = 0
+[pool]
+# The maximum number of connections to the server. If set to 0, no limit is imposed.
+# maxConnect = 0
+
+# The maximum number of idle connections to the server. Should match maxConnect.
+# maxIdle = 0
+
+# The maximum number of connections waiting to be established. 0 means no limit.
+maxWait = 0
+
+# Maximum time to wait for a connection. 0 means no timeout.
+waitTimeout = 60
 
 [ssl]
 enable = false
@@ -110,6 +118,3 @@ gatherDuration = "5s"
 
 [prometheus]
 enable = true
-
-[tmq]
-releaseIntervalMultiplierForAutocommit = 2

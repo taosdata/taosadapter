@@ -1,7 +1,8 @@
 package connectpool
 
 import (
-	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 	"unsafe"
@@ -63,59 +64,177 @@ func TestConnectPool(t *testing.T) {
 	assert.Equal(t, 5, closeCalled)
 }
 
-func TestRelease(t *testing.T) {
-	value := []int{1, 2}
-	deleteValue := []int{2, 1}
-	deleteIndex := 0
-	index := 0
+func TestTimeout(t *testing.T) {
 	pool, err := NewConnectPool(&Config{
-		InitialCap: 1,
-		MaxCap:     2,
+		InitialCap:  0,
+		MaxCap:      1,
+		MaxWait:     0,
+		WaitTimeout: time.Second * 1,
 		Factory: func() (unsafe.Pointer, error) {
-			p := unsafe.Pointer(&value[index])
-			index += 1
-			return p, nil
+			return nil, nil
 		},
 		Close: func(pointer unsafe.Pointer) error {
-			assert.Equal(t, deleteValue[deleteIndex], *(*int)(pointer))
-			deleteIndex += 1
-			t.Log("close", *(*int)(pointer))
+			t.Log("close")
 			return nil
 		},
 	})
 	assert.NoError(t, err)
-
-	conn1, err := pool.Get()
+	_, err = pool.Get()
 	assert.NoError(t, err)
-	assert.NotNil(t, conn1)
-	t.Log("conn1", *(*int)(conn1))
+	_, err = pool.Get()
+	assert.Equal(t, ErrTimeout, err)
+}
 
-	conn2, err := pool.Get()
+func TestGetAfterRelease(t *testing.T) {
+	a := 1
+	pool, err := NewConnectPool(&Config{
+		InitialCap:  0,
+		MaxCap:      1,
+		MaxWait:     0,
+		WaitTimeout: 0,
+		Factory: func() (unsafe.Pointer, error) {
+			return unsafe.Pointer(&a), nil
+		},
+		Close: func(pointer unsafe.Pointer) error {
+			t.Log("close")
+			return nil
+		},
+	})
 	assert.NoError(t, err)
-	assert.NotNil(t, conn2)
-	t.Log("conn2", *(*int)(conn2))
-	recv := make(chan unsafe.Pointer)
+	assert.NoError(t, err)
+	c, err := pool.Get()
+	assert.NoError(t, err)
 	go func() {
-		conn3, err := pool.Get()
-		assert.NoError(t, err)
-		assert.NotNil(t, conn3)
-		recv <- conn3
+		time.Sleep(time.Second)
+		pool.Release()
+		assert.Nil(t, pool.conns)
 	}()
-	time.Sleep(time.Second)
+	// wait for connection put back, util release
+	_, err = pool.Get()
+	assert.Equal(t, ErrClosed, err)
+	err = pool.Put(nil)
+	assert.EqualError(t, err, "connection is nil. rejecting")
+	err = pool.Put(c)
+	assert.NoError(t, err)
+
+	// get after release
+	_, err = pool.Get()
+	assert.Equal(t, ErrClosed, err)
+
+	// release after release
 	pool.Release()
-	pool.Put(conn1)
-	pool.Put(conn2)
-	assert.Equal(t, 1, pool.openingConns)
-	timeout, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()
-	select {
-	case <-timeout.Done():
-		t.Error("wait for conn3 timeout")
-	case conn3 := <-recv:
-		assert.Equal(t, conn1, conn3)
-		t.Log("conn3", *(*int)(conn3))
-		pool.Put(conn3)
+
+}
+
+func TestMaxWait(t *testing.T) {
+	a := 1
+	pool, err := NewConnectPool(&Config{
+		InitialCap:  0,
+		MaxCap:      1,
+		MaxWait:     1,
+		WaitTimeout: 0,
+		Factory: func() (unsafe.Pointer, error) {
+			return unsafe.Pointer(&a), nil
+		},
+		Close: func(pointer unsafe.Pointer) error {
+			t.Log("close")
+			return nil
+		},
+	})
+	assert.NoError(t, err)
+	c, err := pool.Get()
+	assert.NoError(t, err)
+	go func() {
+		time.Sleep(time.Second)
+		// over max wait,will return immediately
+		_, err = pool.Get()
+		assert.Equal(t, ErrMaxWait, err)
+		// put back connection
+		pool.Put(c)
+	}()
+	// wait for connection put back
+	_, err = pool.Get()
+	assert.NoError(t, err)
+}
+
+func TestNewConnectPool(t *testing.T) {
+	type args struct {
+		poolConfig *Config
 	}
-	assert.Equal(t, 2, deleteIndex)
-	assert.Equal(t, 0, pool.openingConns)
+	tests := []struct {
+		name    string
+		args    args
+		want    *ConnectPool
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "wrong cap",
+			args: args{
+				poolConfig: &Config{
+					MaxWait: 0,
+				},
+			},
+			want: nil,
+			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+				return assert.EqualError(t, err, "MaxCap must larger than 0", i...)
+			},
+		},
+		{
+			name: "wrong Factory",
+			args: args{
+				poolConfig: &Config{
+					MaxCap:  1,
+					Factory: nil,
+				},
+			},
+			want: nil,
+			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+				return assert.EqualError(t, err, "invalid factory func settings", i...)
+			},
+		},
+		{
+			name: "wrong Close",
+			args: args{
+				poolConfig: &Config{
+					MaxCap: 1,
+					Factory: func() (unsafe.Pointer, error) {
+						return nil, nil
+					},
+					Close: nil,
+				},
+			},
+			want: nil,
+			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+				return assert.EqualError(t, err, "invalid close func settings", i...)
+			},
+		},
+		{
+			name: "factory error",
+			args: args{
+				poolConfig: &Config{
+					MaxCap: 1,
+					Factory: func() (unsafe.Pointer, error) {
+						return nil, errors.New("connect error")
+					},
+					Close: func(pointer unsafe.Pointer) error {
+						return nil
+					},
+					InitialCap: 1,
+				},
+			},
+			want: nil,
+			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+				return assert.EqualError(t, err, "connect error", i...)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewConnectPool(tt.args.poolConfig)
+			if !tt.wantErr(t, err, fmt.Sprintf("NewConnectPool(%v)", tt.args.poolConfig)) {
+				return
+			}
+			assert.Equalf(t, tt.want, got, "NewConnectPool(%v)", tt.args.poolConfig)
+		})
+	}
 }
