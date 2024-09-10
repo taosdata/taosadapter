@@ -26,6 +26,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/tools"
+	"github.com/taosdata/taosadapter/v3/tools/connectpool"
 	"github.com/taosdata/taosadapter/v3/tools/csv"
 	"github.com/taosdata/taosadapter/v3/tools/ctools"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
@@ -195,6 +196,10 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID in
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 			logger.Errorf("whitelist forbidden, ip:%s", ip)
 			ForbiddenResponse(c, logger, commonpool.ErrWhitelistForbidden.Error())
+			return
+		}
+		if errors.Is(err, connectpool.ErrTimeout) || errors.Is(err, connectpool.ErrMaxWait) {
+			ServiceUnavailable(c, logger, err.Error())
 			return
 		}
 		var tError *tErrors.TaosError
@@ -527,6 +532,10 @@ func (ctl *Restful) upload(c *gin.Context) {
 			ForbiddenResponse(c, logger, commonpool.ErrWhitelistForbidden.Error())
 			return
 		}
+		if errors.Is(err, connectpool.ErrTimeout) || errors.Is(err, connectpool.ErrMaxWait) {
+			ServiceUnavailable(c, logger, err.Error())
+			return
+		}
 		if errors.As(err, &tError) {
 			TaosErrorResponse(c, logger, int(tError.Code), tError.ErrStr)
 			return
@@ -710,6 +719,10 @@ func (ctl *Restful) des(c *gin.Context) {
 		logger.Errorf("get connection error, ip:%s, err:%s", ip, err)
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 			ForbiddenResponse(c, logger, commonpool.ErrWhitelistForbidden.Error())
+			return
+		}
+		if errors.Is(err, connectpool.ErrTimeout) || errors.Is(err, connectpool.ErrMaxWait) {
+			ServiceUnavailable(c, logger, err.Error())
 			return
 		}
 		UnAuthResponse(c, logger, httperror.TSDB_CODE_RPC_AUTH_FAILURE)
