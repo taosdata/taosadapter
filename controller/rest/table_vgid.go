@@ -10,6 +10,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/tools/connectpool"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 )
 
@@ -36,6 +37,10 @@ func (ctl *Restful) tableVgID(c *gin.Context) {
 		logger.WithError(err).Error("connect server error")
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 			ForbiddenResponse(c, commonpool.ErrWhitelistForbidden.Error())
+			return
+		}
+		if errors.Is(err, connectpool.ErrTimeout) || errors.Is(err, connectpool.ErrMaxWait) {
+			ServiceUnavailable(c, err.Error())
 			return
 		}
 		var tError *tErrors.TaosError

@@ -18,6 +18,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/plugin"
 	"github.com/taosdata/taosadapter/v3/schemaless/inserter"
+	"github.com/taosdata/taosadapter/v3/tools/connectpool"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
 	"github.com/taosdata/taosadapter/v3/tools/web"
@@ -129,6 +130,10 @@ func (p *Plugin) insertJson(c *gin.Context) {
 			p.errorResponse(c, http.StatusForbidden, err)
 			return
 		}
+		if errors.Is(err, connectpool.ErrTimeout) || errors.Is(err, connectpool.ErrMaxWait) {
+			p.errorResponse(c, http.StatusServiceUnavailable, err)
+			return
+		}
 		p.errorResponse(c, http.StatusInternalServerError, err)
 		return
 	}
@@ -234,6 +239,10 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 		logger.WithError(err).Error("connect server error")
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 			p.errorResponse(c, http.StatusForbidden, err)
+			return
+		}
+		if errors.Is(err, connectpool.ErrTimeout) || errors.Is(err, connectpool.ErrMaxWait) {
+			p.errorResponse(c, http.StatusServiceUnavailable, err)
 			return
 		}
 		p.errorResponse(c, http.StatusInternalServerError, err)

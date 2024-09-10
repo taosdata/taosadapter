@@ -17,6 +17,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/plugin"
 	"github.com/taosdata/taosadapter/v3/schemaless/inserter"
 	"github.com/taosdata/taosadapter/v3/tools"
+	"github.com/taosdata/taosadapter/v3/tools/connectpool"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/web"
 )
@@ -155,6 +156,13 @@ func (p *Influxdb) write(c *gin.Context) {
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 			p.commonResponse(c, http.StatusUnauthorized, &message{
 				Code:    "forbidden",
+				Message: err.Error(),
+			})
+			return
+		}
+		if errors.Is(err, connectpool.ErrTimeout) || errors.Is(err, connectpool.ErrMaxWait) {
+			p.commonResponse(c, http.StatusServiceUnavailable, &message{
+				Code:    "internal error",
 				Message: err.Error(),
 			})
 			return
