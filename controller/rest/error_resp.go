@@ -77,6 +77,10 @@ func ForbiddenResponse(c *gin.Context, msg string) {
 	errorResp(c, http.StatusForbidden, 0xffff, msg)
 }
 
+func ServiceUnavailable(c *gin.Context, msg string) {
+	errorResp(c, http.StatusServiceUnavailable, 0xffff, msg)
+}
+
 type MessageWithTiming struct {
 	Code   int    `json:"code"`
 	Desc   string `json:"desc"`
