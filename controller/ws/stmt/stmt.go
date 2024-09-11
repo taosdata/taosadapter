@@ -192,7 +192,7 @@ func NewSTMTController() *STMTController {
 			stmtID := *(*uint64)(tools.AddPointer(p0, uintptr(8)))
 			action := *(*uint64)(tools.AddPointer(p0, uintptr(16)))
 			logger := wstool.GetLogger(session)
-			logger.Debugf("get ws message binary qid:0x%x, stmtID:%d, action:%d", reqID, stmtID, action)
+			logger.Debugf("get ws message binary QID:0x%x, stmtID:%d, action:%d", reqID, stmtID, action)
 			block := tools.AddPointer(p0, uintptr(24))
 			columns := parser.RawBlockGetNumOfCols(block)
 			rows := parser.RawBlockGetNumOfRows(block)

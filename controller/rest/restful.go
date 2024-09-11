@@ -85,7 +85,7 @@ func prepareCtx(c *gin.Context) {
 	}
 	if reqID == 0 {
 		reqID = generator.GetReqID()
-		logger.Tracef("request:%s, client_ip:%s, req_id not set, generate new qid: 0x%x", c.Request.RequestURI, c.ClientIP(), reqID)
+		logger.Tracef("request:%s, client_ip:%s, req_id not set, generate new QID:0x%x", c.Request.RequestURI, c.ClientIP(), reqID)
 	}
 	c.Set(config.ReqIDKey, reqID)
 	ctxLogger := logger.WithField(config.ReqIDKey, reqID)
@@ -258,7 +258,7 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 	if code != httperror.SUCCESS {
 		monitor.RestRecordResult(sqlType, false)
 		errStr := wrapper.TaosErrorStr(res)
-		logger.Errorf("taos query error, qid:0x%x, code:%d, msg:%s, sql: %s", reqID, code, errStr, log.GetLogSql(sql))
+		logger.Errorf("taos query error, QID:0x%x, code:%d, msg:%s, sql: %s", reqID, code, errStr, log.GetLogSql(sql))
 		TaosErrorResponse(c, logger, code, errStr)
 		return
 	}
@@ -317,7 +317,7 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 		return
 	} else {
 		if monitor.QueryPaused() {
-			logger.Errorf("query memory exceeds threshold, qid:0x%x", reqID)
+			logger.Errorf("query memory exceeds threshold, QID:0x%x", reqID)
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, "query memory exceeds threshold")
 			return
 		}

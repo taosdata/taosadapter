@@ -107,7 +107,7 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, logger *logrus.Entry, isDeb
 }
 
 func (a *Async) TaosQuery(taosConnect unsafe.Pointer, logger *logrus.Entry, isDebug bool, sql string, handler *Handler, reqID int64) *Result {
-	logger.Tracef("call taos_query_a, conn:%p, qid:0x%x, sql:%s", taosConnect, reqID, log.GetLogSql(sql))
+	logger.Tracef("call taos_query_a, conn:%p, QID:0x%x, sql:%s", taosConnect, reqID, log.GetLogSql(sql))
 	if reqID == 0 {
 		reqID = generator.GetReqID()
 		logger.Tracef("reqID is 0, generate a new one:0x%x", reqID)

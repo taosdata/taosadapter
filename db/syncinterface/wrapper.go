@@ -91,7 +91,7 @@ func TaosGetTablesVgID(conn unsafe.Pointer, db string, tables []string, logger *
 }
 
 func TaosStmtInitWithReqID(conn unsafe.Pointer, reqID int64, logger *logrus.Entry, isDebug bool) unsafe.Pointer {
-	logger.Tracef("call taos_stmt_init_with_reqid, conn:%p, qid: %d", conn, reqID)
+	logger.Tracef("call taos_stmt_init_with_reqid, conn:%p, QID: %d", conn, reqID)
 	s := log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugf("get thread lock for taos_stmt_init_with_reqid cost:%s", log.GetLogDuration(isDebug, s))

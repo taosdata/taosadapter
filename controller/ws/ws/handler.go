@@ -251,7 +251,7 @@ func (h *messageHandler) handleMessageBinary(session *melody.Session, bytes []by
 	reqID := *(*uint64)(p0)
 	messageID := *(*uint64)(tools.AddPointer(p0, uintptr(8)))
 	action := *(*uint64)(tools.AddPointer(p0, uintptr(16)))
-	h.logger.Debugf("get ws message binary qid:0x%x, messageID:%d, action:%d", reqID, messageID, action)
+	h.logger.Debugf("get ws message binary QID:0x%x, messageID:%d, action:%d", reqID, messageID, action)
 
 	ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 	mt := messageType(action)

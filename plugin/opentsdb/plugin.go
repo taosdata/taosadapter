@@ -90,7 +90,7 @@ func (p *Plugin) insertJson(c *gin.Context) {
 	}
 	if reqID == 0 {
 		reqID = uint64(generator.GetReqID())
-		logger.Tracef("req_id is 0, generate new req_id, qid:0x%x", reqID)
+		logger.Tracef("req_id is 0, generate new req_id, QID:0x%x", reqID)
 	}
 	c.Set(config.ReqIDKey, reqID)
 
@@ -194,7 +194,7 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 	}
 	if reqID == 0 {
 		reqID = uint64(generator.GetReqID())
-		logger.Tracef("req_id is 0, generate new req_id, qid:0x%x", reqID)
+		logger.Tracef("req_id is 0, generate new req_id, QID:0x%x", reqID)
 	}
 	c.Set(config.ReqIDKey, reqID)
 
