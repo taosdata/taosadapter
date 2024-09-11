@@ -134,7 +134,7 @@ func NewQueryController() *QueryController {
 			defer t.wg.Done()
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 			logger := wstool.GetLogger(session)
-			logger.Debugf("get ws block message data:%s", data)
+			logger.Tracef("get ws block message data:%+v", data)
 			p0 := unsafe.Pointer(&data[0])
 			reqID := *(*uint64)(p0)
 			messageID := *(*uint64)(tools.AddPointer(p0, uintptr(8)))

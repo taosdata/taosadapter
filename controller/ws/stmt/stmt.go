@@ -182,6 +182,8 @@ func NewSTMTController() *STMTController {
 		t.wg.Add(1)
 		go func() {
 			defer t.wg.Done()
+			logger := wstool.GetLogger(session)
+			logger.Tracef("get ws block message data:%+v", data)
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 			//p0 uin64  req_id
 			//p0+8 uint64  stmt_id
@@ -191,7 +193,6 @@ func NewSTMTController() *STMTController {
 			reqID := *(*uint64)(p0)
 			stmtID := *(*uint64)(tools.AddPointer(p0, uintptr(8)))
 			action := *(*uint64)(tools.AddPointer(p0, uintptr(16)))
-			logger := wstool.GetLogger(session)
 			logger.Debugf("get ws message binary QID:0x%x, stmtID:%d, action:%d", reqID, stmtID, action)
 			block := tools.AddPointer(p0, uintptr(24))
 			columns := parser.RawBlockGetNumOfCols(block)

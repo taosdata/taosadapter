@@ -247,6 +247,7 @@ func (h *messageHandler) handleMessageBinary(session *melody.Session, bytes []by
 	//p0 uin64  req_id
 	//p0+8 uint64  message_id
 	//p0+16 uint64 (1 (set tag) 2 (bind))
+	h.logger.Tracef("get ws block message data:%+v", bytes)
 	p0 := unsafe.Pointer(&bytes[0])
 	reqID := *(*uint64)(p0)
 	messageID := *(*uint64)(tools.AddPointer(p0, uintptr(8)))
