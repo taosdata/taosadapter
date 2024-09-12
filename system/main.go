@@ -35,12 +35,18 @@ func Init() *gin.Engine {
 	logger.Info("                     global config")
 	logger.Info("=================================================================")
 	for _, key := range keys {
+		if key == "version" {
+			continue
+		}
 		v := viper.Get(key)
 		if v == "" {
 			v = `""`
 		}
 		logger.Infof("%-45s%v", key, v)
 	}
+	logger.Infof("%-45s%v", "version", version.Version)
+	logger.Infof("%-45s%v", "gitinfo", version.CommitID)
+	logger.Infof("%-45s%v", "buildinfo", version.BuildInfo)
 	logger.Info("=================================================================")
 
 	logger.Infof("start server: %s", log.ServerID)
@@ -114,7 +120,7 @@ func (p *program) Start(s service.Service) error {
 		logger.Info("Running under service manager.")
 	}
 	monitor.StartMonitor()
-	logger.Printf("server on :%d", config.Conf.Port)
+	logger.Printf("server on: %d", config.Conf.Port)
 	go p.startHttpServer(p.server)
 	return nil
 }
