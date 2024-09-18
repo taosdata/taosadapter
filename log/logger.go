@@ -128,6 +128,8 @@ func ConfigLog() {
 			rotatelogs.WithRotateGlobPattern(filepath.Join(config.Conf.Log.Path, fmt.Sprintf("%sadapter_%d_*.log*", version.CUS_PROMPT, config.Conf.InstanceID))),
 			rotatelogs.WithCompress(config.Conf.Log.Compress),
 			rotatelogs.WithCleanLockFile(filepath.Join(config.Conf.Log.Path, fmt.Sprintf(".%sadapter_%d_rotate_lock", version.CUS_PROMPT, config.Conf.InstanceID))),
+			rotatelogs.ForceNewFile(),
+			rotatelogs.WithMaxAge(time.Hour*24*time.Duration(config.Conf.Log.KeepDays)),
 		)
 		if err != nil {
 			panic(err)
@@ -147,6 +149,8 @@ func ConfigLog() {
 				rotatelogs.WithRotateGlobPattern(filepath.Join(config.Conf.Log.Path, fmt.Sprintf("httpsql_%d_*.log*", config.Conf.InstanceID))),
 				rotatelogs.WithCompress(config.Conf.Log.Compress),
 				rotatelogs.WithCleanLockFile(filepath.Join(config.Conf.Log.Path, fmt.Sprintf(".httpsql_%d_rotate_lock", config.Conf.InstanceID))),
+				rotatelogs.ForceNewFile(),
+				rotatelogs.WithMaxAge(time.Hour*24*time.Duration(config.Conf.Log.KeepDays)),
 			)
 			if err != nil {
 				panic(err)
