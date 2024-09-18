@@ -49,8 +49,8 @@ level = "info"
 # Number of log file rotations before deletion.
 rotationCount = 30
 
-# The time interval for log rotation.
-rotationTime = "24h"
+# The number of days to retain log files.
+keepDays = 30
 
 # The maximum size of a log file before rotation.
 rotationSize = "1GB"

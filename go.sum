@@ -2611,8 +2611,8 @@ github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2/go.mod h1:hkRG
 github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635/go.mod h1:hkRG7XYTFWNJGYcbNJQlaLq0fg1yr4J4t/NcTQtrfww=
 github.com/taosdata/driver-go/v3 v3.5.1-0.20240905075738-5d27ebcc3e79 h1:HL1/cmYJz48nWnwwjw4DoCikgubW2DdxETN7IN9XWz0=
 github.com/taosdata/driver-go/v3 v3.5.1-0.20240905075738-5d27ebcc3e79/go.mod h1:H2vo/At+rOPY1aMzUV9P49SVX7NlXb3LAbKw+MCLrmU=
-github.com/taosdata/file-rotatelogs/v2 v2.5.0 h1:7iqDggodohXowoE9Y2CsUH0Esz9zGcoSfkI0cVU/z5E=
-github.com/taosdata/file-rotatelogs/v2 v2.5.0/go.mod h1:Qm99Lh0iMZouGgyy++JgTqKvP5FQw1ruR5jkWF7e1n0=
+github.com/taosdata/file-rotatelogs/v2 v2.5.1 h1:eD27I2vAh86l6kksTa8Y81Jz6XQ4cHBwX1oyGGuwnK0=
+github.com/taosdata/file-rotatelogs/v2 v2.5.1/go.mod h1:Qm99Lh0iMZouGgyy++JgTqKvP5FQw1ruR5jkWF7e1n0=
 github.com/taosdata/melody v0.0.0-20240407104517-11dcf4a47591 h1:JT7pgLJpQvmSGPAFVWJZG/bPyuAio0uY3cb7AKyfhGY=
 github.com/taosdata/melody v0.0.0-20240407104517-11dcf4a47591/go.mod h1:pfxtyQ9i9meRbS4BJBZ9YkE7upPetr0KKqcOCfi4nqY=
 github.com/tbrandon/mbserver v0.0.0-20170611213546-993e1772cc62/go.mod h1:qUzPVlSj2UgxJkVbH0ZwuuiR46U8RBMDT5KLY78Ifpw=

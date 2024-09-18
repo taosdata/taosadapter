@@ -16,6 +16,7 @@ type Log struct {
 	RotationCount    uint
 	RotationTime     time.Duration
 	RotationSize     uint
+	KeepDays         uint
 	Compress         bool
 	ReservedDiskSize uint
 
@@ -52,6 +53,10 @@ func initLog() {
 	_ = viper.BindEnv("log.rotationSize", "TAOS_ADAPTER_LOG_ROTATION_SIZE")
 	pflag.String("log.rotationSize", "1GB", `log rotation size(KB MB GB), must be a positive integer. Env "TAOS_ADAPTER_LOG_ROTATION_SIZE"`)
 
+	viper.SetDefault("log.keepDays", 30)
+	_ = viper.BindEnv("log.keepDays", "TAOS_ADAPTER_LOG_KEEP_DAYS")
+	pflag.Uint("log.keepDays", 30, `log retention days, must be a positive integer. Env "TAOS_ADAPTER_LOG_KEEP_DAYS"`)
+
 	viper.SetDefault("log.compress", false)
 	_ = viper.BindEnv("log.compress", "TAOS_ADAPTER_LOG_COMPRESS")
 	pflag.Bool("log.compress", false, `whether to compress old log. Env "TAOS_ADAPTER_LOG_COMPRESS"`)
@@ -83,6 +88,7 @@ func (l *Log) setValue() {
 	l.RotationCount = viper.GetUint("log.rotationCount")
 	l.RotationTime = viper.GetDuration("log.rotationTime")
 	l.RotationSize = viper.GetSizeInBytes("log.rotationSize")
+	l.KeepDays = viper.GetUint("log.keepDays")
 	l.Compress = viper.GetBool("log.compress")
 	l.ReservedDiskSize = viper.GetSizeInBytes("log.reservedDiskSize")
 	l.EnableRecordHttpSql = viper.GetBool("log.enableRecordHttpSql")

@@ -48,6 +48,7 @@ func TestInit(t *testing.T) {
 					RotationCount:       30,
 					RotationTime:        time.Hour * 24,
 					RotationSize:        1 * 1024 * 1024 * 1024, // 1G
+					KeepDays:            30,
 					Compress:            false,
 					ReservedDiskSize:    1 * 1024 * 1024 * 1024,
 					EnableRecordHttpSql: false,
