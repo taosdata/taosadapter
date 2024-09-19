@@ -27,7 +27,7 @@ jobs:
   run_taosadapter_test:
     runs-on: [self-hosted, linux, x64]
     container:
-      image: my-github-actions-image:latest
+      image: sha256:8390c3e0c60eafa3329c3a47f43f3e8af863c471252fd08374b5e8310073e32b
       volumes:
         - /data/huoh/TDengine:/data/TDengine
         - /data/huoh/release:/data/release
