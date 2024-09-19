@@ -6,7 +6,7 @@ on:
   #    - '3.0'
   push:
     branches:
-      - '/ref/qa_ci'
+      - 'ref/qa_ci'
   #      - 'main'
   #    - '3.0'
   #    - '3.1'
