@@ -1,0 +1,94 @@
+name: 3.0 QA-workflow
+
+on:
+  #pull_request:
+  #  branches:
+  #    - '3.0'
+  #push:
+  #  branches:
+  #      - 'main'
+  #    - '3.0'
+  #    - '3.1'
+  #  - '3.1.2'
+  workflow_dispatch:
+
+env:
+  RELEASE_HOST: 192.168.1.45
+  # RUSTFLAGS: "-C instrument-coverage --cfg tokio_unstable"
+  ARTIFACT_BASE_DIR: /data/artifacts
+  COVERAGE_BASE_DIR: /data/coverage
+  ALLURE_REPORT_DIR: /data/coverage
+  ALLURE_HISTORY_DIR: /data/allure-history
+  DIR_PATH: ${{ github.sha }}
+  REPORT_BASE_URL: http://192.168.1.45:8787
+
+jobs:
+  run_taosadapter_test:
+    runs-on: ubuntu-latest
+    container:
+      image: my-github-actions-image:latest
+      volumes:
+        - /data/huoh/TDengine:/data/TDengine
+        - /data/huoh/release:/data/release
+        - /data/huoh/TestNG_taosX:/data/huoh/TestNG_taosX
+        - /data/coverage:/data/coverage
+      ports:
+        - 8080:8080
+        - 6041:6041
+      options: --network host
+    name: Get TDengine
+    steps:
+      - name: Copy TDengine files to container
+        run: |
+          mkdir -p /app/release
+          cp /data/release/* /app/release/
+
+      - name: Install TDengine
+        run: |
+          cd /app/release
+          chmod +x taos taosd
+          cp taos taosd /usr/bin/
+          cp libtaos.so.3.9.9.9 /usr/lib/
+          ln -sf /usr/lib/libtaos.so.3.9.9.9 /usr/lib/libtaos.so.1
+          ln -sf /usr/lib/libtaos.so.1 /usr/lib/libtaos.so
+          cp taos.h /usr/include/
+
+      - name: checkout taosadapter
+        uses: actions/checkout@v4
+        with:
+          path: 'taosadapter'
+
+      - name: build taosAdapter
+        run:  |
+          cd ./taosadapter && go build -cover
+          cp taosadapter /usr/bin
+
+      - name: 复制taos配置
+        run: |
+          mkdir -p /etc/taos
+          cp ./taosadapter/.github/workflows/taos.cfg /etc/taos/taos.cfg
+
+      - name: start taosd
+        run: nohup sudo taosd > /dev/null 2>&1 &
+
+      - name: start taosadapter
+        run: |
+          export GOCOVERDIR=/tmp/taosadapter_coverage
+          mkdir -p $GOCOVERDIR
+          nohup sudo taosadapter > /dev/null 2>&1 &
+        env:
+          GOCOVERDIR: /tmp/taosadapter_coverage
+
+      - name: 运行TestNG测试
+        run: |
+          cd /data/huoh/TestNG_taosX
+          poetry config virtualenvs.in-project true
+          poetry install
+          . ./setenv.sh
+          #cd taosadapter_tests
+          poetry run pytest -sv -m sanity taosadapter_tests/InfluxDB_api_test.py --alluredir=${{ env.ALLURE_REPORT_DIR }}/${{ env.DIR_PATH }}/allure_profile
+
+      - name: allure report
+        run: |
+          allure generate ${{ env.ALLURE_REPORT_DIR }}/${{ env.DIR_PATH }}/allure_profile -o ${{ env.ALLURE_REPORT_DIR }}/${{ env.DIR_PATH }}/allure_report --clean
+          echo "see report at ${{ env.REPORT_BASE_URL }}/${{ env.DIR_PATH }}/allure_report/"
