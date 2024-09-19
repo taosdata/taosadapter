@@ -4,8 +4,9 @@ on:
   #pull_request:
   #  branches:
   #    - '3.0'
-  #push:
-  #  branches:
+  push:
+    branches:
+      - '/ref/qa_ci'
   #      - 'main'
   #    - '3.0'
   #    - '3.1'
