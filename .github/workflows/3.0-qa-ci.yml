@@ -36,7 +36,7 @@ jobs:
       ports:
         - 8080:8080
         - 6041:6041
-      options: --network host
+      options: --network host --pull never
     name: Get TDengine
     steps:
       - name: Copy TDengine files to container
