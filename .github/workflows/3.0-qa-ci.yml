@@ -24,7 +24,7 @@ env:
 
 jobs:
   run_taosadapter_test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, qa, test]
     container:
       image: my-github-actions-image:latest
       volumes:
