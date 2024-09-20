@@ -79,10 +79,10 @@ jobs:
             cp ${{ env.TAOSADAPTER_DIR }}/.github/workflows/taos.cfg /etc/taos/taos.cfg"
 
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
-            "nohup sudo taosd > /dev/null 2>&1 &"
+            "nohup taosd > /dev/null 2>&1 &"
 
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
-            "nohup sudo taosadapter > /dev/null 2>&1 &"
+            "nohup taosadapter > /dev/null 2>&1 &"
 
       - name: 运行TestNG测试
         run: |
@@ -91,7 +91,8 @@ jobs:
             poetry config virtualenvs.in-project true && \
             poetry install && \
             . ./setenv.sh && \
-            poetry run pytest -sv -m sanity taosadapter_tests/InfluxDB_api_test.py --alluredir=${{ env.ALLURE_REPORT_DIR }}/${{ env.DIR_PATH }}/allure_profile"
+            cd taosadapter_tests && \
+            poetry run pytest -sv -m sanity --alluredir=${{ env.ALLURE_REPORT_DIR }}/${{ env.DIR_PATH }}/allure_profile"
           
       - name: allure report
         run: |
