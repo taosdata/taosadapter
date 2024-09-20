@@ -106,14 +106,15 @@ jobs:
       - name: collect coverage
         run: |
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
-            "go tool covdata textfmt -i=${{ env.GOCOVERDIR }} -o ${{ env.GOCOVERDIR }}/coverage.txt && \
-            go tool cover -html=${{ env.GOCOVERDIR }}/coverage.txt -o ${{ env.GOCOVERDIR }}/coverage.html"
+            "go tool covdata textfmt -i=${{ env.GOCOVERDIR }} -o ${{ env.GOCOVERDIR }}/coverage.txt"
       
       - name: Upload coverage to Codecov
-        run: |
-          cd ${{ env.TAOSADAPTER_DIR }} 
-          curl -s https://codecov.io/bash | bash -s -- -f ${{ env.GOCOVERDIR }}/coverage.txt -t ${{ secrets.CODECOV_ORG_TOKEN }}
-  
+        uses: codecov/codecov-action@v4-beta
+        with:
+          files: ${{ env.GOCOVERDIR }}/coverage.txt
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_ORG_TOKEN }}
+
   after_success:
     runs-on: [self-hosted, linux, x64]
     needs: run_taosadapter_test
