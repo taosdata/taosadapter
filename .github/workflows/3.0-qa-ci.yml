@@ -19,77 +19,104 @@ env:
   ARTIFACT_BASE_DIR: /data/artifacts
   COVERAGE_BASE_DIR: /data/coverage
   ALLURE_REPORT_DIR: /data/coverage
-  ALLURE_HISTORY_DIR: /data/allure-history
   DIR_PATH: ${{ github.sha }}
   REPORT_BASE_URL: http://192.168.1.45:8787
 
 jobs:
   run_taosadapter_test:
     runs-on: [self-hosted, linux, x64]
-    container:
-      image: sha256:8390c3e0c60eafa3329c3a47f43f3e8af863c471252fd08374b5e8310073e32b
-      volumes:
-        - /data/huoh/TDengine:/data/TDengine
-        - /data/huoh/release:/data/release
-        - /data/huoh/TestNG_taosX:/data/huoh/TestNG_taosX
-        - /data/coverage:/data/coverage
-      ports:
-        - 8080:8080
-        - 6041:6041
-      options: --network host --pull never
-    name: Get TDengine
+    outputs:
+      container_id: ${{ steps.run_container.outputs.container_id }}
     steps:
-      - name: Copy TDengine files to container
+      - name: run container
+        id: run_container
+        # 1. 寻找可用端口
+        # 2. 启动容器
+        # 3. copy TDengine 到容器
         run: |
-          mkdir -p /app/release
-          cp /data/release/* /app/release/
+          for port in $(seq 10000 65000); do (echo >/dev/tcp/localhost/$port) &>/dev/null || { taosadapter_port=$port; break; }; done &&  echo "Available taosadapter_port: $taosadapter_port"
 
-      - name: Install TDengine
-        run: |
-          cd /app/release
-          chmod +x taos taosd
-          cp taos taosd /usr/bin/
-          cp libtaos.so.3.9.9.9 /usr/lib/
-          ln -sf /usr/lib/libtaos.so.3.9.9.9 /usr/lib/libtaos.so.1
-          ln -sf /usr/lib/libtaos.so.1 /usr/lib/libtaos.so
-          cp taos.h /usr/include/
+          run_container_id=$(docker run \
+            -v /data/huoh/TDengine:/data/TDengine \
+            -v /data/huoh/release:/data/release \
+            -v /data/huoh/TestNG_taosX:/data/huoh/TestNG_taosX \
+            -v /data/coverage:/data/coverage \
+            -v /data/huoh/CI:/data/huoh/CI \
+            -p taosadapter_port:6041 \
+            --network host \
+            --pull never \
+            taosadapter_ci:latest)
+          echo "container_id: $run_container_id"
+          echo "container_id=$run_container_id" >> "$GITHUB_OUTPUT"
 
-      - name: checkout taosadapter
+          docker exec $run_container_id bash -c \
+            "mkdir -p /app/release && \
+            cp /data/release/* /app/release/ && \
+            cd /app/release && \
+            chmod +x taos taosd && \
+            cp taos taosd /usr/bin/ && \
+            cp libtaos.so.3.9.9.9 /usr/lib/ && \
+            ln -sf /usr/lib/libtaos.so.3.9.9.9 /usr/lib/libtaos.so.1 && \
+            ln -sf /usr/lib/libtaos.so.1 /usr/lib/libtaos.so && \
+            cp taos.h /usr/include/"
+
+      - name: checkout
         uses: actions/checkout@v4
         with:
-          path: 'taosadapter'
+          path: '/data/huoh/CI/taosadapter${{ env.DIR_PATH }}'
 
       - name: build taosAdapter
         run:  |
-          cd ./taosadapter && go build -cover
-          cp taosadapter /usr/bin
+          cd /data/huoh/CI/taosadapter${{ env.DIR_PATH }} && go build -cover
 
-      - name: 复制taos配置
+      - name: deploy taosadapter
         run: |
-          mkdir -p /etc/taos
-          cp ./taosadapter/.github/workflows/taos.cfg /etc/taos/taos.cfg
+          docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
+            "mkdir -p /etc/taos && \
+            cp /data/huoh/CI/taosadapter${{ env.DIR_PATH }}/taosadapter /usr/bin && \
+            cp /data/taos.cfg /etc/taos/taos.cfg"
 
-      - name: start taosd
-        run: nohup sudo taosd > /dev/null 2>&1 &
+          docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
+            "nohup sudo taosd > /dev/null 2>&1 &"
 
-      - name: start taosadapter
-        run: |
-          export GOCOVERDIR=/tmp/taosadapter_coverage
-          mkdir -p $GOCOVERDIR
-          nohup sudo taosadapter > /dev/null 2>&1 &
-        env:
-          GOCOVERDIR: /tmp/taosadapter_coverage
+          docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
+            "nohup sudo taosadapter > /dev/null 2>&1 &"
 
       - name: 运行TestNG测试
         run: |
-          cd /data/huoh/TestNG_taosX
-          poetry config virtualenvs.in-project true
-          poetry install
-          . ./setenv.sh
-          #cd taosadapter_tests
-          poetry run pytest -sv -m sanity taosadapter_tests/InfluxDB_api_test.py --alluredir=${{ env.ALLURE_REPORT_DIR }}/${{ env.DIR_PATH }}/allure_profile
-
+          docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
+            "cd /data/huoh/TestNG_taosX && \
+            poetry config virtualenvs.in-project true && \
+            poetry install && \
+            . ./setenv.sh && \
+            poetry run pytest -sv -m sanity taosadapter_tests/InfluxDB_api_test.py --alluredir=${{ env.ALLURE_REPORT_DIR }}/${{ env.DIR_PATH }}/allure_profile"
+          
       - name: allure report
         run: |
           allure generate ${{ env.ALLURE_REPORT_DIR }}/${{ env.DIR_PATH }}/allure_profile -o ${{ env.ALLURE_REPORT_DIR }}/${{ env.DIR_PATH }}/allure_report --clean
           echo "see report at ${{ env.REPORT_BASE_URL }}/${{ env.DIR_PATH }}/allure_report/"
+
+  after_success:
+    runs-on: [self-hosted, linux, x64]
+    needs: run_taosadapter_test
+    if: success()
+    steps:
+      - name: Force stop taosd & taosadapter
+        # shell: bash {0}
+        run: |
+          echo "stop and rm container ${{ needs.run_taosadapter_test.outputs.container_id }}"
+          docker stop ${{ needs.run_taosadapter_test.outputs.container_id }}
+          docker rm ${{ needs.run_taosadapter_test.outputs.container_id }}
+          rm -rf /data/huoh/CI/taosadapter${{ env.DIR_PATH }}
+
+  after_failure:
+    runs-on: [self-hosted, linux, x64]
+    needs: run_taosadapter_test
+    if: failure()
+    steps: 
+      - name: Send Feishu Message
+        run: |
+          rm -rf /data/huoh/CI/taosadapter${{ env.DIR_PATH }}
+          curl -X POST -H "Content-Type: application/json" \
+          -d "{\"msg_type\":\"text\",\"content\":{\"text\":\"${{ github.workflow }} 运行失败，@${{ github.actor }}，\n Action 执行地址见: https://github.com/taosdata/taosx/actions/runs/${{ github.run_id }} \n 报告地址见：$REPORT_BASE_URL/$DIR_PATH/allure_report/\"}}" \
+          https://open.feishu.cn/open-apis/bot/v2/hook/209e9aba-167a-49de-8d7b-15e12abd7922 
