@@ -71,7 +71,8 @@ jobs:
       - name: build taosAdapter
         run:  |
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
-            "cd ${{ env.TAOSADAPTER_DIR }} && \
+            "mkdir -p ${{ env.GOCOVERDIR }} && \
+            cd ${{ env.TAOSADAPTER_DIR }} && \
             go build -cover"
 
       - name: deploy taosadapter
