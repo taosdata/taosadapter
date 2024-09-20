@@ -21,7 +21,7 @@ env:
   ALLURE_REPORT_DIR: /data/coverage
   DIR_PATH: ${{ github.sha }}
   WORK_DIR: /data/actions-runner-taosadapter/_work/taosadapter/taosadapter
-  TAOSADAPTER_DIR: ${{ env.WORK_DIR }}/taosadapter_${{ env.DIR_PATH }}
+  TAOSADAPTER_DIR: /data/actions-runner-taosadapter/_work/taosadapter/taosadapter/taosadapter_${{ github.sha }}
   REPORT_BASE_URL: http://192.168.1.45:8787
 
 jobs:
@@ -63,7 +63,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
         with:
-          path: ${{ env.TAOSADAPTER_DIR }}
+          path: taosadapter_${{ env.DIR_PATH }}
 
       - name: build taosAdapter
         run:  |
