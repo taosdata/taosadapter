@@ -23,6 +23,7 @@ env:
   WORK_DIR: /data/actions-runner-taosadapter/_work/taosadapter/taosadapter
   TAOSADAPTER_DIR: /data/actions-runner-taosadapter/_work/taosadapter/taosadapter/taosadapter_${{ github.sha }}
   REPORT_BASE_URL: http://192.168.1.45:8787
+  GOCOVERDIR: /data/huoh/go_cover/${{ github.sha }}
 
 jobs:
   run_taosadapter_test:
@@ -43,8 +44,10 @@ jobs:
             -v /data/huoh/release:/data/release \
             -v /data/huoh/TestNG_taosX:/data/huoh/TestNG_taosX \
             -v /data/coverage:/data/coverage \
+            -v /data/huoh/go_cover:/data/huoh/go_cover \
             -v /data/actions-runner-taosadapter/_work:/data/actions-runner-taosadapter/_work \
             -p $taosadapter_port:6041 \
+            -e GOCOVERDIR=${{ env.GOCOVERDIR }} \
             taosadapter_ci:latest)
           echo "container_id: $run_container_id"
           echo "container_id=$run_container_id" >> "$GITHUB_OUTPUT"
@@ -98,6 +101,19 @@ jobs:
         run: |
           allure generate ${{ env.ALLURE_REPORT_DIR }}/${{ env.DIR_PATH }}/allure_profile -o ${{ env.ALLURE_REPORT_DIR }}/${{ env.DIR_PATH }}/allure_report --clean
           echo "see report at ${{ env.REPORT_BASE_URL }}/${{ env.DIR_PATH }}/allure_report/"
+
+      - name: collect coverage
+        run: |
+          docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
+            "go tool covdata textfmt -i=${{ env.GOCOVERDIR }} -o ${{ env.GOCOVERDIR }}/coverage.txt && \
+            go tool cover -html=${{ env.GOCOVERDIR }}/coverage.txt -o ${{ env.GOCOVERDIR }}/coverage.html"
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4-beta
+        with:
+          files: ${{ env.GOCOVERDIR }}/coverage.txt
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_ORG_TOKEN }}
 
   after_success:
     runs-on: [self-hosted, linux, x64]
