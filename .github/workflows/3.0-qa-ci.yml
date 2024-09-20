@@ -65,7 +65,9 @@ jobs:
 
       - name: build taosAdapter
         run:  |
-          cd ./taosadapter_${{ env.DIR_PATH }} && go build -cover
+          docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
+            "cd /data/actions-runner-taosadapter/_work/taosadapter/taosadapter/taosadapter_${{ env.DIR_PATH }} && \
+            go build -cover"
 
       - name: deploy taosadapter
         run: |
