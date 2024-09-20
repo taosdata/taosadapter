@@ -72,6 +72,7 @@ jobs:
         run:  |
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
             "mkdir -p ${{ env.GOCOVERDIR }} && \
+            mkdir -p ${{ env.COVERAGE_BASE_DIR }}/${{ env.DIR_PATH }} && \
             cd ${{ env.TAOSADAPTER_DIR }} && \
             go build -cover"
 
@@ -106,14 +107,13 @@ jobs:
       - name: collect coverage
         run: |
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
-            "go tool covdata textfmt -i=${{ env.GOCOVERDIR }} -o ${{ env.GOCOVERDIR }}/coverage.txt"
+            "go tool covdata percent -i=${{ env.GOCOVERDIR }} -o ${{ env.GOCOVERDIR }}/coverage.txt && \
+            cat ${{ env.GOCOVERDIR }}/coverage.txt && \
+            go tool covdata textfmt -i=${{ env.GOCOVERDIR }} -o ${{ env.GOCOVERDIR }}/cov.txt && \
+            cd ${{ env.TAOSADAPTER_DIR }} && \
+            gocov convert ${{ env.GOCOVERDIR }}/cov.txt | gocov-html > ${{ env.COVERAGE_BASE_DIR }}/${{ env.DIR_PATH }}/cov.html"            
       
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4-beta
-        with:
-          files: ${{ env.GOCOVERDIR }}/coverage.txt
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_ORG_TOKEN }}
+
 
   after_success:
     runs-on: [self-hosted, linux, x64]
