@@ -41,7 +41,7 @@ jobs:
             -v /data/huoh/release:/data/release \
             -v /data/huoh/TestNG_taosX:/data/huoh/TestNG_taosX \
             -v /data/coverage:/data/coverage \
-            -v /data/huoh/CI:/data/huoh/CI \
+            -v /data/actions-runner-taosadapter/_work:/data/actions-runner-taosadapter/_work \
             -p $taosadapter_port:6041 \
             taosadapter_ci:latest)
           echo "container_id: $run_container_id"
@@ -61,17 +61,17 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
         with:
-          path: '/data/huoh/CI/taosadapter${{ env.DIR_PATH }}'
+          path: 'taosadapter_${{ env.DIR_PATH }}'
 
       - name: build taosAdapter
         run:  |
-          cd /data/huoh/CI/taosadapter${{ env.DIR_PATH }} && go build -cover
+          cd ./taosadapter_${{ env.DIR_PATH }} && go build -cover
 
       - name: deploy taosadapter
         run: |
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
             "mkdir -p /etc/taos && \
-            cp /data/huoh/CI/taosadapter${{ env.DIR_PATH }}/taosadapter /usr/bin && \
+            cp taosadapter_${{ env.DIR_PATH }}/taosadapter /usr/bin && \
             cp /data/taos.cfg /etc/taos/taos.cfg"
 
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
