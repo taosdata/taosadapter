@@ -21,6 +21,7 @@ env:
   ALLURE_REPORT_DIR: /data/coverage
   DIR_PATH: ${{ github.sha }}
   WORK_DIR: /data/actions-runner-taosadapter/_work/taosadapter/taosadapter
+  TAOSADAPTER_DIR: ${{ env.WORK_DIR }}/taosadapter_${{ env.DIR_PATH }}
   REPORT_BASE_URL: http://192.168.1.45:8787
 
 jobs:
@@ -62,20 +63,20 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
         with:
-          path: 'taosadapter_${{ env.DIR_PATH }}'
+          path: ${{ env.TAOSADAPTER_DIR }}
 
       - name: build taosAdapter
         run:  |
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
-            "cd ${{ env.WORK_DIR }}/taosadapter_${{ env.DIR_PATH }} && \
+            "cd ${{ env.TAOSADAPTER_DIR }} && \
             go build -cover"
 
       - name: deploy taosadapter
         run: |
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
             "mkdir -p /etc/taos && \
-            cp ${{ env.WORK_DIR }}/taosadapter_${{ env.DIR_PATH }}/taosadapter /usr/bin && \
-            cp /data/taos.cfg /etc/taos/taos.cfg"
+            cp ${{ env.TAOSADAPTER_DIR }}/taosadapter /usr/bin && \
+            cp ${{ env.TAOSADAPTER_DIR }}/.github/workflows/taos.cfg /etc/taos/taos.cfg"
 
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
             "nohup sudo taosd > /dev/null 2>&1 &"
