@@ -42,7 +42,7 @@ jobs:
             -v /data/huoh/TestNG_taosX:/data/huoh/TestNG_taosX \
             -v /data/coverage:/data/coverage \
             -v /data/huoh/CI:/data/huoh/CI \
-            -p taosadapter_port:6041 \
+            -p $taosadapter_port:6041 \
             --network host \
             --pull never \
             taosadapter_ci:latest)
@@ -109,14 +109,14 @@ jobs:
           docker rm ${{ needs.run_taosadapter_test.outputs.container_id }}
           rm -rf /data/huoh/CI/taosadapter${{ env.DIR_PATH }}
 
-  after_failure:
-    runs-on: [self-hosted, linux, x64]
-    needs: run_taosadapter_test
-    if: failure()
-    steps: 
-      - name: Send Feishu Message
-        run: |
-          rm -rf /data/huoh/CI/taosadapter${{ env.DIR_PATH }}
-          curl -X POST -H "Content-Type: application/json" \
-          -d "{\"msg_type\":\"text\",\"content\":{\"text\":\"${{ github.workflow }} 运行失败，@${{ github.actor }}，\n Action 执行地址见: https://github.com/taosdata/taosx/actions/runs/${{ github.run_id }} \n 报告地址见：$REPORT_BASE_URL/$DIR_PATH/allure_report/\"}}" \
-          https://open.feishu.cn/open-apis/bot/v2/hook/209e9aba-167a-49de-8d7b-15e12abd7922 
+  #after_failure:
+  #  runs-on: [self-hosted, linux, x64]
+  #  needs: run_taosadapter_test
+  #  if: failure()
+  #  steps: 
+  #    - name: Send Feishu Message
+  #      run: |
+  #        rm -rf /data/huoh/CI/taosadapter${{ env.DIR_PATH }}
+  #        curl -X POST -H "Content-Type: application/json" \
+  #          -d "{\"msg_type\":\"text\",\"content\":{\"text\":\"${{ github.workflow }} 运行失败，@${{ github.actor }}，\n Action 执行地址见: https://github.com/taosdata/taosx/actions/runs/${{ github.run_id }} \n 报告地址见：$REPORT_BASE_URL/$DIR_PATH/allure_report/\"}}" \
+  #          https://open.feishu.cn/open-apis/bot/v2/hook/209e9aba-167a-49de-8d7b-15e12abd7922 
