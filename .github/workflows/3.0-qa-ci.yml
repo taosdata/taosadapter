@@ -43,8 +43,6 @@ jobs:
             -v /data/coverage:/data/coverage \
             -v /data/huoh/CI:/data/huoh/CI \
             -p $taosadapter_port:6041 \
-            --network host \
-            --pull never \
             taosadapter_ci:latest)
           echo "container_id: $run_container_id"
           echo "container_id=$run_container_id" >> "$GITHUB_OUTPUT"
