@@ -36,7 +36,7 @@ jobs:
         run: |
           for port in $(seq 10000 65000); do (echo >/dev/tcp/localhost/$port) &>/dev/null || { taosadapter_port=$port; break; }; done &&  echo "Available taosadapter_port: $taosadapter_port"
 
-          run_container_id=$(docker --privileged=true -d run \
+          run_container_id=$(docker run --privileged=true -d \
             -v /data/huoh/TDengine:/data/TDengine \
             -v /data/huoh/release:/data/release \
             -v /data/huoh/TestNG_taosX:/data/huoh/TestNG_taosX \
