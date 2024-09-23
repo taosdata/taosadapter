@@ -103,7 +103,6 @@ jobs:
             "mkdir -p ${{ env.ALLURE_PROFILE_DIR }} && \
             mkdir -p ${{ env.ALLURE_REPORT_DIR }} && \
             cd /data/huoh/TestNG_taosX && \
-            git pull && \
             poetry config virtualenvs.in-project true && \
             poetry install && \
             . ./setenv.sh && \
