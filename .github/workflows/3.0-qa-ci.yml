@@ -102,7 +102,7 @@ jobs:
             poetry install && \
             . ./setenv.sh && \
             cd taosadapter_tests && \
-            poetry run pytest -sv -m sanity --alluredir=${{ env.ALLURE_PROFILE_DIR }}"
+            poetry run pytest -sv --alluredir=${{ env.ALLURE_PROFILE_DIR }}"
           
       - name: allure report
         run: |
