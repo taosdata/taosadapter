@@ -28,7 +28,7 @@ env:
   GOCOVERDIR: /data/huoh/go_cover/${{ github.sha }}
 
 jobs:
-  run_taosadapter_test:
+  build_and_deploy:
     runs-on: [self-hosted, linux, x64]
     outputs:
       container_id: ${{ steps.run_container.outputs.container_id }}
@@ -93,9 +93,13 @@ jobs:
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
             "nohup taosadapter > /dev/null 2>&1 &"
 
+  run_taosadapter_test:
+    runs-on: [self-hosted, linux, x64]
+    needs: build_and_deploy
+    steps:          
       - name: 运行TestNG测试
         run: |
-          docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
+          docker exec ${{ needs.build_and_deploy.outputs.container_id }} bash -c \
             "mkdir -p ${{ env.ALLURE_PROFILE_DIR }} && \
             mkdir -p ${{ env.ALLURE_REPORT_DIR }} && \
             cd /data/huoh/TestNG_taosX && \
@@ -105,7 +109,11 @@ jobs:
             . ./setenv.sh && \
             cd taosadapter_tests && \
             poetry run pytest -sv --alluredir=${{ env.ALLURE_PROFILE_DIR }}"
-          
+
+  generate_report:
+    runs-on: [self-hosted, linux, x64]
+    needs: [build_and_deploy, run_taosadapter_test]
+    steps:          
       - name: allure report
         run: |
           allure generate ${{ env.ALLURE_PROFILE_DIR }} -o ${{ env.ALLURE_REPORT_DIR }} --clean
@@ -113,7 +121,7 @@ jobs:
 
       - name: collect coverage
         run: |
-          docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
+          docker exec ${{ needs.build_and_deploy.outputs.container_id }} bash -c \
             "kill -TERM \$(pgrep taosadapter) && \
             go tool covdata percent -i=${{ env.GOCOVERDIR }} -o ${{ env.GOCOVERDIR }}/coverage.txt && \
             head -n 1 ${{ env.GOCOVERDIR }}/coverage.txt && \
@@ -125,24 +133,24 @@ jobs:
 
   after_success:
     runs-on: [self-hosted, linux, x64]
-    needs: run_taosadapter_test
+    needs: [build_and_deploy, run_taosadapter_test, generate_report]
     if: success()
     steps:
       - name: Force stop taosd & taosadapter
         run: |
-          echo "stop and rm container ${{ needs.run_taosadapter_test.outputs.container_id }}"
-          #docker stop ${{ needs.run_taosadapter_test.outputs.container_id }}
-          #docker rm ${{ needs.run_taosadapter_test.outputs.container_id }}
+          echo "stop and rm container ${{ needs.build_and_deploy.outputs.container_id }}"
+          #docker stop ${{ needs.build_and_deploy.outputs.container_id }}
+          #docker rm ${{ needs.build_and_deploy.outputs.container_id }}
           rm -rf /data/huoh/CI/taosadapter${{ env.DIR_PATH }}
 
   after_failure:
     runs-on: [self-hosted, linux, x64]
-    needs: run_taosadapter_test
+    needs: [build_and_deploy, run_taosadapter_test, generate_report]
     if: failure()
     steps: 
       - name: Send Feishu Message
         run: |
           rm -rf /data/huoh/CI/taosadapter${{ env.DIR_PATH }}
           curl -X POST -H "Content-Type: application/json" \
-            -d "{\"msg_type\":\"text\",\"content\":{\"text\":\"${{ github.workflow }} 运行失败，@${{ github.actor }}，\n Action 执行地址见: https://github.com/taosdata/taosx/actions/runs/${{ github.run_id }} \n 报告地址见：$REPORT_BASE_URL/$DIR_PATH/allure_report/\"}}" \
+            -d "{\"msg_type\":\"text\",\"content\":{\"text\":\"${{ github.workflow }} 运行失败，@${{ github.actor }}，\n Action 执行地址见: https://github.com/taosdata/taosadapter/actions/runs/${{ github.run_id }} \n 报告地址见：$REPORT_BASE_URL/$DIR_PATH/allure_report/\"}}" \
             https://open.feishu.cn/open-apis/bot/v2/hook/209e9aba-167a-49de-8d7b-15e12abd7922 
