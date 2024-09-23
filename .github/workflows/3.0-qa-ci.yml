@@ -127,8 +127,8 @@ jobs:
         # shell: bash {0}
         run: |
           echo "stop and rm container ${{ needs.run_taosadapter_test.outputs.container_id }}"
-          docker stop ${{ needs.run_taosadapter_test.outputs.container_id }}
-          docker rm ${{ needs.run_taosadapter_test.outputs.container_id }}
+          #docker stop ${{ needs.run_taosadapter_test.outputs.container_id }}
+          #docker rm ${{ needs.run_taosadapter_test.outputs.container_id }}
           rm -rf /data/huoh/CI/taosadapter${{ env.DIR_PATH }}
 
   #after_failure:
