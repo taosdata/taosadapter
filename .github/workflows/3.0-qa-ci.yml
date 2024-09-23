@@ -112,7 +112,7 @@ jobs:
       - name: collect coverage
         run: |
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
-            "kill -TERM $(pgrep taosadapter) && \
+            "kill -TERM \$(pgrep taosadapter) && \
             go tool covdata percent -i=${{ env.GOCOVERDIR }} -o ${{ env.GOCOVERDIR }}/coverage.txt && \
             head -n 1 ${{ env.GOCOVERDIR }}/coverage.txt && \
             go tool covdata textfmt -i=${{ env.GOCOVERDIR }} -o ${{ env.GOCOVERDIR }}/cov.txt && \
