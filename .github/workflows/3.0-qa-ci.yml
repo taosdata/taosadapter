@@ -18,8 +18,9 @@ env:
   # RUSTFLAGS: "-C instrument-coverage --cfg tokio_unstable"
   ARTIFACT_BASE_DIR: /data/artifacts
   COVERAGE_BASE_DIR: /data/coverage
-  ALLURE_REPORT_DIR: /data/coverage
   DIR_PATH: ${{ github.sha }}
+  ALLURE_PROFILE_DIR: /data/huoh/allure_profile/${{ github.sha }}
+  ALLURE_REPORT_DIR: /data/coverage/${{ github.sha }}
   WORK_DIR: /data/actions-runner-taosadapter/_work/taosadapter/taosadapter
   TAOSADAPTER_DIR: /data/actions-runner-taosadapter/_work/taosadapter/taosadapter/taosadapter_${{ github.sha }}
   REPORT_BASE_URL: http://192.168.1.45:8787
@@ -45,6 +46,7 @@ jobs:
             -v /data/huoh/TestNG_taosX:/data/huoh/TestNG_taosX \
             -v /data/coverage:/data/coverage \
             -v /data/huoh/go_cover:/data/huoh/go_cover \
+            -v /data/huoh/allure_profile:/data/huoh/allure_profile \
             -v /data/actions-runner-taosadapter/_work:/data/actions-runner-taosadapter/_work \
             -p $taosadapter_port:6041 \
             -e GOCOVERDIR=${{ env.GOCOVERDIR }} \
@@ -71,7 +73,8 @@ jobs:
       - name: build taosAdapter
         run:  |
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
-            "mkdir -p ${{ env.GOCOVERDIR }} && \
+            "rm -rf ${{ env.GOCOVERDIR }} && \
+            mkdir -p ${{ env.GOCOVERDIR }} && \
             mkdir -p ${{ env.COVERAGE_BASE_DIR }}/${{ env.DIR_PATH }} && \
             cd ${{ env.TAOSADAPTER_DIR }} && \
             go build -cover"
@@ -97,22 +100,22 @@ jobs:
             poetry install && \
             . ./setenv.sh && \
             cd taosadapter_tests && \
-            poetry run pytest -sv -m sanity --alluredir=${{ env.ALLURE_REPORT_DIR }}/${{ env.DIR_PATH }}/allure_profile"
+            poetry run pytest -sv -m sanity --alluredir=${{ env.ALLURE_PROFILE_DIR }}"
           
       - name: allure report
         run: |
-          allure generate ${{ env.ALLURE_REPORT_DIR }}/${{ env.DIR_PATH }}/allure_profile -o ${{ env.ALLURE_REPORT_DIR }}/${{ env.DIR_PATH }}/allure_report --clean
+          allure generate ${{ env.ALLURE_PROFILE_DIR }} -o ${{ env.ALLURE_REPORT_DIR }} --clean
           echo "see report at ${{ env.REPORT_BASE_URL }}/${{ env.DIR_PATH }}/allure_report/"
 
       - name: collect coverage
         run: |
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
             "go tool covdata percent -i=${{ env.GOCOVERDIR }} -o ${{ env.GOCOVERDIR }}/coverage.txt && \
-            cat ${{ env.GOCOVERDIR }}/coverage.txt && \
+            head -n 1 ${{ env.GOCOVERDIR }}/coverage.txt && \
             go tool covdata textfmt -i=${{ env.GOCOVERDIR }} -o ${{ env.GOCOVERDIR }}/cov.txt && \
             cd ${{ env.TAOSADAPTER_DIR }} && \
             gocov convert ${{ env.GOCOVERDIR }}/cov.txt | gocov-html > ${{ env.COVERAGE_BASE_DIR }}/${{ env.DIR_PATH }}/cov.html"            
-      
+          echo "see report at ${{ env.REPORT_BASE_URL }}/${{ env.DIR_PATH }}/cov.html"
 
 
   after_success:
