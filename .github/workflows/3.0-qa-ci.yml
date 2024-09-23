@@ -113,6 +113,7 @@ jobs:
   generate_report:
     runs-on: [self-hosted, linux, x64]
     needs: [build_and_deploy, run_taosadapter_test]
+    if: always()
     steps:          
       - name: allure report
         run: |
