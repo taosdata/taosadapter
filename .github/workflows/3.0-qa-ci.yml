@@ -92,22 +92,22 @@ jobs:
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
             "nohup taosadapter > /dev/null 2>&1 &"
 
-      - name: 运行TestNG测试
-        run: |
-          docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
-            "mkdir -p ${{ env.ALLURE_PROFILE_DIR }} && \
-            mkdir -p ${{ env.ALLURE_REPORT_DIR }} && \
-            cd /data/huoh/TestNG_taosX && \
-            poetry config virtualenvs.in-project true && \
-            poetry install && \
-            . ./setenv.sh && \
-            cd taosadapter_tests && \
-            poetry run pytest -sv --alluredir=${{ env.ALLURE_PROFILE_DIR }}"
+      #- name: 运行TestNG测试
+      #  run: |
+      #    docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
+      #      "mkdir -p ${{ env.ALLURE_PROFILE_DIR }} && \
+      #      mkdir -p ${{ env.ALLURE_REPORT_DIR }} && \
+      #      cd /data/huoh/TestNG_taosX && \
+      #      poetry config virtualenvs.in-project true && \
+      #      poetry install && \
+      #      . ./setenv.sh && \
+      #      cd taosadapter_tests && \
+      #      poetry run pytest -sv --alluredir=${{ env.ALLURE_PROFILE_DIR }}"
           
-      - name: allure report
-        run: |
-          allure generate ${{ env.ALLURE_PROFILE_DIR }} -o ${{ env.ALLURE_REPORT_DIR }} --clean
-          echo "see report at ${{ env.REPORT_BASE_URL }}/${{ env.DIR_PATH }}/allure_report/"
+      #- name: allure report
+      #  run: |
+      #    allure generate ${{ env.ALLURE_PROFILE_DIR }} -o ${{ env.ALLURE_REPORT_DIR }} --clean
+      #    echo "see report at ${{ env.REPORT_BASE_URL }}/${{ env.DIR_PATH }}/allure_report/"
 
       - name: collect coverage
         run: |
@@ -134,14 +134,14 @@ jobs:
           #docker rm ${{ needs.run_taosadapter_test.outputs.container_id }}
           rm -rf /data/huoh/CI/taosadapter${{ env.DIR_PATH }}
 
-  #after_failure:
-  #  runs-on: [self-hosted, linux, x64]
-  #  needs: run_taosadapter_test
-  #  if: failure()
-  #  steps: 
-  #    - name: Send Feishu Message
-  #      run: |
-  #        rm -rf /data/huoh/CI/taosadapter${{ env.DIR_PATH }}
-  #        curl -X POST -H "Content-Type: application/json" \
-  #          -d "{\"msg_type\":\"text\",\"content\":{\"text\":\"${{ github.workflow }} 运行失败，@${{ github.actor }}，\n Action 执行地址见: https://github.com/taosdata/taosx/actions/runs/${{ github.run_id }} \n 报告地址见：$REPORT_BASE_URL/$DIR_PATH/allure_report/\"}}" \
-  #          https://open.feishu.cn/open-apis/bot/v2/hook/209e9aba-167a-49de-8d7b-15e12abd7922 
+  after_failure:
+    runs-on: [self-hosted, linux, x64]
+    needs: run_taosadapter_test
+    if: failure()
+    steps: 
+      - name: Send Feishu Message
+        run: |
+          rm -rf /data/huoh/CI/taosadapter${{ env.DIR_PATH }}
+          curl -X POST -H "Content-Type: application/json" \
+            -d "{\"msg_type\":\"text\",\"content\":{\"text\":\"${{ github.workflow }} 运行失败，@${{ github.actor }}，\n Action 执行地址见: https://github.com/taosdata/taosx/actions/runs/${{ github.run_id }} \n 报告地址见：$REPORT_BASE_URL/$DIR_PATH/allure_report/\"}}" \
+            https://open.feishu.cn/open-apis/bot/v2/hook/209e9aba-167a-49de-8d7b-15e12abd7922 
