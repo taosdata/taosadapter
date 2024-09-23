@@ -20,7 +20,7 @@ env:
   COVERAGE_BASE_DIR: /data/coverage
   DIR_PATH: ${{ github.sha }}
   ALLURE_PROFILE_DIR: /data/huoh/allure_profile/${{ github.sha }}
-  ALLURE_REPORT_DIR: /data/coverage/${{ github.sha }}
+  ALLURE_REPORT_DIR: /data/coverage/${{ github.sha }}/allure_report
   WORK_DIR: /data/actions-runner-taosadapter/_work/taosadapter/taosadapter
   TAOSADAPTER_DIR: /data/actions-runner-taosadapter/_work/taosadapter/taosadapter/taosadapter_${{ github.sha }}
   REPORT_BASE_URL: http://192.168.1.45:8787
@@ -90,12 +90,14 @@ jobs:
             "nohup taosd > /dev/null 2>&1 &"
 
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
-            "nohup taosadapter > /dev/null 2>&1 &"
+            "nohup taosadapter > /dev/null 2>&1"
 
       - name: 运行TestNG测试
         run: |
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
-            "cd /data/huoh/TestNG_taosX && \
+            "mkdir -p ${{ env.ALLURE_PROFILE_DIR }} && \
+            mkdir -p ${{ env.ALLURE_REPORT_DIR }} && \
+            cd /data/huoh/TestNG_taosX && \
             poetry config virtualenvs.in-project true && \
             poetry install && \
             . ./setenv.sh && \
