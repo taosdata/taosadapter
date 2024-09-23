@@ -92,22 +92,23 @@ jobs:
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
             "nohup taosadapter > /dev/null 2>&1 &"
 
-      #- name: 运行TestNG测试
-      #  run: |
-      #    docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
-      #      "mkdir -p ${{ env.ALLURE_PROFILE_DIR }} && \
-      #      mkdir -p ${{ env.ALLURE_REPORT_DIR }} && \
-      #      cd /data/huoh/TestNG_taosX && \
-      #      poetry config virtualenvs.in-project true && \
-      #      poetry install && \
-      #      . ./setenv.sh && \
-      #      cd taosadapter_tests && \
-      #      poetry run pytest -sv --alluredir=${{ env.ALLURE_PROFILE_DIR }}"
+      - name: 运行TestNG测试
+        run: |
+          docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
+            "mkdir -p ${{ env.ALLURE_PROFILE_DIR }} && \
+            mkdir -p ${{ env.ALLURE_REPORT_DIR }} && \
+            cd /data/huoh/TestNG_taosX && \
+            git pull && \
+            poetry config virtualenvs.in-project true && \
+            poetry install && \
+            . ./setenv.sh && \
+            cd taosadapter_tests && \
+            poetry run pytest -sv --alluredir=${{ env.ALLURE_PROFILE_DIR }}"
           
-      #- name: allure report
-      #  run: |
-      #    allure generate ${{ env.ALLURE_PROFILE_DIR }} -o ${{ env.ALLURE_REPORT_DIR }} --clean
-      #    echo "see report at ${{ env.REPORT_BASE_URL }}/${{ env.DIR_PATH }}/allure_report/"
+      - name: allure report
+        run: |
+          allure generate ${{ env.ALLURE_PROFILE_DIR }} -o ${{ env.ALLURE_REPORT_DIR }} --clean
+          echo "see report at ${{ env.REPORT_BASE_URL }}/${{ env.DIR_PATH }}/allure_report/"
 
       - name: collect coverage
         run: |
@@ -127,7 +128,6 @@ jobs:
     if: success()
     steps:
       - name: Force stop taosd & taosadapter
-        # shell: bash {0}
         run: |
           echo "stop and rm container ${{ needs.run_taosadapter_test.outputs.container_id }}"
           #docker stop ${{ needs.run_taosadapter_test.outputs.container_id }}
