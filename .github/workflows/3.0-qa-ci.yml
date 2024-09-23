@@ -89,8 +89,8 @@ jobs:
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
             "nohup taosd > /dev/null 2>&1 &"
 
-          docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
-            "nohup taosadapter > /dev/null 2>&1"
+          docker exec -d ${{ steps.run_container.outputs.container_id }} bash -c \
+            "taosadapter > /dev/null 2>&1"
 
       - name: 运行TestNG测试
         run: |
