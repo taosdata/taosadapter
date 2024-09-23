@@ -1,22 +1,22 @@
 name: 3.0 QA-workflow
 
 on:
-  #pull_request:
-  #  branches:
-  #    - '3.0'
+  pull_request:
+    branches:
+      - 'main'
+      - '3.0'
+      - '3.1'
+      - '3.1.2'
   push:
     branches:
-      - 'ref/qa_ci'
-  #      - 'main'
-  #    - '3.0'
-  #    - '3.1'
-  #  - '3.1.2'
+      - 'main'
+      - '3.0'
+      - '3.1'
+      - '3.1.2'
   workflow_dispatch:
 
 env:
   RELEASE_HOST: 192.168.1.45
-  # RUSTFLAGS: "-C instrument-coverage --cfg tokio_unstable"
-  ARTIFACT_BASE_DIR: /data/artifacts
   COVERAGE_BASE_DIR: /data/coverage
   DIR_PATH: ${{ github.sha }}
   ALLURE_PROFILE_DIR: /data/huoh/allure_profile/${{ github.sha }}
