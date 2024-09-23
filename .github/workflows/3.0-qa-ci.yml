@@ -89,8 +89,8 @@ jobs:
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
             "nohup taosd > /dev/null 2>&1 &"
 
-          docker exec -d ${{ steps.run_container.outputs.container_id }} bash -c \
-            "taosadapter > /dev/null 2>&1"
+          docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
+            "nohup taosadapter > /dev/null 2>&1 &"
 
       - name: 运行TestNG测试
         run: |
@@ -112,7 +112,8 @@ jobs:
       - name: collect coverage
         run: |
           docker exec ${{ steps.run_container.outputs.container_id }} bash -c \
-            "go tool covdata percent -i=${{ env.GOCOVERDIR }} -o ${{ env.GOCOVERDIR }}/coverage.txt && \
+            "kill -TERM $(pgrep taosadapter) && \
+            go tool covdata percent -i=${{ env.GOCOVERDIR }} -o ${{ env.GOCOVERDIR }}/coverage.txt && \
             head -n 1 ${{ env.GOCOVERDIR }}/coverage.txt && \
             go tool covdata textfmt -i=${{ env.GOCOVERDIR }} -o ${{ env.GOCOVERDIR }}/cov.txt && \
             cd ${{ env.TAOSADAPTER_DIR }} && \
