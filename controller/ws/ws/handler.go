@@ -560,7 +560,7 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 		return wsCommonErrorMsg(0xffff, "unmarshal ws query request error")
 	}
 	sqlType := monitor.WSRecordRequest(req.Sql)
-	logger.Errorf("get query request, sql:%s", req.Sql)
+	logger.Debugf("get query request, sql:%s", req.Sql)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugf("get handler cost:%s", log.GetLogDuration(isDebug, s))
