@@ -9,9 +9,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/common/parser"
+	stmtCommon "github.com/taosdata/driver-go/v3/common/stmt"
 	taoserrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/types"
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/driver-go/v3/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
@@ -446,6 +448,133 @@ func TestTaosWriteRawBlockWithFieldsWithReqID(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(2), d[0][0])
 }
+
+type TestStmt2Result struct {
+	Res      unsafe.Pointer
+	Affected int
+	N        int
+}
+
+type Stmt2CallBackCaller struct {
+	ExecResult chan *TestStmt2Result
+}
+
+func (s *Stmt2CallBackCaller) ExecCall(res unsafe.Pointer, affected int, code int) {
+	s.ExecResult <- &TestStmt2Result{
+		Res:      res,
+		Affected: affected,
+		N:        code,
+	}
+}
+
+func TestTaosStmt2(t *testing.T) {
+	reqID := generator.GetReqID()
+	var logger = logger.WithField("test", "TestTaosStmt2").WithField(config.ReqIDKey, reqID)
+	conn, err := TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer TaosClose(conn, logger, isDebug)
+	err = exec(conn, "create database if not exists `syncinterface_test_stmt2`")
+	assert.NoError(t, err)
+	defer func() {
+		err = exec(conn, "drop database if exists `syncinterface_test_stmt2`")
+		assert.NoError(t, err)
+	}()
+	err = exec(conn, "create table if not exists `syncinterface_test_stmt2`.`stb1` (ts timestamp,v int) tags (id int)")
+	assert.NoError(t, err)
+	code := TaosSelectDB(conn, "syncinterface_test_stmt2", logger, isDebug)
+	assert.Equal(t, 0, code)
+	caller := &Stmt2CallBackCaller{
+		ExecResult: make(chan *TestStmt2Result, 1),
+	}
+	handle := cgo.NewHandle(caller)
+	stmt := TaosStmt2Init(conn, reqID, false, false, handle, logger, isDebug)
+	if !assert.NotNil(t, stmt, wrapper.TaosStmtErrStr(stmt)) {
+		return
+	}
+	defer func() {
+		code = TaosStmt2Close(stmt, logger, isDebug)
+		assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt))
+	}()
+	code = TaosStmt2Prepare(stmt, "insert into ? using `syncinterface_test_stmt2`.`stb1` tags(?) values(?,?)", logger, isDebug)
+	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+		return
+	}
+	isInsert, code := TaosStmt2IsInsert(stmt, logger, isDebug)
+	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+		return
+	}
+	assert.True(t, isInsert)
+	tableName := "tb1"
+	binds := &stmtCommon.TaosStmt2BindData{
+		TableName: tableName,
+	}
+	bs, err := stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, nil, nil)
+	assert.NoError(t, err)
+	err = TaosStmt2BindBinary(stmt, bs, -1, logger, isDebug)
+	assert.NoError(t, err)
+
+	code, num, fields := TaosStmt2GetFields(stmt, stmtCommon.TAOS_FIELD_COL, logger, isDebug)
+	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+		return
+	}
+	assert.Equal(t, 2, num)
+	assert.NotNil(t, fields)
+	defer func() {
+		wrapper.TaosStmt2FreeFields(stmt, fields)
+	}()
+	colFields := wrapper.StmtParseFields(num, fields)
+	assert.Equal(t, 2, len(colFields))
+	assert.Equal(t, "ts", colFields[0].Name)
+	assert.Equal(t, int8(common.TSDB_DATA_TYPE_TIMESTAMP), colFields[0].FieldType)
+	assert.Equal(t, "v", colFields[1].Name)
+	assert.Equal(t, int8(common.TSDB_DATA_TYPE_INT), colFields[1].FieldType)
+	code, num, tags := TaosStmt2GetFields(stmt, stmtCommon.TAOS_FIELD_TAG, logger, isDebug)
+	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+		return
+	}
+	assert.Equal(t, 1, num)
+	assert.NotNil(t, tags)
+	defer func() {
+		wrapper.TaosStmt2FreeFields(stmt, tags)
+	}()
+	tagFields := wrapper.StmtParseFields(num, tags)
+	assert.Equal(t, 1, len(tagFields))
+	assert.Equal(t, "id", tagFields[0].Name)
+	assert.Equal(t, int8(common.TSDB_DATA_TYPE_INT), tagFields[0].FieldType)
+
+	binds = &stmtCommon.TaosStmt2BindData{
+		Tags: []driver.Value{int32(1)},
+	}
+
+	bs, err = stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, nil, tagFields)
+	assert.NoError(t, err)
+	err = TaosStmt2BindBinary(stmt, bs, -1, logger, isDebug)
+	assert.NoError(t, err)
+
+	now := time.Now()
+	binds = &stmtCommon.TaosStmt2BindData{
+		Cols: [][]driver.Value{
+			{now, now.Add(time.Second)},
+			{int32(100), int32(101)},
+		},
+	}
+	bs, err = stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, colFields, nil)
+	assert.NoError(t, err)
+	err = TaosStmt2BindBinary(stmt, bs, -1, logger, isDebug)
+	assert.NoError(t, err)
+
+	code = TaosStmt2Exec(stmt, logger, isDebug)
+	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+		return
+	}
+	result := <-caller.ExecResult
+	assert.NotNil(t, result)
+	assert.Equal(t, 0, result.N)
+	assert.Equal(t, 2, result.Affected)
+}
+
 func exec(conn unsafe.Pointer, sql string) error {
 	result := wrapper.TaosQuery(conn, sql)
 	defer wrapper.TaosFreeResult(result)
