@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/types"
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/driver-go/v3/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
 )
@@ -64,18 +65,6 @@ func TaosConnect(host, user, pass, db string, port int, logger *logrus.Entry, is
 	logger.Debugf("taos_connect finish, conn:%p, err:%v, cost:%s", conn, err, log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	return conn, err
-}
-
-func TaosSchemalessInsertRawTTLWithReqID(conn unsafe.Pointer, lines string, protocol int, precision string, ttl int, reqID int64, logger *logrus.Entry, isDebug bool) (int32, unsafe.Pointer) {
-	logger.Tracef("call taos_schemaless_insert_raw_ttl_with_reqid, conn:%p, lines:%s, protocol:%d, precision:%s, ttl:%d, reqID:%d", conn, lines, protocol, precision, ttl, reqID)
-	s := log.GetLogNow(isDebug)
-	thread.Lock()
-	logger.Debugf("get thread lock for taos_schemaless_insert_raw_ttl_with_reqid cost:%s", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	rows, result := wrapper.TaosSchemalessInsertRawTTLWithReqID(conn, lines, protocol, precision, ttl, reqID)
-	logger.Debugf("taos_schemaless_insert_raw_ttl_with_reqid finish, rows:%d, result:%p, cost:%s", rows, result, log.GetLogDuration(isDebug, s))
-	thread.Unlock()
-	return rows, result
 }
 
 func TaosGetTablesVgID(conn unsafe.Pointer, db string, tables []string, logger *logrus.Entry, isDebug bool) ([]int, int) {
@@ -326,7 +315,7 @@ func TaosStmtGetParam(stmt unsafe.Pointer, index int, logger *logrus.Entry, isDe
 }
 
 func TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn unsafe.Pointer, lines string, protocol int, precision string, ttl int, reqID int64, tbNameKey string, logger *logrus.Entry, isDebug bool) (int32, unsafe.Pointer) {
-	logger.Tracef("call taos_schemaless_insert_raw_ttl_with_reqid_tbname_key, conn:%p, lines:%s, protocol:%d, precision:%s, ttl:%d, reqID:%d, tbnameKey ", conn, lines, protocol, precision, ttl, reqID)
+	logger.Tracef("call taos_schemaless_insert_raw_ttl_with_reqid_tbname_key, conn:%p, lines:%s, protocol:%d, precision:%s, ttl:%d, reqID:%d, tbnameKey:%s", conn, lines, protocol, precision, ttl, reqID, tbNameKey)
 	s := log.GetLogNow(isDebug)
 	thread.Lock()
 	logger.Debugf("get thread lock for taos_schemaless_insert_raw_ttl_with_reqid_tbname_key cost:%s", log.GetLogDuration(isDebug, s))
@@ -335,4 +324,88 @@ func TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn unsafe.Pointer, lines str
 	logger.Debugf("taos_schemaless_insert_raw_ttl_with_reqid_tbname_key finish, rows:%d, result:%p, cost:%s", rows, result, log.GetLogDuration(isDebug, s))
 	thread.Unlock()
 	return rows, result
+}
+
+func TaosStmt2Init(taosConnect unsafe.Pointer, reqID int64, singleStbInsert bool, singleTableBindOnce bool, handle cgo.Handle, logger *logrus.Entry, isDebug bool) unsafe.Pointer {
+	logger.Tracef("call taos_stmt2_init, taosConnect:%p, reqID:%d, singleStbInsert:%t, singleTableBindOnce:%t, handle:%p", taosConnect, reqID, singleStbInsert, singleTableBindOnce, handle.Pointer())
+	s := log.GetLogNow(isDebug)
+	thread.Lock()
+	logger.Debugf("get thread lock for taos_stmt2_init cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	stmt2 := wrapper.TaosStmt2Init(taosConnect, reqID, singleStbInsert, singleTableBindOnce, handle)
+	logger.Debugf("taos_stmt2_init finish, stmt2:%p, cost:%s", stmt2, log.GetLogDuration(isDebug, s))
+	thread.Unlock()
+	return stmt2
+}
+
+func TaosStmt2Prepare(stmt2 unsafe.Pointer, sql string, logger *logrus.Entry, isDebug bool) int {
+	logger.Tracef("call taos_stmt2_prepare, stmt2:%p, sql:%s", stmt2, log.GetLogSql(sql))
+	s := log.GetLogNow(isDebug)
+	thread.Lock()
+	logger.Debugf("get thread lock for taos_stmt2_prepare cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	code := wrapper.TaosStmt2Prepare(stmt2, sql)
+	logger.Debugf("taos_stmt2_prepare finish, code:%d, cost:%s", code, log.GetLogDuration(isDebug, s))
+	thread.Unlock()
+	return code
+}
+
+func TaosStmt2IsInsert(stmt2 unsafe.Pointer, logger *logrus.Entry, isDebug bool) (bool, int) {
+	logger.Tracef("call taos_stmt2_is_insert, stmt2:%p", stmt2)
+	s := log.GetLogNow(isDebug)
+	thread.Lock()
+	logger.Debugf("get thread lock for taos_stmt2_is_insert cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	isInsert, code := wrapper.TaosStmt2IsInsert(stmt2)
+	logger.Debugf("taos_stmt2_is_insert finish, isInsert:%t, code:%d, cost:%s", isInsert, code, log.GetLogDuration(isDebug, s))
+	thread.Unlock()
+	return isInsert, code
+}
+
+func TaosStmt2GetFields(stmt2 unsafe.Pointer, fieldType int, logger *logrus.Entry, isDebug bool) (code, count int, fields unsafe.Pointer) {
+	logger.Tracef("call taos_stmt2_get_fields, stmt2:%p, fieldType:%d", stmt2, fieldType)
+	s := log.GetLogNow(isDebug)
+	thread.Lock()
+	logger.Debugf("get thread lock for taos_stmt2_get_fields cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	code, count, fields = wrapper.TaosStmt2GetFields(stmt2, fieldType)
+	logger.Debugf("taos_stmt2_get_fields finish, code:%d, count:%d, fields:%p, cost:%s", code, count, fields, log.GetLogDuration(isDebug, s))
+	thread.Unlock()
+	return code, count, fields
+}
+
+func TaosStmt2Exec(stmt2 unsafe.Pointer, logger *logrus.Entry, isDebug bool) int {
+	logger.Tracef("call taos_stmt2_exec, stmt2:%p", stmt2)
+	s := log.GetLogNow(isDebug)
+	thread.Lock()
+	logger.Debugf("get thread lock for taos_stmt2_exec cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	code := wrapper.TaosStmt2Exec(stmt2)
+	logger.Debugf("taos_stmt2_exec finish, code:%d, cost:%s", code, log.GetLogDuration(isDebug, s))
+	thread.Unlock()
+	return code
+}
+
+func TaosStmt2Close(stmt2 unsafe.Pointer, logger *logrus.Entry, isDebug bool) int {
+	logger.Tracef("call taos_stmt2_close, stmt2:%p", stmt2)
+	s := log.GetLogNow(isDebug)
+	thread.Lock()
+	logger.Debugf("get thread lock for taos_stmt2_close cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	code := wrapper.TaosStmt2Close(stmt2)
+	logger.Debugf("taos_stmt2_close finish, code:%d, cost:%s", code, log.GetLogDuration(isDebug, s))
+	thread.Unlock()
+	return code
+}
+
+func TaosStmt2BindBinary(stmt2 unsafe.Pointer, data []byte, colIdx int32, logger *logrus.Entry, isDebug bool) error {
+	logger.Tracef("call taos_stmt_bind_binary, stmt2:%p, colIdx:%d, data:%v", stmt2, colIdx, data)
+	s := log.GetLogNow(isDebug)
+	thread.Lock()
+	logger.Debugf("get thread lock for taos_stmt_bind_binary cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	err := wrapper.TaosStmt2BindBinary(stmt2, data, colIdx)
+	logger.Debugf("taos_stmt_bind_binary finish, err:%v, cost:%s", err, log.GetLogDuration(isDebug, s))
+	thread.Unlock()
+	return err
 }

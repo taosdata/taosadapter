@@ -237,6 +237,18 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 		f = h.handleGetCurrentDB
 	case WSGetServerInfo:
 		f = h.handleGetServerInfo
+	case STMT2Init:
+		f = h.handleStmt2Init
+	case STMT2Prepare:
+		f = h.handleStmt2Prepare
+	case STMT2GetFields:
+		f = h.handleStmt2GetFields
+	case STMT2Exec:
+		f = h.handleStmt2Exec
+	case STMT2Result:
+		f = h.handleStmt2UseResult
+	case STMT2Close:
+		f = h.handleStmt2Close
 	default:
 		f = h.handleDefault
 	}
@@ -273,6 +285,8 @@ func (h *messageHandler) handleMessageBinary(session *melody.Session, bytes []by
 		f = h.handleBinaryQuery
 	case FetchRawBlockMessage:
 		f = h.handleFetchRawBlock
+	case Stmt2BindMessage:
+		f = h.handleStmt2Bind
 	default:
 		f = h.handleDefaultBinary
 	}
@@ -546,7 +560,7 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 		return wsCommonErrorMsg(0xffff, "unmarshal ws query request error")
 	}
 	sqlType := monitor.WSRecordRequest(req.Sql)
-	logger.Errorf("get query request, sql:%s", req.Sql)
+	logger.Debugf("get query request, sql:%s", req.Sql)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugf("get handler cost:%s", log.GetLogDuration(isDebug, s))
@@ -1202,8 +1216,8 @@ type StmtExecResponse struct {
 func (h *messageHandler) handleStmtExec(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req StmtExecRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
-		logger.Errorf("unmarshal stmt add batch request %s error, err:%s", request.Args, err)
-		return wsStmtErrorMsg(0xffff, "unmarshal stmt add batch request error", req.StmtID)
+		logger.Errorf("unmarshal stmt exec request %s error, err:%s", request.Args, err)
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt exec request error", req.StmtID)
 	}
 	logger.Tracef("stmt execute, stmt_id:%d", req.StmtID)
 	stmtItem := h.stmts.Get(req.StmtID)
@@ -1243,10 +1257,14 @@ func (h *messageHandler) handleStmtClose(_ context.Context, request Request, log
 	var req StmtCloseRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt close request %s error, err:%s", request.Args, err)
-		return wsStmtErrorMsg(0xffff, "unmarshal stmt add batch request error", req.StmtID)
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt close request error", req.StmtID)
 	}
 	logger.Tracef("stmt close, stmt_id:%d", req.StmtID)
-	h.stmts.FreeStmtByID(req.StmtID, logger)
+	err := h.stmts.FreeStmtByID(req.StmtID, false, logger)
+	if err != nil {
+		logger.Errorf("stmt close error, err:%s", err.Error())
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt close request error", req.StmtID)
+	}
 	resp = &BaseResponse{}
 	resp.SetNull(true)
 	logger.Tracef("stmt close success, stmt_id:%d", req.StmtID)
@@ -1267,8 +1285,8 @@ type StmtGetColFieldsResponse struct {
 func (h *messageHandler) handleStmtGetColFields(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
 	var req StmtGetColFieldsRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
-		logger.Errorf("unmarshal stmt get tags request %s error, err:%s", request.Args, err)
-		return wsStmtErrorMsg(0xffff, "unmarshal stmt get tags request error", req.StmtID)
+		logger.Errorf("unmarshal stmt get col request %s error, err:%s", request.Args, err)
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt get col request error", req.StmtID)
 	}
 	logger.Tracef("stmt get col fields, stmt_id:%d", req.StmtID)
 	stmtItem := h.stmts.Get(req.StmtID)
@@ -1366,8 +1384,8 @@ type StmtUseResultResponse struct {
 func (h *messageHandler) handleStmtUseResult(_ context.Context, request Request, logger *logrus.Entry, _ bool, _ time.Time) (resp Response) {
 	var req StmtUseResultRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
-		logger.Errorf("unmarshal stmt get tags request %s error, err:%s", request.Args, err)
-		return wsStmtErrorMsg(0xffff, "unmarshal stmt get tags request error", req.StmtID)
+		logger.Errorf("unmarshal stmt use result request %s error, err:%s", request.Args, err)
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt use result request error", req.StmtID)
 	}
 	logger.Tracef("stmt use result, stmt_id:%d", req.StmtID)
 	stmtItem := h.stmts.Get(req.StmtID)
@@ -1672,6 +1690,46 @@ func (h *messageHandler) handleFetchRawBlock(ctx context.Context, req dealBinary
 	return resp
 }
 
+type Stmt2BindResponse struct {
+	BaseResponse
+	StmtID uint64 `json:"stmt_id"`
+}
+
+func (h *messageHandler) handleStmt2Bind(ctx context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) Response {
+	message := req.message
+	if len(message) < 30 {
+		return wsStmtErrorMsg(0xffff, "message length is too short", req.id)
+	}
+	v := binary.LittleEndian.Uint16(message[24:])
+	if v != Stmt2BindProtocolVersion1 {
+		return wsStmtErrorMsg(0xffff, "unknown stmt2 bind version", req.id)
+	}
+	colIndex := int32(binary.LittleEndian.Uint32(message[26:]))
+	stmtItem := h.stmts.GetStmt2(req.id)
+	if stmtItem == nil {
+		logger.Errorf("stmt2 is nil, stmt_id:%d", req.id)
+		return wsStmtErrorMsg(0xffff, "stmt2 is nil", req.id)
+	}
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		logger.Errorf("stmt2 has been freed, stmt_id:%d", req.id)
+		return wsStmtErrorMsg(0xffff, "stmt2 has been freed", req.id)
+	}
+	bindData := message[30:]
+	err := syncinterface.TaosStmt2BindBinary(stmtItem.stmt, bindData, colIndex, logger, isDebug)
+	if err != nil {
+		logger.Errorf("stmt2 bind error, err:%s", err.Error())
+		var tError *errors2.TaosError
+		if errors.As(err, &tError) {
+			return wsStmtErrorMsg(int(tError.Code), tError.ErrStr, req.id)
+		}
+		return wsStmtErrorMsg(0xffff, err.Error(), req.id)
+	}
+	logger.Trace("stmt2 bind success")
+	return &Stmt2BindResponse{StmtID: req.id}
+}
+
 type GetCurrentDBResponse struct {
 	BaseResponse
 	DB string `json:"db"`
@@ -1810,6 +1868,349 @@ func (h *messageHandler) handleStmtGetParam(_ context.Context, request Request, 
 	}
 	logger.Tracef("stmt get param success, data_type:%d, length:%d", dataType, length)
 	return &StmtGetParamResponse{StmtID: req.StmtID, Index: req.Index, DataType: dataType, Length: length}
+}
+
+type Stmt2InitRequest struct {
+	ReqID               uint64 `json:"req_id"`
+	SingleStbInsert     bool   `json:"single_stb_insert"`
+	SingleTableBindOnce bool   `json:"single_table_bind_once"`
+}
+
+type Stmt2InitResponse struct {
+	BaseResponse
+	StmtID uint64 `json:"stmt_id"`
+}
+
+func (h *messageHandler) handleStmt2Init(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, _ time.Time) (resp Response) {
+	var req Stmt2InitRequest
+	if err := json.Unmarshal(request.Args, &req); err != nil {
+		logger.Errorf("unmarshal stmt2 init request %s error, err:%s", request.Args, err)
+		return wsCommonErrorMsg(0xffff, "unmarshal stmt2 init request error")
+	}
+	handle, caller := async.GlobalStmt2CallBackCallerPool.Get()
+	stmtInit := syncinterface.TaosStmt2Init(h.conn, int64(req.ReqID), req.SingleStbInsert, req.SingleTableBindOnce, handle, logger, isDebug)
+	if stmtInit == nil {
+		async.GlobalStmt2CallBackCallerPool.Put(handle)
+		errStr := wrapper.TaosStmtErrStr(stmtInit)
+		logger.Errorf("stmt2 init error, err:%s", errStr)
+		return wsCommonErrorMsg(0xffff, errStr)
+	}
+	stmtItem := &StmtItem{stmt: stmtInit, handler: handle, caller: caller, isStmt2: true}
+	h.stmts.Add(stmtItem)
+	logger.Tracef("stmt2 init sucess, stmt_id:%d, stmt pointer:%p", stmtItem.index, stmtInit)
+	return &StmtInitResponse{StmtID: stmtItem.index}
+}
+
+type Stmt2PrepareRequest struct {
+	ReqID     uint64 `json:"req_id"`
+	StmtID    uint64 `json:"stmt_id"`
+	SQL       string `json:"sql"`
+	GetFields bool   `json:"get_fields"`
+}
+
+type PrepareFields struct {
+	stmtCommon.StmtField
+	BindType int8
+}
+
+type Stmt2PrepareResponse struct {
+	BaseResponse
+	StmtID     uint64           `json:"stmt_id"`
+	IsInsert   bool             `json:"is_insert"`
+	Fields     []*PrepareFields `json:"fields"`
+	FieldCount int              `json:"field_count"`
+}
+
+func (h *messageHandler) handleStmt2Prepare(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) Response {
+	var req Stmt2PrepareRequest
+	if err := json.Unmarshal(request.Args, &req); err != nil {
+		logger.Errorf("unmarshal stmt2 prepare request %s error, err:%s", request.Args, err)
+		return wsStmtErrorMsg(0xffff, "unmarshal connect request error", req.StmtID)
+	}
+	logger.Debugf("stmt2 prepare, stmt_id:%d, sql:%s", req.StmtID, req.SQL)
+	stmtItem := h.stmts.GetStmt2(req.StmtID)
+	if stmtItem == nil {
+		logger.Errorf("stmt2 is nil, stmt_id:%d", req.StmtID)
+		return wsStmtErrorMsg(0xffff, "stmt2 is nil", req.StmtID)
+	}
+	s = log.GetLogNow(isDebug)
+	logger.Trace("get stmt2 lock")
+	stmtItem.Lock()
+	logger.Debugf("get stmt2 lock cost:%s", log.GetLogDuration(isDebug, s))
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		logger.Errorf("stmt2 has been freed, stmt_id:%d", req.StmtID)
+		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
+	}
+	stmt2 := stmtItem.stmt
+	code := syncinterface.TaosStmt2Prepare(stmt2, req.SQL, logger, isDebug)
+	if code != httperror.SUCCESS {
+		errStr := wrapper.TaosStmt2Error(stmt2)
+		logger.Errorf("stmt2 prepare error, err:%s", errStr)
+		return wsStmtErrorMsg(code, errStr, req.StmtID)
+	}
+	logger.Tracef("stmt2 prepare success, stmt_id:%d", req.StmtID)
+	isInsert, code := syncinterface.TaosStmt2IsInsert(stmt2, logger, isDebug)
+	if code != httperror.SUCCESS {
+		errStr := wrapper.TaosStmt2Error(stmt2)
+		logger.Errorf("check stmt2 is insert error, err:%s", errStr)
+		return wsStmtErrorMsg(code, errStr, req.StmtID)
+	}
+	logger.Tracef("stmt2 is insert:%t", isInsert)
+	stmtItem.isInsert = isInsert
+	prepareResp := &Stmt2PrepareResponse{StmtID: req.StmtID, IsInsert: isInsert}
+	if req.GetFields {
+		if isInsert {
+			var prepareFields []*PrepareFields
+			// get table field
+			_, count, code, errStr := getFields(stmt2, stmtCommon.TAOS_FIELD_TBNAME, logger, isDebug)
+			if code != 0 {
+				return wsStmtErrorMsg(code, fmt.Sprintf("get table names fields error, %s", errStr), req.StmtID)
+			}
+			if count == 1 {
+				tableNameFields := &PrepareFields{
+					StmtField: stmtCommon.StmtField{},
+					BindType:  stmtCommon.TAOS_FIELD_TBNAME,
+				}
+				prepareFields = append(prepareFields, tableNameFields)
+			}
+			// get tags field
+			tagFields, _, code, errStr := getFields(stmt2, stmtCommon.TAOS_FIELD_TAG, logger, isDebug)
+			if code != 0 {
+				return wsStmtErrorMsg(code, fmt.Sprintf("get tag fields error, %s", errStr), req.StmtID)
+			}
+			for i := 0; i < len(tagFields); i++ {
+				prepareFields = append(prepareFields, &PrepareFields{StmtField: *tagFields[i], BindType: stmtCommon.TAOS_FIELD_TAG})
+			}
+			// get cols field
+			colFields, _, code, errStr := getFields(stmt2, stmtCommon.TAOS_FIELD_COL, logger, isDebug)
+			if code != 0 {
+				return wsStmtErrorMsg(code, fmt.Sprintf("get col fields error, %s", errStr), req.StmtID)
+			}
+			for i := 0; i < len(colFields); i++ {
+				prepareFields = append(prepareFields, &PrepareFields{StmtField: *colFields[i], BindType: stmtCommon.TAOS_FIELD_COL})
+			}
+			prepareResp.Fields = prepareFields
+		} else {
+			_, count, code, errStr := getFields(stmt2, stmtCommon.TAOS_FIELD_QUERY, logger, isDebug)
+			if code != 0 {
+				return wsStmtErrorMsg(code, fmt.Sprintf("get query fields error, %s", errStr), req.StmtID)
+			}
+			prepareResp.FieldCount = count
+		}
+	}
+	return prepareResp
+}
+
+func getFields(stmt2 unsafe.Pointer, fieldType int8, logger *logrus.Entry, isDebug bool) (fields []*stmtCommon.StmtField, count int, code int, errSt string) {
+	var cFields unsafe.Pointer
+	code, count, cFields = syncinterface.TaosStmt2GetFields(stmt2, int(fieldType), logger, isDebug)
+	if code != 0 {
+		errStr := wrapper.TaosStmt2Error(stmt2)
+		logger.Errorf("stmt2 get fields error, field_type:%d, err:%s", fieldType, errStr)
+		return nil, count, code, errStr
+	}
+	defer wrapper.TaosStmt2FreeFields(stmt2, cFields)
+	if count > 0 && cFields != nil {
+		s := log.GetLogNow(isDebug)
+		fields = wrapper.StmtParseFields(count, cFields)
+		logger.Debugf("stmt2 parse fields cost:%s", log.GetLogDuration(isDebug, s))
+		return fields, count, 0, ""
+	}
+	return nil, count, 0, ""
+}
+
+type Stmt2GetFieldsRequest struct {
+	ReqID      uint64 `json:"req_id"`
+	StmtID     uint64 `json:"stmt_id"`
+	FieldTypes []int8 `json:"field_types"`
+}
+
+type Stmt2GetFieldsResponse struct {
+	BaseResponse
+	StmtID     uint64                  `json:"stmt_id"`
+	TableCount int32                   `json:"table_count"`
+	QueryCount int32                   `json:"query_count"`
+	ColFields  []*stmtCommon.StmtField `json:"col_fields"`
+	TagFields  []*stmtCommon.StmtField `json:"tag_fields"`
+}
+
+func (h *messageHandler) handleStmt2GetFields(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+	var req Stmt2GetFieldsRequest
+	if err := json.Unmarshal(request.Args, &req); err != nil {
+		logger.Errorf("unmarshal stmt2 get fields request %s error, err:%s", request.Args, err)
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt get fields request error", req.StmtID)
+	}
+	logger.Tracef("stmt2 get col fields, stmt_id:%d", req.StmtID)
+	stmtItem := h.stmts.GetStmt2(req.StmtID)
+	if stmtItem == nil {
+		logger.Errorf("stmt2 is nil, stmt_id:%d", req.StmtID)
+		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
+	}
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		logger.Errorf("stmt2 has been freed, stmt_id:%d", req.StmtID)
+		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
+	}
+	stmt2GetFieldsResp := &Stmt2GetFieldsResponse{StmtID: req.StmtID}
+	for i := 0; i < len(req.FieldTypes); i++ {
+		switch req.FieldTypes[i] {
+		case stmtCommon.TAOS_FIELD_COL:
+			colFields, _, code, errStr := getFields(stmtItem.stmt, stmtCommon.TAOS_FIELD_COL, logger, isDebug)
+			if code != 0 {
+				return wsStmtErrorMsg(code, fmt.Sprintf("get col fields error, %s", errStr), req.StmtID)
+			}
+			stmt2GetFieldsResp.ColFields = colFields
+		case stmtCommon.TAOS_FIELD_TAG:
+			tagFields, _, code, errStr := getFields(stmtItem.stmt, stmtCommon.TAOS_FIELD_TAG, logger, isDebug)
+			if code != 0 {
+				return wsStmtErrorMsg(code, fmt.Sprintf("get tag fields error, %s", errStr), req.StmtID)
+			}
+			stmt2GetFieldsResp.TagFields = tagFields
+		case stmtCommon.TAOS_FIELD_TBNAME:
+			_, count, code, errStr := getFields(stmtItem.stmt, stmtCommon.TAOS_FIELD_TBNAME, logger, isDebug)
+			if code != 0 {
+				return wsStmtErrorMsg(code, fmt.Sprintf("get table names fields error, %s", errStr), req.StmtID)
+			}
+			stmt2GetFieldsResp.TableCount = int32(count)
+		case stmtCommon.TAOS_FIELD_QUERY:
+			_, count, code, errStr := getFields(stmtItem.stmt, stmtCommon.TAOS_FIELD_QUERY, logger, isDebug)
+			if code != 0 {
+				return wsStmtErrorMsg(code, fmt.Sprintf("get query fields error, %s", errStr), req.StmtID)
+			}
+			stmt2GetFieldsResp.QueryCount = int32(count)
+		}
+	}
+	return stmt2GetFieldsResp
+}
+
+type Stmt2ExecRequest struct {
+	ReqID  uint64 `json:"req_id"`
+	StmtID uint64 `json:"stmt_id"`
+}
+
+type Stmt2ExecResponse struct {
+	BaseResponse
+	StmtID   uint64 `json:"stmt_id"`
+	Affected int    `json:"affected"`
+}
+
+func (h *messageHandler) handleStmt2Exec(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+	var req Stmt2ExecRequest
+	if err := json.Unmarshal(request.Args, &req); err != nil {
+		logger.Errorf("unmarshal stmt2 exec request %s error, err:%s", request.Args, err)
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt2 exec request error", req.StmtID)
+	}
+	logger.Tracef("stmt2 execute, stmt_id:%d", req.StmtID)
+	stmtItem := h.stmts.GetStmt2(req.StmtID)
+	if stmtItem == nil {
+		logger.Errorf("stmt2 is nil, stmt_id:%d", req.StmtID)
+		return wsStmtErrorMsg(0xffff, "stmt2 is nil", req.StmtID)
+	}
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		logger.Errorf("stmt2 has been freed, stmt_id:%d", req.StmtID)
+		return wsStmtErrorMsg(0xffff, "stmt has been freed", req.StmtID)
+	}
+	code := syncinterface.TaosStmt2Exec(stmtItem.stmt, logger, isDebug)
+	if code != httperror.SUCCESS {
+		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		logger.Errorf("stmt2 execute error, err:%s", errStr)
+		return wsStmtErrorMsg(code, errStr, req.StmtID)
+	}
+	s = log.GetLogNow(isDebug)
+	logger.Tracef("stmt2 execute wait callback, stmt_id:%d", req.StmtID)
+	result := <-stmtItem.caller.ExecResult
+	logger.Debugf("stmt2 execute wait callback finish, affected:%d, res:%p, n:%d, cost:%s", result.Affected, result.Res, result.N, log.GetLogDuration(isDebug, s))
+	stmtItem.result = result.Res
+	return &Stmt2ExecResponse{StmtID: req.StmtID, Affected: result.Affected}
+}
+
+type Stmt2CloseRequest struct {
+	ReqID  uint64 `json:"req_id"`
+	StmtID uint64 `json:"stmt_id"`
+}
+
+type Stmt2CloseResponse struct {
+	BaseResponse
+	StmtID uint64 `json:"stmt_id"`
+}
+
+func (h *messageHandler) handleStmt2Close(_ context.Context, request Request, logger *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+	var req StmtCloseRequest
+	if err := json.Unmarshal(request.Args, &req); err != nil {
+		logger.Errorf("unmarshal stmt close request %s error, err:%s", request.Args, err)
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt close request error", req.StmtID)
+	}
+	logger.Tracef("stmt2 close, stmt_id:%d", req.StmtID)
+	err := h.stmts.FreeStmtByID(req.StmtID, true, logger)
+	if err != nil {
+		logger.Errorf("stmt2 close error, err:%s", err.Error())
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt close request error", req.StmtID)
+	}
+	resp = &Stmt2CloseResponse{StmtID: req.StmtID}
+	logger.Tracef("stmt2 close success, stmt_id:%d", req.StmtID)
+	return resp
+}
+
+type Stmt2UseResultRequest struct {
+	ReqID  uint64 `json:"req_id"`
+	StmtID uint64 `json:"stmt_id"`
+}
+
+type Stmt2UseResultResponse struct {
+	BaseResponse
+	StmtID        uint64             `json:"stmt_id"`
+	ResultID      uint64             `json:"result_id"`
+	FieldsCount   int                `json:"fields_count"`
+	FieldsNames   []string           `json:"fields_names"`
+	FieldsTypes   jsontype.JsonUint8 `json:"fields_types"`
+	FieldsLengths []int64            `json:"fields_lengths"`
+	Precision     int                `json:"precision"`
+}
+
+func (h *messageHandler) handleStmt2UseResult(_ context.Context, request Request, logger *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+	var req Stmt2UseResultRequest
+	if err := json.Unmarshal(request.Args, &req); err != nil {
+		logger.Errorf("unmarshal stmt2 use result request %s error, err:%s", request.Args, err)
+		return wsStmtErrorMsg(0xffff, "unmarshal stmt2 use result request error", req.StmtID)
+	}
+	logger.Tracef("stmt2 use result, stmt_id:%d", req.StmtID)
+	stmtItem := h.stmts.GetStmt2(req.StmtID)
+	if stmtItem == nil {
+		logger.Errorf("stmt2 is nil, stmt_id:%d", req.StmtID)
+		return wsStmtErrorMsg(0xffff, "stmt2 is nil", req.StmtID)
+	}
+	stmtItem.Lock()
+	defer stmtItem.Unlock()
+	if stmtItem.stmt == nil {
+		logger.Errorf("stmt2 has been freed, stmt_id:%d", req.StmtID)
+		return wsStmtErrorMsg(0xffff, "stmt2 has been freed", req.StmtID)
+	}
+
+	if stmtItem.result == nil {
+		logger.Errorf("stmt2 result is nil, stmt_id:%d", req.StmtID)
+		return wsStmtErrorMsg(0xffff, "stmt result is nil", req.StmtID)
+	}
+	result := stmtItem.result
+	fieldsCount := wrapper.TaosNumFields(result)
+	rowsHeader, _ := wrapper.ReadColumn(result, fieldsCount)
+	precision := wrapper.TaosResultPrecision(result)
+	logger.Tracef("stmt use result success, stmt_id:%d, fields_count:%d, precision:%d", req.StmtID, fieldsCount, precision)
+	queryResult := QueryResult{TaosResult: result, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision, inStmt: true}
+	idx := h.queryResults.Add(&queryResult)
+
+	return &Stmt2UseResultResponse{
+		StmtID:        req.StmtID,
+		ResultID:      idx,
+		FieldsCount:   fieldsCount,
+		FieldsNames:   rowsHeader.ColNames,
+		FieldsTypes:   rowsHeader.ColTypes,
+		FieldsLengths: rowsHeader.ColLength,
+		Precision:     precision,
+	}
 }
 
 type Response interface {

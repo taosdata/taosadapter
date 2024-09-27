@@ -33,6 +33,14 @@ const (
 	STMTUseResult    = "use_result"
 	STMTNumParams    = "stmt_num_params"
 	STMTGetParam     = "stmt_get_param"
+
+	// stmt2
+	STMT2Init      = "stmt2_init"
+	STMT2Prepare   = "stmt2_prepare"
+	STMT2GetFields = "stmt2_get_fields"
+	STMT2Exec      = "stmt2_exec"
+	STMT2Result    = "stmt2_result"
+	STMT2Close     = "stmt2_close"
 )
 
 type messageType uint64
@@ -46,6 +54,7 @@ const (
 	RawBlockMessageWithFields
 	BinaryQueryMessage
 	FetchRawBlockMessage
+	Stmt2BindMessage = 9
 )
 
 func (m messageType) String() string {
@@ -64,11 +73,14 @@ func (m messageType) String() string {
 		return "binary_query"
 	case FetchRawBlockMessage:
 		return "fetch_raw_block"
+	case Stmt2BindMessage:
+		return "stmt2_bind"
 	default:
 		return "unknown"
 	}
 }
 
 const (
-	BinaryProtocolVersion1 uint16 = 1
+	BinaryProtocolVersion1    uint16 = 1
+	Stmt2BindProtocolVersion1 uint16 = 1
 )

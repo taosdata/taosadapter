@@ -2,12 +2,15 @@ package ws
 
 import (
 	"container/list"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"unsafe"
 
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/driver-go/v3/wrapper/cgo"
+	"github.com/taosdata/taosadapter/v3/db/async"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/log"
 )
@@ -127,6 +130,10 @@ type StmtItem struct {
 	index    uint64
 	stmt     unsafe.Pointer
 	isInsert bool
+	isStmt2  bool
+	result   unsafe.Pointer
+	handler  cgo.Handle
+	caller   *async.Stmt2CallBackCaller
 	sync.Mutex
 }
 
@@ -137,7 +144,12 @@ func (s *StmtItem) free(logger *logrus.Entry) {
 	if s.stmt == nil {
 		return
 	}
-	syncinterface.TaosStmtClose(s.stmt, logger, log.IsDebug())
+	if s.isStmt2 {
+		syncinterface.TaosStmt2Close(s.stmt, logger, log.IsDebug())
+		async.GlobalStmt2CallBackCallerPool.Put(s.handler)
+	} else {
+		syncinterface.TaosStmtClose(s.stmt, logger, log.IsDebug())
+	}
 
 	s.stmt = nil
 }
@@ -164,6 +176,14 @@ func (h *StmtHolder) Add(item *StmtItem) uint64 {
 }
 
 func (h *StmtHolder) Get(index uint64) *StmtItem {
+	item := h.getByIndex(index)
+	if item != nil && item.isStmt2 {
+		return nil
+	}
+	return item
+}
+
+func (h *StmtHolder) getByIndex(index uint64) *StmtItem {
 	h.RLock()
 	defer h.RUnlock()
 
@@ -180,24 +200,35 @@ func (h *StmtHolder) Get(index uint64) *StmtItem {
 	}
 }
 
-func (h *StmtHolder) FreeStmtByID(index uint64, logger *logrus.Entry) {
+func (h *StmtHolder) GetStmt2(index uint64) *StmtItem {
+	item := h.getByIndex(index)
+	if item != nil && !item.isStmt2 {
+		return nil
+	}
+	return item
+}
+
+func (h *StmtHolder) FreeStmtByID(index uint64, isStmt2 bool, logger *logrus.Entry) error {
 	h.Lock()
 	defer h.Unlock()
 
 	if h.results.Len() == 0 {
-		return
+		return nil
 	}
 
 	node := h.results.Front()
 	for {
 		if node == nil || node.Value == nil {
-			return
+			return nil
 		}
 		result := node.Value.(*StmtItem)
 		if result.index == index {
+			if result.isStmt2 != isStmt2 {
+				return errors.New("stmt type not match")
+			}
 			result.free(logger)
 			h.results.Remove(node)
-			return
+			return nil
 		}
 		node = node.Next()
 	}
