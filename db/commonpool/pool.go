@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net"
 	"runtime"
-	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/sirupsen/logrus"
@@ -15,10 +15,10 @@ import (
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/driver-go/v3/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
-	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/connectpool"
 	"golang.org/x/sync/singleflight"
 )
@@ -54,17 +54,27 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 		whitelistChangeHandle: whitelistChangeHandle,
 		dropUserChan:          dropUserChan,
 		dropUserHandle:        dropUserHandle,
-		logger:                log.GetLogger("connect_pool").WithField("user", user),
+		logger:                log.GetLogger("CNP").WithField("user", user),
 	}
 	maxConnect := config.Conf.Pool.MaxConnect
 	if maxConnect == 0 {
 		maxConnect = runtime.GOMAXPROCS(0) * 2
 	}
+	maxWait := config.Conf.Pool.MaxWait
+	if maxWait < 0 {
+		maxWait = 0
+	}
+	waitTimeout := config.Conf.Pool.WaitTimeout
+	if waitTimeout < 0 {
+		waitTimeout = config.DefaultWaitTimeout
+	}
 	poolConfig := &connectpool.Config{
-		InitialCap: 1,
-		MaxCap:     maxConnect,
-		Factory:    cp.factory,
-		Close:      cp.close,
+		InitialCap:  1,
+		MaxWait:     maxWait,
+		WaitTimeout: time.Second * time.Duration(waitTimeout),
+		MaxCap:      maxConnect,
+		Factory:     cp.factory,
+		Close:       cp.close,
 	}
 	p, err := connectpool.NewConnectPool(poolConfig)
 
@@ -110,7 +120,7 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	p.Put(v)
 	go func() {
 		defer func() {
-			cp.logger.Warnln("connector pool exit")
+			cp.logger.Warn("connector pool exit")
 			cp.putHandle()
 		}()
 		for {
@@ -144,11 +154,8 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 				}
 				cp.ipNetsLock.Lock()
 				cp.ipNets = ipNets
-				tmp := make([]string, 0, len(cp.ipNets))
-				for _, ipNet := range cp.ipNets {
-					tmp = append(tmp, ipNet.String())
-				}
-				cp.logger.WithField("whitelist", strings.Join(tmp, ",")).Debugln("whitelist change")
+
+				cp.logger.Debugf("whitelist change, whitelist:%s", tool.IpNetSliceToString(cp.ipNets))
 				cp.ipNetsLock.Unlock()
 			case <-cp.ctx.Done():
 				return
@@ -160,16 +167,16 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 }
 
 func (cp *ConnectorPool) factory() (unsafe.Pointer, error) {
-	thread.Lock()
-	defer thread.Unlock()
-	return wrapper.TaosConnect("", cp.user, cp.password, "", 0)
+	conn, err := syncinterface.TaosConnect("", cp.user, cp.password, "", 0, cp.logger, log.IsDebug())
+	if err != nil {
+		cp.logger.Errorf("connect to taos failed: %s", err.Error())
+	}
+	return conn, err
 }
 
 func (cp *ConnectorPool) close(v unsafe.Pointer) error {
 	if v != nil {
-		thread.Lock()
-		defer thread.Unlock()
-		wrapper.TaosClose(v)
+		syncinterface.TaosClose(v, cp.logger, log.IsDebug())
 	}
 	return nil
 }
@@ -220,7 +227,7 @@ func (cp *ConnectorPool) Release() {
 			connectionMap.Delete(cp.user)
 		}
 		cp.pool.Release()
-		cp.logger.Warnln("connector released")
+		cp.logger.Warn("connector released")
 	})
 }
 

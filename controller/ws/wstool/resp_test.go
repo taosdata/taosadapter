@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/huskar-t/melody"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,7 +26,9 @@ func TestWSWriteJson(t *testing.T) {
 		if m.IsClosed() {
 			return
 		}
-		WSWriteJson(session, data)
+		logger := logrus.New().WithField("test", "TestWSWriteJson")
+		session.Set("logger", logger)
+		WSWriteJson(session, logger, data)
 	})
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()

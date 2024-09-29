@@ -924,6 +924,8 @@ func (s *Statsd) handler(conn *net.TCPConn, id string) {
 					s.Log.Errorf("Whitelist forbidden for %s", ip)
 					return
 				}
+				s.Log.Errorf("get connection error, err:%s", err)
+				return
 			}
 			taosConn.Put()
 			select {

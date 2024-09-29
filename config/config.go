@@ -12,6 +12,7 @@ import (
 )
 
 type Config struct {
+	InstanceID          uint8
 	Cors                CorsConfig
 	TaosConfigDir       string
 	Debug               bool
@@ -24,7 +25,6 @@ type Config struct {
 	Pool                Pool
 	Monitor             Monitor
 	UploadKeeper        UploadKeeper
-	TMQ                 TMQ
 }
 
 var (
@@ -80,13 +80,25 @@ func Init() {
 		RestfulRowLimit:     viper.GetInt("restfulRowLimit"),
 		HttpCodeServerError: viper.GetBool("httpCodeServerError"),
 		SMLAutoCreateDB:     viper.GetBool("smlAutoCreateDB"),
+		InstanceID:          uint8(viper.GetInt("instanceId")),
 	}
 	Conf.Log.setValue()
 	Conf.Cors.setValue()
 	Conf.Pool.setValue()
 	Conf.Monitor.setValue()
 	Conf.UploadKeeper.setValue()
-	Conf.TMQ.setValue()
+	// set log level default value: info
+	if Conf.LogLevel == "" {
+		Conf.LogLevel = "info"
+	}
+	if viper.IsSet("log.level") {
+		Conf.LogLevel = Conf.Log.Level
+	} else {
+		viper.Set("log.level", "")
+	}
+	if !viper.IsSet("logLevel") {
+		viper.Set("logLevel", "")
+	}
 }
 
 // arg > file > env
@@ -104,9 +116,8 @@ func init() {
 	_ = viper.BindEnv("port", "TAOS_ADAPTER_PORT")
 	pflag.IntP("port", "P", 6041, `http port. Env "TAOS_ADAPTER_PORT"`)
 
-	viper.SetDefault("logLevel", "info")
 	_ = viper.BindEnv("logLevel", "TAOS_ADAPTER_LOG_LEVEL")
-	pflag.String("logLevel", "info", `log level (panic fatal error warn warning info debug trace). Env "TAOS_ADAPTER_LOG_LEVEL"`)
+	pflag.String("logLevel", "info", `log level (trace debug info warning error). Env "TAOS_ADAPTER_LOG_LEVEL"`)
 
 	viper.SetDefault("taosConfigDir", "")
 	_ = viper.BindEnv("taosConfigDir", "TAOS_ADAPTER_TAOS_CONFIG_FILE")
@@ -120,12 +131,15 @@ func init() {
 	_ = viper.BindEnv("smlAutoCreateDB", "TAOS_ADAPTER_SML_AUTO_CREATE_DB")
 	pflag.Bool("smlAutoCreateDB", false, `Whether to automatically create db when writing with schemaless. Env "TAOS_ADAPTER_SML_AUTO_CREATE_DB"`)
 
+	viper.SetDefault("instanceId", 32)
+	_ = viper.BindEnv("instanceId", "TAOS_ADAPTER_INSTANCE_ID")
+	pflag.Int("instanceId", 32, `instance ID. Env "TAOS_ADAPTER_INSTANCE_ID"`)
+
 	initLog()
 	initCors()
 	initPool()
 	initMonitor()
 	initUploadKeeper()
-	initTMQ()
 	err := viper.BindPFlags(pflag.CommandLine)
 	if err != nil {
 		panic(err)

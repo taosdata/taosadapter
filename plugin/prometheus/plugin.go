@@ -16,12 +16,13 @@ import (
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/plugin"
 	prompbWrite "github.com/taosdata/taosadapter/v3/plugin/prometheus/proto/write"
+	"github.com/taosdata/taosadapter/v3/tools/connectpool"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
 	"github.com/taosdata/taosadapter/v3/tools/web"
 )
 
-var logger = log.GetLogger("prometheus")
+var logger = log.GetLogger("PLG").WithField("mod", "prometheus")
 var bufferPool pool.ByteBufferPool
 
 type Plugin struct {
@@ -103,6 +104,10 @@ func (p *Plugin) Read(c *gin.Context) {
 		logger.WithError(err).Error("connect server error")
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 			c.String(http.StatusForbidden, err.Error())
+			return
+		}
+		if errors.Is(err, connectpool.ErrTimeout) || errors.Is(err, connectpool.ErrMaxWait) {
+			c.String(http.StatusServiceUnavailable, err.Error())
 			return
 		}
 		c.String(http.StatusUnauthorized, err.Error())
@@ -190,6 +195,10 @@ func (p *Plugin) Write(c *gin.Context) {
 		logger.WithError(err).Error("connect server error")
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 			c.String(http.StatusForbidden, err.Error())
+			return
+		}
+		if errors.Is(err, connectpool.ErrTimeout) || errors.Is(err, connectpool.ErrMaxWait) {
+			c.String(http.StatusServiceUnavailable, err.Error())
 			return
 		}
 		c.String(http.StatusUnauthorized, err.Error())

@@ -2,6 +2,8 @@ module github.com/taosdata/taosadapter/v3
 
 go 1.17
 
+replace github.com/huskar-t/melody => github.com/taosdata/melody v0.0.0-20240407104517-11dcf4a47591
+
 require (
 	collectd.org v0.5.0
 	github.com/gin-contrib/cors v1.4.0
@@ -11,10 +13,9 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/snappy v0.0.4
 	github.com/gorilla/websocket v1.5.0
-	github.com/huskar-t/file-rotatelogs/v2 v2.4.1
-	github.com/huskar-t/jsoniterator v0.0.0-20240515033108-8155b3b08417
 	github.com/huskar-t/melody v0.0.0-20240407104517-11dcf4a47591
 	github.com/influxdata/telegraf v1.23.4
+	github.com/json-iterator/go v1.1.12
 	github.com/kardianos/service v1.2.2
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369
 	github.com/patrickmn/go-cache v2.1.0+incompatible
@@ -27,9 +28,10 @@ require (
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.14.0
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.9.0
 	github.com/swaggo/swag v1.8.8
-	github.com/taosdata/driver-go/v3 v3.5.1-0.20240605054320-93543fefe642
+	github.com/taosdata/driver-go/v3 v3.5.1-0.20240926073234-cf0734af3a1c
+	github.com/taosdata/file-rotatelogs/v2 v2.5.2
 	go.uber.org/automaxprocs v1.5.1
 	golang.org/x/sync v0.1.0
 )
@@ -78,9 +80,8 @@ require (
 	github.com/influxdata/line-protocol/v2 v2.2.1 // indirect
 	github.com/influxdata/toml v0.0.0-20190415235208-270119a8ce65 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
-	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
-	github.com/lestrrat-go/strftime v1.0.5 // indirect
+	github.com/lestrrat-go/strftime v1.0.6 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
@@ -125,7 +126,7 @@ require (
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/crypto v0.4.0 // indirect
 	golang.org/x/net v0.4.0 // indirect
-	golang.org/x/sys v0.3.0 // indirect
+	golang.org/x/sys v0.24.0 // indirect
 	golang.org/x/text v0.5.0 // indirect
 	golang.org/x/tools v0.4.0 // indirect
 	google.golang.org/api v0.103.0 // indirect

@@ -9,6 +9,7 @@ import (
 
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/monitor/metrics"
+	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/sqltype"
 )
 
@@ -266,22 +267,24 @@ func StartUpload() {
 		}
 		go func() {
 			nextUploadTime := getNextUploadTime()
-			logger.Info("start upload keeper when ", nextUploadTime.Format("2006-01-02 15:04:05.000000000"))
+			logger.Debugf("start upload keeper when %s", nextUploadTime.Format("2006-01-02 15:04:05.000000000"))
 			startTimer := time.NewTimer(nextUploadTime.Sub(time.Now()))
 			<-startTimer.C
 			startTimer.Stop()
 			go func() {
-				err := upload(client)
+				reqID := generator.GetUploadKeeperReqID()
+				err := upload(client, reqID)
 				if err != nil {
-					logger.WithError(err).Error("write to server error")
+					logger.Errorf("upload_id:0x%x, upload to keeper error, err:%s", reqID, err)
 				}
 			}()
 			ticker := time.NewTicker(config.Conf.UploadKeeper.Interval)
 			for range ticker.C {
 				go func() {
-					err := upload(client)
+					reqID := generator.GetUploadKeeperReqID()
+					err := upload(client, reqID)
 					if err != nil {
-						logger.WithError(err).Error("write to server error")
+						logger.Errorf("upload_id:0x%x, upload to keeper error, err:%s", reqID, err)
 					}
 				}()
 			}
@@ -304,7 +307,7 @@ type UploadData struct {
 	Endpoint string         `json:"endpoint"`
 }
 
-func upload(client *http.Client) error {
+func upload(client *http.Client, reqID int64) error {
 	ts := time.Now().Round(config.Conf.UploadKeeper.Interval)
 	data := UploadData{
 		Ts:       ts.Unix(),
@@ -323,11 +326,13 @@ func upload(client *http.Client) error {
 	if err != nil {
 		return err
 	}
-	err = doRequest(client, jsonData)
+	err = doRequest(client, jsonData, reqID)
 	if err != nil {
 		for i := 0; i < int(config.Conf.UploadKeeper.RetryTimes); i++ {
+			logger.Debugf("upload_id:0x%x, upload to keeper error, will retry in %s", reqID, config.Conf.UploadKeeper.RetryInterval)
 			time.Sleep(config.Conf.UploadKeeper.RetryInterval)
-			err = doRequest(client, jsonData)
+			logger.Debugf("upload_id:0x%x, retry upload to keeper, retry times:%d", reqID, i+1)
+			err = doRequest(client, jsonData, reqID)
 			if err == nil {
 				return nil
 			}
@@ -336,13 +341,21 @@ func upload(client *http.Client) error {
 	return err
 }
 
-func doRequest(client *http.Client, data []byte) error {
-	resp, err := client.Post(config.Conf.UploadKeeper.Url, "application/json", bytes.NewBuffer(data))
+func doRequest(client *http.Client, data []byte, reqID int64) error {
+	req, err := http.NewRequest(http.MethodPost, config.Conf.UploadKeeper.Url, bytes.NewBuffer(data))
+	if err != nil {
+		return fmt.Errorf("create new request error: %s", err)
+	}
+	req.Header.Set("X-QID", fmt.Sprintf("0x%x", reqID))
+	logger.Tracef("upload_id:0x%x, upload to keeper, url:%s, data:%s", reqID, config.Conf.UploadKeeper.Url, data)
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
 	resp.Body.Close()
+	logger.Debugf("upload_id:0x%x, upload to keeper success", reqID)
 	if resp.StatusCode != http.StatusOK {
+		logger.Errorf("upload_id:0x%x, upload keeper error, code: %d", reqID, resp.StatusCode)
 		return fmt.Errorf("upload keeper error, code: %d", resp.StatusCode)
 	}
 	return nil

@@ -23,7 +23,7 @@ var router *gin.Engine
 func TestMain(m *testing.M) {
 	viper.Set("pool.maxConnect", 10000)
 	viper.Set("pool.maxIdle", 10000)
-	viper.Set("logLevel", "debug")
+	viper.Set("logLevel", "trace")
 	config.Init()
 	db.PrepareConnection()
 	gin.SetMode(gin.ReleaseMode)

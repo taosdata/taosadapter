@@ -26,6 +26,7 @@ func TestInit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			Init()
 			assert.Equal(t, &Config{
+				InstanceID: 32,
 				Cors: CorsConfig{
 					AllowAllOrigins:  true,
 					AllowOrigins:     []string{},
@@ -42,10 +43,14 @@ func TestInit(t *testing.T) {
 				HttpCodeServerError: false,
 				SMLAutoCreateDB:     false,
 				Log: Log{
+					Level:               "info",
 					Path:                "/var/log/taos",
 					RotationCount:       30,
 					RotationTime:        time.Hour * 24,
 					RotationSize:        1 * 1024 * 1024 * 1024, // 1G
+					KeepDays:            30,
+					Compress:            false,
+					ReservedDiskSize:    1 * 1024 * 1024 * 1024,
 					EnableRecordHttpSql: false,
 					SqlRotationCount:    2,
 					SqlRotationTime:     time.Hour * 24,
@@ -55,6 +60,8 @@ func TestInit(t *testing.T) {
 					MaxConnect:  0,
 					MaxIdle:     0,
 					IdleTimeout: 0,
+					WaitTimeout: 60,
+					MaxWait:     0,
 				},
 				Monitor: Monitor{
 					Disable:                   true,
@@ -71,9 +78,6 @@ func TestInit(t *testing.T) {
 					Timeout:       5 * time.Second,
 					RetryTimes:    3,
 					RetryInterval: 5 * time.Second,
-				},
-				TMQ: TMQ{
-					ReleaseIntervalMultiplierForAutocommit: 2,
 				},
 			}, Conf)
 			corsC := Conf.Cors.GetConfig()

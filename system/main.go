@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 	_ "time/tzdata"
@@ -13,6 +14,7 @@ import (
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/kardianos/service"
+	"github.com/spf13/viper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller"
 	"github.com/taosdata/taosadapter/v3/db"
@@ -22,13 +24,32 @@ import (
 	"github.com/taosdata/taosadapter/v3/version"
 )
 
-var logger = log.GetLogger("main")
+var logger = log.GetLogger("SYS")
 
 func Init() *gin.Engine {
 	config.Init()
 	log.ConfigLog()
 	db.PrepareConnection()
-	logger.Info("start server:", log.ServerID)
+	keys := viper.AllKeys()
+	sort.Strings(keys)
+	logger.Info("                     global config")
+	logger.Info("=================================================================")
+	for _, key := range keys {
+		if key == "version" {
+			continue
+		}
+		v := viper.Get(key)
+		if v == "" {
+			v = `""`
+		}
+		logger.Infof("%-45s%v", key, v)
+	}
+	logger.Infof("%-45s%v", "version", version.Version)
+	logger.Infof("%-45s%v", "gitinfo", version.CommitID)
+	logger.Infof("%-45s%v", "buildinfo", version.BuildInfo)
+	logger.Info("=================================================================")
+
+	logger.Infof("start server: %s", log.ServerID)
 	router := createRouter(config.Conf.Debug, &config.Conf.Cors, true)
 	controllers := controller.GetControllers()
 	for _, webController := range controllers {
@@ -99,7 +120,7 @@ func (p *program) Start(s service.Service) error {
 		logger.Info("Running under service manager.")
 	}
 	monitor.StartMonitor()
-	logger.Println("server on :", config.Conf.Port)
+	logger.Printf("server on: %d", config.Conf.Port)
 	go p.startHttpServer(p.server)
 	return nil
 }

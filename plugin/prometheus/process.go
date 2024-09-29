@@ -14,18 +14,20 @@ import (
 	"time"
 	"unsafe"
 
-	jsoniter "github.com/huskar-t/jsoniterator"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/taosdata/driver-go/v3/common"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/async"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/httperror"
+	"github.com/taosdata/taosadapter/v3/log"
 	prompbWrite "github.com/taosdata/taosadapter/v3/plugin/prometheus/proto/write"
-	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
+	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
 )
 
@@ -33,8 +35,11 @@ var jsonI = jsoniter.ConfigCompatibleWithStandardLibrary
 var timeBufferPool pool.ByteBufferPool
 
 func processWrite(taosConn unsafe.Pointer, req *prompbWrite.WriteRequest, db string, ttl int) error {
+	reqID := generator.GetReqID()
+	logger := logger.WithField(config.ReqIDKey, reqID)
+	isDebug := log.IsDebug()
 	start := time.Now()
-	err := tool.SchemalessSelectDB(taosConn, db, 0)
+	err := tool.SchemalessSelectDB(taosConn, logger, isDebug, db, 0)
 	if err != nil {
 		return err
 	}
@@ -45,18 +50,22 @@ func processWrite(taosConn unsafe.Pointer, req *prompbWrite.WriteRequest, db str
 	generateWriteSql(req.Timeseries, bp, ttl)
 	logger.Debug("generateWriteSql cost:", time.Since(start))
 	start = time.Now()
-	err = async.GlobalAsync.TaosExecWithoutResult(taosConn, bytesutil.ToUnsafeString(bp.Bytes()), 0)
+	sql := bytesutil.ToUnsafeString(bp.Bytes())
+
+	logger.Debugf("execute sql:%s", sql)
+	err = async.GlobalAsync.TaosExecWithoutResult(taosConn, logger, isDebug, sql, reqID)
 	logger.Debug("processWrite TaosExecWithoutResult cost:", time.Since(start))
 	if err != nil {
+		logger.WithError(err).Error("processWrite error, retry processWrite")
 		if tErr, is := err.(*tErrors.TaosError); is {
 			start = time.Now()
 			if tErr.Code == httperror.PAR_TABLE_NOT_EXIST || tErr.Code == httperror.MND_INVALID_TABLE_NAME || tErr.Code == httperror.TSC_INVALID_TABLE_NAME {
-				err := async.GlobalAsync.TaosExecWithoutResult(taosConn, "create stable if not exists metrics(ts timestamp,v double) tags (labels json)", 0)
+				err := async.GlobalAsync.TaosExecWithoutResult(taosConn, logger, isDebug, "create stable if not exists metrics(ts timestamp,v double) tags (labels json)", reqID)
 				if err != nil {
 					return err
 				}
 				// retry
-				err = async.GlobalAsync.TaosExecWithoutResult(taosConn, bytesutil.ToUnsafeString(bp.Bytes()), 0)
+				err = async.GlobalAsync.TaosExecWithoutResult(taosConn, logger, isDebug, sql, reqID)
 				if err != nil {
 					logger.WithError(err).Error(bp.String())
 					return err
@@ -139,21 +148,25 @@ func generateWriteSql(timeseries []prompbWrite.TimeSeries, sql *bytes.Buffer, tt
 }
 
 func processRead(taosConn unsafe.Pointer, req *prompb.ReadRequest, db string) (resp *prompb.ReadResponse, err error) {
-	start := time.Now()
-	thread.Lock()
-	wrapper.TaosSelectDB(taosConn, db)
-	thread.Unlock()
-	logger.Debug("processRead SchemalessSelectDB cost:", time.Since(start))
+	isDebug := log.IsDebug()
+	reqID := generator.GetReqID()
+	logger := logger.WithField(config.ReqIDKey, reqID)
+	logger.Tracef("select db %s", db)
+	code := syncinterface.TaosSelectDB(taosConn, db, logger, isDebug)
+	if code != 0 {
+		return nil, tErrors.NewError(code, wrapper.TaosErrorStr(nil))
+	}
 	resp = &prompb.ReadResponse{}
 	for i, query := range req.Queries {
-		start = time.Now()
+		start := log.GetLogNow(isDebug)
 		sql, err := generateReadSql(query)
-		logger.Debug("processRead generateReadSql cost:", time.Since(start))
+		logger.Debug("processRead generateReadSql cost:", log.GetLogDuration(isDebug, start))
 		if err != nil {
 			return nil, err
 		}
 		start = time.Now()
-		data, err := async.GlobalAsync.TaosExec(taosConn, sql, func(ts int64, precision int) driver.Value {
+		logger.Tracef("execute sql: %s", sql)
+		data, err := async.GlobalAsync.TaosExec(taosConn, logger, isDebug, sql, func(ts int64, precision int) driver.Value {
 			switch precision {
 			case common.PrecisionMilliSecond:
 				return ts
@@ -164,7 +177,7 @@ func processRead(taosConn unsafe.Pointer, req *prompb.ReadRequest, db string) (r
 			default:
 				return 0
 			}
-		}, 0)
+		}, reqID)
 		if err != nil {
 			logger.WithError(err).Error(sql)
 			return nil, err

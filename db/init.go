@@ -12,7 +12,7 @@ import (
 )
 
 var once = sync.Once{}
-var logger = log.GetLogger("db")
+var logger = log.GetLogger("OPT")
 
 func PrepareConnection() {
 	once.Do(func() {
