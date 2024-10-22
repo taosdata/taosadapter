@@ -21,7 +21,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller"
 	"github.com/taosdata/taosadapter/v3/db/async"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
-	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
@@ -223,7 +222,8 @@ func DoQuery(c *gin.Context, db string, timeFunc ctools.FormatTimeFunc, reqID in
 	if len(db) > 0 {
 		// Attempt to select the database does not return even if there is an error
 		// To avoid error reporting in the `create database` statement
-		syncinterface.TaosSelectDB(taosConnect.TaosConnection, db, logger, isDebug)
+		logger.Tracef("select db %s", db)
+		_ = async.GlobalAsync.TaosExecWithoutResult(taosConnect.TaosConnection, logger, isDebug, fmt.Sprintf("use `%s`", db), reqID)
 	}
 	execute(c, logger, isDebug, taosConnect.TaosConnection, sql, timeFunc, reqID, sqlType, returnObj)
 }
@@ -250,7 +250,7 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 	result := async.GlobalAsync.TaosQuery(taosConnect, logger, isDebug, sql, handler, reqID)
 	defer func() {
 		if result != nil && result.Res != nil {
-			syncinterface.FreeResult(result.Res, logger, isDebug)
+			async.FreeResultAsync(result.Res, logger, isDebug)
 		}
 	}()
 	res := result.Res

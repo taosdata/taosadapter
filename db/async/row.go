@@ -11,7 +11,6 @@ import (
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
-	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
@@ -36,7 +35,7 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, logger *logrus.Entry, isDeb
 	var s time.Time
 	defer func() {
 		if result != nil && result.Res != nil {
-			syncinterface.FreeResult(result.Res, logger, isDebug)
+			FreeResultAsync(result.Res, logger, isDebug)
 		}
 	}()
 	res := result.Res
@@ -79,12 +78,12 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, logger *logrus.Entry, isDeb
 				var row unsafe.Pointer
 				logger.Tracef("get thread lock for fetch row, row:%d", i)
 				s = log.GetLogNow(isDebug)
-				thread.Lock()
+				thread.AsyncLocker.Lock()
 				logger.Debugf("get thread lock for fetch row cost:%s", log.GetLogDuration(isDebug, s))
 				s = log.GetLogNow(isDebug)
 				row = wrapper.TaosFetchRow(res)
 				logger.Debugf("taos_fetch_row finish, row:%p, cost:%s", row, log.GetLogDuration(isDebug, s))
-				thread.Unlock()
+				thread.AsyncLocker.Unlock()
 				lengths := wrapper.FetchLengths(res, len(rowsHeader.ColNames))
 				logger.Tracef("fetch lengths:%d", lengths)
 				values := make([]driver.Value, len(rowsHeader.ColNames))
@@ -114,12 +113,12 @@ func (a *Async) TaosQuery(taosConnect unsafe.Pointer, logger *logrus.Entry, isDe
 		logger = logger.WithField(config.ReqIDKey, reqID)
 	}
 	s := log.GetLogNow(isDebug)
-	thread.Lock()
+	thread.AsyncLocker.Lock()
 	logger.Debugf("get thread lock for taos_query_a cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	wrapper.TaosQueryAWithReqID(taosConnect, sql, handler.Handler, reqID)
 	logger.Debugf("taos_query_a finish, cost:%s", log.GetLogDuration(isDebug, s))
-	thread.Unlock()
+	thread.AsyncLocker.Unlock()
 	logger.Trace("wait for query result")
 	s = log.GetLogNow(isDebug)
 	r := <-handler.Caller.QueryResult
@@ -130,12 +129,12 @@ func (a *Async) TaosQuery(taosConnect unsafe.Pointer, logger *logrus.Entry, isDe
 func (a *Async) TaosFetchRowsA(res unsafe.Pointer, logger *logrus.Entry, isDebug bool, handler *Handler) *Result {
 	logger.Tracef("call taos_fetch_rows_a, res:%p", res)
 	s := log.GetLogNow(isDebug)
-	thread.Lock()
+	thread.AsyncLocker.Lock()
 	logger.Debugf("get thread lock for fetch_rows_a cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	wrapper.TaosFetchRowsA(res, handler.Handler)
 	logger.Debugf("taos_fetch_rows_a finish, cost:%s", log.GetLogDuration(isDebug, s))
-	thread.Unlock()
+	thread.AsyncLocker.Unlock()
 	logger.Trace("wait for fetch rows result")
 	s = log.GetLogNow(isDebug)
 	r := <-handler.Caller.FetchResult
@@ -146,13 +145,13 @@ func (a *Async) TaosFetchRowsA(res unsafe.Pointer, logger *logrus.Entry, isDebug
 func (a *Async) TaosFetchRawBlockA(res unsafe.Pointer, logger *logrus.Entry, isDebug bool, handler *Handler) *Result {
 	logger.Tracef("call taos_fetch_raw_block_a, res:%p", res)
 	s := log.GetLogNow(isDebug)
-	thread.Lock()
+	thread.AsyncLocker.Lock()
 	logger.Debugf("get thread lock for fetch_raw_block_a cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	logger.Trace("start fetch_raw_block_a")
 	wrapper.TaosFetchRawBlockA(res, handler.Handler)
 	logger.Debugf("taos_fetch_raw_block_a finish, cost:%s", log.GetLogDuration(isDebug, s))
-	thread.Unlock()
+	thread.AsyncLocker.Unlock()
 	logger.Trace("wait for fetch raw block result")
 	s = log.GetLogNow(isDebug)
 	r := <-handler.Caller.FetchResult
@@ -173,7 +172,7 @@ func (a *Async) TaosExecWithoutResult(taosConnect unsafe.Pointer, logger *logrus
 	result := a.TaosQuery(taosConnect, logger, isDebug, sql, handler, reqID)
 	defer func() {
 		if result != nil && result.Res != nil {
-			syncinterface.FreeResult(result.Res, logger, isDebug)
+			FreeResultAsync(result.Res, logger, isDebug)
 		}
 	}()
 	res := result.Res
@@ -184,4 +183,19 @@ func (a *Async) TaosExecWithoutResult(taosConnect unsafe.Pointer, logger *logrus
 		return tErrors.NewError(code, errStr)
 	}
 	return nil
+}
+
+func FreeResultAsync(res unsafe.Pointer, logger *logrus.Entry, isDebug bool) {
+	logger.Tracef("call taos_free_result async, res:%p", res)
+	if res == nil {
+		logger.Trace("result is nil")
+		return
+	}
+	s := log.GetLogNow(isDebug)
+	thread.AsyncLocker.Lock()
+	logger.Debugf("get thread lock for free result cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	wrapper.TaosFreeResult(res)
+	logger.Debugf("taos_free_result finish, cost:%s", log.GetLogDuration(isDebug, s))
+	thread.AsyncLocker.Unlock()
 }

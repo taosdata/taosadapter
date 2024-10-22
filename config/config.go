@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/version"
 	"go.uber.org/automaxprocs/maxprocs"
 )
@@ -15,6 +16,8 @@ type Config struct {
 	InstanceID          uint8
 	Cors                CorsConfig
 	TaosConfigDir       string
+	MaxSyncMethodLimit  int
+	MaxAsyncMethodLimit int
 	Debug               bool
 	Port                int
 	LogLevel            string
@@ -81,6 +84,8 @@ func Init() {
 		HttpCodeServerError: viper.GetBool("httpCodeServerError"),
 		SMLAutoCreateDB:     viper.GetBool("smlAutoCreateDB"),
 		InstanceID:          uint8(viper.GetInt("instanceId")),
+		MaxSyncMethodLimit:  viper.GetInt("maxSyncMethodLimit"),
+		MaxAsyncMethodLimit: viper.GetInt("maxAsyncMethodLimit"),
 	}
 	Conf.Log.setValue()
 	Conf.Cors.setValue()
@@ -99,6 +104,17 @@ func Init() {
 	if !viper.IsSet("logLevel") {
 		viper.Set("logLevel", "")
 	}
+	maxAsyncMethodLimit := Conf.MaxAsyncMethodLimit
+	if maxAsyncMethodLimit == 0 {
+		maxAsyncMethodLimit = runtime.NumCPU()
+	}
+	thread.AsyncLocker = thread.NewLocker(maxAsyncMethodLimit)
+
+	maxSyncMethodLimit := Conf.MaxSyncMethodLimit
+	if maxSyncMethodLimit == 0 {
+		maxSyncMethodLimit = runtime.NumCPU()
+	}
+	thread.SyncLocker = thread.NewLocker(maxSyncMethodLimit)
 }
 
 // arg > file > env
@@ -134,6 +150,14 @@ func init() {
 	viper.SetDefault("instanceId", 32)
 	_ = viper.BindEnv("instanceId", "TAOS_ADAPTER_INSTANCE_ID")
 	pflag.Int("instanceId", 32, `instance ID. Env "TAOS_ADAPTER_INSTANCE_ID"`)
+
+	viper.SetDefault("maxSyncMethodLimit", 0)
+	_ = viper.BindEnv("maxSyncMethodLimit", "TAOS_ADAPTER_MAX_SYNC_METHOD_LIMIT")
+	pflag.Int("maxSyncMethodLimit", 0, `The maximum number of concurrent calls allowed for the C synchronized method. 0 means use CPU core count. Env "TAOS_ADAPTER_MAX_SYNC_METHOD_LIMIT"`)
+
+	viper.SetDefault("maxAsyncMethodLimit", 0)
+	_ = viper.BindEnv("maxAsyncMethodLimit", "TAOS_ADAPTER_MAX_ASYNC_METHOD_LIMIT")
+	pflag.Int("maxAsyncMethodLimit", 0, `The maximum number of concurrent calls allowed for the C asynchronous method. 0 means use CPU core count. Env "TAOS_ADAPTER_MAX_ASYNC_METHOD_LIMIT"`)
 
 	initLog()
 	initCors()

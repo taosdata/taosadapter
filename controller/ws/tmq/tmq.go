@@ -1467,16 +1467,16 @@ func (t *TMQ) listTopics(ctx context.Context, session *melody.Session, req *TMQL
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
 	logger.Trace("subscription get thread lock")
-	thread.Lock()
+	thread.SyncLocker.Lock()
 	logger.Debugf("subscription get thread lock cost:%s", log.GetLogDuration(isDebug, s))
 	if t.isClosed() {
-		thread.Unlock()
+		thread.SyncLocker.Unlock()
 		logger.Trace("server closed")
 		return
 	}
 	s = log.GetLogNow(isDebug)
 	code, topicsPointer := wrapper.TMQSubscription(t.consumer)
-	thread.Unlock()
+	thread.SyncLocker.Unlock()
 	logger.Debugf("subscription cost:%s", log.GetLogDuration(isDebug, s))
 	defer wrapper.TMQListDestroy(topicsPointer)
 	if code != 0 {

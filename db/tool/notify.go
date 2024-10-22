@@ -45,9 +45,9 @@ func putWhiteListHandle(handle cgo.Handle) {
 func GetWhitelist(conn unsafe.Pointer) ([]*net.IPNet, error) {
 	c, handler := getWhiteListHandle()
 	defer putWhiteListHandle(handler)
-	thread.Lock()
+	thread.SyncLocker.Lock()
 	wrapper.TaosFetchWhitelistA(conn, handler)
-	thread.Unlock()
+	thread.SyncLocker.Unlock()
 	data := <-c
 	if data.ErrCode != 0 {
 		err := errors.NewError(int(data.ErrCode), wrapper.TaosErrorStr(nil))
