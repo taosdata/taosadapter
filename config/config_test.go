@@ -36,6 +36,8 @@ func TestInit(t *testing.T) {
 					AllowWebSockets:  false,
 				},
 				TaosConfigDir:       "",
+				MaxSyncMethodLimit:  0,
+				MaxAsyncMethodLimit: 0,
 				Debug:               true,
 				Port:                6041,
 				LogLevel:            "info",
