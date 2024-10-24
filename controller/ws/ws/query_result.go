@@ -44,7 +44,7 @@ func (r *QueryResult) free(logger *logrus.Entry) {
 		return
 	}
 	logger.Tracef("free result:%d", r.index)
-	syncinterface.FreeResult(r.TaosResult, logger, log.IsDebug())
+	async.FreeResultAsync(r.TaosResult, logger, log.IsDebug())
 	r.TaosResult = nil
 }
 

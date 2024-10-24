@@ -15,6 +15,7 @@ import (
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/driver-go/v3/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 )
@@ -26,6 +27,7 @@ const isDebug = true
 func TestMain(m *testing.M) {
 	config.Init()
 	log.SetLevel("trace")
+	db.PrepareConnection()
 	m.Run()
 }
 func TestTaosConnect(t *testing.T) {

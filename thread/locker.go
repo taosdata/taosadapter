@@ -1,12 +1,11 @@
 package thread
 
-import (
-	"runtime"
-)
-
 type Locker struct {
 	c chan struct{}
 }
+
+var SyncLocker *Locker
+var AsyncLocker *Locker
 
 func NewLocker(count int) *Locker {
 	return &Locker{c: make(chan struct{}, count)}
@@ -18,18 +17,4 @@ func (l *Locker) Lock() {
 
 func (l *Locker) Unlock() {
 	<-l.c
-}
-
-var c chan struct{}
-
-func Lock() {
-	c <- struct{}{}
-}
-
-func Unlock() {
-	<-c
-}
-
-func init() {
-	c = make(chan struct{}, runtime.NumCPU())
 }

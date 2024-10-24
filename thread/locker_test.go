@@ -30,12 +30,3 @@ func TestNewLocker(t *testing.T) {
 		})
 	}
 }
-
-// @author: xftan
-// @date: 2021/12/14 15:16
-// @description: test DefaultLocker
-func TestDefaultLocker(t *testing.T) {
-	Lock()
-	t.Log("success")
-	defer Unlock()
-}
