@@ -91,7 +91,7 @@ jobs:
           cd TDengine
           mkdir debug
           cd debug
-          cmake .. -DBUILD_TEST=off -DVERNUMBER=3.9.9.9
+          cmake .. -DBUILD_TEST=off -DBUILD_DEPENDENCY_TESTS=0 -DVERNUMBER=3.9.9.9
           make -j 4
 
       - name: package
