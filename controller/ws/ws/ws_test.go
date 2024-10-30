@@ -2706,7 +2706,7 @@ func TestStmt2Prepare(t *testing.T) {
 	assert.Equal(t, 0, prepareResp.Code, prepareResp.Message)
 	assert.Equal(t, false, prepareResp.IsInsert)
 	assert.Nil(t, prepareResp.Fields)
-	assert.Equal(t, 2, prepareResp.FieldCount)
+	assert.Equal(t, 2, prepareResp.FieldsCount)
 }
 
 func TestStmt2GetFields(t *testing.T) {
