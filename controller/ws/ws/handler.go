@@ -1915,10 +1915,10 @@ type PrepareFields struct {
 
 type Stmt2PrepareResponse struct {
 	BaseResponse
-	StmtID     uint64           `json:"stmt_id"`
-	IsInsert   bool             `json:"is_insert"`
-	Fields     []*PrepareFields `json:"fields"`
-	FieldCount int              `json:"field_count"`
+	StmtID      uint64           `json:"stmt_id"`
+	IsInsert    bool             `json:"is_insert"`
+	Fields      []*PrepareFields `json:"fields"`
+	FieldsCount int              `json:"fields_count"`
 }
 
 func (h *messageHandler) handleStmt2Prepare(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) Response {
@@ -1996,7 +1996,7 @@ func (h *messageHandler) handleStmt2Prepare(_ context.Context, request Request, 
 			if code != 0 {
 				return wsStmtErrorMsg(code, fmt.Sprintf("get query fields error, %s", errStr), req.StmtID)
 			}
-			prepareResp.FieldCount = count
+			prepareResp.FieldsCount = count
 		}
 	}
 	return prepareResp
