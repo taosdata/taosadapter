@@ -527,7 +527,7 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		default:
 			syncinterface.TaosClose(conn, logger, isDebug)
 			logger.Tracef("unexpected mode:%d", *req.Mode)
-			return wsCommonErrorMsg(0xffff, fmt.Sprintf("unexpected mode:%d", req.Mode))
+			return wsCommonErrorMsg(0xffff, fmt.Sprintf("unexpected mode:%d", *req.Mode))
 		}
 	}
 	h.conn = conn
