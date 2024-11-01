@@ -1,0 +1,6 @@
+ignore:
+  - "docs"
+  - "benchmark"
+  - "examples"
+  - "plugin/prometheus/proto/write"
+  - "main.go"

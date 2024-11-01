@@ -3,6 +3,7 @@ package rest
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -18,6 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 )
 
@@ -285,6 +287,80 @@ func TestRowLimit(t *testing.T) {
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
+}
+
+func TestWrongReqID(t *testing.T) {
+	w := httptest.NewRecorder()
+	body := strings.NewReader("")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql/log?req_id=wrong", body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 400, w.Code)
+	var resp TDEngineRestfulRespDoc
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0xffff, resp.Code)
+	if !strings.HasPrefix(resp.Desc, "illegal param, req_id must be numeric") {
+		t.Errorf("wrong desc %s", resp.Desc)
+	}
+}
+
+func TestWrongRowWithMeta(t *testing.T) {
+	w := httptest.NewRecorder()
+	body := strings.NewReader("")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql/log?row_with_meta=wrong", body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 400, w.Code)
+	var resp TDEngineRestfulRespDoc
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0xffff, resp.Code)
+	if !strings.HasPrefix(resp.Desc, "illegal param, row_with_meta must be boolean") {
+		t.Errorf("wrong desc %s", resp.Desc)
+	}
+}
+
+func TestWrongEmptySql(t *testing.T) {
+	w := httptest.NewRecorder()
+	body := strings.NewReader(" ")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql/log", body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 400, w.Code)
+	var resp TDEngineRestfulRespDoc
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Equal(t, httperror.HTTP_NO_SQL_INPUT, resp.Code)
+	if !strings.HasPrefix(resp.Desc, "no sql input") {
+		t.Errorf("wrong desc %s", resp.Desc)
+	}
+}
+
+type ErrorReader struct{}
+
+func (e *ErrorReader) Read(p []byte) (n int, err error) {
+	return 0, errors.New("forced read error")
+}
+
+func TestWrongRequest(t *testing.T) {
+	w := httptest.NewRecorder()
+	body := &ErrorReader{}
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql/log", body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 400, w.Code)
+	var resp TDEngineRestfulRespDoc
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Equal(t, httperror.HTTP_INVALID_CONTENT_LENGTH, resp.Code)
+	if !strings.HasPrefix(resp.Desc, "invalid content length") {
+		t.Errorf("wrong desc %s", resp.Desc)
+	}
 }
 
 func TestUpload(t *testing.T) {

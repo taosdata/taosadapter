@@ -4,10 +4,17 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/process"
 )
+
+type ProcessInterface interface {
+	Percent(interval time.Duration) (float64, error)
+	MemoryPercent() (float32, error)
+	MemoryInfo() (*process.MemoryInfoStat, error)
+}
 
 type SysCollector interface {
 	CpuPercent() (float64, error)
@@ -15,7 +22,7 @@ type SysCollector interface {
 }
 
 type NormalCollector struct {
-	p *process.Process
+	p ProcessInterface
 }
 
 func NewNormalCollector() (*NormalCollector, error) {
@@ -48,13 +55,20 @@ const (
 	CGroupMemLimitPath  = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
 )
 
+type CGProcessInterface interface {
+	Percent(interval time.Duration) (float64, error)
+	MemoryInfo() (*process.MemoryInfoStat, error)
+}
+
 type CGroupCollector struct {
-	p           *process.Process
+	p           CGProcessInterface
 	cpuCore     float64
 	totalMemory uint64
 }
 
-func NewCGroupCollector() (*CGroupCollector, error) {
+type ReadUintFunc func(path string) (uint64, error)
+
+func NewCGroupCollector(readUint ReadUintFunc) (*CGroupCollector, error) {
 	p, err := process.NewProcess(int32(os.Getpid()))
 	if err != nil {
 		return nil, err
