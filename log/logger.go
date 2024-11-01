@@ -20,7 +20,7 @@ var logger = logrus.New()
 var ServerID = randomID()
 var globalLogFormatter = &TaosLogFormatter{}
 var finish = make(chan struct{})
-var exist = make(chan struct{})
+var exit = make(chan struct{})
 
 var bufferPool = &defaultPool{
 	pool: &sync.Pool{
@@ -63,7 +63,7 @@ func NewFileHook(formatter logrus.Formatter, writer io.WriteCloser) *FileHook {
 					fh.flush()
 				}
 				fh.Unlock()
-			case <-exist:
+			case <-exit:
 				fh.Lock()
 				fh.flush()
 				fh.Unlock()
@@ -300,7 +300,7 @@ func GetLogSql(sql string) string {
 }
 
 func Close(ctx context.Context) {
-	close(exist)
+	close(exit)
 	select {
 	case <-finish:
 		return
