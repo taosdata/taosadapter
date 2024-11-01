@@ -8,11 +8,15 @@ import (
 	"github.com/taosdata/taosadapter/v3/config"
 )
 
+func TestMain(m *testing.M) {
+	config.Init()
+	m.Run()
+}
+
 // @author: xftan
 // @date: 2021/12/14 15:07
 // @description: test config log
 func TestConfigLog(t *testing.T) {
-	config.Init()
 	config.Conf.Log.EnableRecordHttpSql = true
 	ConfigLog()
 	logger := GetLogger("TST")
@@ -20,7 +24,6 @@ func TestConfigLog(t *testing.T) {
 }
 
 func TestIsDebug(t *testing.T) {
-	config.Init()
 	assert.False(t, IsDebug())
 	s := GetLogNow(IsDebug())
 	assert.Equal(t, s, zeroTime)
@@ -36,7 +39,6 @@ func TestIsDebug(t *testing.T) {
 }
 
 func TestGetLogSql(t *testing.T) {
-	config.Init()
 	sql := GetLogSql("insert into test values(1)")
 	assert.Equal(t, sql, "insert into test values(1)")
 	builder := strings.Builder{}
