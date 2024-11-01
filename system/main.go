@@ -26,6 +26,8 @@ import (
 
 var logger = log.GetLogger("SYS")
 
+var testProg *program
+
 func Init() *gin.Engine {
 	config.Init()
 	log.ConfigLog()
@@ -93,6 +95,7 @@ func Start(router *gin.Engine, startHttpServer func(server *http.Server)) {
 	if err != nil {
 		logger.Fatal(err)
 	}
+	testProg = prg
 	err = s.Run()
 	if err != nil {
 		logger.Fatal(err)

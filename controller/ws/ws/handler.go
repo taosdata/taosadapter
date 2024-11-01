@@ -1910,7 +1910,7 @@ type Stmt2PrepareRequest struct {
 
 type PrepareFields struct {
 	stmtCommon.StmtField
-	BindType int8
+	BindType int8 `json:"bind_type"`
 }
 
 type Stmt2PrepareResponse struct {
