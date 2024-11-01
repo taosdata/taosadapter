@@ -2,5 +2,5 @@ ignore:
   - "docs"
   - "benchmark"
   - "examples"
-  - "plugin/prometheus/write"
+  - "plugin/prometheus/proto/write"
   - "main.go"

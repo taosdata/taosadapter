@@ -218,3 +218,61 @@ func TestUint64(t *testing.T) {
 		ReturnStream(stream)
 	}
 }
+
+func TestWriteString(t *testing.T) {
+	b := &strings.Builder{}
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"hello", `"hello"`},
+		{"he\"llo", `"he\"llo"`},
+		{"he\\llo", `"he\\llo"`},
+		{"he\nllo", `"he\nllo"`},
+		{"he\rllo", `"he\rllo"`},
+		{"he\tllo", `"he\tllo"`},
+		{"\x01\x02hello", `"\u0001\u0002hello"`},
+		{"\x03\x04world", `"\u0003\u0004world"`},
+	}
+
+	for _, test := range tests {
+		b.Reset()
+		stream := BorrowStream(b)
+		stream.WriteString(test.input)
+
+		result := string(stream.buf)
+		if result != test.expected {
+			t.Errorf("WriteString(%q) = %s; want %s", test.input, result, test.expected)
+		}
+		ReturnStream(stream)
+	}
+}
+
+func TestWriteStringByte(t *testing.T) {
+	b := &strings.Builder{}
+	tests := []struct {
+		input    byte
+		expected string
+	}{
+		{'h', "h"},       // 正常字符，无需转义
+		{'"', `\"`},      // 引号转义
+		{'\\', `\\`},     // 反斜杠转义
+		{'\n', `\n`},     // 换行符转义
+		{'\r', `\r`},     // 回车符转义
+		{'\t', `\t`},     // 制表符转义
+		{0x01, `\u0001`}, // 触发 default 分支的控制字符
+		{0x04, `\u0004`}, // 触发 default 分支的控制字符
+	}
+
+	for _, test := range tests {
+		b.Reset()
+		stream := BorrowStream(b)
+		stream.WriteStringByte(test.input)
+
+		result := string(stream.buf)
+		if result != test.expected {
+			t.Errorf("WriteStringByte(%q) = %s; want %s", test.input, result, test.expected)
+		}
+		ReturnStream(stream)
+	}
+}
