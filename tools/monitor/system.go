@@ -70,7 +70,7 @@ var SysMonitor = &sysMonitor{status: &SysStatus{}}
 func Start(collectDuration time.Duration, inCGroup bool) {
 	SysMonitor.collectDuration = collectDuration
 	if inCGroup {
-		collector, err := NewCGroupCollector()
+		collector, err := NewCGroupCollector(readUint)
 		if err != nil {
 			logger.WithError(err).Fatal("new normal controller")
 		}
