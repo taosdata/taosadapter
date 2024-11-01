@@ -152,12 +152,23 @@ func TestStream_Common(t *testing.T) {
 	stream.WriteRuneString('\n')
 	stream.WriteRuneString('\r')
 	stream.WriteRuneString('\t')
+	stream.WriteRuneString('A')
+	stream.WriteRuneString('é')
+	stream.WriteRuneString('你')
+	stream.WriteRuneString('𐍈')
+
 	stream.WriteRune('"')
 	stream.WriteRune('/')
 	stream.WriteRune('a')
 	stream.WriteRune('\n')
 	stream.WriteRune('\r')
 	stream.WriteRune('\t')
+
+	stream.WriteRune('A')
+	stream.WriteRune('é')
+	stream.WriteRune('你')
+	stream.WriteRune('𐍈')
+
 }
 
 func TestStr(t *testing.T) {
@@ -176,4 +187,34 @@ func TestStrByte(t *testing.T) {
 	stream.WriteStringByte('b')
 	stream.Flush()
 	assert.Equal(t, "a\\nb", b.String())
+}
+
+func TestUint64(t *testing.T) {
+	b := &strings.Builder{}
+	tests := []struct {
+		input    uint64
+		expected string
+	}{
+		{0, "0"},
+		{9, "9"},
+		{10, "10"},
+		{999, "999"},
+		{1000, "1000"},
+		{123456, "123456"},
+		{999999, "999999"},
+		{1000000, "1000000"},
+		{1001001, "1001001"},
+		{9876543210, "9876543210"},
+		{18446744073709551615, "18446744073709551615"}, // 最大 uint64 值
+	}
+	for _, test := range tests {
+		b.Reset()
+		stream := BorrowStream(b)
+		stream.WriteUint64(test.input)
+		result := string(stream.buf)
+		if result != test.expected {
+			t.Errorf("WriteUint64(%d) = %s; want %s", test.input, result, test.expected)
+		}
+		ReturnStream(stream)
+	}
 }
