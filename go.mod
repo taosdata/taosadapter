@@ -30,7 +30,7 @@ require (
 	github.com/spf13/viper v1.14.0
 	github.com/stretchr/testify v1.9.0
 	github.com/swaggo/swag v1.8.8
-	github.com/taosdata/driver-go/v3 v3.5.1-0.20240926073234-cf0734af3a1c
+	github.com/taosdata/driver-go/v3 v3.5.1-0.20241101015534-8fb37f82db51
 	github.com/taosdata/file-rotatelogs/v2 v2.5.2
 	go.uber.org/automaxprocs v1.5.1
 	golang.org/x/sync v0.1.0
@@ -109,6 +109,7 @@ require (
 	github.com/spf13/afero v1.9.3 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.4.1 // indirect
 	github.com/testcontainers/testcontainers-go v0.13.0 // indirect
 	github.com/tidwall/gjson v1.14.1 // indirect

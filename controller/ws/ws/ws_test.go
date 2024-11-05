@@ -78,6 +78,37 @@ func doRestful(sql string, db string) (code int, message string) {
 	return res.Code, res.Desc
 }
 
+type queryResp struct {
+	Code       int              `json:"code,omitempty"`
+	Desc       string           `json:"desc,omitempty"`
+	ColumnMeta [][]driver.Value `json:"column_meta,omitempty"`
+	Data       [][]driver.Value `json:"data,omitempty"`
+	Rows       int              `json:"rows,omitempty"`
+}
+
+func restQuery(sql string, db string) *queryResp {
+	w := httptest.NewRecorder()
+	body := strings.NewReader(sql)
+	url := "/rest/sql"
+	if db != "" {
+		url = fmt.Sprintf("/rest/sql/%s", db)
+	}
+	req, _ := http.NewRequest(http.MethodPost, url, body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		return &queryResp{
+			Code: w.Code,
+			Desc: w.Body.String(),
+		}
+	}
+	b, _ := io.ReadAll(w.Body)
+	var res queryResp
+	_ = json.Unmarshal(b, &res)
+	return &res
+}
+
 func doWebSocket(ws *websocket.Conn, action string, arg interface{}) (resp []byte, err error) {
 	var b []byte
 	if arg != nil {
@@ -1668,8 +1699,24 @@ func TestWsStmt(t *testing.T) {
 	assert.Equal(t, 0, setTableNameResp.Code, setTableNameResp.Message)
 
 	// set tags
-	setTagsReq = StmtSetTagsRequest{StmtID: prepareResp.StmtID, Tags: json.RawMessage(`["{\"c\":\"d\"}"]`)}
-	resp, err = doWebSocket(ws, STMTSetTags, &setTagsReq)
+	var tagBuffer bytes.Buffer
+	wstool.WriteUint64(&tagBuffer, 100)
+	wstool.WriteUint64(&tagBuffer, prepareResp.StmtID)
+	wstool.WriteUint64(&tagBuffer, uint64(SetTagsMessage))
+	tags, err := json.Marshal(map[string]string{"a": "b"})
+	assert.NoError(t, err)
+	b, err := serializer.SerializeRawBlock(
+		[]*param.Param{
+			param.NewParam(1).AddJson(tags),
+		},
+		param.NewColumnType(1).AddJson(50))
+	assert.NoError(t, err)
+	assert.NoError(t, err)
+	tagBuffer.Write(b)
+
+	err = ws.WriteMessage(websocket.BinaryMessage, tagBuffer.Bytes())
+	assert.NoError(t, err)
+	_, resp, err = ws.ReadMessage()
 	assert.NoError(t, err)
 	err = json.Unmarshal(resp, &setTagsResp)
 	assert.NoError(t, err)
@@ -1679,7 +1726,7 @@ func TestWsStmt(t *testing.T) {
 	var block bytes.Buffer
 	wstool.WriteUint64(&block, 10)
 	wstool.WriteUint64(&block, prepareResp.StmtID)
-	wstool.WriteUint64(&block, 2)
+	wstool.WriteUint64(&block, uint64(BindMessage))
 	rawBlock := []byte{
 		0x01, 0x00, 0x00, 0x00,
 		0x11, 0x02, 0x00, 0x00,
@@ -2706,7 +2753,7 @@ func TestStmt2Prepare(t *testing.T) {
 	assert.Equal(t, 0, prepareResp.Code, prepareResp.Message)
 	assert.Equal(t, false, prepareResp.IsInsert)
 	assert.Nil(t, prepareResp.Fields)
-	assert.Equal(t, 2, prepareResp.FieldCount)
+	assert.Equal(t, 2, prepareResp.FieldsCount)
 }
 
 func TestStmt2GetFields(t *testing.T) {
@@ -3066,4 +3113,206 @@ func Stmt2Query(t *testing.T, db string, prepareDataSql []string) {
 	var closeResp Stmt2CloseResponse
 	err = json.Unmarshal(resp, &fetchResp)
 	assert.Equal(t, 0, closeResp.Code, closeResp.Message)
+}
+
+func TestWSConnect(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err := ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	// wrong password
+	connReq := ConnRequest{ReqID: 1, User: "root", Password: "wrong"}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp BaseResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, "Authentication failure", connResp.Message)
+	assert.Equal(t, 0x357, connResp.Code, connResp.Message)
+
+	// connect
+	connReq = ConnRequest{ReqID: 1, User: "root", Password: "taosdata"}
+	resp, err = doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+	//duplicate connections
+	connReq = ConnRequest{ReqID: 1, User: "root", Password: "taosdata"}
+	resp, err = doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0xffff, connResp.Code)
+	assert.Equal(t, "duplicate connections", connResp.Message)
+
+}
+
+type TestConnRequest struct {
+	ReqID    uint64 `json:"req_id"`
+	User     string `json:"user"`
+	Password string `json:"password"`
+	DB       string `json:"db"`
+	Mode     int    `json:"mode"`
+}
+
+func TestMode(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err := ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	wrongMode := 999
+	connReq := TestConnRequest{ReqID: 1, User: "root", Password: "taosdata", Mode: wrongMode}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp BaseResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0xffff, connResp.Code)
+	assert.Equal(t, fmt.Sprintf("unexpected mode:%d", wrongMode), connResp.Message)
+
+	//bi
+	biMode := 0
+	connReq = TestConnRequest{ReqID: 1, User: "root", Password: "taosdata", Mode: biMode}
+	resp, err = doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+
+}
+
+func TestStmtBinary(t *testing.T) {
+
+}
+
+func TestWSTMQWriteRaw(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err := ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	data := []byte{
+		0x64, 0x01, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x58, 0x01, 0x00, 0x00, 0x04, 0x73, 0x74, 0x62,
+		0x00, 0xd5, 0xf0, 0xed, 0x8a, 0xe0, 0x23, 0xf3, 0x45, 0x00, 0x1c, 0x02, 0x09, 0x01, 0x10, 0x02,
+		0x03, 0x74, 0x73, 0x00, 0x01, 0x01, 0x02, 0x04, 0x03, 0x63, 0x31, 0x00, 0x02, 0x01, 0x02, 0x06,
+		0x03, 0x63, 0x32, 0x00, 0x03, 0x01, 0x04, 0x08, 0x03, 0x63, 0x33, 0x00, 0x04, 0x01, 0x08, 0x0a,
+		0x03, 0x63, 0x34, 0x00, 0x05, 0x01, 0x10, 0x0c, 0x03, 0x63, 0x35, 0x00, 0x0b, 0x01, 0x02, 0x0e,
+		0x03, 0x63, 0x36, 0x00, 0x0c, 0x01, 0x04, 0x10, 0x03, 0x63, 0x37, 0x00, 0x0d, 0x01, 0x08, 0x12,
+		0x03, 0x63, 0x38, 0x00, 0x0e, 0x01, 0x10, 0x14, 0x03, 0x63, 0x39, 0x00, 0x06, 0x01, 0x08, 0x16,
+		0x04, 0x63, 0x31, 0x30, 0x00, 0x07, 0x01, 0x10, 0x18, 0x04, 0x63, 0x31, 0x31, 0x00, 0x08, 0x01,
+		0x2c, 0x1a, 0x04, 0x63, 0x31, 0x32, 0x00, 0x0a, 0x01, 0xa4, 0x01, 0x1c, 0x04, 0x63, 0x31, 0x33,
+		0x00, 0x1c, 0x02, 0x09, 0x02, 0x10, 0x1e, 0x04, 0x74, 0x74, 0x73, 0x00, 0x01, 0x00, 0x02, 0x20,
+		0x04, 0x74, 0x63, 0x31, 0x00, 0x02, 0x00, 0x02, 0x22, 0x04, 0x74, 0x63, 0x32, 0x00, 0x03, 0x00,
+		0x04, 0x24, 0x04, 0x74, 0x63, 0x33, 0x00, 0x04, 0x00, 0x08, 0x26, 0x04, 0x74, 0x63, 0x34, 0x00,
+		0x05, 0x00, 0x10, 0x28, 0x04, 0x74, 0x63, 0x35, 0x00, 0x0b, 0x00, 0x02, 0x2a, 0x04, 0x74, 0x63,
+		0x36, 0x00, 0x0c, 0x00, 0x04, 0x2c, 0x04, 0x74, 0x63, 0x37, 0x00, 0x0d, 0x00, 0x08, 0x2e, 0x04,
+		0x74, 0x63, 0x38, 0x00, 0x0e, 0x00, 0x10, 0x30, 0x04, 0x74, 0x63, 0x39, 0x00, 0x06, 0x00, 0x08,
+		0x32, 0x05, 0x74, 0x63, 0x31, 0x30, 0x00, 0x07, 0x00, 0x10, 0x34, 0x05, 0x74, 0x63, 0x31, 0x31,
+		0x00, 0x08, 0x00, 0x2c, 0x36, 0x05, 0x74, 0x63, 0x31, 0x32, 0x00, 0x0a, 0x00, 0xa4, 0x01, 0x38,
+		0x05, 0x74, 0x63, 0x31, 0x33, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x1c, 0x02, 0x02, 0x02,
+		0x01, 0x00, 0x02, 0x04, 0x02, 0x01, 0x00, 0x03, 0x06, 0x02, 0x01, 0x00, 0x01, 0x08, 0x02, 0x01,
+		0x00, 0x01, 0x0a, 0x02, 0x01, 0x00, 0x01, 0x0c, 0x02, 0x01, 0x00, 0x01, 0x0e, 0x02, 0x01, 0x00,
+		0x01, 0x10, 0x02, 0x01, 0x00, 0x01, 0x12, 0x02, 0x01, 0x00, 0x01, 0x14, 0x02, 0x01, 0x00, 0x01,
+		0x16, 0x02, 0x01, 0x00, 0x04, 0x18, 0x02, 0x01, 0x00, 0x04, 0x1a, 0x02, 0x01, 0x00, 0xff, 0x1c,
+		0x02, 0x01, 0x00, 0xff,
+	}
+	length := uint32(356)
+	metaType := uint16(531)
+	code, message := doRestful("create database if not exists test_ws_tmq_write_raw", "")
+	assert.Equal(t, 0, code, message)
+	defer func() {
+		code, message := doRestful("drop database if exists test_ws_tmq_write_raw", "")
+		assert.Equal(t, 0, code, message)
+	}()
+	// connect
+	connReq := ConnRequest{ReqID: 1, User: "root", Password: "taosdata", DB: "test_ws_tmq_write_raw"}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp BaseResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+	buffer := bytes.Buffer{}
+	wstool.WriteUint64(&buffer, 2) // req id
+	wstool.WriteUint64(&buffer, 0) // message id
+	wstool.WriteUint64(&buffer, uint64(TMQRawMessage))
+	wstool.WriteUint32(&buffer, length)
+	wstool.WriteUint16(&buffer, metaType)
+	buffer.Write(data)
+	err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
+	assert.NoError(t, err)
+	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
+	var tmqResp BaseResponse
+	err = json.Unmarshal(resp, &tmqResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(2), tmqResp.ReqID)
+	assert.Equal(t, 0, tmqResp.Code, tmqResp.Message)
+
+	d := restQuery("describe stb", "test_ws_tmq_write_raw")
+	expect := [][]driver.Value{
+		{"ts", "TIMESTAMP", float64(8), ""},
+		{"c1", "BOOL", float64(1), ""},
+		{"c2", "TINYINT", float64(1), ""},
+		{"c3", "SMALLINT", float64(2), ""},
+		{"c4", "INT", float64(4), ""},
+		{"c5", "BIGINT", float64(8), ""},
+		{"c6", "TINYINT UNSIGNED", float64(1), ""},
+		{"c7", "SMALLINT UNSIGNED", float64(2), ""},
+		{"c8", "INT UNSIGNED", float64(4), ""},
+		{"c9", "BIGINT UNSIGNED", float64(8), ""},
+		{"c10", "FLOAT", float64(4), ""},
+		{"c11", "DOUBLE", float64(8), ""},
+		{"c12", "VARCHAR", float64(20), ""},
+		{"c13", "NCHAR", float64(20), ""},
+		{"tts", "TIMESTAMP", float64(8), "TAG"},
+		{"tc1", "BOOL", float64(1), "TAG"},
+		{"tc2", "TINYINT", float64(1), "TAG"},
+		{"tc3", "SMALLINT", float64(2), "TAG"},
+		{"tc4", "INT", float64(4), "TAG"},
+		{"tc5", "BIGINT", float64(8), "TAG"},
+		{"tc6", "TINYINT UNSIGNED", float64(1), "TAG"},
+		{"tc7", "SMALLINT UNSIGNED", float64(2), "TAG"},
+		{"tc8", "INT UNSIGNED", float64(4), "TAG"},
+		{"tc9", "BIGINT UNSIGNED", float64(8), "TAG"},
+		{"tc10", "FLOAT", float64(4), "TAG"},
+		{"tc11", "DOUBLE", float64(8), "TAG"},
+		{"tc12", "VARCHAR", float64(20), "TAG"},
+		{"tc13", "NCHAR", float64(20), "TAG"},
+	}
+	for rowIndex, values := range d.Data {
+		for i := 0; i < 4; i++ {
+			assert.Equal(t, expect[rowIndex][i], values[i])
+		}
+	}
 }

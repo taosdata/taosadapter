@@ -527,7 +527,7 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		default:
 			syncinterface.TaosClose(conn, logger, isDebug)
 			logger.Tracef("unexpected mode:%d", *req.Mode)
-			return wsCommonErrorMsg(0xffff, fmt.Sprintf("unexpected mode:%d", req.Mode))
+			return wsCommonErrorMsg(0xffff, fmt.Sprintf("unexpected mode:%d", *req.Mode))
 		}
 	}
 	h.conn = conn
@@ -1910,15 +1910,15 @@ type Stmt2PrepareRequest struct {
 
 type PrepareFields struct {
 	stmtCommon.StmtField
-	BindType int8
+	BindType int8 `json:"bind_type"`
 }
 
 type Stmt2PrepareResponse struct {
 	BaseResponse
-	StmtID     uint64           `json:"stmt_id"`
-	IsInsert   bool             `json:"is_insert"`
-	Fields     []*PrepareFields `json:"fields"`
-	FieldCount int              `json:"field_count"`
+	StmtID      uint64           `json:"stmt_id"`
+	IsInsert    bool             `json:"is_insert"`
+	Fields      []*PrepareFields `json:"fields"`
+	FieldsCount int              `json:"fields_count"`
 }
 
 func (h *messageHandler) handleStmt2Prepare(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) Response {
@@ -1996,7 +1996,7 @@ func (h *messageHandler) handleStmt2Prepare(_ context.Context, request Request, 
 			if code != 0 {
 				return wsStmtErrorMsg(code, fmt.Sprintf("get query fields error, %s", errStr), req.StmtID)
 			}
-			prepareResp.FieldCount = count
+			prepareResp.FieldsCount = count
 		}
 	}
 	return prepareResp
