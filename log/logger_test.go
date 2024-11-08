@@ -1,9 +1,14 @@
 package log
 
 import (
+	"bytes"
+	"context"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
 )
@@ -21,6 +26,10 @@ func TestConfigLog(t *testing.T) {
 	ConfigLog()
 	logger := GetLogger("TST")
 	logger.Info("test config log")
+	time.Sleep(time.Second * 6)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	Close(ctx)
 }
 
 func TestIsDebug(t *testing.T) {
@@ -48,4 +57,218 @@ func TestGetLogSql(t *testing.T) {
 	str := builder.String()
 	sql = GetLogSql(str)
 	assert.Equal(t, sql, str[:MaxLogSqlLength])
+}
+func TestTaosLogFormatter_Format(t1 *testing.T) {
+	type args struct {
+		entry *logrus.Entry
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []byte
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "common_panic",
+			args: args{
+				entry: &logrus.Entry{
+					Time:    time.Unix(1657084598, 0),
+					Message: "select 1\n",
+					Data: map[string]interface{}{
+						config.ModelKey:     "test",
+						config.SessionIDKey: 1,
+						config.ReqIDKey:     1,
+						"ext":               "111",
+					},
+					Level: logrus.PanicLevel,
+				},
+			},
+			want: []byte(fmt.Sprintf("%s %s test PANIC SID:0x1, QID:0x1 select 1, ext:111\n", time.Unix(1657084598, 0).Format("01/02 15:04:05.000000"), ServerID)),
+			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+				if err != nil {
+					t.Errorf("%s,%v", err.Error(), i)
+					return false
+				}
+				return true
+			},
+		},
+		{
+			name: "common_fatal",
+			args: args{
+				entry: &logrus.Entry{
+					Time:    time.Unix(1657084598, 0),
+					Message: "select 1\n",
+					Data: map[string]interface{}{
+						config.ModelKey:     "test",
+						config.SessionIDKey: 1,
+						config.ReqIDKey:     1,
+						"ext":               "111",
+					},
+					Level: logrus.FatalLevel,
+				},
+			},
+			want: []byte(fmt.Sprintf("%s %s test FATAL SID:0x1, QID:0x1 select 1, ext:111\n", time.Unix(1657084598, 0).Format("01/02 15:04:05.000000"), ServerID)),
+			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+				if err != nil {
+					t.Errorf("%s,%v", err.Error(), i)
+					return false
+				}
+				return true
+			},
+		},
+		{
+			name: "common_error",
+			args: args{
+				entry: &logrus.Entry{
+					Time:    time.Unix(1657084598, 0),
+					Message: "select 1\n",
+					Data: map[string]interface{}{
+						config.ModelKey:     "test",
+						config.SessionIDKey: 1,
+						config.ReqIDKey:     1,
+						"ext":               "111",
+					},
+					Level: logrus.ErrorLevel,
+				},
+			},
+			want: []byte(fmt.Sprintf("%s %s test ERROR SID:0x1, QID:0x1 select 1, ext:111\n", time.Unix(1657084598, 0).Format("01/02 15:04:05.000000"), ServerID)),
+			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+				if err != nil {
+					t.Errorf("%s,%v", err.Error(), i)
+					return false
+				}
+				return true
+			},
+		},
+		{
+			name: "common_warn",
+			args: args{
+				entry: &logrus.Entry{
+					Time:    time.Unix(1657084598, 0),
+					Message: "select 1\n",
+					Data: map[string]interface{}{
+						config.ModelKey:     "test",
+						config.SessionIDKey: 1,
+						config.ReqIDKey:     1,
+						"ext":               "111",
+					},
+					Level: logrus.WarnLevel,
+				},
+			},
+			want: []byte(fmt.Sprintf("%s %s test WARN  SID:0x1, QID:0x1 select 1, ext:111\n", time.Unix(1657084598, 0).Format("01/02 15:04:05.000000"), ServerID)),
+			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+				if err != nil {
+					t.Errorf("%s,%v", err.Error(), i)
+					return false
+				}
+				return true
+			},
+		},
+		{
+			name: "common_info",
+			args: args{
+				entry: &logrus.Entry{
+					Time:    time.Unix(1657084598, 0),
+					Message: "select 1\n",
+					Data: map[string]interface{}{
+						config.ModelKey:     "test",
+						config.SessionIDKey: 1,
+						config.ReqIDKey:     1,
+						"ext":               "111",
+					},
+					Level: logrus.InfoLevel,
+				},
+			},
+			want: []byte(fmt.Sprintf("%s %s test INFO  SID:0x1, QID:0x1 select 1, ext:111\n", time.Unix(1657084598, 0).Format("01/02 15:04:05.000000"), ServerID)),
+			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+				if err != nil {
+					t.Errorf("%s,%v", err.Error(), i)
+					return false
+				}
+				return true
+			},
+		},
+		{
+			name: "common_debug",
+			args: args{
+				entry: &logrus.Entry{
+					Time:    time.Unix(1657084598, 0),
+					Message: "select 1\n",
+					Data: map[string]interface{}{
+						config.ModelKey:     "test",
+						config.SessionIDKey: 1,
+						config.ReqIDKey:     1,
+						"ext":               "111",
+					},
+					Level: logrus.DebugLevel,
+				},
+			},
+			want: []byte(fmt.Sprintf("%s %s test DEBUG SID:0x1, QID:0x1 select 1, ext:111\n", time.Unix(1657084598, 0).Format("01/02 15:04:05.000000"), ServerID)),
+			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+				if err != nil {
+					t.Errorf("%s,%v", err.Error(), i)
+					return false
+				}
+				return true
+			},
+		},
+		{
+			name: "common_debug",
+			args: args{
+				entry: &logrus.Entry{
+					Time:    time.Unix(1657084598, 0),
+					Message: "select 1\n",
+					Data: map[string]interface{}{
+						config.ModelKey:     "test",
+						config.SessionIDKey: 1,
+						config.ReqIDKey:     1,
+						"ext":               "111",
+					},
+					Level: logrus.TraceLevel,
+				},
+			},
+			want: []byte(fmt.Sprintf("%s %s test TRACE SID:0x1, QID:0x1 select 1, ext:111\n", time.Unix(1657084598, 0).Format("01/02 15:04:05.000000"), ServerID)),
+			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+				if err != nil {
+					t.Errorf("%s,%v", err.Error(), i)
+					return false
+				}
+				return true
+			},
+		},
+		{
+			name: "common",
+			args: args{
+				entry: &logrus.Entry{
+					Time:    time.Unix(1657084598, 0),
+					Message: "select 1",
+					Data: map[string]interface{}{
+						config.SessionIDKey: 1,
+						config.ReqIDKey:     nil,
+						"ext":               "111",
+					},
+					Level:  logrus.InfoLevel,
+					Buffer: &bytes.Buffer{},
+				},
+			},
+			want: []byte(fmt.Sprintf("%s %s CLI INFO  SID:0x1, select 1, ext:111\n", time.Unix(1657084598, 0).Format("01/02 15:04:05.000000"), ServerID)),
+			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+				if err != nil {
+					t.Errorf("%s,%v", err.Error(), i)
+					return false
+				}
+				return true
+			},
+		},
+	}
+	for _, tt := range tests {
+		t1.Run(tt.name, func(t1 *testing.T) {
+			t := &TaosLogFormatter{}
+			got, err := t.Format(tt.args.entry)
+			if !tt.wantErr(t1, err, fmt.Sprintf("Format(%v)", tt.args.entry)) {
+				return
+			}
+			assert.Equalf(t1, tt.want, got, "Format(%v)", tt.args.entry)
+		})
+	}
 }
