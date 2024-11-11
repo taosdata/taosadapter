@@ -98,13 +98,7 @@ func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 				return
 			}
 			logger.Info("user dropped, close connection")
-			s := log.GetLogNow(isDebug)
-			h.session.Close()
-			h.Unlock()
-			logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
-			s = log.GetLogNow(isDebug)
-			h.Close()
-			logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
+			h.signalExit(logger, isDebug)
 			return
 		case <-h.whitelistChangeChan:
 			logger.Info("get whitelist change signal")
@@ -116,32 +110,17 @@ func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 				return
 			}
 			logger.Trace("get whitelist")
-			s := log.GetLogNow(isDebug)
 			whitelist, err := tool.GetWhitelist(h.conn)
 			if err != nil {
 				logger.Errorf("get whitelist error, close connection, err:%s", err)
-				s = log.GetLogNow(isDebug)
-				h.session.Close()
-				logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
-				h.Unlock()
-				s = log.GetLogNow(isDebug)
-				h.Close()
-				logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
+				h.signalExit(logger, isDebug)
 				return
 			}
 			logger.Tracef("check whitelist, ip:%s, whitelist:%s", h.ipStr, tool.IpNetSliceToString(whitelist))
 			valid := tool.CheckWhitelist(whitelist, h.ip)
 			if !valid {
 				logger.Errorf("ip not in whitelist! close connection, ip:%s, whitelist:%s", h.ipStr, tool.IpNetSliceToString(whitelist))
-				logger.Trace("close session")
-				s = log.GetLogNow(isDebug)
-				h.session.Close()
-				logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
-				h.Unlock()
-				logger.Trace("close handler")
-				s = log.GetLogNow(isDebug)
-				h.Close()
-				logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
+				h.signalExit(logger, isDebug)
 				return
 			}
 			h.Unlock()
@@ -149,6 +128,18 @@ func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 			return
 		}
 	}
+}
+
+func (h *messageHandler) signalExit(logger *logrus.Entry, isDebug bool) {
+	logger.Trace("close session")
+	s := log.GetLogNow(isDebug)
+	h.session.Close()
+	logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
+	h.Unlock()
+	logger.Trace("close handler")
+	s = log.GetLogNow(isDebug)
+	h.Close()
+	logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
 }
 
 func (h *messageHandler) lock(logger *logrus.Entry, isDebug bool) {

@@ -3316,3 +3316,35 @@ func TestWSTMQWriteRaw(t *testing.T) {
 		}
 	}
 }
+
+func TestDropUser(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err := ws.Close()
+		assert.NoError(t, err)
+	}()
+	defer doRestful("drop user test_ws_drop_user", "")
+	code, message := doRestful("create user test_ws_drop_user pass 'pass'", "")
+	assert.Equal(t, 0, code, message)
+	// connect
+	connReq := ConnRequest{ReqID: 1, User: "test_ws_drop_user", Password: "pass"}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp BaseResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+	// drop user
+	code, message = doRestful("drop user test_ws_drop_user", "")
+	assert.Equal(t, 0, code, message)
+	time.Sleep(time.Second * 3)
+	resp, err = doWebSocket(ws, wstool.ClientVersion, nil)
+	assert.Error(t, err, resp)
+}

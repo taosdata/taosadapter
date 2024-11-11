@@ -252,14 +252,11 @@ func (t *TaosLogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		keys = append(keys, k)
 	}
 	for _, k := range keys {
-		v := entry.Data[k]
-		if k == config.ReqIDKey && v == nil {
-			continue
-		}
+		value := entry.Data[k]
 		b.WriteString(", ")
 		b.WriteString(k)
 		b.WriteByte(':')
-		fmt.Fprintf(b, "%v", v)
+		fmt.Fprintf(b, "%v", value)
 	}
 
 	b.WriteByte('\n')
