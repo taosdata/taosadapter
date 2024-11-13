@@ -3155,3 +3155,54 @@ func TestTMQ_SetMsgConsumeExcluded(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
 }
+
+//func TestDropUser(t *testing.T) {
+//	defer doHttpSql("drop user test_tmq_drop_user")
+//	code, message := doHttpSql("create user test_tmq_drop_user pass 'pass'")
+//	assert.Equal(t, 0, code, message)
+//
+//	dbName := "test_ws_tmq_drop_user"
+//	topic := "test_ws_tmq_drop_user_topic"
+//
+//	before(t, dbName, topic)
+//
+//	s := httptest.NewServer(router)
+//	defer s.Close()
+//	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/tmq", nil)
+//	if err != nil {
+//		t.Error(err)
+//		return
+//	}
+//	defer func() {
+//		err = ws.Close()
+//		assert.NoError(t, err)
+//	}()
+//
+//	defer func() {
+//		err = after(ws, dbName, topic)
+//		assert.NoError(t, err)
+//	}()
+//
+//	// subscribe
+//	b, _ := json.Marshal(TMQSubscribeReq{
+//		User:        "test_tmq_drop_user",
+//		Password:    "pass",
+//		DB:          dbName,
+//		GroupID:     "test",
+//		Topics:      []string{topic},
+//		AutoCommit:  "false",
+//		OffsetReset: "earliest",
+//	})
+//	msg, err := doWebSocket(ws, TMQSubscribe, b)
+//	assert.NoError(t, err)
+//	var subscribeResp TMQSubscribeResp
+//	err = json.Unmarshal(msg, &subscribeResp)
+//	assert.NoError(t, err)
+//	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
+//	// drop user
+//	code, message = doHttpSql("drop user test_tmq_drop_user")
+//	assert.Equal(t, 0, code, message)
+//	time.Sleep(time.Second * 3)
+//	resp, err := doWebSocket(ws, wstool.ClientVersion, nil)
+//	assert.Error(t, err, string(resp))
+//}

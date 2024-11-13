@@ -325,13 +325,7 @@ func (t *TMQ) waitSignal(logger *logrus.Entry) {
 				return
 			}
 			logger.Info("user dropped! close connection!")
-			s := log.GetLogNow(isDebug)
-			_ = t.session.Close()
-			logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
-			t.Unlock()
-			s = log.GetLogNow(isDebug)
-			t.Close(logger)
-			logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
+			t.signalExit(logger, isDebug)
 			return
 		case <-t.whitelistChangeChan:
 			logger.Info("get whitelist change signal")
@@ -348,26 +342,14 @@ func (t *TMQ) waitSignal(logger *logrus.Entry) {
 			logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 			if err != nil {
 				logger.Errorf("get whitelist error, close connection, err:%s", err)
-				s = log.GetLogNow(isDebug)
-				_ = t.session.Close()
-				logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
-				t.Unlock()
-				s = log.GetLogNow(isDebug)
-				t.Close(t.logger)
-				logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
+				t.signalExit(logger, isDebug)
 				return
 			}
 			logger.Tracef("check whitelist, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
 			valid := tool.CheckWhitelist(whitelist, t.ip)
 			if !valid {
 				logger.Errorf("ip not in whitelist, close connection, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
-				s = log.GetLogNow(isDebug)
-				_ = t.session.Close()
-				logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
-				t.Unlock()
-				s = log.GetLogNow(isDebug)
-				t.Close(t.logger)
-				logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
+				t.signalExit(logger, isDebug)
 				return
 			}
 			t.Unlock()
@@ -375,6 +357,17 @@ func (t *TMQ) waitSignal(logger *logrus.Entry) {
 			return
 		}
 	}
+}
+
+func (t *TMQ) signalExit(logger *logrus.Entry, isDebug bool) {
+	logger.Trace("close session")
+	s := log.GetLogNow(isDebug)
+	_ = t.session.Close()
+	logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
+	t.Unlock()
+	s = log.GetLogNow(isDebug)
+	t.Close(logger)
+	logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
 }
 
 func (t *TMQ) lock(logger *logrus.Entry, isDebug bool) {

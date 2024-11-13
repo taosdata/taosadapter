@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1046,4 +1047,75 @@ func TestBlock(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
+}
+
+type restResp struct {
+	Code int    `json:"code"`
+	Desc string `json:"desc"`
+}
+
+func doRestful(sql string, db string) (code int, message string) {
+	w := httptest.NewRecorder()
+	body := strings.NewReader(sql)
+	url := "/rest/sql"
+	if db != "" {
+		url = fmt.Sprintf("/rest/sql/%s", db)
+	}
+	req, _ := http.NewRequest(http.MethodPost, url, body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		return w.Code, w.Body.String()
+	}
+	b, _ := io.ReadAll(w.Body)
+	var res restResp
+	_ = json.Unmarshal(b, &res)
+	return res.Code, res.Desc
+}
+
+func doWebSocket(ws *websocket.Conn, action string, arg interface{}) (resp []byte, err error) {
+	var b []byte
+	if arg != nil {
+		b, _ = json.Marshal(arg)
+	}
+	a, _ := json.Marshal(wstool.WSAction{Action: action, Args: b})
+	err = ws.WriteMessage(websocket.TextMessage, a)
+	if err != nil {
+		return nil, err
+	}
+	_, message, err := ws.ReadMessage()
+	return message, err
+}
+
+func TestDropUser(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/stmt", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+	defer doRestful("drop user test_ws_stmt_drop_user", "")
+	code, message := doRestful("create user test_ws_stmt_drop_user pass 'pass'", "")
+	assert.Equal(t, 0, code, message)
+	// connect
+	connReq := &StmtConnectReq{ReqID: 1, User: "test_ws_stmt_drop_user", Password: "pass"}
+	resp, err := doWebSocket(ws, STMTConnect, &connReq)
+	assert.NoError(t, err)
+	var connResp StmtConnectResp
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+	// drop user
+	code, message = doRestful("drop user test_ws_stmt_drop_user", "")
+	assert.Equal(t, 0, code, message)
+	time.Sleep(time.Second * 3)
+	resp, err = doWebSocket(ws, wstool.ClientVersion, nil)
+	assert.Error(t, err, resp)
 }

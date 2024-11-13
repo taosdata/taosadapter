@@ -266,15 +266,7 @@ func (t *Taos) waitSignal(logger *logrus.Entry) {
 				return
 			}
 			logger.WithField("clientIP", t.ipStr).Info("user dropped! close connection!")
-			logger.Trace("close session")
-			s := log.GetLogNow(isDebug)
-			_ = t.session.Close()
-			logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
-			t.Unlock()
-			logger.Trace("close handler")
-			s = log.GetLogNow(isDebug)
-			t.Close()
-			logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
+			t.signalExit(logger, isDebug)
 			return
 		case <-t.whitelistChangeChan:
 			logger.Info("get whitelist change signal")
@@ -291,29 +283,14 @@ func (t *Taos) waitSignal(logger *logrus.Entry) {
 			logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 			if err != nil {
 				logger.WithField("clientIP", t.ipStr).WithError(err).Errorln("get whitelist error! close connection!")
-				s = log.GetLogNow(isDebug)
-				_ = t.session.Close()
-				logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
-				t.Unlock()
-				logger.Trace("close handler")
-				s = log.GetLogNow(isDebug)
-				t.Close()
-				logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
+				t.signalExit(logger, isDebug)
 				return
 			}
 			logger.Tracef("check whitelist, ip: %s, whitelist: %s", t.ipStr, tool.IpNetSliceToString(whitelist))
 			valid := tool.CheckWhitelist(whitelist, t.ip)
 			if !valid {
 				logger.WithField("clientIP", t.ipStr).Errorln("ip not in whitelist! close connection!")
-				logger.Trace("close session")
-				s = log.GetLogNow(isDebug)
-				_ = t.session.Close()
-				logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
-				t.Unlock()
-				logger.Trace("close handler")
-				s = log.GetLogNow(isDebug)
-				t.Close()
-				logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
+				t.signalExit(logger, isDebug)
 				return
 			}
 			t.Unlock()
@@ -321,6 +298,18 @@ func (t *Taos) waitSignal(logger *logrus.Entry) {
 			return
 		}
 	}
+}
+
+func (t *Taos) signalExit(logger *logrus.Entry, isDebug bool) {
+	logger.Trace("close session")
+	s := log.GetLogNow(isDebug)
+	_ = t.session.Close()
+	logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
+	t.Unlock()
+	logger.Trace("close handler")
+	s = log.GetLogNow(isDebug)
+	t.Close()
+	logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
 }
 
 type Result struct {
