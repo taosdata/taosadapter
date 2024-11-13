@@ -11,7 +11,8 @@ func TestBorrowStream(t *testing.T) {
 	b := &strings.Builder{}
 	s := BorrowStream(b)
 	s.WriteString(`"a"`)
-	s.Flush()
+	err := s.Flush()
+	assert.NoError(t, err)
 	assert.Equal(t, `"\"a\""`, b.String())
 	ReturnStream(s)
 }

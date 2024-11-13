@@ -36,7 +36,7 @@ func (p *Plugin) Init(r gin.IRouter) error {
 		return nil
 	}
 	r.Use(plugin.Auth(func(c *gin.Context, code int, err error) {
-		c.AbortWithError(code, err)
+		_ = c.AbortWithError(code, err)
 	}))
 	r.POST("remote_read/:db", func(c *gin.Context) {
 		if monitor.QueryPaused() {

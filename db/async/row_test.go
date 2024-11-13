@@ -13,7 +13,7 @@ import (
 
 func TestMain(m *testing.M) {
 	config.Init()
-	log.SetLevel("trace")
+	_ = log.SetLevel("trace")
 	m.Run()
 }
 
@@ -48,7 +48,7 @@ func TestAsync_TaosExec(t *testing.T) {
 			args: args{
 				taosConnect: conn,
 				sql:         "select 1",
-				timeFormat: func(ts int64, precision int) driver.Value {
+				timeFormat: func(ts int64, _ int) driver.Value {
 					return ts
 				},
 			},

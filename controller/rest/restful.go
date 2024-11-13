@@ -315,12 +315,11 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 			w.Flush()
 		}
 		return
-	} else {
-		if monitor.QueryPaused() {
-			logger.Errorf("query memory exceeds threshold, QID:0x%x", reqID)
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, "query memory exceeds threshold")
-			return
-		}
+	}
+	if monitor.QueryPaused() {
+		logger.Errorf("query memory exceeds threshold, QID:0x%x", reqID)
+		c.AbortWithStatusJSON(http.StatusServiceUnavailable, "query memory exceeds threshold")
+		return
 	}
 	fieldsCount := wrapper.TaosNumFields(res)
 	logger.Tracef("get fieldsCount:%d", fieldsCount)
@@ -357,7 +356,7 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 	if err != nil {
 		return
 	}
-	tmpFlushTiming += tmpFlushTiming
+	flushTiming += tmpFlushTiming
 	total := 0
 	builder.WritePure(Query3)
 	precision := wrapper.TaosResultPrecision(res)
@@ -373,76 +372,73 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 		if result.N == 0 {
 			logger.Trace("fetch finished")
 			break
+		}
+		if result.N < 0 {
+			logger.Tracef("fetch error, result.N:%d", result.N)
+			break
+		}
+		res = result.Res
+		if fetched {
+			builder.WriteMore()
 		} else {
-			if result.N < 0 {
-				logger.Tracef("fetch error, result.N:%d", result.N)
-				break
-			}
-			res = result.Res
-			if fetched {
-				builder.WriteMore()
+			fetched = true
+		}
+		logger.Tracef("get fetch result, rows:%d", result.N)
+		block := wrapper.TaosGetRawBlock(res)
+		logger.Trace("start parse block")
+		blockSize := result.N
+		nullBitMapOffset := uintptr(ctools.BitmapLen(blockSize))
+		lengthOffset := parser.RawBlockGetColumnLengthOffset(fieldsCount)
+		tmpPHeader := tools.AddPointer(block, parser.RawBlockGetColDataOffset(fieldsCount))
+		for column := 0; column < fieldsCount; column++ {
+			colLength := *((*int32)(unsafe.Pointer(uintptr(block) + lengthOffset + uintptr(column)*parser.Int32Size)))
+			if ctools.IsVarDataType(rowsHeader.ColTypes[column]) {
+				pHeaderList[column] = tmpPHeader
+				pStartList[column] = tools.AddPointer(tmpPHeader, uintptr(4*blockSize))
 			} else {
-				fetched = true
+				pHeaderList[column] = tmpPHeader
+				pStartList[column] = tools.AddPointer(tmpPHeader, nullBitMapOffset)
 			}
-			logger.Tracef("get fetch result, rows:%d", result.N)
-			block := wrapper.TaosGetRawBlock(res)
-			logger.Trace("start parse block")
-			blockSize := result.N
-			nullBitMapOffset := uintptr(ctools.BitmapLen(blockSize))
-			lengthOffset := parser.RawBlockGetColumnLengthOffset(fieldsCount)
-			tmpPHeader := tools.AddPointer(block, parser.RawBlockGetColDataOffset(fieldsCount))
-			tmpPStart := tmpPHeader
-			for column := 0; column < fieldsCount; column++ {
-				colLength := *((*int32)(unsafe.Pointer(uintptr(block) + lengthOffset + uintptr(column)*parser.Int32Size)))
-				if ctools.IsVarDataType(rowsHeader.ColTypes[column]) {
-					pHeaderList[column] = tmpPHeader
-					tmpPStart = tools.AddPointer(tmpPHeader, uintptr(4*blockSize))
-					pStartList[column] = tmpPStart
-				} else {
-					pHeaderList[column] = tmpPHeader
-					tmpPStart = tools.AddPointer(tmpPHeader, nullBitMapOffset)
-					pStartList[column] = tmpPStart
-				}
-				tmpPHeader = tools.AddPointer(tmpPStart, uintptr(colLength))
-			}
+			tmpPHeader = tools.AddPointer(pStartList[column], uintptr(colLength))
+		}
 
-			for row := 0; row < result.N; row++ {
+		for row := 0; row < result.N; row++ {
+			if returnObj {
+				builder.WriteObjectStart()
+			} else {
+				builder.WriteArrayStart()
+			}
+			for column := 0; column < fieldsCount; column++ {
 				if returnObj {
-					builder.WriteObjectStart()
-				} else {
-					builder.WriteArrayStart()
+					builder.WriteObjectField(rowsHeader.ColNames[column])
 				}
-				for column := 0; column < fieldsCount; column++ {
-					if returnObj {
-						builder.WriteObjectField(rowsHeader.ColNames[column])
-					}
-					ctools.JsonWriteRawBlock(builder, rowsHeader.ColTypes[column], pHeaderList[column], pStartList[column], row, precision, timeFormat)
-					if column != fieldsCount-1 {
-						builder.WriteMore()
-					}
-				}
-				// try flushing after parsing a row of data
-				tmpFlushTiming, err = tryFlush(w, builder, calculateTiming)
-				if err != nil {
-					return
-				}
-				flushTiming += tmpFlushTiming
-				if returnObj {
-					builder.WriteObjectEnd()
-				} else {
-					builder.WriteArrayEnd()
-				}
-				total += 1
-				if config.Conf.RestfulRowLimit > -1 && total == config.Conf.RestfulRowLimit {
-					logger.Tracef("row limit %d reached", config.Conf.RestfulRowLimit)
-					break
-				}
-				if row != result.N-1 {
+				ctools.JsonWriteRawBlock(builder, rowsHeader.ColTypes[column], pHeaderList[column], pStartList[column], row, precision, timeFormat)
+				if column != fieldsCount-1 {
 					builder.WriteMore()
 				}
 			}
-			logger.Trace("parse block finished")
+			// try flushing after parsing a row of data
+			tmpFlushTiming, err = tryFlush(w, builder, calculateTiming)
+			if err != nil {
+				return
+			}
+			flushTiming += tmpFlushTiming
+			if returnObj {
+				builder.WriteObjectEnd()
+			} else {
+				builder.WriteArrayEnd()
+			}
+			total += 1
+			if config.Conf.RestfulRowLimit > -1 && total == config.Conf.RestfulRowLimit {
+				logger.Tracef("row limit %d reached", config.Conf.RestfulRowLimit)
+				break
+			}
+			if row != result.N-1 {
+				builder.WriteMore()
+			}
 		}
+		logger.Trace("parse block finished")
+
 	}
 	builder.WritePure(Query4)
 	builder.WriteInt(total)
@@ -468,7 +464,7 @@ func tryFlush(w gin.ResponseWriter, builder *jsonbuilder.Stream, calculateTiming
 		if calculateTiming {
 			s = time.Now()
 			w.Flush()
-			return time.Now().Sub(s).Nanoseconds(), nil
+			return time.Since(s).Nanoseconds(), nil
 		}
 		w.Flush()
 	}
@@ -554,7 +550,7 @@ func (ctl *Restful) upload(c *gin.Context) {
 	}()
 	s = log.GetLogNow(isDebug)
 	logger.Tracef("exec sql: %s", sql)
-	result, err := async.GlobalAsync.TaosExec(taosConnect.TaosConnection, logger, isDebug, sql, func(ts int64, precision int) driver.Value {
+	result, err := async.GlobalAsync.TaosExec(taosConnect.TaosConnection, logger, isDebug, sql, func(ts int64, _ int) driver.Value {
 		return ts
 	}, reqID)
 	logger.Debugf("describe table cost:%s", log.GetLogDuration(isDebug, s))
@@ -666,7 +662,7 @@ func (ctl *Restful) upload(c *gin.Context) {
 				buffer.WriteString(tableName)
 				buffer.WriteString(" values")
 			}
-			colBuffer.WriteTo(buffer)
+			_, _ = colBuffer.WriteTo(buffer)
 		}
 	}
 	if buffer.Len() > prefixLength {
@@ -728,7 +724,12 @@ func (ctl *Restful) des(c *gin.Context) {
 		UnAuthResponse(c, logger, httperror.TSDB_CODE_RPC_AUTH_FAILURE)
 		return
 	}
-	conn.Put()
+	err = conn.Put()
+	if err != nil {
+		logger.Errorf("put connection error, err:%s", err)
+		InternalErrorResponse(c, logger, httperror.HTTP_GEN_TAOSD_TOKEN_ERR, "put connection error")
+		return
+	}
 	token, err := EncodeDes(user, password)
 	if err != nil {
 		logger.Errorf("encode token error, err:%s", err)

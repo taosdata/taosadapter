@@ -56,10 +56,10 @@ func main() {
 				}
 				if resp.StatusCode != 202 {
 					d, _ := io.ReadAll(resp.Body)
-					resp.Body.Close()
+					_ = resp.Body.Close()
 					panic(string(d))
 				}
-				resp.Body.Close()
+				_ = resp.Body.Close()
 			}
 		}()
 	}
@@ -103,11 +103,6 @@ func generateData(id string, loop int) [][]byte {
 }
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-const (
-	letterIdxBits = 6                    // 6 bits to represent a letter index
-	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-)
 
 func RandStringBytesRmndr(n int) string {
 	b := make([]byte, n)

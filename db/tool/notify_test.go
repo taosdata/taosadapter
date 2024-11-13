@@ -228,6 +228,7 @@ func TestGetWhitelist(t *testing.T) {
 	assert.Equal(t, []*net.IPNet{ipNet}, ipNets)
 	ipNets, err = GetWhitelist(nil)
 	assert.Error(t, err)
+	assert.Nil(t, ipNets)
 }
 
 func TestCheckWhitelist(t *testing.T) {
@@ -267,7 +268,10 @@ func TestRegisterChangePass(t *testing.T) {
 	defer wrapper.TaosClose(conn)
 	err = exec(conn, "create user test_notify pass 'notify'")
 	assert.NoError(t, err)
-	defer exec(conn, "drop user test_notify")
+	defer func() {
+		// ignore error
+		_ = exec(conn, "drop user test_notify")
+	}()
 	conn2, err := wrapper.TaosConnect("", "test_notify", "notify", "", 0)
 	assert.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
@@ -299,7 +303,10 @@ func TestRegisterDropUser(t *testing.T) {
 	defer wrapper.TaosClose(conn)
 	err = exec(conn, "create user test_drop_user pass 'notify'")
 	assert.NoError(t, err)
-	defer exec(conn, "drop user test_drop_user")
+	defer func() {
+		// ignore error
+		_ = exec(conn, "drop user test_drop_user")
+	}()
 	conn2, err := wrapper.TaosConnect("", "test_drop_user", "notify", "", 0)
 	assert.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)

@@ -39,7 +39,10 @@ func TestNodeExporter_Gather(t *testing.T) {
 	config.Init()
 	db.PrepareConnection()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(s))
+		_, err := w.Write([]byte(s))
+		if err != nil {
+			return
+		}
 	}))
 	defer ts.Close()
 	api := ts.URL
@@ -49,7 +52,12 @@ func TestNodeExporter_Gather(t *testing.T) {
 	viper.Set("node_exporter.ttl", 1000)
 	conn, err := af.Open("", "", "", "", 0)
 	assert.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		err = conn.Close()
+		if err != nil {
+			t.Error(err)
+		}
+	}()
 	_, err = conn.Exec("create database if not exists node_exporter precision 'ns'")
 	assert.NoError(t, err)
 	err = conn.SelectDB("node_exporter")
@@ -62,7 +70,12 @@ func TestNodeExporter_Gather(t *testing.T) {
 	time.Sleep(time.Second * 2)
 	rows, err := conn.Query("select last(`value`) as `value` from node_exporter.test_metric;")
 	assert.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		err = rows.Close()
+		if err != nil {
+			t.Error(err)
+		}
+	}()
 	assert.Equal(t, 1, len(rows.Columns()))
 	d := make([]driver.Value, 1)
 	err = rows.Next(d)
@@ -77,7 +90,12 @@ func TestNodeExporter_Gather(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer rows.Close()
+	defer func() {
+		err = rows.Close()
+		if err != nil {
+			t.Error(err)
+		}
+	}()
 	values := make([]driver.Value, 1)
 	err = rows.Next(values)
 	assert.NoError(t, err)

@@ -84,7 +84,10 @@ func TestWebsocket(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
 	const (
 		AfterConnect    = 1
 		AfterQuery      = 2
@@ -102,7 +105,7 @@ func TestWebsocket(t *testing.T) {
 	//var jsonResult [][]interface{}
 	var resultID uint64
 	var blockResult [][]driver.Value
-	testMessageHandler := func(messageType int, message []byte) error {
+	testMessageHandler := func(_ int, message []byte) error {
 		//json
 		switch status {
 		case AfterConnect:
@@ -392,7 +395,7 @@ func TestWriteBlock(t *testing.T) {
 	var queryResult *WSQueryResult
 	var rows int
 	finish := make(chan struct{})
-	testMessageHandler := func(messageType int, message []byte) error {
+	testMessageHandler := func(_ int, message []byte) error {
 		//json
 		switch status {
 		case AfterConnect:
@@ -596,14 +599,15 @@ func TestWriteBlock(t *testing.T) {
 		return
 	}
 	<-finish
-	ws.Close()
+	err = ws.Close()
+	assert.NoError(t, err)
 	ws, _, err = websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/ws", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	var blockResult [][]driver.Value
-	testMessageHandler2 := func(messageType int, message []byte) error {
+	testMessageHandler2 := func(_ int, message []byte) error {
 		switch status {
 		case AfterConnect:
 			var d WSConnectResp
@@ -776,7 +780,8 @@ func TestWriteBlock(t *testing.T) {
 		return
 	}
 	<-finish
-	ws.Close()
+	err = ws.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, 3, len(blockResult))
 	assert.Equal(t, true, blockResult[0][1])
 	assert.Equal(t, int8(2), blockResult[0][2])
@@ -884,7 +889,7 @@ func TestWriteBlockWithFields(t *testing.T) {
 	var queryResult *WSQueryResult
 	var rows int
 	finish := make(chan struct{})
-	testMessageHandler := func(messageType int, message []byte) error {
+	testMessageHandler := func(_ int, message []byte) error {
 		//json
 		switch status {
 		case AfterConnect:
@@ -1116,14 +1121,15 @@ func TestWriteBlockWithFields(t *testing.T) {
 		return
 	}
 	<-finish
-	ws.Close()
+	err = ws.Close()
+	assert.NoError(t, err)
 	ws, _, err = websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/ws", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	var blockResult [][]driver.Value
-	testMessageHandler2 := func(messageType int, message []byte) error {
+	testMessageHandler2 := func(_ int, message []byte) error {
 		switch status {
 		case AfterConnect:
 			var d WSConnectResp
@@ -1296,7 +1302,8 @@ func TestWriteBlockWithFields(t *testing.T) {
 		return
 	}
 	<-finish
-	ws.Close()
+	err = ws.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, 3, len(blockResult))
 	assert.Equal(t, now, blockResult[0][0].(time.Time).UnixNano()/1e6)
 	assert.Equal(t, true, blockResult[0][1])
@@ -1359,7 +1366,10 @@ func TestQueryAllType(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
 	const (
 		AfterConnect    = 1
 		AfterQuery      = 2
@@ -1377,7 +1387,7 @@ func TestQueryAllType(t *testing.T) {
 	//var jsonResult [][]interface{}
 	var resultID uint64
 	var blockResult [][]driver.Value
-	testMessageHandler := func(messageType int, message []byte) error {
+	testMessageHandler := func(_ int, message []byte) error {
 		//json
 		switch status {
 		case AfterConnect:

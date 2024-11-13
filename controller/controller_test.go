@@ -8,7 +8,7 @@ import (
 
 type MockController struct{}
 
-func (mc MockController) Init(r gin.IRouter) {}
+func (mc MockController) Init(_ gin.IRouter) {}
 
 func TestAddAndGetControllers(t *testing.T) {
 	mockController := MockController{}

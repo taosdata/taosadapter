@@ -143,7 +143,10 @@ func TestRestful_InitSchemaless(t *testing.T) {
 	if err != nil {
 		t.Fatal("connect error", err)
 	}
-	defer ws.Close()
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
 
 	j, _ := json.Marshal(map[string]interface{}{
 		"action": "conn",

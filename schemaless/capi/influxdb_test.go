@@ -8,7 +8,6 @@ import (
 	"github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/schemaless/capi"
-	"github.com/taosdata/taosadapter/v3/schemaless/proto"
 )
 
 // @author: xftan
@@ -47,7 +46,6 @@ func TestInsertInfluxdb(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *proto.InfluxResult
 		wantErr bool
 	}{
 		{

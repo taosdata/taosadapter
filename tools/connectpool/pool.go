@@ -20,7 +20,7 @@ type Config struct {
 	MaxWait     int
 	WaitTimeout time.Duration
 	Factory     func() (unsafe.Pointer, error)
-	Close       func(pointer unsafe.Pointer) error
+	Close       func(pointer unsafe.Pointer)
 }
 
 type connReq struct {
@@ -31,7 +31,7 @@ type ConnectPool struct {
 	mu           sync.RWMutex
 	conns        chan unsafe.Pointer
 	factory      func() (unsafe.Pointer, error)
-	close        func(pointer unsafe.Pointer) error
+	close        func(pointer unsafe.Pointer)
 	maxActive    int
 	openingConns int
 	maxWait      int
@@ -182,7 +182,7 @@ func (c *ConnectPool) Put(conn unsafe.Pointer) error {
 
 	if c.released {
 		c.mu.Unlock()
-		c.Close(conn)
+		_ = c.Close(conn)
 		if c.openingConns == 0 {
 			c.close = nil
 		}
@@ -198,16 +198,16 @@ func (c *ConnectPool) Put(conn unsafe.Pointer) error {
 		}
 		c.mu.Unlock()
 		return nil
-	} else {
-		select {
-		case c.conns <- conn:
-			c.mu.Unlock()
-			return nil
-		default:
-			c.mu.Unlock()
-			return c.Close(conn)
-		}
 	}
+	select {
+	case c.conns <- conn:
+		c.mu.Unlock()
+		return nil
+	default:
+		c.mu.Unlock()
+		return c.Close(conn)
+	}
+
 }
 
 func (c *ConnectPool) Close(conn unsafe.Pointer) error {
@@ -220,7 +220,8 @@ func (c *ConnectPool) Close(conn unsafe.Pointer) error {
 		return nil
 	}
 	c.openingConns--
-	return c.close(conn)
+	c.close(conn)
+	return nil
 }
 
 func (c *ConnectPool) Release() {

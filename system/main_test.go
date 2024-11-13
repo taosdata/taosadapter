@@ -32,7 +32,7 @@ func TestStart(t *testing.T) {
 			time.Sleep(time.Second)
 			continue
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		success = true
 		break
 	}

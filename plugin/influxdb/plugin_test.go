@@ -24,6 +24,7 @@ import (
 // @date: 2021/12/14 15:07
 // @description: test influxdb plugin
 func TestInfluxdb(t *testing.T) {
+	//nolint:staticcheck
 	rand.Seed(time.Now().UnixNano())
 	viper.Set("smlAutoCreateDB", true)
 	defer viper.Set("smlAutoCreateDB", false)
@@ -39,7 +40,10 @@ func TestInfluxdb(t *testing.T) {
 	}
 	afC, err := af.NewConnector(conn)
 	assert.NoError(t, err)
-	defer afC.Close()
+	defer func() {
+		err = afC.Close()
+		assert.NoError(t, err)
+	}()
 	_, err = afC.Exec("create database if not exists test_plugin_influxdb")
 	assert.NoError(t, err)
 	defer func() {
@@ -56,7 +60,10 @@ func TestInfluxdb(t *testing.T) {
 	err = p.Start()
 	assert.NoError(t, err)
 	number := rand.Int31()
-	defer p.Stop()
+	defer func() {
+		err = p.Stop()
+		assert.NoError(t, err)
+	}()
 	w := httptest.NewRecorder()
 	reader := strings.NewReader(fmt.Sprintf("measurement,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
 	req, _ := http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb", reader)
@@ -81,7 +88,10 @@ func TestInfluxdb(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer r.Close()
+	defer func() {
+		err = r.Close()
+		assert.NoError(t, err)
+	}()
 	fieldCount := len(r.Columns())
 	values := make([]driver.Value, fieldCount)
 	err = r.Next(values)
@@ -112,7 +122,10 @@ func TestInfluxdb(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer r.Close()
+	defer func() {
+		err = r.Close()
+		assert.NoError(t, err)
+	}()
 	values = make([]driver.Value, 1)
 	err = r.Next(values)
 	assert.NoError(t, err)

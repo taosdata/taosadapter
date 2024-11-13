@@ -21,7 +21,7 @@ func TestMain(m *testing.M) {
 // @author: xftan
 // @date: 2021/12/14 15:07
 // @description: test config log
-func TestConfigLog(t *testing.T) {
+func TestConfigLog(_ *testing.T) {
 	config.Conf.Log.EnableRecordHttpSql = true
 	ConfigLog()
 	logger := GetLogger("TST")

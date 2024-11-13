@@ -24,6 +24,7 @@ import (
 // @date: 2021/12/14 15:08
 // @description: test opentsdb test
 func TestOpentsdb(t *testing.T) {
+	//nolint:staticcheck
 	rand.Seed(time.Now().UnixNano())
 	viper.Set("smlAutoCreateDB", true)
 	defer viper.Set("smlAutoCreateDB", false)
@@ -40,7 +41,10 @@ func TestOpentsdb(t *testing.T) {
 	}
 	afC, err := af.NewConnector(conn)
 	assert.NoError(t, err)
-	defer afC.Close()
+	defer func() {
+		err = afC.Close()
+		assert.NoError(t, err)
+	}()
 	_, err = afC.Exec("create database if not exists test_plugin_opentsdb_http_json")
 	assert.NoError(t, err)
 	err = p.Init(router)
@@ -48,7 +52,10 @@ func TestOpentsdb(t *testing.T) {
 	err = p.Start()
 	assert.NoError(t, err)
 	number := rand.Int31()
-	defer p.Stop()
+	defer func() {
+		err = p.Stop()
+		assert.NoError(t, err)
+	}()
 	w := httptest.NewRecorder()
 	reader := strings.NewReader(fmt.Sprintf("put metric %d %d host=web01 interface=eth0 ", time.Now().Unix(), number))
 	req, _ := http.NewRequest("POST", "/put/telnet/test_plugin_opentsdb_http_telnet?ttl=1000", reader)
@@ -96,7 +103,10 @@ func TestOpentsdb(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer r.Close()
+	defer func() {
+		err = r.Close()
+		assert.NoError(t, err)
+	}()
 	values := make([]driver.Value, 1)
 	err = r.Next(values)
 	assert.NoError(t, err)
@@ -109,7 +119,10 @@ func TestOpentsdb(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer r2.Close()
+	defer func() {
+		err = r2.Close()
+		assert.NoError(t, err)
+	}()
 	values = make([]driver.Value, 1)
 	err = r2.Next(values)
 	assert.NoError(t, err)
@@ -123,7 +136,10 @@ func TestOpentsdb(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer rows.Close()
+	defer func() {
+		err = rows.Close()
+		assert.NoError(t, err)
+	}()
 	values = make([]driver.Value, 1)
 	err = rows.Next(values)
 	assert.NoError(t, err)
@@ -137,7 +153,10 @@ func TestOpentsdb(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer rows.Close()
+	defer func() {
+		err = rows.Close()
+		assert.NoError(t, err)
+	}()
 	values = make([]driver.Value, 1)
 	err = rows.Next(values)
 	assert.NoError(t, err)

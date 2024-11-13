@@ -21,7 +21,7 @@ func TestGinLog(t *testing.T) {
 	router.POST("/rest/sql", func(c *gin.Context) {
 		c.Status(200)
 	})
-	router.POST("/panic", func(c *gin.Context) {
+	router.POST("/panic", func(_ *gin.Context) {
 		panic("test")
 	})
 	w := httptest.NewRecorder()

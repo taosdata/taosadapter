@@ -21,6 +21,7 @@ import (
 // @date: 2021/12/14 15:08
 // @description: test statsd plugin
 func TestStatsd(t *testing.T) {
+	//nolint:staticcheck
 	rand.Seed(time.Now().UnixNano())
 	p := &Plugin{}
 	config.Init()
@@ -35,7 +36,10 @@ func TestStatsd(t *testing.T) {
 	}
 	afC, err := af.NewConnector(conn)
 	assert.NoError(t, err)
-	defer afC.Close()
+	defer func() {
+		err = afC.Close()
+		assert.NoError(t, err)
+	}()
 	_, err = afC.Exec("create database if not exists statsd")
 	assert.NoError(t, err)
 	err = p.Init(nil)
@@ -68,7 +72,10 @@ func TestStatsd(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer r.Close()
+	defer func() {
+		err = r.Close()
+		assert.NoError(t, err)
+	}()
 	values := make([]driver.Value, 1)
 	err = r.Next(values)
 	assert.NoError(t, err)
@@ -82,7 +89,10 @@ func TestStatsd(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer rows.Close()
+	defer func() {
+		err = rows.Close()
+		assert.NoError(t, err)
+	}()
 	values = make([]driver.Value, 1)
 	err = rows.Next(values)
 	assert.NoError(t, err)

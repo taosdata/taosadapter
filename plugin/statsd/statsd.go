@@ -3,7 +3,6 @@ package statsd
 import (
 	"bufio"
 	"bytes"
-	_ "embed"
 	"fmt"
 	"math/rand"
 	"net"
@@ -28,10 +27,7 @@ const (
 
 	defaultFieldName = "value"
 
-	defaultProtocol = "udp4"
-
-	defaultSeparator           = "_"
-	defaultAllowPendingMessage = 10000
+	defaultSeparator = "_"
 
 	parserGoRoutines = 5
 )
@@ -399,7 +395,12 @@ func (s *Statsd) tcpListen(listener *net.TCPListener) error {
 					_ = conn.Close()
 					continue
 				}
-				taosConn.Put()
+				err = taosConn.Put()
+				if err != nil {
+					s.Log.Errorf("PutConnection error: %v", err)
+					_ = conn.Close()
+					continue
+				}
 				authed = true
 				valid = true
 			}
@@ -461,10 +462,11 @@ func (s *Statsd) udpListen(conn *net.UDPConn) error {
 					s.Log.Errorf("Error reading: %s", err.Error())
 					continue
 				}
-				return nil
+				return err
 			}
 			if addr == nil {
 				s.Log.Errorf("RemoteAddr is nil")
+				continue
 			}
 			authed, valid, poolExists := commonpool.VerifyClientIP(s.User, s.Password, addr.IP)
 			if !poolExists {
@@ -474,7 +476,12 @@ func (s *Statsd) udpListen(conn *net.UDPConn) error {
 					_ = conn.Close()
 					continue
 				}
-				taosConn.Put()
+				err = taosConn.Put()
+				if err != nil {
+					s.Log.Errorf("PutConnection error: %v", err)
+					_ = conn.Close()
+					continue
+				}
 				authed = true
 				valid = true
 			}
@@ -927,7 +934,11 @@ func (s *Statsd) handler(conn *net.TCPConn, id string) {
 				s.Log.Errorf("get connection error, err:%s", err)
 				return
 			}
-			taosConn.Put()
+			err = taosConn.Put()
+			if err != nil {
+				s.Log.Errorf("PutConnection error: %v", err)
+				return
+			}
 			select {
 			case s.in <- input{Buffer: b, Time: time.Now(), Addr: remoteIP}:
 			default:
@@ -1044,10 +1055,11 @@ func (s *Statsd) expireCachedMetrics() {
 const alphanum string = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 func RandomString(n int) string {
-	var bytes = make([]byte, n)
-	rand.Read(bytes)
-	for i, b := range bytes {
-		bytes[i] = alphanum[b%byte(len(alphanum))]
+	var bs = make([]byte, n)
+	//nolint:staticcheck
+	rand.Read(bs)
+	for i, b := range bs {
+		bs[i] = alphanum[b%byte(len(alphanum))]
 	}
-	return string(bytes)
+	return string(bs)
 }

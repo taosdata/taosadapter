@@ -22,7 +22,7 @@ func TestWSWriteJson(t *testing.T) {
 		Action:  "version",
 		Version: "1.0.0",
 	}
-	m.HandleMessage(func(session *melody.Session, msg []byte) {
+	m.HandleMessage(func(session *melody.Session, _ []byte) {
 		if m.IsClosed() {
 			return
 		}
@@ -42,7 +42,10 @@ func TestWSWriteJson(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
 	err = ws.WriteMessage(websocket.TextMessage, []byte{'1'})
 	assert.NoError(t, err)
 	wt, resp, err := ws.ReadMessage()

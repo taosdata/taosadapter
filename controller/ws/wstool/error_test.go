@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/huskar-t/melody"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 )
@@ -26,15 +27,16 @@ func TestWSError(t *testing.T) {
 		ErrStr: "test error",
 	}
 	commonErr := errors.New("test common error")
+	logger := logrus.New().WithField("test", "TestWSError")
 	m.HandleMessage(func(session *melody.Session, data []byte) {
 		if m.IsClosed() {
 			return
 		}
 		switch data[0] {
 		case '1':
-			WSError(ctx, session, taosErr, "test action", reqID)
+			WSError(ctx, session, logger, taosErr, "test action", reqID)
 		case '2':
-			WSError(ctx, session, commonErr, "test common error action", reqID)
+			WSError(ctx, session, logger, commonErr, "test common error action", reqID)
 		}
 
 	})
@@ -50,7 +52,10 @@ func TestWSError(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
 	err = ws.WriteMessage(websocket.TextMessage, []byte{'1'})
 	assert.NoError(t, err)
 	wt, resp, err := ws.ReadMessage()

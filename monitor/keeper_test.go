@@ -2,7 +2,7 @@ package monitor_test
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -224,7 +224,11 @@ func TestUpload(t *testing.T) {
 	done := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/upload" {
-			b, _ := ioutil.ReadAll(r.Body)
+			b, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Error(err)
+				return
+			}
 			t.Log(string(b))
 			times += 1
 			if times == 1 {

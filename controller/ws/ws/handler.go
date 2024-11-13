@@ -14,7 +14,6 @@ import (
 	"unsafe"
 
 	"github.com/huskar-t/melody"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/common/parser"
@@ -133,7 +132,7 @@ func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 func (h *messageHandler) signalExit(logger *logrus.Entry, isDebug bool) {
 	logger.Trace("close session")
 	s := log.GetLogNow(isDebug)
-	h.session.Close()
+	_ = h.session.Close()
 	logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
 	h.Unlock()
 	logger.Trace("close handler")
@@ -167,8 +166,6 @@ type Request struct {
 	Action string          `json:"action"`
 	Args   json.RawMessage `json:"args"`
 }
-
-var jsonI = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
@@ -288,7 +285,7 @@ type RequestID struct {
 	ReqID uint64 `json:"req_id"`
 }
 
-type dealFunc func(context.Context, Request, *logrus.Entry, bool, time.Time) Response
+type dealFunc func(context.Context, Request, *logrus.Entry, bool) Response
 
 type dealBinaryRequest struct {
 	action  messageType
@@ -297,7 +294,7 @@ type dealBinaryRequest struct {
 	p0      unsafe.Pointer
 	message []byte
 }
-type dealBinaryFunc func(context.Context, dealBinaryRequest, *logrus.Entry, bool, time.Time) Response
+type dealBinaryFunc func(context.Context, dealBinaryRequest, *logrus.Entry, bool) Response
 
 func (h *messageHandler) deal(ctx context.Context, session *melody.Session, request Request, f dealFunc) {
 	h.wait.Add(1)
@@ -324,9 +321,7 @@ func (h *messageHandler) deal(ctx context.Context, session *melody.Session, requ
 			return
 		}
 
-		s := log.GetLogNow(isDebug)
-
-		resp := f(ctx, request, logger, isDebug, s)
+		resp := f(ctx, request, logger, isDebug)
 		h.writeResponse(ctx, session, resp, request.Action, reqID, logger)
 	}()
 }
@@ -344,8 +339,6 @@ func (h *messageHandler) dealBinary(ctx context.Context, session *melody.Session
 			return
 		}
 
-		s := log.GetLogNow(isDebug)
-
 		req := dealBinaryRequest{
 			action:  action,
 			reqID:   reqID,
@@ -353,7 +346,7 @@ func (h *messageHandler) dealBinary(ctx context.Context, session *melody.Session
 			p0:      p0,
 			message: message,
 		}
-		resp := f(ctx, req, logger, isDebug, s)
+		resp := f(ctx, req, logger, isDebug)
 		h.writeResponse(ctx, session, resp, action.String(), reqID, logger)
 	}()
 }
@@ -417,15 +410,15 @@ func (h *messageHandler) stop() {
 	})
 }
 
-func (h *messageHandler) handleDefault(_ context.Context, request Request, _ *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleDefault(_ context.Context, request Request, _ *logrus.Entry, _ bool) (resp Response) {
 	return wsCommonErrorMsg(0xffff, fmt.Sprintf("unknown action %s", request.Action))
 }
 
-func (h *messageHandler) handleDefaultBinary(_ context.Context, req dealBinaryRequest, _ *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleDefaultBinary(_ context.Context, req dealBinaryRequest, _ *logrus.Entry, _ bool) (resp Response) {
 	return wsCommonErrorMsg(0xffff, fmt.Sprintf("unknown action %v", req.action))
 }
 
-func (h *messageHandler) handleVersion(_ context.Context, _ Request, _ *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleVersion(_ context.Context, _ Request, _ *logrus.Entry, _ bool) (resp Response) {
 	return &VersionResponse{Version: version.TaosClientVersion}
 }
 
@@ -437,7 +430,7 @@ type ConnRequest struct {
 	Mode     *int   `json:"mode"`
 }
 
-func (h *messageHandler) handleConnect(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleConnect(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req ConnRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal connect request:%s, error, err:%s", string(request.Args), err)
@@ -464,7 +457,7 @@ func (h *messageHandler) handleConnect(_ context.Context, request Request, logge
 		return wsCommonErrorMsg(int(taosErr.Code), taosErr.ErrStr)
 	}
 	logger.Trace("get whitelist")
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	whitelist, err := tool.GetWhitelist(conn)
 	logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
@@ -544,7 +537,7 @@ type QueryResponse struct {
 	Precision     int                `json:"precision"`
 }
 
-func (h *messageHandler) handleQuery(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleQuery(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req QueryRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal ws query request %s error, err:%s", request.Args, err)
@@ -552,6 +545,7 @@ func (h *messageHandler) handleQuery(_ context.Context, request Request, logger 
 	}
 	sqlType := monitor.WSRecordRequest(req.Sql)
 	logger.Debugf("get query request, sql:%s", req.Sql)
+	s := log.GetLogNow(isDebug)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugf("get handler cost:%s", log.GetLogDuration(isDebug, s))
@@ -613,7 +607,7 @@ type FetchResponse struct {
 	Rows      int    `json:"rows"`
 }
 
-func (h *messageHandler) handleFetch(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleFetch(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req FetchRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal ws fetch request %s error, err:%s", request.Args, err)
@@ -632,7 +626,7 @@ func (h *messageHandler) handleFetch(_ context.Context, request Request, logger 
 		logger.Errorf("result has been freed")
 		return wsCommonErrorMsg(0xffff, "result has been freed")
 	}
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugf("get handler, cost:%s", log.GetLogDuration(isDebug, s))
@@ -669,7 +663,7 @@ type FetchBlockRequest struct {
 	ID    uint64 `json:"id"`
 }
 
-func (h *messageHandler) handleFetchBlock(ctx context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleFetchBlock(ctx context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req FetchBlockRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal ws fetch block request, req:%s, error, err:%s", request.Args, err)
@@ -696,6 +690,7 @@ func (h *messageHandler) handleFetchBlock(ctx context.Context, request Request, 
 	if blockLength <= 0 {
 		return wsCommonErrorMsg(0xffff, "block length illegal")
 	}
+	s := log.GetLogNow(isDebug)
 	if cap(item.buf) < blockLength+16 {
 		item.buf = make([]byte, 0, blockLength+16)
 	}
@@ -714,7 +709,7 @@ type FreeResultRequest struct {
 	ID    uint64 `json:"id"`
 }
 
-func (h *messageHandler) handleFreeResult(_ context.Context, request Request, logger *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleFreeResult(_ context.Context, request Request, logger *logrus.Entry, _ bool) (resp Response) {
 	var req FreeResultRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal ws fetch request %s error, err:%s", request.Args, err)
@@ -742,7 +737,7 @@ type SchemalessWriteResponse struct {
 	TotalRows    int32 `json:"total_rows"`
 }
 
-func (h *messageHandler) handleSchemalessWrite(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleSchemalessWrite(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req SchemalessWriteRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal schemaless write request %s error, err:%s", request.Args, err)
@@ -775,7 +770,7 @@ type StmtInitResponse struct {
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) handleStmtInit(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleStmtInit(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	stmtInit := syncinterface.TaosStmtInitWithReqID(h.conn, int64(request.ReqID), logger, isDebug)
 	if stmtInit == nil {
 		errStr := wrapper.TaosStmtErrStr(stmtInit)
@@ -800,7 +795,7 @@ type StmtPrepareResponse struct {
 	IsInsert bool   `json:"is_insert"`
 }
 
-func (h *messageHandler) handleStmtPrepare(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleStmtPrepare(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req StmtPrepareRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt prepare request %s error, err:%s", request.Args, err)
@@ -812,7 +807,7 @@ func (h *messageHandler) handleStmtPrepare(_ context.Context, request Request, l
 		logger.Errorf("stmt is nil, stmt_id:%d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt is nil", req.StmtID)
 	}
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	logger.Trace("get stmt lock")
 	stmtItem.Lock()
 	logger.Debugf("get stmt lock cost:%s", log.GetLogDuration(isDebug, s))
@@ -850,7 +845,7 @@ type StmtSetTableNameResponse struct {
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) handleStmtSetTableName(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleStmtSetTableName(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req StmtSetTableNameRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt set table name request %s error, err:%s", request.Args, err)
@@ -889,7 +884,7 @@ type StmtSetTagsResponse struct {
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) handleStmtSetTags(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleStmtSetTags(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req StmtSetTagsRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt set tags request %s error, err:%s", request.Args, err)
@@ -921,7 +916,7 @@ func (h *messageHandler) handleStmtSetTags(_ context.Context, request Request, l
 		logger.Trace("no tags")
 		return &StmtSetTagsResponse{StmtID: req.StmtID}
 	}
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(tagNums, tagFields)
 	logger.Debugf("stmt parse fields cost:%s", log.GetLogDuration(isDebug, s))
 	tags := make([][]driver.Value, tagNums)
@@ -955,7 +950,7 @@ type StmtBindResponse struct {
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) handleStmtBind(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleStmtBind(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req StmtBindRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt bind tag request %s error, err:%s", request.Args, err)
@@ -986,7 +981,7 @@ func (h *messageHandler) handleStmtBind(_ context.Context, request Request, logg
 		logger.Trace("no columns")
 		return &StmtBindResponse{StmtID: req.StmtID}
 	}
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(colNums, colFields)
 	logger.Debugf("stmt parse fields cost:%s", log.GetLogDuration(isDebug, s))
 	fieldTypes := make([]*types.ColumnType, colNums)
@@ -1015,7 +1010,7 @@ func (h *messageHandler) handleStmtBind(_ context.Context, request Request, logg
 	return &StmtBindResponse{StmtID: req.StmtID}
 }
 
-func (h *messageHandler) handleBindMessage(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleBindMessage(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool) (resp Response) {
 	block := tools.AddPointer(req.p0, uintptr(24))
 	columns := parser.RawBlockGetNumOfCols(block)
 	rows := parser.RawBlockGetNumOfRows(block)
@@ -1047,7 +1042,7 @@ func (h *messageHandler) handleBindMessage(_ context.Context, req dealBinaryRequ
 			logger.Trace("no columns")
 			return &StmtBindResponse{StmtID: req.id}
 		}
-		s = log.GetLogNow(isDebug)
+		s := log.GetLogNow(isDebug)
 		fields := wrapper.StmtParseFields(colNums, colFields)
 		logger.Debugf("stmt parse fields cost:%s", log.GetLogDuration(isDebug, s))
 		fieldTypes = make([]*types.ColumnType, colNums)
@@ -1165,7 +1160,7 @@ type StmtAddBatchResponse struct {
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) handleStmtAddBatch(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleStmtAddBatch(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req StmtAddBatchRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt add batch request %s error, err:%s", request.Args, err)
@@ -1204,7 +1199,7 @@ type StmtExecResponse struct {
 	Affected int    `json:"affected"`
 }
 
-func (h *messageHandler) handleStmtExec(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleStmtExec(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req StmtExecRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt exec request %s error, err:%s", request.Args, err)
@@ -1228,7 +1223,7 @@ func (h *messageHandler) handleStmtExec(_ context.Context, request Request, logg
 		logger.Errorf("stmt execute error, err:%s", errStr)
 		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	affected := wrapper.TaosStmtAffectedRowsOnce(stmtItem.stmt)
 	logger.Debugf("stmt_affected_rows_once, affected:%d, cost:%s", affected, log.GetLogDuration(isDebug, s))
 	return &StmtExecResponse{StmtID: req.StmtID, Affected: affected}
@@ -1244,7 +1239,7 @@ type StmtCloseResponse struct {
 	StmtID uint64 `json:"stmt_id,omitempty"`
 }
 
-func (h *messageHandler) handleStmtClose(_ context.Context, request Request, logger *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleStmtClose(_ context.Context, request Request, logger *logrus.Entry, _ bool) (resp Response) {
 	var req StmtCloseRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt close request %s error, err:%s", request.Args, err)
@@ -1273,7 +1268,7 @@ type StmtGetColFieldsResponse struct {
 	Fields []*stmtCommon.StmtField `json:"fields"`
 }
 
-func (h *messageHandler) handleStmtGetColFields(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleStmtGetColFields(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req StmtGetColFieldsRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt get col request %s error, err:%s", request.Args, err)
@@ -1303,7 +1298,7 @@ func (h *messageHandler) handleStmtGetColFields(_ context.Context, request Reque
 	if colNums == 0 {
 		return &StmtGetColFieldsResponse{StmtID: req.StmtID}
 	}
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(colNums, colFields)
 	logger.Debugf("stmt parse fields cost:%s", log.GetLogDuration(isDebug, s))
 	return &StmtGetColFieldsResponse{StmtID: req.StmtID, Fields: fields}
@@ -1320,7 +1315,7 @@ type StmtGetTagFieldsResponse struct {
 	Fields []*stmtCommon.StmtField `json:"fields,omitempty"`
 }
 
-func (h *messageHandler) handleStmtGetTagFields(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleStmtGetTagFields(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req StmtGetTagFieldsRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt get tags request %s error, err:%s", request.Args, err)
@@ -1350,7 +1345,7 @@ func (h *messageHandler) handleStmtGetTagFields(_ context.Context, request Reque
 	if tagNums == 0 {
 		return &StmtGetTagFieldsResponse{StmtID: req.StmtID}
 	}
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(tagNums, tagFields)
 	logger.Debugf("stmt parse fields cost:%s", log.GetLogDuration(isDebug, s))
 	return &StmtGetTagFieldsResponse{StmtID: req.StmtID, Fields: fields}
@@ -1372,7 +1367,7 @@ type StmtUseResultResponse struct {
 	Precision     int                `json:"precision"`
 }
 
-func (h *messageHandler) handleStmtUseResult(_ context.Context, request Request, logger *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleStmtUseResult(_ context.Context, request Request, logger *logrus.Entry, _ bool) (resp Response) {
 	var req StmtUseResultRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt use result request %s error, err:%s", request.Args, err)
@@ -1416,7 +1411,7 @@ func (h *messageHandler) handleStmtUseResult(_ context.Context, request Request,
 	}
 }
 
-func (h *messageHandler) handleSetTagsMessage(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleSetTagsMessage(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool) (resp Response) {
 	block := tools.AddPointer(req.p0, uintptr(24))
 	columns := parser.RawBlockGetNumOfCols(block)
 	rows := parser.RawBlockGetNumOfRows(block)
@@ -1453,7 +1448,7 @@ func (h *messageHandler) handleSetTagsMessage(_ context.Context, req dealBinaryR
 		logger.Tracef("stmt tags count not match %d != %d", columns, tagNums)
 		return wsStmtErrorMsg(0xffff, "stmt tags count not match", req.id)
 	}
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(tagNums, tagFields)
 	logger.Debugf("stmt parse fields cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
@@ -1473,12 +1468,13 @@ func (h *messageHandler) handleSetTagsMessage(_ context.Context, req dealBinaryR
 	return &StmtSetTagsResponse{StmtID: req.id}
 }
 
-func (h *messageHandler) handleTMQRawMessage(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleTMQRawMessage(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool) (resp Response) {
 	length := *(*uint32)(tools.AddPointer(req.p0, uintptr(24)))
 	metaType := *(*uint16)(tools.AddPointer(req.p0, uintptr(28)))
 	data := tools.AddPointer(req.p0, uintptr(30))
 	logger.Tracef("get write raw message, length:%d, metaType:%d", length, metaType)
 	logger.Trace("get global lock for raw message")
+	s := log.GetLogNow(isDebug)
 	h.Lock()
 	logger.Debugf("get global lock cost:%s", log.GetLogDuration(isDebug, s))
 	defer h.Unlock()
@@ -1498,7 +1494,7 @@ func (h *messageHandler) handleTMQRawMessage(_ context.Context, req dealBinaryRe
 	return &BaseResponse{}
 }
 
-func (h *messageHandler) handleRawBlockMessage(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleRawBlockMessage(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool) (resp Response) {
 	numOfRows := *(*int32)(tools.AddPointer(req.p0, uintptr(24)))
 	tableNameLength := *(*uint16)(tools.AddPointer(req.p0, uintptr(28)))
 	tableName := make([]byte, tableNameLength)
@@ -1507,7 +1503,7 @@ func (h *messageHandler) handleRawBlockMessage(_ context.Context, req dealBinary
 	}
 	rawBlock := tools.AddPointer(req.p0, uintptr(30+tableNameLength))
 	logger.Tracef("raw block message, table:%s, rows:%d", tableName, numOfRows)
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	h.Lock()
 	logger.Debugf("get global lock cost:%s", log.GetLogDuration(isDebug, s))
 	defer h.Unlock()
@@ -1525,7 +1521,7 @@ func (h *messageHandler) handleRawBlockMessage(_ context.Context, req dealBinary
 	return &BaseResponse{}
 }
 
-func (h *messageHandler) handleRawBlockMessageWithFields(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleRawBlockMessageWithFields(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool) (resp Response) {
 	numOfRows := *(*int32)(tools.AddPointer(req.p0, uintptr(24)))
 	tableNameLength := int(*(*uint16)(tools.AddPointer(req.p0, uintptr(28))))
 	tableName := make([]byte, tableNameLength)
@@ -1537,7 +1533,6 @@ func (h *messageHandler) handleRawBlockMessageWithFields(_ context.Context, req 
 	numOfColumn := int(parser.RawBlockGetNumOfCols(rawBlock))
 	fieldsBlock := tools.AddPointer(req.p0, uintptr(30+tableNameLength+blockLength))
 	logger.Tracef("raw block message with fields, table:%s, rows:%d", tableName, numOfRows)
-	s = log.GetLogNow(isDebug)
 	h.Lock()
 	defer h.Unlock()
 	if h.closed {
@@ -1554,7 +1549,7 @@ func (h *messageHandler) handleRawBlockMessageWithFields(_ context.Context, req 
 	return &BaseResponse{}
 }
 
-func (h *messageHandler) handleBinaryQuery(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) Response {
+func (h *messageHandler) handleBinaryQuery(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool) Response {
 	message := req.message
 	if len(message) < 31 {
 		return wsCommonErrorMsg(0xffff, "message length is too short")
@@ -1574,7 +1569,7 @@ func (h *messageHandler) handleBinaryQuery(_ context.Context, req dealBinaryRequ
 	}
 	logger.Debugf("binary query, sql:%s", log.GetLogSql(bytesutil.ToUnsafeString(sql)))
 	sqlType := monitor.WSRecordRequest(bytesutil.ToUnsafeString(sql))
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugf("get handler cost:%s", log.GetLogDuration(isDebug, s))
@@ -1602,7 +1597,6 @@ func (h *messageHandler) handleBinaryQuery(_ context.Context, req dealBinaryRequ
 	s = log.GetLogNow(isDebug)
 	fieldsCount := wrapper.TaosNumFields(result.Res)
 	logger.Debugf("num_fields cost:%s", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
 	rowsHeader, _ := wrapper.ReadColumn(result.Res, fieldsCount)
 	s = log.GetLogNow(isDebug)
 	logger.Debugf("read column cost:%s", log.GetLogDuration(isDebug, s))
@@ -1622,7 +1616,7 @@ func (h *messageHandler) handleBinaryQuery(_ context.Context, req dealBinaryRequ
 	}
 }
 
-func (h *messageHandler) handleFetchRawBlock(ctx context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) Response {
+func (h *messageHandler) handleFetchRawBlock(ctx context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool) Response {
 	message := req.message
 	if len(message) < 26 {
 		return wsFetchRawBlockErrorMsg(0xffff, "message length is too short", req.reqID, req.id, uint64(wstool.GetDuration(ctx)))
@@ -1643,7 +1637,7 @@ func (h *messageHandler) handleFetchRawBlock(ctx context.Context, req dealBinary
 		logger.Errorf("result has been freed, result_id:%d", req.id)
 		return wsFetchRawBlockErrorMsg(0xffff, "result has been freed", req.reqID, req.id, uint64(wstool.GetDuration(ctx)))
 	}
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugf("get handler cost:%s", log.GetLogDuration(isDebug, s))
@@ -1686,7 +1680,7 @@ type Stmt2BindResponse struct {
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) handleStmt2Bind(ctx context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool, s time.Time) Response {
+func (h *messageHandler) handleStmt2Bind(_ context.Context, req dealBinaryRequest, logger *logrus.Entry, isDebug bool) Response {
 	message := req.message
 	if len(message) < 30 {
 		return wsStmtErrorMsg(0xffff, "message length is too short", req.id)
@@ -1726,7 +1720,7 @@ type GetCurrentDBResponse struct {
 	DB string `json:"db"`
 }
 
-func (h *messageHandler) handleGetCurrentDB(_ context.Context, _ Request, logger *logrus.Entry, isDebug bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleGetCurrentDB(_ context.Context, _ Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	db, err := syncinterface.TaosGetCurrentDB(h.conn, logger, isDebug)
 	if err != nil {
 		var taosErr *errors2.TaosError
@@ -1742,7 +1736,7 @@ type GetServerInfoResponse struct {
 	Info string `json:"info"`
 }
 
-func (h *messageHandler) handleGetServerInfo(_ context.Context, _ Request, logger *logrus.Entry, isDebug bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleGetServerInfo(_ context.Context, _ Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	serverInfo := syncinterface.TaosGetServerInfo(h.conn, logger, isDebug)
 	return &GetServerInfoResponse{Info: serverInfo}
 }
@@ -1757,7 +1751,7 @@ type NumFieldsResponse struct {
 	NumFields int `json:"num_fields"`
 }
 
-func (h *messageHandler) handleNumFields(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleNumFields(_ context.Context, request Request, logger *logrus.Entry, _ bool) (resp Response) {
 	var req NumFieldsRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt num params request %s error, err:%s", request.Args, err)
@@ -1790,7 +1784,7 @@ type StmtNumParamsResponse struct {
 	NumParams int    `json:"num_params"`
 }
 
-func (h *messageHandler) handleStmtNumParams(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleStmtNumParams(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req StmtNumParamsRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt num params request %s error, err:%s", request.Args, err)
@@ -1831,7 +1825,7 @@ type StmtGetParamResponse struct {
 	Length   int    `json:"length"`
 }
 
-func (h *messageHandler) handleStmtGetParam(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleStmtGetParam(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req StmtGetParamRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt get param request %s error, err:%s", request.Args, err)
@@ -1872,7 +1866,7 @@ type Stmt2InitResponse struct {
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) handleStmt2Init(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleStmt2Init(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req Stmt2InitRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt2 init request %s error, err:%s", request.Args, err)
@@ -1912,7 +1906,7 @@ type Stmt2PrepareResponse struct {
 	FieldsCount int              `json:"fields_count"`
 }
 
-func (h *messageHandler) handleStmt2Prepare(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) Response {
+func (h *messageHandler) handleStmt2Prepare(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) Response {
 	var req Stmt2PrepareRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt2 prepare request %s error, err:%s", request.Args, err)
@@ -1924,7 +1918,7 @@ func (h *messageHandler) handleStmt2Prepare(_ context.Context, request Request, 
 		logger.Errorf("stmt2 is nil, stmt_id:%d", req.StmtID)
 		return wsStmtErrorMsg(0xffff, "stmt2 is nil", req.StmtID)
 	}
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	logger.Trace("get stmt2 lock")
 	stmtItem.Lock()
 	logger.Debugf("get stmt2 lock cost:%s", log.GetLogDuration(isDebug, s))
@@ -2026,7 +2020,7 @@ type Stmt2GetFieldsResponse struct {
 	TagFields  []*stmtCommon.StmtField `json:"tag_fields"`
 }
 
-func (h *messageHandler) handleStmt2GetFields(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleStmt2GetFields(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req Stmt2GetFieldsRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt2 get fields request %s error, err:%s", request.Args, err)
@@ -2087,7 +2081,7 @@ type Stmt2ExecResponse struct {
 	Affected int    `json:"affected"`
 }
 
-func (h *messageHandler) handleStmt2Exec(_ context.Context, request Request, logger *logrus.Entry, isDebug bool, s time.Time) (resp Response) {
+func (h *messageHandler) handleStmt2Exec(_ context.Context, request Request, logger *logrus.Entry, isDebug bool) (resp Response) {
 	var req Stmt2ExecRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt2 exec request %s error, err:%s", request.Args, err)
@@ -2111,7 +2105,7 @@ func (h *messageHandler) handleStmt2Exec(_ context.Context, request Request, log
 		logger.Errorf("stmt2 execute error, err:%s", errStr)
 		return wsStmtErrorMsg(code, errStr, req.StmtID)
 	}
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	logger.Tracef("stmt2 execute wait callback, stmt_id:%d", req.StmtID)
 	result := <-stmtItem.caller.ExecResult
 	logger.Debugf("stmt2 execute wait callback finish, affected:%d, res:%p, n:%d, cost:%s", result.Affected, result.Res, result.N, log.GetLogDuration(isDebug, s))
@@ -2129,7 +2123,7 @@ type Stmt2CloseResponse struct {
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) handleStmt2Close(_ context.Context, request Request, logger *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleStmt2Close(_ context.Context, request Request, logger *logrus.Entry, _ bool) (resp Response) {
 	var req StmtCloseRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt close request %s error, err:%s", request.Args, err)
@@ -2162,7 +2156,7 @@ type Stmt2UseResultResponse struct {
 	Precision     int                `json:"precision"`
 }
 
-func (h *messageHandler) handleStmt2UseResult(_ context.Context, request Request, logger *logrus.Entry, _ bool, _ time.Time) (resp Response) {
+func (h *messageHandler) handleStmt2UseResult(_ context.Context, request Request, logger *logrus.Entry, _ bool) (resp Response) {
 	var req Stmt2UseResultRequest
 	if err := json.Unmarshal(request.Args, &req); err != nil {
 		logger.Errorf("unmarshal stmt2 use result request %s error, err:%s", request.Args, err)

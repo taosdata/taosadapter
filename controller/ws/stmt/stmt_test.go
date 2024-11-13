@@ -91,7 +91,10 @@ func TestSTMT(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
 	const (
 		AfterConnect = iota + 1
 		AfterInit
@@ -366,6 +369,7 @@ func TestSTMT(t *testing.T) {
 					nil,
 				},
 			})
+			assert.NoError(t, err)
 			b, _ := json.Marshal(&StmtBindReq{
 				ReqID:   5,
 				StmtID:  stmtID,
@@ -512,7 +516,8 @@ func TestSTMT(t *testing.T) {
 		return
 	}
 	<-finish
-	ws.Close()
+	err = ws.Close()
+	assert.NoError(t, err)
 	time.Sleep(time.Second)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("select * from st")
@@ -721,7 +726,10 @@ func TestBlock(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
 	const (
 		AfterConnect = iota + 1
 		AfterInit
@@ -1027,7 +1035,8 @@ func TestBlock(t *testing.T) {
 		return
 	}
 	<-finish
-	ws.Close()
+	err = ws.Close()
+	assert.NoError(t, err)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("select * from stb")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_stmt", body)
