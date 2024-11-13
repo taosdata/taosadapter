@@ -726,10 +726,6 @@ func TestBlock(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer func() {
-		err = ws.Close()
-		assert.NoError(t, err)
-	}()
 	const (
 		AfterConnect = iota + 1
 		AfterInit
