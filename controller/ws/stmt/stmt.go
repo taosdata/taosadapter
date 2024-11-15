@@ -71,7 +71,7 @@ func NewSTMTController() *STMTController {
 			}
 			switch action.Action {
 			case wstool.ClientVersion:
-				session.Write(wstool.VersionResp)
+				_ = session.Write(wstool.VersionResp)
 			case STMTConnect:
 				var req StmtConnectReq
 				err = json.Unmarshal(action.Args, &req)
@@ -303,13 +303,7 @@ func (t *TaosStmt) waitSignal(logger *logrus.Entry) {
 				return
 			}
 			logger.Info("user dropped! close connection!")
-			s := log.GetLogNow(isDebug)
-			t.session.Close()
-			logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
-			t.Unlock()
-			s = log.GetLogNow(isDebug)
-			t.Close(logger)
-			logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
+			t.signalExit(logger, isDebug)
 			return
 		case <-t.whitelistChangeChan:
 			logger.Info("get whitelist change signal")
@@ -327,26 +321,14 @@ func (t *TaosStmt) waitSignal(logger *logrus.Entry) {
 			if err != nil {
 				logger.Errorf("get whitelist error, close connection, err:%s", err)
 				wstool.GetLogger(t.session).WithField("ip", t.ipStr).WithError(err).Errorln("get whitelist error! close connection!")
-				s = log.GetLogNow(isDebug)
-				t.session.Close()
-				logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
-				t.Unlock()
-				s = log.GetLogNow(isDebug)
-				t.Close(t.logger)
-				logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
+				t.signalExit(logger, isDebug)
 				return
 			}
 			logger.Tracef("check whitelist, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
 			valid := tool.CheckWhitelist(whitelist, t.ip)
 			if !valid {
 				logger.Errorf("ip not in whitelist, close connection, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
-				s = log.GetLogNow(isDebug)
-				t.session.Close()
-				logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
-				t.Unlock()
-				s = log.GetLogNow(isDebug)
-				t.Close(logger)
-				logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
+				t.signalExit(logger, isDebug)
 				return
 			}
 			t.Unlock()
@@ -354,6 +336,17 @@ func (t *TaosStmt) waitSignal(logger *logrus.Entry) {
 			return
 		}
 	}
+}
+
+func (t *TaosStmt) signalExit(logger *logrus.Entry, isDebug bool) {
+	logger.Trace("close session")
+	s := log.GetLogNow(isDebug)
+	_ = t.session.Close()
+	logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
+	t.Unlock()
+	s = log.GetLogNow(isDebug)
+	t.Close(logger)
+	logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
 }
 
 func (t *TaosStmt) lock(logger *logrus.Entry, isDebug bool) {
@@ -442,13 +435,13 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 	}
 	if t.conn != nil {
 		logger.Errorf("duplicate connections")
-		wsStmtErrorMsg(ctx, session, 0xffff, "duplicate connections", action, req.ReqID, nil)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "duplicate connections", action, req.ReqID, nil)
 		return
 	}
 	conn, err := syncinterface.TaosConnect("", req.User, req.Password, req.DB, 0, logger, isDebug)
 	if err != nil {
 		logger.Errorf("connect error, err:%s", err)
-		wsStmtError(ctx, session, err, action, req.ReqID, nil)
+		wsStmtError(ctx, session, logger, err, action, req.ReqID, nil)
 		return
 	}
 	s := log.GetLogNow(isDebug)
@@ -457,7 +450,7 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 	if err != nil {
 		logger.Errorf("get whitelist error, close connection, err:%s", err)
 		syncinterface.TaosClose(conn, logger, isDebug)
-		wstool.WSError(ctx, session, err, action, req.ReqID)
+		wstool.WSError(ctx, session, logger, err, action, req.ReqID)
 		return
 	}
 	logger.Tracef("check whitelist, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
@@ -465,7 +458,7 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 	if !valid {
 		logger.Errorf("ip not in whitelist, close connection, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
 		syncinterface.TaosClose(conn, logger, isDebug)
-		wstool.WSErrorMsg(ctx, session, 0xffff, "whitelist prohibits current IP access", action, req.ReqID)
+		wstool.WSErrorMsg(ctx, session, logger, 0xffff, "whitelist prohibits current IP access", action, req.ReqID)
 		return
 	}
 	logger.Trace("register change whitelist")
@@ -473,7 +466,7 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 	if err != nil {
 		logger.Errorf("register change whitelist error, err:%s", err)
 		syncinterface.TaosClose(conn, logger, isDebug)
-		wstool.WSError(ctx, session, err, action, req.ReqID)
+		wstool.WSError(ctx, session, logger, err, action, req.ReqID)
 		return
 	}
 	logger.Trace("register drop user")
@@ -481,7 +474,7 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 	if err != nil {
 		logger.Errorf("register drop user error, err:%s", err)
 		syncinterface.TaosClose(conn, logger, isDebug)
-		wstool.WSError(ctx, session, err, action, req.ReqID)
+		wstool.WSError(ctx, session, logger, err, action, req.ReqID)
 		return
 	}
 	t.conn = conn
@@ -511,7 +504,7 @@ func (t *TaosStmt) init(ctx context.Context, session *melody.Session, req *StmtI
 	logger.Tracef("stmt init request:%+v", req)
 	if t.conn == nil {
 		logger.Error("server not connected")
-		wsStmtErrorMsg(ctx, session, 0xffff, "server not connected", action, req.ReqID, nil)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "server not connected", action, req.ReqID, nil)
 		return
 	}
 	isDebug := log.IsDebug()
@@ -519,7 +512,7 @@ func (t *TaosStmt) init(ctx context.Context, session *melody.Session, req *StmtI
 	if stmt == nil {
 		errStr := wrapper.TaosStmtErrStr(stmt)
 		logger.Errorf("stmt init error, err:%s", errStr)
-		wsStmtErrorMsg(ctx, session, 0xffff, errStr, action, req.ReqID, nil)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, errStr, action, req.ReqID, nil)
 		return
 	}
 	stmtItem := &StmtItem{
@@ -552,14 +545,14 @@ func (t *TaosStmt) prepare(ctx context.Context, session *melody.Session, req *St
 
 	if t.conn == nil {
 		logger.Error("server not connected")
-		wsStmtErrorMsg(ctx, session, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
 		return
 	}
 
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
 		logger.Errorf("stmt is nil, stmt_id:%d", req.StmtID)
-		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
@@ -568,7 +561,7 @@ func (t *TaosStmt) prepare(ctx context.Context, session *melody.Session, req *St
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
 		logger.Errorf("stmt prepare error, code:%d, msg:%s", code, errStr)
-		wsStmtErrorMsg(ctx, session, code, errStr, action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
 	}
 	logger.Tracef("stmt prepare success, stmt_id:%d", req.StmtID)
@@ -601,13 +594,13 @@ func (t *TaosStmt) setTableName(ctx context.Context, session *melody.Session, re
 	logger.Tracef("stmt set table name, stmt_id:%d, name:%s", req.StmtID, req.Name)
 	if t.conn == nil {
 		logger.Error("server not connected")
-		wsStmtErrorMsg(ctx, session, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
 		logger.Errorf("stmt is nil, stmt_id:%d", req.StmtID)
-		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
@@ -616,7 +609,7 @@ func (t *TaosStmt) setTableName(ctx context.Context, session *melody.Session, re
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
 		logger.Errorf("stmt set table name error, code:%d, msg:%s", code, errStr)
-		wsStmtErrorMsg(ctx, session, code, errStr, action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
 	}
 	resp := &StmtSetTableNameResp{
@@ -650,13 +643,13 @@ func (t *TaosStmt) setTags(ctx context.Context, session *melody.Session, req *St
 	logger.Tracef("stmt set tags, stmt_id:%d, tags:%+v", req.StmtID, req.Tags)
 	if t.conn == nil {
 		logger.Error("server not connected")
-		wsStmtErrorMsg(ctx, session, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
 		logger.Errorf("stmt is nil, stmt_id:%d", req.StmtID)
-		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
@@ -665,7 +658,7 @@ func (t *TaosStmt) setTags(ctx context.Context, session *melody.Session, req *St
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
 		logger.Errorf("stmt get tag fields error, code:%d, msg:%s", code, errStr)
-		wsStmtErrorMsg(ctx, session, code, errStr, action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
 	}
 	defer func() {
@@ -693,14 +686,14 @@ func (t *TaosStmt) setTags(ctx context.Context, session *melody.Session, req *St
 	logger.Debugf("stmt parse tag json cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.Errorf("stmt parse tag json error, err:%s", err)
-		wsStmtErrorMsg(ctx, session, 0xffff, fmt.Sprintf("stmt parse tag json:%s", err.Error()), action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, fmt.Sprintf("stmt parse tag json:%s", err.Error()), action, req.ReqID, &req.StmtID)
 		return
 	}
 	code = syncinterface.TaosStmtSetTags(stmt.stmt, data, logger, isDebug)
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
 		logger.Errorf("stmt set tags error, code:%d, msg:%s", code, errStr)
-		wsStmtErrorMsg(ctx, session, code, errStr, action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
 	}
 	resp.Timing = wstool.GetDuration(ctx)
@@ -729,13 +722,13 @@ func (t *TaosStmt) getTagFields(ctx context.Context, session *melody.Session, re
 	logger.Tracef("stmt get tag fields, stmt_id:%d", req.StmtID)
 	if t.conn == nil {
 		logger.Error("server not connected")
-		wsStmtErrorMsg(ctx, session, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
 		logger.Errorf("stmt is nil, stmt_id:%d", req.StmtID)
-		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
@@ -744,7 +737,7 @@ func (t *TaosStmt) getTagFields(ctx context.Context, session *melody.Session, re
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
 		logger.Errorf("stmt get tag fields error, code:%d, msg:%s", code, errStr)
-		wsStmtErrorMsg(ctx, session, code, errStr, action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
 	}
 	defer func() {
@@ -788,13 +781,13 @@ func (t *TaosStmt) getColFields(ctx context.Context, session *melody.Session, re
 	logger.Tracef("stmt get tag fields, stmt_id:%d", req.StmtID)
 	if t.conn == nil {
 		logger.Error("server not connected")
-		wsStmtErrorMsg(ctx, session, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
 		logger.Errorf("stmt is nil, stmt_id:%d", req.StmtID)
-		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
@@ -803,7 +796,7 @@ func (t *TaosStmt) getColFields(ctx context.Context, session *melody.Session, re
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
 		logger.Errorf("stmt get col fields error, code:%d, msg:%s", code, errStr)
-		wsStmtErrorMsg(ctx, session, code, errStr, action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
 	}
 	defer func() {
@@ -847,13 +840,13 @@ func (t *TaosStmt) bind(ctx context.Context, session *melody.Session, req *StmtB
 
 	if t.conn == nil {
 		logger.Error("server not connected")
-		wsStmtErrorMsg(ctx, session, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
 		logger.Errorf("stmt is nil, stmt_id:%d", req.StmtID)
-		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
@@ -862,7 +855,7 @@ func (t *TaosStmt) bind(ctx context.Context, session *melody.Session, req *StmtB
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
 		logger.Errorf("stmt get col fields error, code:%d, msg:%s", code, errStr)
-		wsStmtErrorMsg(ctx, session, code, errStr, action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
 	}
 	defer func() {
@@ -888,7 +881,7 @@ func (t *TaosStmt) bind(ctx context.Context, session *melody.Session, req *StmtB
 		fieldTypes[i], err = fields[i].GetType()
 		if err != nil {
 			logger.Errorf("stmt get column type error, err:%s", err)
-			wsStmtErrorMsg(ctx, session, 0xffff, fmt.Sprintf("stmt get column type error, err:%s", err.Error()), action, req.ReqID, &req.StmtID)
+			wsStmtErrorMsg(ctx, session, logger, 0xffff, fmt.Sprintf("stmt get column type error, err:%s", err.Error()), action, req.ReqID, &req.StmtID)
 			return
 		}
 	}
@@ -897,14 +890,14 @@ func (t *TaosStmt) bind(ctx context.Context, session *melody.Session, req *StmtB
 	logger.Debugf("stmt parse column json cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.Errorf("stmt parse column json error, err:%s", err)
-		wsStmtErrorMsg(ctx, session, 0xffff, fmt.Sprintf("stmt parse column json:%s", err.Error()), action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, fmt.Sprintf("stmt parse column json:%s", err.Error()), action, req.ReqID, &req.StmtID)
 		return
 	}
 	code = syncinterface.TaosStmtBindParamBatch(stmt.stmt, data, fieldTypes, logger, isDebug)
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
 		logger.Errorf("stmt bind error, code:%d, msg:%s", code, errStr)
-		wsStmtErrorMsg(ctx, session, code, errStr, action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
 	}
 	resp.Timing = wstool.GetDuration(ctx)
@@ -931,13 +924,13 @@ func (t *TaosStmt) addBatch(ctx context.Context, session *melody.Session, req *S
 	logger.Tracef("stmt add batch, stmt_id:%d", req.StmtID)
 	if t.conn == nil {
 		logger.Error("server not connected")
-		wsStmtErrorMsg(ctx, session, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
 		logger.Errorf("stmt is nil, stmt_id:%d", req.StmtID)
-		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
@@ -946,7 +939,7 @@ func (t *TaosStmt) addBatch(ctx context.Context, session *melody.Session, req *S
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
 		logger.Errorf("stmt add batch error, code:%d, msg:%s", code, errStr)
-		wsStmtErrorMsg(ctx, session, code, errStr, action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
 	}
 	resp := &StmtAddBatchResp{
@@ -979,13 +972,13 @@ func (t *TaosStmt) exec(ctx context.Context, session *melody.Session, req *StmtE
 	logger.Tracef("stmt exec, stmt_id:%d", req.StmtID)
 	if t.conn == nil {
 		logger.Error("server not connected")
-		wsStmtErrorMsg(ctx, session, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
 		logger.Errorf("stmt is nil, stmt_id:%d", req.StmtID)
-		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
@@ -994,7 +987,7 @@ func (t *TaosStmt) exec(ctx context.Context, session *melody.Session, req *StmtE
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
 		logger.Errorf("stmt exec error, code:%d, msg:%s", code, errStr)
-		wsStmtErrorMsg(ctx, session, code, errStr, action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
 	}
 	s := log.GetLogNow(isDebug)
@@ -1021,13 +1014,13 @@ func (t *TaosStmt) close(ctx context.Context, session *melody.Session, req *Stmt
 	logger.Tracef("stmt close, stmt_id:%d", req.StmtID)
 	if t.conn == nil {
 		logger.Error("server not connected")
-		wsStmtErrorMsg(ctx, session, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "server not connected", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(req.StmtID)
 	if stmtItem == nil {
 		logger.Errorf("stmt is nil, stmt_id:%d", req.StmtID)
-		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "stmt is nil", action, req.ReqID, &req.StmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
@@ -1041,18 +1034,18 @@ func (t *TaosStmt) setTagsBlock(ctx context.Context, session *melody.Session, re
 	logger.Tracef("stmt set tags with block, stmt_id:%d", stmtID)
 	if rows != 1 {
 		logger.Errorf("rows not equal 1")
-		wsStmtErrorMsg(ctx, session, 0xffff, "rows not equal 1", action, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "rows not equal 1", action, reqID, &stmtID)
 		return
 	}
 	if t.conn == nil {
 		logger.Error("server not connected")
-		wsStmtErrorMsg(ctx, session, 0xffff, "server not connected", action, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "server not connected", action, reqID, &stmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(stmtID)
 	if stmtItem == nil {
 		logger.Errorf("stmt is nil, stmt_id:%d", stmtID)
-		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", action, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "stmt is nil", action, reqID, &stmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
@@ -1061,7 +1054,7 @@ func (t *TaosStmt) setTagsBlock(ctx context.Context, session *melody.Session, re
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
 		logger.Errorf("stmt get tag fields error, code:%d, msg:%s", code, errStr)
-		wsStmtErrorMsg(ctx, session, code, errStr, action, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, reqID, &stmtID)
 		return
 	}
 	defer func() {
@@ -1078,7 +1071,7 @@ func (t *TaosStmt) setTagsBlock(ctx context.Context, session *melody.Session, re
 	}
 	if columns != tagNums {
 		logger.Errorf("stmt tags count not match, columns:%d, tagNums:%d", columns, tagNums)
-		wsStmtErrorMsg(ctx, session, 0xffff, "stmt tags count not match", action, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "stmt tags count not match", action, reqID, &stmtID)
 		return
 	}
 	s := log.GetLogNow(isDebug)
@@ -1095,7 +1088,7 @@ func (t *TaosStmt) setTagsBlock(ctx context.Context, session *melody.Session, re
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
 		logger.Errorf("stmt set tags error, code:%d, msg:%s", code, errStr)
-		wsStmtErrorMsg(ctx, session, code, errStr, action, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, reqID, &stmtID)
 		return
 	}
 	resp.Timing = wstool.GetDuration(ctx)
@@ -1108,13 +1101,13 @@ func (t *TaosStmt) bindBlock(ctx context.Context, session *melody.Session, reqID
 	logger.Tracef("stmt bind with block, stmt_id:%d", stmtID)
 	if t.conn == nil {
 		logger.Error("server not connected")
-		wsStmtErrorMsg(ctx, session, 0xffff, "server not connected", action, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "server not connected", action, reqID, &stmtID)
 		return
 	}
 	stmtItem := t.getStmtItem(stmtID)
 	if stmtItem == nil {
 		logger.Errorf("stmt is nil, stmt_id:%d", stmtID)
-		wsStmtErrorMsg(ctx, session, 0xffff, "stmt is nil", action, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "stmt is nil", action, reqID, &stmtID)
 		return
 	}
 	stmt := stmtItem.Value.(*StmtItem)
@@ -1123,7 +1116,7 @@ func (t *TaosStmt) bindBlock(ctx context.Context, session *melody.Session, reqID
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
 		logger.Errorf("stmt get col fields error, code:%d, msg:%s", code, errStr)
-		wsStmtErrorMsg(ctx, session, code, errStr, action, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, reqID, &stmtID)
 		return
 	}
 	defer func() {
@@ -1148,13 +1141,13 @@ func (t *TaosStmt) bindBlock(ctx context.Context, session *melody.Session, reqID
 		fieldTypes[i], err = fields[i].GetType()
 		if err != nil {
 			logger.Errorf("stmt get column type error, err:%s", err)
-			wsStmtErrorMsg(ctx, session, 0xffff, fmt.Sprintf("stmt get column type error, err:%s", err.Error()), action, reqID, &stmtID)
+			wsStmtErrorMsg(ctx, session, logger, 0xffff, fmt.Sprintf("stmt get column type error, err:%s", err.Error()), action, reqID, &stmtID)
 			return
 		}
 	}
 	if columns != colNums {
 		logger.Errorf("stmt column count not match, columns:%d, colNums:%d", columns, colNums)
-		wsStmtErrorMsg(ctx, session, 0xffff, "stmt column count not match", action, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, "stmt column count not match", action, reqID, &stmtID)
 		return
 	}
 	s = log.GetLogNow(isDebug)
@@ -1164,7 +1157,7 @@ func (t *TaosStmt) bindBlock(ctx context.Context, session *melody.Session, reqID
 	if code != httperror.SUCCESS {
 		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
 		logger.Errorf("stmt bind error, code:%d, msg:%s", code, errStr)
-		wsStmtErrorMsg(ctx, session, code, errStr, action, reqID, &stmtID)
+		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, reqID, &stmtID)
 		return
 	}
 	resp.Timing = wstool.GetDuration(ctx)
@@ -1227,23 +1220,23 @@ type WSStmtErrorResp struct {
 	StmtID  *uint64 `json:"stmt_id,omitempty"`
 }
 
-func wsStmtErrorMsg(ctx context.Context, session *melody.Session, code int, message string, action string, reqID uint64, stmtID *uint64) {
-	b, _ := json.Marshal(&WSStmtErrorResp{
+func wsStmtErrorMsg(ctx context.Context, session *melody.Session, logger *logrus.Entry, code int, message string, action string, reqID uint64, stmtID *uint64) {
+	data := &WSStmtErrorResp{
 		Code:    code & 0xffff,
 		Message: message,
 		Action:  action,
 		ReqID:   reqID,
 		Timing:  wstool.GetDuration(ctx),
 		StmtID:  stmtID,
-	})
-	session.Write(b)
+	}
+	wstool.WSWriteJson(session, logger, data)
 }
-func wsStmtError(ctx context.Context, session *melody.Session, err error, action string, reqID uint64, stmtID *uint64) {
+func wsStmtError(ctx context.Context, session *melody.Session, logger *logrus.Entry, err error, action string, reqID uint64, stmtID *uint64) {
 	e, is := err.(*tErrors.TaosError)
 	if is {
-		wsStmtErrorMsg(ctx, session, int(e.Code)&0xffff, e.ErrStr, action, reqID, stmtID)
+		wsStmtErrorMsg(ctx, session, logger, int(e.Code)&0xffff, e.ErrStr, action, reqID, stmtID)
 	} else {
-		wsStmtErrorMsg(ctx, session, 0xffff, err.Error(), action, reqID, stmtID)
+		wsStmtErrorMsg(ctx, session, logger, 0xffff, err.Error(), action, reqID, stmtID)
 	}
 }
 

@@ -2,13 +2,13 @@ package rest
 
 import (
 	"encoding/json"
-	"github.com/taosdata/driver-go/v3/wrapper"
 	"net/http"
 	"sync/atomic"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	taoserrors "github.com/taosdata/driver-go/v3/errors"
+	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/controller"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/db/tool"

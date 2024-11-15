@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -48,35 +49,14 @@ func TestMain(m *testing.M) {
 // @description: test websocket bulk pulling
 func TestWebsocket(t *testing.T) {
 	now := time.Now().Local().UnixNano() / 1e6
-	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists test_ws WAL_RETENTION_PERIOD 86400")
-	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader("drop table if exists test_ws")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader("create table if not exists test_ws(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20)) tags (info json)")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader(fmt.Sprintf(`insert into t1 using test_ws tags('{"table":"t1"}') values (%d,true,2,3,4,5,6,7,8,9,10,11,'中文"binary','中文nchar')(%d,false,12,13,14,15,16,17,18,19,110,111,'中文"binary','中文nchar')(%d,null,null,null,null,null,null,null,null,null,null,null,null,null)`, now, now+1, now+3))
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-
+	code, message := doRestful("create database if not exists test_ws WAL_RETENTION_PERIOD 86400", "")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful("drop table if exists test_ws", "test_ws")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful("create table if not exists test_ws(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20)) tags (info json)", "test_ws")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(fmt.Sprintf(`insert into t1 using test_ws tags('{"table":"t1"}') values (%d,true,2,3,4,5,6,7,8,9,10,11,'中文"binary','中文nchar')(%d,false,12,13,14,15,16,17,18,19,110,111,'中文"binary','中文nchar')(%d,null,null,null,null,null,null,null,null,null,null,null,null,null)`, now, now+1, now+3), "test_ws")
+	assert.Equal(t, 0, code, message)
 	s := httptest.NewServer(router)
 	defer s.Close()
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/ws", nil)
@@ -84,7 +64,10 @@ func TestWebsocket(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
 	const (
 		AfterConnect    = 1
 		AfterQuery      = 2
@@ -102,7 +85,7 @@ func TestWebsocket(t *testing.T) {
 	//var jsonResult [][]interface{}
 	var resultID uint64
 	var blockResult [][]driver.Value
-	testMessageHandler := func(messageType int, message []byte) error {
+	testMessageHandler := func(_ int, message []byte) error {
 		//json
 		switch status {
 		case AfterConnect:
@@ -325,52 +308,22 @@ func TestWebsocket(t *testing.T) {
 	assert.Equal(t, nil, blockResult[2][12])
 	assert.Equal(t, nil, blockResult[2][13])
 	assert.Equal(t, []byte(`{"table":"t1"}`), blockResult[2][14])
-	w = httptest.NewRecorder()
-	body = strings.NewReader("drop database if exists test_ws")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
+	code, message = doRestful("drop database if exists test_ws", "")
+	assert.Equal(t, 0, code, message)
 }
 
 func TestWriteBlock(t *testing.T) {
 	now := time.Now().Local().UnixNano() / 1e6
-	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists test_ws_write_block WAL_RETENTION_PERIOD 86400")
-	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader("drop table if exists test_ws_write_block")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_write_block", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader("create table if not exists test_ws_write_block(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20)) tags (info json)")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_write_block", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader(fmt.Sprintf(`insert into t1 using test_ws_write_block tags('{"table":"t1"}') values (%d,true,2,3,4,5,6,7,8,9,10,11,'中文"binary','中文nchar')(%d,false,12,13,14,15,16,17,18,19,110,111,'中文"binary','中文nchar')(%d,null,null,null,null,null,null,null,null,null,null,null,null,null)`, now, now+1, now+3))
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_write_block", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader(`create table t2 using test_ws_write_block tags('{"table":"t2"}')`)
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_write_block", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
+	code, message := doRestful("create database if not exists test_ws_write_block WAL_RETENTION_PERIOD 86400", "")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful("drop table if exists test_ws_write_block", "test_ws_write_block")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful("create table if not exists test_ws_write_block(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20)) tags (info json)", "test_ws_write_block")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(fmt.Sprintf(`insert into t1 using test_ws_write_block tags('{"table":"t1"}') values (%d,true,2,3,4,5,6,7,8,9,10,11,'中文"binary','中文nchar')(%d,false,12,13,14,15,16,17,18,19,110,111,'中文"binary','中文nchar')(%d,null,null,null,null,null,null,null,null,null,null,null,null,null)`, now, now+1, now+3), "test_ws_write_block")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(`create table t2 using test_ws_write_block tags('{"table":"t2"}')`, "test_ws_write_block")
+	assert.Equal(t, 0, code, message)
 
 	s := httptest.NewServer(router)
 	defer s.Close()
@@ -392,7 +345,7 @@ func TestWriteBlock(t *testing.T) {
 	var queryResult *WSQueryResult
 	var rows int
 	finish := make(chan struct{})
-	testMessageHandler := func(messageType int, message []byte) error {
+	testMessageHandler := func(_ int, message []byte) error {
 		//json
 		switch status {
 		case AfterConnect:
@@ -596,14 +549,15 @@ func TestWriteBlock(t *testing.T) {
 		return
 	}
 	<-finish
-	ws.Close()
+	err = ws.Close()
+	assert.NoError(t, err)
 	ws, _, err = websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/ws", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	var blockResult [][]driver.Value
-	testMessageHandler2 := func(messageType int, message []byte) error {
+	testMessageHandler2 := func(_ int, message []byte) error {
 		switch status {
 		case AfterConnect:
 			var d WSConnectResp
@@ -776,7 +730,8 @@ func TestWriteBlock(t *testing.T) {
 		return
 	}
 	<-finish
-	ws.Close()
+	err = ws.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, 3, len(blockResult))
 	assert.Equal(t, true, blockResult[0][1])
 	assert.Equal(t, int8(2), blockResult[0][2])
@@ -817,52 +772,22 @@ func TestWriteBlock(t *testing.T) {
 	assert.Equal(t, nil, blockResult[2][11])
 	assert.Equal(t, nil, blockResult[2][12])
 	assert.Equal(t, nil, blockResult[2][13])
-	w = httptest.NewRecorder()
-	body = strings.NewReader("drop database if exists test_ws_write_block")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
+	code, message = doRestful("drop database if exists test_ws_write_block", "")
+	assert.Equal(t, 0, code, message)
 }
 
 func TestWriteBlockWithFields(t *testing.T) {
 	now := time.Now().Local().UnixNano() / 1e6
-	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists test_ws_write_block_with_fields WAL_RETENTION_PERIOD 86400")
-	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader("drop table if exists test_ws_write_block_with_fields")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_write_block_with_fields", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader("create table if not exists test_ws_write_block_with_fields(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20)) tags (info json)")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_write_block_with_fields", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader(fmt.Sprintf(`insert into t1 using test_ws_write_block_with_fields tags('{"table":"t1"}') values (%d,true,2,3,4,5,6,7,8,9,10,11,'中文"binary','中文nchar')(%d,false,12,13,14,15,16,17,18,19,110,111,'中文"binary','中文nchar')(%d,null,null,null,null,null,null,null,null,null,null,null,null,null)`, now, now+1, now+3))
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_write_block_with_fields", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader(`create table t2 using test_ws_write_block_with_fields tags('{"table":"t2"}')`)
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_write_block_with_fields", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
+	code, message := doRestful("create database if not exists test_ws_write_block_with_fields WAL_RETENTION_PERIOD 86400", "")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful("drop table if exists test_ws_write_block_with_fields", "test_ws_write_block_with_fields")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful("create table if not exists test_ws_write_block_with_fields(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20)) tags (info json)", "test_ws_write_block_with_fields")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(fmt.Sprintf(`insert into t1 using test_ws_write_block_with_fields tags('{"table":"t1"}') values (%d,true,2,3,4,5,6,7,8,9,10,11,'中文"binary','中文nchar')(%d,false,12,13,14,15,16,17,18,19,110,111,'中文"binary','中文nchar')(%d,null,null,null,null,null,null,null,null,null,null,null,null,null)`, now, now+1, now+3), "test_ws_write_block_with_fields")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(`create table t2 using test_ws_write_block_with_fields tags('{"table":"t2"}')`, "test_ws_write_block_with_fields")
+	assert.Equal(t, 0, code, message)
 
 	s := httptest.NewServer(router)
 	defer s.Close()
@@ -884,7 +809,7 @@ func TestWriteBlockWithFields(t *testing.T) {
 	var queryResult *WSQueryResult
 	var rows int
 	finish := make(chan struct{})
-	testMessageHandler := func(messageType int, message []byte) error {
+	testMessageHandler := func(_ int, message []byte) error {
 		//json
 		switch status {
 		case AfterConnect:
@@ -1116,14 +1041,15 @@ func TestWriteBlockWithFields(t *testing.T) {
 		return
 	}
 	<-finish
-	ws.Close()
+	err = ws.Close()
+	assert.NoError(t, err)
 	ws, _, err = websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/ws", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	var blockResult [][]driver.Value
-	testMessageHandler2 := func(messageType int, message []byte) error {
+	testMessageHandler2 := func(_ int, message []byte) error {
 		switch status {
 		case AfterConnect:
 			var d WSConnectResp
@@ -1296,7 +1222,8 @@ func TestWriteBlockWithFields(t *testing.T) {
 		return
 	}
 	<-finish
-	ws.Close()
+	err = ws.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, 3, len(blockResult))
 	assert.Equal(t, now, blockResult[0][0].(time.Time).UnixNano()/1e6)
 	assert.Equal(t, true, blockResult[0][1])
@@ -1312,46 +1239,20 @@ func TestWriteBlockWithFields(t *testing.T) {
 	for i := 1; i < 14; i++ {
 		assert.Equal(t, nil, blockResult[2][i])
 	}
-	w = httptest.NewRecorder()
-	body = strings.NewReader("drop database if exists test_ws_write_block_with_fields")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
+	code, message = doRestful("drop database if exists test_ws_write_block_with_fields", "")
+	assert.Equal(t, 0, code, message)
 }
 
 func TestQueryAllType(t *testing.T) {
 	now := time.Now().Local().UnixNano() / 1e6
-	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists test_ws_all_query WAL_RETENTION_PERIOD 86400")
-	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader("drop table if exists test_ws_all_query")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_all_query", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader("create table if not exists test_ws_all_query(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100))")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_all_query", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader(fmt.Sprintf(`insert into test_ws_all_query values (%d,true,2,3,4,5,6,7,8,9,10,11,'中文"binary','中文nchar','\xaabbcc','POINT(100 100)')(%d,false,12,13,14,15,16,17,18,19,110,111,'中文"binary','中文nchar','\xaabbcc','POINT(100 100)')(%d,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)`, now, now+1, now+3))
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_all_query", body)
-	req.RemoteAddr = "127.0.0.1:33333"
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-
+	code, message := doRestful("create database if not exists test_ws_all_query WAL_RETENTION_PERIOD 86400", "")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful("drop table if exists test_ws_all_query", "test_ws_all_query")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful("create table if not exists test_ws_all_query(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100))", "test_ws_all_query")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(fmt.Sprintf(`insert into test_ws_all_query values (%d,true,2,3,4,5,6,7,8,9,10,11,'中文"binary','中文nchar','\xaabbcc','POINT(100 100)')(%d,false,12,13,14,15,16,17,18,19,110,111,'中文"binary','中文nchar','\xaabbcc','POINT(100 100)')(%d,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)`, now, now+1, now+3), "test_ws_all_query")
+	assert.Equal(t, 0, code, message)
 	s := httptest.NewServer(router)
 	defer s.Close()
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/ws", nil)
@@ -1359,7 +1260,10 @@ func TestQueryAllType(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
 	const (
 		AfterConnect    = 1
 		AfterQuery      = 2
@@ -1377,7 +1281,7 @@ func TestQueryAllType(t *testing.T) {
 	//var jsonResult [][]interface{}
 	var resultID uint64
 	var blockResult [][]driver.Value
-	testMessageHandler := func(messageType int, message []byte) error {
+	testMessageHandler := func(_ int, message []byte) error {
 		//json
 		switch status {
 		case AfterConnect:
@@ -1648,11 +1552,77 @@ func TestQueryAllType(t *testing.T) {
 	assert.Equal(t, nil, blockResult[2][13])
 	assert.Equal(t, nil, blockResult[2][14])
 	assert.Equal(t, nil, blockResult[2][15])
-	w = httptest.NewRecorder()
-	body = strings.NewReader("drop database if exists test_ws_all_query")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	code, message = doRestful("drop database if exists test_ws_all_query", "")
+	assert.Equal(t, 0, code, message)
+}
+
+type restResp struct {
+	Code int    `json:"code"`
+	Desc string `json:"desc"`
+}
+
+func doRestful(sql string, db string) (code int, message string) {
+	w := httptest.NewRecorder()
+	body := strings.NewReader(sql)
+	url := "/rest/sql"
+	if db != "" {
+		url = fmt.Sprintf("/rest/sql/%s", db)
+	}
+	req, _ := http.NewRequest(http.MethodPost, url, body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
+	if w.Code != http.StatusOK {
+		return w.Code, w.Body.String()
+	}
+	b, _ := io.ReadAll(w.Body)
+	var res restResp
+	_ = json.Unmarshal(b, &res)
+	return res.Code, res.Desc
+}
+
+func doWebSocket(ws *websocket.Conn, action string, arg interface{}) (resp []byte, err error) {
+	var b []byte
+	if arg != nil {
+		b, _ = json.Marshal(arg)
+	}
+	a, _ := json.Marshal(WSAction{Action: action, Args: b})
+	err = ws.WriteMessage(websocket.TextMessage, a)
+	if err != nil {
+		return nil, err
+	}
+	_, message, err := ws.ReadMessage()
+	return message, err
+}
+
+func TestDropUser(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+	defer doRestful("drop user test_ws_query_drop_user", "")
+	code, message := doRestful("create user test_ws_query_drop_user pass 'pass'", "")
+	assert.Equal(t, 0, code, message)
+	// connect
+	connReq := &WSConnectReq{ReqID: 1, User: "test_ws_query_drop_user", Password: "pass"}
+	resp, err := doWebSocket(ws, WSConnect, &connReq)
+	assert.NoError(t, err)
+	var connResp WSConnectResp
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+	// drop user
+	code, message = doRestful("drop user test_ws_query_drop_user", "")
+	assert.Equal(t, 0, code, message)
+	time.Sleep(time.Second * 3)
+	resp, err = doWebSocket(ws, wstool.ClientVersion, nil)
+	assert.Error(t, err, resp)
 }

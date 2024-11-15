@@ -87,7 +87,7 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	cp.ctx, cp.cancel = context.WithCancel(context.Background())
 	err = tool.RegisterChangePass(v, cp.changePassHandle)
 	if err != nil {
-		p.Put(v)
+		_ = p.Put(v)
 		p.Release()
 		cp.putHandle()
 		return nil, err
@@ -95,7 +95,7 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	// notify drop
 	err = tool.RegisterDropUser(v, cp.dropUserHandle)
 	if err != nil {
-		p.Put(v)
+		_ = p.Put(v)
 		p.Release()
 		cp.putHandle()
 		return nil, err
@@ -103,7 +103,7 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	// whitelist
 	ipNets, err := tool.GetWhitelist(v)
 	if err != nil {
-		p.Put(v)
+		_ = p.Put(v)
 		p.Release()
 		cp.putHandle()
 		return nil, err
@@ -112,12 +112,12 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	// register whitelist modify callback
 	err = tool.RegisterChangeWhitelist(v, cp.whitelistChangeHandle)
 	if err != nil {
-		p.Put(v)
+		_ = p.Put(v)
 		p.Release()
 		cp.putHandle()
 		return nil, err
 	}
-	p.Put(v)
+	_ = p.Put(v)
 	go func() {
 		defer func() {
 			cp.logger.Warn("connector pool exit")
@@ -174,11 +174,10 @@ func (cp *ConnectorPool) factory() (unsafe.Pointer, error) {
 	return conn, err
 }
 
-func (cp *ConnectorPool) close(v unsafe.Pointer) error {
+func (cp *ConnectorPool) close(v unsafe.Pointer) {
 	if v != nil {
 		syncinterface.TaosClose(v, cp.logger, log.IsDebug())
 	}
-	return nil
 }
 
 var AuthFailureError = tErrors.NewError(httperror.TSDB_CODE_MND_AUTH_FAILURE, "Authentication failure")
@@ -250,7 +249,7 @@ func (c *Conn) Put() error {
 }
 
 var singleGroup singleflight.Group
-var ErrWhitelistForbidden error = errors.New("whitelist prohibits current IP access")
+var ErrWhitelistForbidden = errors.New("whitelist prohibits current IP access")
 
 func GetConnection(user, password string, clientIp net.IP) (*Conn, error) {
 	cp, err := getConnectionPool(user, password)
@@ -266,16 +265,7 @@ func getConnectionPool(user, password string) (*ConnectorPool, error) {
 		connectionPool := p.(*ConnectorPool)
 		if connectionPool.verifyPassword(password) {
 			return connectionPool, nil
-		} else {
-			cp, err, _ := singleGroup.Do(fmt.Sprintf("%s:%s", user, password), func() (interface{}, error) {
-				return getConnectorPoolSafe(user, password)
-			})
-			if err != nil {
-				return nil, err
-			}
-			return cp.(*ConnectorPool), nil
 		}
-	} else {
 		cp, err, _ := singleGroup.Do(fmt.Sprintf("%s:%s", user, password), func() (interface{}, error) {
 			return getConnectorPoolSafe(user, password)
 		})
@@ -284,6 +274,13 @@ func getConnectionPool(user, password string) (*ConnectorPool, error) {
 		}
 		return cp.(*ConnectorPool), nil
 	}
+	cp, err, _ := singleGroup.Do(fmt.Sprintf("%s:%s", user, password), func() (interface{}, error) {
+		return getConnectorPoolSafe(user, password)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return cp.(*ConnectorPool), nil
 }
 
 func VerifyClientIP(user, password string, clientIP net.IP) (authed bool, valid bool, connectionPoolExits bool) {
@@ -325,21 +322,19 @@ func getConnectorPoolSafe(user, password string) (*ConnectorPool, error) {
 		connectionPool := p.(*ConnectorPool)
 		if connectionPool.verifyPassword(password) {
 			return connectionPool, nil
-		} else {
-			newPool, err := NewConnectorPool(user, password)
-			if err != nil {
-				return nil, err
-			}
-			connectionPool.Release()
-			connectionMap.Store(user, newPool)
-			return newPool, nil
 		}
-	} else {
 		newPool, err := NewConnectorPool(user, password)
 		if err != nil {
 			return nil, err
 		}
+		connectionPool.Release()
 		connectionMap.Store(user, newPool)
 		return newPool, nil
 	}
+	newPool, err := NewConnectorPool(user, password)
+	if err != nil {
+		return nil, err
+	}
+	connectionMap.Store(user, newPool)
+	return newPool, nil
 }

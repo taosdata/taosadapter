@@ -72,7 +72,7 @@ func NewTMQController() *TMQController {
 			}
 			switch action.Action {
 			case wstool.ClientVersion:
-				session.Write(wstool.VersionResp)
+				_ = session.Write(wstool.VersionResp)
 			case TMQSubscribe:
 				var req TMQSubscribeReq
 				err = json.Unmarshal(action.Args, &req)
@@ -325,18 +325,11 @@ func (t *TMQ) waitSignal(logger *logrus.Entry) {
 				return
 			}
 			logger.Info("user dropped! close connection!")
-			s := log.GetLogNow(isDebug)
-			t.session.Close()
-			logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
-			t.Unlock()
-			s = log.GetLogNow(isDebug)
-			t.Close(logger)
-			logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
+			t.signalExit(logger, isDebug)
 			return
 		case <-t.whitelistChangeChan:
 			logger.Info("get whitelist change signal")
 			isDebug := log.IsDebug()
-			s := log.GetLogNow(isDebug)
 			t.lock(logger, isDebug)
 			if t.isClosed() {
 				logger.Trace("server closed")
@@ -344,31 +337,19 @@ func (t *TMQ) waitSignal(logger *logrus.Entry) {
 				return
 			}
 			logger.Trace("get whitelist")
-			s = log.GetLogNow(isDebug)
+			s := log.GetLogNow(isDebug)
 			whitelist, err := tool.GetWhitelist(t.conn)
 			logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 			if err != nil {
 				logger.Errorf("get whitelist error, close connection, err:%s", err)
-				s = log.GetLogNow(isDebug)
-				t.session.Close()
-				logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
-				t.Unlock()
-				s = log.GetLogNow(isDebug)
-				t.Close(t.logger)
-				logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
+				t.signalExit(logger, isDebug)
 				return
 			}
 			logger.Tracef("check whitelist, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
 			valid := tool.CheckWhitelist(whitelist, t.ip)
 			if !valid {
 				logger.Errorf("ip not in whitelist, close connection, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
-				s = log.GetLogNow(isDebug)
-				t.session.Close()
-				logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
-				t.Unlock()
-				s = log.GetLogNow(isDebug)
-				t.Close(t.logger)
-				logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
+				t.signalExit(logger, isDebug)
 				return
 			}
 			t.Unlock()
@@ -376,6 +357,17 @@ func (t *TMQ) waitSignal(logger *logrus.Entry) {
 			return
 		}
 	}
+}
+
+func (t *TMQ) signalExit(logger *logrus.Entry, isDebug bool) {
+	logger.Trace("close session")
+	s := log.GetLogNow(isDebug)
+	_ = t.session.Close()
+	logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
+	t.Unlock()
+	s = log.GetLogNow(isDebug)
+	t.Close(logger)
+	logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
 }
 
 func (t *TMQ) lock(logger *logrus.Entry, isDebug bool) {
@@ -416,7 +408,6 @@ type TMQSubscribeResp struct {
 func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSubscribeReq) {
 	action := TMQSubscribe
 	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
-	ctx = context.WithValue(ctx, LoggerKey, logger)
 	isDebug := log.IsDebug()
 	logger.Tracef("subscribe request:%+v", req)
 	// lock for consumer and unsubscribed
@@ -456,11 +447,11 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 				Timing: wstool.GetDuration(ctx),
 			})
 			return
-		} else {
-			logger.Errorf("tmq should have unsubscribed first")
-			wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq should have unsubscribed first", action, req.ReqID, nil)
-			return
 		}
+		logger.Errorf("tmq should have unsubscribed first")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq should have unsubscribed first", action, req.ReqID, nil)
+		return
+
 	}
 	tmqConfig := wrapper.TMQConfNew()
 	defer func() {
@@ -546,7 +537,7 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	if err != nil {
 		logger.Errorf("get whitelist error:%s", err.Error())
 		t.wrapperCloseConsumer(logger, isDebug, cPointer)
-		wstool.WSError(ctx, session, err, action, req.ReqID)
+		wstool.WSError(ctx, session, logger, err, action, req.ReqID)
 		return
 	}
 	logger.Tracef("check whitelist, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
@@ -554,7 +545,7 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	if !valid {
 		logger.Errorf("whitelist prohibits current IP access, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
 		t.wrapperCloseConsumer(logger, isDebug, cPointer)
-		wstool.WSErrorMsg(ctx, session, 0xffff, "whitelist prohibits current IP access", action, req.ReqID)
+		wstool.WSErrorMsg(ctx, session, logger, 0xffff, "whitelist prohibits current IP access", action, req.ReqID)
 		return
 	}
 	logger.Trace("register change whitelist")
@@ -562,7 +553,7 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	if err != nil {
 		logger.Errorf("register change whitelist error:%s", err)
 		t.wrapperCloseConsumer(logger, isDebug, cPointer)
-		wstool.WSError(ctx, session, err, action, req.ReqID)
+		wstool.WSError(ctx, session, logger, err, action, req.ReqID)
 		return
 	}
 	logger.Trace("register drop user")
@@ -570,7 +561,7 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	if err != nil {
 		logger.Errorf("register drop user error:%s", err)
 		t.wrapperCloseConsumer(logger, isDebug, cPointer)
-		wstool.WSError(ctx, session, err, action, req.ReqID)
+		wstool.WSError(ctx, session, logger, err, action, req.ReqID)
 		return
 	}
 	t.conn = conn
@@ -890,7 +881,7 @@ func (t *TMQ) fetchBlock(ctx context.Context, session *melody.Session, req *TMQF
 		wsTMQErrorMsg(ctx, session, logger, 0xffff, "message type is not data", action, req.ReqID, &req.MessageID)
 		return
 	}
-	if message.buffer == nil || len(message.buffer) == 0 {
+	if len(message.buffer) == 0 {
 		logger.Errorf("no fetch data")
 		wsTMQErrorMsg(ctx, session, logger, 0xffff, "no fetch data", action, req.ReqID, &req.MessageID)
 		return
@@ -898,7 +889,7 @@ func (t *TMQ) fetchBlock(ctx context.Context, session *melody.Session, req *TMQF
 	s = log.GetLogNow(isDebug)
 	binary.LittleEndian.PutUint64(message.buffer, uint64(wstool.GetDuration(ctx)))
 	logger.Debugf("handle data cost:%s", log.GetLogDuration(isDebug, s))
-	session.WriteBinary(message.buffer)
+	wstool.WSWriteBinary(session, message.buffer, logger)
 }
 
 type TMQFetchRawReq struct {
@@ -971,7 +962,7 @@ func (t *TMQ) fetchRawBlockNew(ctx context.Context, session *melody.Session, req
 	logger.Tracef("fetch raw request:%+v", req)
 	if t.consumer == nil {
 		logger.Trace("tmq not init")
-		tmqFetchRawBlockErrorMsg(ctx, session, 0xffff, "tmq not init", req.ReqID, req.MessageID)
+		tmqFetchRawBlockErrorMsg(ctx, session, logger, 0xffff, "tmq not init", req.ReqID, req.MessageID)
 		return
 	}
 	isDebug := log.IsDebug()
@@ -981,16 +972,15 @@ func (t *TMQ) fetchRawBlockNew(ctx context.Context, session *melody.Session, req
 	logger.Debugf("get message lock cost:%s", log.GetLogDuration(isDebug, s))
 	if t.tmpMessage.CPointer == nil {
 		logger.Error("message has been freed")
-		tmqFetchRawBlockErrorMsg(ctx, session, 0xffff, "message has been freed", req.ReqID, req.MessageID)
+		tmqFetchRawBlockErrorMsg(ctx, session, logger, 0xffff, "message has been freed", req.ReqID, req.MessageID)
 		return
 	}
 	message := t.tmpMessage
 	if message.Index != req.MessageID {
 		logger.Errorf("message ID are not equal, req:%d, message:%d", req.MessageID, message.Index)
-		tmqFetchRawBlockErrorMsg(ctx, session, 0xffff, "message ID is not equal", req.ReqID, req.MessageID)
+		tmqFetchRawBlockErrorMsg(ctx, session, logger, 0xffff, "message ID is not equal", req.ReqID, req.MessageID)
 		return
 	}
-	s = log.GetLogNow(isDebug)
 	rawData := asynctmq.TaosaInitTMQRaw()
 	defer asynctmq.TaosaFreeTMQRaw(rawData)
 	errCode, closed := t.wrapperGetRaw(logger, isDebug, message.CPointer, rawData)
@@ -1001,7 +991,7 @@ func (t *TMQ) fetchRawBlockNew(ctx context.Context, session *melody.Session, req
 	if errCode != 0 {
 		errStr := wrapper.TMQErr2Str(errCode)
 		logger.Errorf("tmq get raw error, code:%d, msg:%s", errCode, errStr)
-		tmqFetchRawBlockErrorMsg(ctx, session, int(errCode), errStr, req.ReqID, req.MessageID)
+		tmqFetchRawBlockErrorMsg(ctx, session, logger, int(errCode), errStr, req.ReqID, req.MessageID)
 		return
 	}
 	s = log.GetLogNow(isDebug)
@@ -1319,11 +1309,7 @@ func wsTMQErrorMsg(ctx context.Context, session *melody.Session, logger *logrus.
 		MessageID: messageID,
 	})
 	logger.Tracef("write json:%s", b)
-	session.Write(b)
-}
-
-func canGetMeta(messageType int32) bool {
-	return messageType == common.TMQ_RES_TABLE_META || messageType == common.TMQ_RES_METADATA
+	_ = session.Write(b)
 }
 
 func canGetData(messageType int32) bool {
@@ -1814,7 +1800,7 @@ func (t *TMQ) wrapperCommitOffset(logger *logrus.Entry, isDebug bool, topic stri
 	TMQRawBlock    []byte //RawBlockLength  56 + MessageLen + RawBlockLength
 */
 
-func tmqFetchRawBlockErrorMsg(ctx context.Context, session *melody.Session, code int, message string, reqID uint64, messageID uint64) {
+func tmqFetchRawBlockErrorMsg(ctx context.Context, session *melody.Session, logger *logrus.Entry, code int, message string, reqID uint64, messageID uint64) {
 	bufLength := 8 + 8 + 2 + 8 + 8 + 4 + 4 + len(message) + 8
 	buf := make([]byte, bufLength)
 	binary.LittleEndian.PutUint64(buf, 0xffffffffffffffff)
@@ -1826,7 +1812,7 @@ func tmqFetchRawBlockErrorMsg(ctx context.Context, session *melody.Session, code
 	binary.LittleEndian.PutUint32(buf[38:], uint32(len(message)))
 	copy(buf[42:], message)
 	binary.LittleEndian.PutUint64(buf[42+len(message):], messageID)
-	session.WriteBinary(buf)
+	wstool.WSWriteBinary(session, buf, logger)
 }
 
 func wsFetchRawBlockMessage(ctx context.Context, buf []byte, reqID uint64, resultID uint64, MetaType uint16, blockLength uint32, rawBlock unsafe.Pointer) []byte {

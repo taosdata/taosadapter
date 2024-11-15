@@ -20,7 +20,7 @@ type MockProcess struct {
 	errMem     error
 }
 
-func (m *MockProcess) Percent(interval time.Duration) (float64, error) {
+func (m *MockProcess) Percent(_ time.Duration) (float64, error) {
 	return m.cpuPercent, m.errCpu
 }
 

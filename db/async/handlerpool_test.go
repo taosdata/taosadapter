@@ -32,7 +32,7 @@ func TestNewHandlerPool(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			got := NewHandlerPool(tt.args.count)
 			l := make([]*Handler, tt.args.count)
 			for i := 0; i < tt.args.count; i++ {

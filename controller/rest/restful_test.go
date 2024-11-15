@@ -342,7 +342,7 @@ func TestWrongEmptySql(t *testing.T) {
 
 type ErrorReader struct{}
 
-func (e *ErrorReader) Read(p []byte) (n int, err error) {
+func (e *ErrorReader) Read(_ []byte) (n int, err error) {
 	return 0, errors.New("forced read error")
 }
 

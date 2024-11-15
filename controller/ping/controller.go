@@ -18,10 +18,9 @@ func (c Controller) Init(r gin.IRouter) {
 			if monitor.QueryPaused() {
 				c.Status(http.StatusServiceUnavailable)
 				return
-			} else {
-				c.Status(http.StatusOK)
-				return
 			}
+			c.Status(http.StatusOK)
+			return
 		}
 		if monitor.AllPaused() {
 			c.Status(http.StatusServiceUnavailable)

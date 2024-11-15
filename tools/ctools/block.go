@@ -102,11 +102,11 @@ func WriteRawJsonBinary(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Poin
 	clen := *((*uint16)(currentRow))
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 
-	builder.WriteByte('"')
+	builder.AddByte('"')
 	for index := uint16(0); index < clen; index++ {
 		builder.WriteStringByte(*((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index)))))
 	}
-	builder.WriteByte('"')
+	builder.AddByte('"')
 }
 
 func WriteRawJsonVarBinary(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
@@ -119,17 +119,17 @@ func WriteRawJsonVarBinary(builder *jsonbuilder.Stream, pHeader, pStart unsafe.P
 	clen := *((*uint16)(currentRow))
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 
-	builder.WriteByte('"')
+	builder.AddByte('"')
 	var b byte
 	for index := uint16(0); index < clen; index++ {
 		b = *((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index))))
 		s := strconv.FormatInt(int64(b), 16)
 		if len(s) == 1 {
-			builder.WriteByte('0')
+			builder.AddByte('0')
 		}
 		builder.WriteRaw(s)
 	}
-	builder.WriteByte('"')
+	builder.AddByte('"')
 }
 
 func WriteRawJsonGeometry(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
@@ -145,11 +145,11 @@ func WriteRawJsonNchar(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Point
 	currentRow := tools.AddPointer(pStart, uintptr(offset))
 	clen := *((*uint16)(currentRow)) / 4
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
-	builder.WriteByte('"')
+	builder.AddByte('"')
 	for index := uint16(0); index < clen; index++ {
 		builder.WriteRuneString(*((*rune)(unsafe.Pointer(uintptr(currentRow) + uintptr(index*4)))))
 	}
-	builder.WriteByte('"')
+	builder.AddByte('"')
 }
 
 func WriteRawJsonJson(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
@@ -163,7 +163,7 @@ func WriteRawJsonJson(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointe
 	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
 
 	for index := uint16(0); index < clen; index++ {
-		builder.WriteByte(*((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index)))))
+		builder.AddByte(*((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index)))))
 	}
 }
 

@@ -24,7 +24,11 @@ func BenchmarkGetConnection(b *testing.B) {
 			b.Error(err)
 			return
 		}
-		conn.Put()
+		err = conn.Put()
+		if err != nil {
+			b.Error(err)
+			return
+		}
 	}
 }
 
@@ -142,7 +146,8 @@ func TestChangePassword(t *testing.T) {
 	wc, err := conn.pool.Get()
 	assert.Equal(t, AuthFailureError, err)
 	assert.Equal(t, unsafe.Pointer(nil), wc)
-	conn.Put()
+	err = conn.Put()
+	assert.NoError(t, err)
 
 	conn2, err := GetConnection("test", "test", net.ParseIP("127.0.0.1"))
 	assert.Error(t, err)
@@ -155,7 +160,8 @@ func TestChangePassword(t *testing.T) {
 	errNo = wrapper.TaosError(result2)
 	wrapper.TaosFreeResult(result2)
 	assert.Equal(t, 0, errNo)
-	conn3.Put()
+	err = conn3.Put()
+	assert.NoError(t, err)
 
 	conn4, err := GetConnection("test", "test2", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
@@ -164,7 +170,8 @@ func TestChangePassword(t *testing.T) {
 	errNo = wrapper.TaosError(result3)
 	wrapper.TaosFreeResult(result3)
 	assert.Equal(t, 0, errNo)
-	conn3.Put()
+	err = conn3.Put()
+	assert.NoError(t, err)
 }
 
 func TestChangePasswordConcurrent(t *testing.T) {
@@ -201,7 +208,8 @@ func TestChangePasswordConcurrent(t *testing.T) {
 	wc1, err := conn.pool.Get()
 	assert.Equal(t, AuthFailureError, err)
 	assert.Equal(t, unsafe.Pointer(nil), wc1)
-	conn.Put()
+	err = conn.Put()
+	assert.NoError(t, err)
 	wg := sync.WaitGroup{}
 	wg.Add(5)
 	for i := 0; i < 5; i++ {
@@ -210,7 +218,8 @@ func TestChangePasswordConcurrent(t *testing.T) {
 			conn2, err := GetConnection("test", "test2", net.ParseIP("127.0.0.1"))
 			assert.NoError(t, err)
 			assert.NotNil(t, conn2)
-			conn2.Put()
+			err = conn2.Put()
+			assert.NoError(t, err)
 		}()
 	}
 	wg.Wait()
@@ -225,7 +234,8 @@ func TestChangePasswordConcurrent(t *testing.T) {
 	errNo = wrapper.TaosError(result2)
 	wrapper.TaosFreeResult(result2)
 	assert.Equal(t, 0, errNo)
-	conn3.Put()
+	err = conn3.Put()
+	assert.NoError(t, err)
 
 	conn4, err := GetConnection("test", "test2", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
@@ -234,5 +244,6 @@ func TestChangePasswordConcurrent(t *testing.T) {
 	errNo = wrapper.TaosError(result3)
 	wrapper.TaosFreeResult(result3)
 	assert.Equal(t, 0, errNo)
-	conn3.Put()
+	err = conn3.Put()
+	assert.NoError(t, err)
 }

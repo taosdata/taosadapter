@@ -30,11 +30,15 @@ func TestCollectd(t *testing.T) {
 	}
 	afC, err := af.NewConnector(conn)
 	assert.NoError(t, err)
-	defer afC.Close()
+	defer func() {
+		err = afC.Close()
+		assert.NoError(t, err)
+	}()
 	_, err = afC.Exec("drop database if exists collectd")
 	assert.NoError(t, err)
 	_, err = afC.Exec("create database if not exists collectd")
 	assert.NoError(t, err)
+	//nolint:staticcheck
 	rand.Seed(time.Now().UnixNano())
 	p := &Plugin{}
 	config.Init()
@@ -75,7 +79,10 @@ func TestCollectd(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer c.Close()
+	defer func() {
+		err = c.Close()
+		assert.NoError(t, err)
+	}()
 	_, err = c.Write(bytes)
 	if err != nil {
 		t.Error(err)
@@ -97,7 +104,10 @@ func TestCollectd(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer r.Close()
+	defer func() {
+		err = r.Close()
+		assert.NoError(t, err)
+	}()
 	values := make([]driver.Value, 1)
 	err = r.Next(values)
 	assert.NoError(t, err)
@@ -111,7 +121,10 @@ func TestCollectd(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer r.Close()
+	defer func() {
+		err = r.Close()
+		assert.NoError(t, err)
+	}()
 	values = make([]driver.Value, 1)
 	err = r.Next(values)
 	assert.NoError(t, err)

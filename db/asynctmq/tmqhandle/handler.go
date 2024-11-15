@@ -206,11 +206,9 @@ func (c *TMQHandlerPool) Put(handler *TMQHandler) {
 		}
 		c.mu.Unlock()
 		return
-	} else {
-		c.handlers <- handler
-		c.mu.Unlock()
-		return
 	}
+	c.handlers <- handler
+	c.mu.Unlock()
 }
 
 var GlobalTMQHandlerPoll = NewHandlerPool(10000)

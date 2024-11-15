@@ -9,7 +9,7 @@ import (
 type fakePlugin struct {
 }
 
-func (f *fakePlugin) Init(r gin.IRouter) error {
+func (f *fakePlugin) Init(_ gin.IRouter) error {
 	return nil
 }
 
@@ -32,7 +32,7 @@ func (f *fakePlugin) Version() string {
 // @author: xftan
 // @date: 2021/12/14 15:09
 // @description: test plugin register
-func TestRegister(t *testing.T) {
+func TestRegister(_ *testing.T) {
 	Register(&fakePlugin{})
 	r := gin.Default()
 	Init(r)

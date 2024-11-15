@@ -50,7 +50,7 @@ func Init() {
 	help := pflag.Bool("help", false, "Print this help message and exit")
 	pflag.Parse()
 	if *help {
-		fmt.Fprintf(os.Stderr, "Usage of %sadapter v%s-%s:\n", version.CUS_PROMPT, version.Version, version.CommitID)
+		_, _ = fmt.Fprintf(os.Stderr, "Usage of %sadapter v%s-%s:\n", version.CUS_PROMPT, version.Version, version.CommitID)
 		pflag.PrintDefaults()
 		os.Exit(0)
 	}
@@ -119,7 +119,8 @@ func Init() {
 
 // arg > file > env
 func init() {
-	maxprocs.Set()
+	// get the number of CPU cores, and set GOMAXPROCS to match the number of CPU cores
+	_, _ = maxprocs.Set()
 	viper.SetDefault("debug", true)
 	_ = viper.BindEnv("debug", "TAOS_ADAPTER_DEBUG")
 	pflag.Bool("debug", true, `enable debug mode. Env "TAOS_ADAPTER_DEBUG"`)

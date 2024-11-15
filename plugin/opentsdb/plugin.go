@@ -230,11 +230,10 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 		if err != nil {
 			if err == io.EOF {
 				break
-			} else {
-				logger.Errorf("read line error, err:%s", err)
-				p.errorResponse(c, http.StatusBadRequest, err)
-				return
 			}
+			logger.Errorf("read line error, err:%s", err)
+			p.errorResponse(c, http.StatusBadRequest, err)
+			return
 		}
 		tmp.Write(l)
 		if !hasNext {

@@ -20,9 +20,8 @@ func TestConnectPool(t *testing.T) {
 			factoryCalled++
 			return unsafe.Pointer(&struct{}{}), nil
 		},
-		Close: func(pointer unsafe.Pointer) error {
+		Close: func(_ unsafe.Pointer) {
 			closeCalled++
-			return nil
 		},
 	})
 
@@ -41,9 +40,12 @@ func TestConnectPool(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, conn3)
 
-	pool.Put(conn1)
-	pool.Put(conn2)
-	pool.Put(conn3)
+	err = pool.Put(conn1)
+	assert.NoError(t, err)
+	err = pool.Put(conn2)
+	assert.NoError(t, err)
+	err = pool.Put(conn3)
+	assert.NoError(t, err)
 
 	arr := make([]unsafe.Pointer, 5)
 	for i := 0; i < 5; i++ {
@@ -56,7 +58,6 @@ func TestConnectPool(t *testing.T) {
 		err = pool.Put(arr[i])
 		assert.NoError(t, err)
 	}
-	arr = nil
 	assert.Equal(t, 5, factoryCalled)
 
 	pool.Release()
@@ -73,9 +74,8 @@ func TestTimeout(t *testing.T) {
 		Factory: func() (unsafe.Pointer, error) {
 			return nil, nil
 		},
-		Close: func(pointer unsafe.Pointer) error {
+		Close: func(_ unsafe.Pointer) {
 			t.Log("close")
-			return nil
 		},
 	})
 	assert.NoError(t, err)
@@ -95,9 +95,8 @@ func TestGetAfterRelease(t *testing.T) {
 		Factory: func() (unsafe.Pointer, error) {
 			return unsafe.Pointer(&a), nil
 		},
-		Close: func(pointer unsafe.Pointer) error {
+		Close: func(_ unsafe.Pointer) {
 			t.Log("close")
-			return nil
 		},
 	})
 	assert.NoError(t, err)
@@ -136,9 +135,8 @@ func TestMaxWait(t *testing.T) {
 		Factory: func() (unsafe.Pointer, error) {
 			return unsafe.Pointer(&a), nil
 		},
-		Close: func(pointer unsafe.Pointer) error {
+		Close: func(_ unsafe.Pointer) {
 			t.Log("close")
-			return nil
 		},
 	})
 	assert.NoError(t, err)
@@ -150,7 +148,8 @@ func TestMaxWait(t *testing.T) {
 		_, err = pool.Get()
 		assert.Equal(t, ErrMaxWait, err)
 		// put back connection
-		pool.Put(c)
+		err = pool.Put(c)
+		assert.NoError(t, err)
 	}()
 	// wait for connection put back
 	_, err = pool.Get()
@@ -216,9 +215,7 @@ func TestNewConnectPool(t *testing.T) {
 					Factory: func() (unsafe.Pointer, error) {
 						return nil, errors.New("connect error")
 					},
-					Close: func(pointer unsafe.Pointer) error {
-						return nil
-					},
+					Close:      func(pointer unsafe.Pointer) {},
 					InitialCap: 1,
 				},
 			},

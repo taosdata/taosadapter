@@ -200,7 +200,12 @@ func (p *NodeExporter) Gather() {
 		logger.WithError(err).Errorln("commonpool.GetConnection error")
 		return
 	}
-	defer conn.Put()
+	defer func() {
+		err = conn.Put()
+		if err != nil {
+			logger.WithError(err).Errorln("conn.Put error")
+		}
+	}()
 	for _, req := range p.request {
 		err := p.requestSingle(conn.TaosConnection, req)
 		if err != nil {
@@ -214,7 +219,9 @@ func (p *NodeExporter) requestSingle(conn unsafe.Pointer, req *Req) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%s returned HTTP status %s", req.req.URL, resp.Status)

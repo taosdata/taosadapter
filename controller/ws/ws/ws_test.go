@@ -144,7 +144,10 @@ func TestVersion(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
 	resp, err := doWebSocket(ws, wstool.ClientVersion, nil)
 	assert.NoError(t, err)
 	var versionResp VersionResponse
@@ -182,7 +185,7 @@ func TestWsQuery(t *testing.T) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -275,7 +278,7 @@ func TestWsQuery(t *testing.T) {
 	assert.NoError(t, err)
 	resultID, blockResult = parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
 	checkBlockResult(t, blockResult)
-
+	assert.Equal(t, queryResp.ID, resultID)
 	// fetch
 	fetchReq = FetchRequest{ReqID: 9, ID: queryResp.ID}
 	resp, err = doWebSocket(ws, WSFetch, &fetchReq)
@@ -547,7 +550,8 @@ func TestWsQuery(t *testing.T) {
 	fetchBlockResp, err = doWebSocket(ws, WSFetchBlock, &fetchBlockReq)
 	assert.NoError(t, err)
 	resultID, blockResult = parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
-
+	assert.Equal(t, queryResp.ID, resultID)
+	checkBlockResult(t, blockResult)
 	// fetch
 	fetchReq = FetchRequest{ReqID: 13, ID: queryResp.ID}
 	resp, err = doWebSocket(ws, WSFetch, &fetchReq)
@@ -635,7 +639,7 @@ func TestWsBinaryQuery(t *testing.T) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -1050,7 +1054,6 @@ func TestWsBinaryQuery(t *testing.T) {
 	assert.Equal(t, false, fetchRawBlockResp.Finished)
 	blockResult = ReadBlockSimple(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]), queryResp.Precision)
 	checkBlockResult(t, blockResult)
-	rawBlock = fetchRawBlockResp.RawBlock
 
 	buffer.Reset()
 	wstool.WriteUint64(&buffer, 13)           // req id
@@ -1093,6 +1096,7 @@ func TestWsBinaryQuery(t *testing.T) {
 	err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
 	assert.NoError(t, err)
 	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
 	err = json.Unmarshal(resp, &queryResp)
 	assert.NoError(t, err)
 	assert.Equal(t, 65535, queryResp.Code, queryResp.Message)
@@ -1109,6 +1113,7 @@ func TestWsBinaryQuery(t *testing.T) {
 	err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
 	assert.NoError(t, err)
 	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
 	err = json.Unmarshal(resp, &queryResp)
 	assert.NoError(t, err)
 	assert.Equal(t, 65535, queryResp.Code, queryResp.Message)
@@ -1125,6 +1130,7 @@ func TestWsBinaryQuery(t *testing.T) {
 	err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
 	assert.NoError(t, err)
 	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
 	err = json.Unmarshal(resp, &queryResp)
 	assert.NoError(t, err)
 	assert.NotEqual(t, 0, queryResp.Code, queryResp.Message)
@@ -1141,6 +1147,7 @@ func TestWsBinaryQuery(t *testing.T) {
 	err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
 	assert.NoError(t, err)
 	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
 	err = json.Unmarshal(resp, &queryResp)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, queryResp.Code, queryResp.Message)
@@ -1158,6 +1165,7 @@ func TestWsBinaryQuery(t *testing.T) {
 	err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
 	assert.NoError(t, err)
 	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
 	err = json.Unmarshal(resp, &queryResp)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, queryResp.Code, queryResp.Message)
@@ -1316,7 +1324,7 @@ func TestWsSchemaless(t *testing.T) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -1481,7 +1489,7 @@ func TestWsStmt(t *testing.T) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -1994,7 +2002,7 @@ func StmtQuery(t *testing.T, db string, prepareDataSql []string) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -2138,7 +2146,7 @@ func TestStmtNumParams(t *testing.T) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -2207,7 +2215,7 @@ func TestStmtGetParams(t *testing.T) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -2276,7 +2284,7 @@ func TestGetCurrentDB(t *testing.T) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -2311,7 +2319,7 @@ func TestGetServerInfo(t *testing.T) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -2359,7 +2367,7 @@ func TestNumFields(t *testing.T) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -2416,7 +2424,7 @@ func TestWsStmt2(t *testing.T) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -2651,7 +2659,7 @@ func TestStmt2Prepare(t *testing.T) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -2777,7 +2785,7 @@ func TestStmt2GetFields(t *testing.T) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -2990,7 +2998,7 @@ func Stmt2Query(t *testing.T, db string, prepareDataSql []string) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -3047,6 +3055,7 @@ func Stmt2Query(t *testing.T, db string, prepareDataSql []string) {
 		},
 	}
 	b, err := stmtCommon.MarshalStmt2Binary(params, false, nil, nil)
+	assert.NoError(t, err)
 	block.Write(b)
 
 	err = ws.WriteMessage(websocket.BinaryMessage, block.Bytes())
@@ -3112,6 +3121,7 @@ func Stmt2Query(t *testing.T, db string, prepareDataSql []string) {
 	assert.NoError(t, err)
 	var closeResp Stmt2CloseResponse
 	err = json.Unmarshal(resp, &fetchResp)
+	assert.NoError(t, err)
 	assert.Equal(t, 0, closeResp.Code, closeResp.Message)
 }
 
@@ -3124,7 +3134,7 @@ func TestWSConnect(t *testing.T) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -3176,7 +3186,7 @@ func TestMode(t *testing.T) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -3203,10 +3213,6 @@ func TestMode(t *testing.T) {
 
 }
 
-func TestStmtBinary(t *testing.T) {
-
-}
-
 func TestWSTMQWriteRaw(t *testing.T) {
 	s := httptest.NewServer(router)
 	defer s.Close()
@@ -3216,7 +3222,7 @@ func TestWSTMQWriteRaw(t *testing.T) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 
@@ -3326,7 +3332,7 @@ func TestDropUser(t *testing.T) {
 		return
 	}
 	defer func() {
-		err := ws.Close()
+		err = ws.Close()
 		assert.NoError(t, err)
 	}()
 	defer doRestful("drop user test_ws_drop_user", "")

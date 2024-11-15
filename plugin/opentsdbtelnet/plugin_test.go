@@ -22,6 +22,7 @@ import (
 // @date: 2021/12/14 15:08
 // @description: test opentsdb_telnet plugin
 func TestPlugin(t *testing.T) {
+	//nolint:staticcheck
 	rand.Seed(time.Now().UnixNano())
 	p := &opentsdbtelnet.Plugin{}
 	config.Init()
@@ -36,7 +37,10 @@ func TestPlugin(t *testing.T) {
 	}
 	afC, err := af.NewConnector(conn)
 	assert.NoError(t, err)
-	defer afC.Close()
+	defer func() {
+		err = afC.Close()
+		assert.NoError(t, err)
+	}()
 	_, err = afC.Exec("create database if not exists opentsdb_telnet")
 	assert.NoError(t, err)
 	err = p.Init(nil)
@@ -50,7 +54,10 @@ func TestPlugin(t *testing.T) {
 	number := rand.Int31()
 	c, err := net.Dial("tcp", "127.0.0.1:6046")
 	assert.NoError(t, err)
-	defer c.Close()
+	defer func() {
+		err = c.Close()
+		assert.NoError(t, err)
+	}()
 	_, err = c.Write([]byte(fmt.Sprintf("put sys.if.bytes.out 1479496100 %d host=web01 interface=eth0\r\n", number)))
 	assert.NoError(t, err)
 	time.Sleep(time.Second)
@@ -70,7 +77,10 @@ func TestPlugin(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer r.Close()
+	defer func() {
+		err = r.Close()
+		assert.NoError(t, err)
+	}()
 	values := make([]driver.Value, 1)
 	err = r.Next(values)
 	assert.NoError(t, err)
@@ -84,7 +94,10 @@ func TestPlugin(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer rows.Close()
+	defer func() {
+		err = rows.Close()
+		assert.NoError(t, err)
+	}()
 	values = make([]driver.Value, 1)
 	err = rows.Next(values)
 	assert.NoError(t, err)

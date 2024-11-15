@@ -147,19 +147,16 @@ func TestJsonWriteRawBlock(t *testing.T) {
 	block := unsafe.Pointer(&raw[0])
 	lengthOffset := parser.RawBlockGetColumnLengthOffset(fieldsCount)
 	tmpPHeader := tools.AddPointer(block, parser.RawBlockGetColDataOffset(fieldsCount))
-	tmpPStart := tmpPHeader
 	for column := 0; column < fieldsCount; column++ {
 		colLength := *((*int32)(unsafe.Pointer(uintptr(block) + lengthOffset + uintptr(column)*parser.Int32Size)))
 		if IsVarDataType(fieldTypes[column]) {
 			pHeaderList[column] = tmpPHeader
-			tmpPStart = tools.AddPointer(tmpPHeader, uintptr(4*blockSize))
-			pStartList[column] = tmpPStart
+			pStartList[column] = tools.AddPointer(tmpPHeader, uintptr(4*blockSize))
 		} else {
 			pHeaderList[column] = tmpPHeader
-			tmpPStart = tools.AddPointer(tmpPHeader, nullBitMapOffset)
-			pStartList[column] = tmpPStart
+			pStartList[column] = tools.AddPointer(tmpPHeader, nullBitMapOffset)
 		}
-		tmpPHeader = tools.AddPointer(tmpPStart, uintptr(colLength))
+		tmpPHeader = tools.AddPointer(pStartList[column], uintptr(colLength))
 	}
 	timeBuffer := make([]byte, 0, 30)
 	builder.WriteObjectStart()

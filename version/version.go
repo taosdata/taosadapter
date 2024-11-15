@@ -10,6 +10,8 @@ var BuildInfo = "unknown"
 
 var TaosClientVersion = wrapper.TaosGetClientInfo()
 
+//revive:disable-next-line
 var CUS_NAME = "TDengine"
 
+//revive:disable-next-line
 var CUS_PROMPT = "taos"

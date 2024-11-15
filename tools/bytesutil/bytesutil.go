@@ -72,21 +72,12 @@ func ToUnsafeString(b []byte) string {
 //
 // The returned byte slice is valid only until s is reachable and unmodified.
 func ToUnsafeBytes(s string) (b []byte) {
+	//nolint:staticcheck
 	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
+	//nolint:staticcheck
 	slh := (*reflect.SliceHeader)(unsafe.Pointer(&b))
 	slh.Data = sh.Data
 	slh.Len = sh.Len
 	slh.Cap = sh.Len
 	return b
-}
-
-// LimitStringLen limits the length of s to maxLen.
-//
-// If len(s) > maxLen, then the function concatenates s prefix with s suffix.
-func LimitStringLen(s string, maxLen int) string {
-	if maxLen <= 4 || len(s) <= maxLen {
-		return s
-	}
-	n := maxLen/2 - 1
-	return s[:n] + ".." + s[len(s)-n:]
 }

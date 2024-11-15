@@ -70,7 +70,8 @@ func TestTMQCaller(t *testing.T) {
 	caller := NewTMQCaller()
 
 	// Test PollCall
-	res := unsafe.Pointer(uintptr(0x12345))
+	a := 1
+	res := unsafe.Pointer(&a)
 	caller.PollCall(res)
 	if <-caller.PollResult != res {
 		t.Error("PollCall failed")
@@ -88,10 +89,11 @@ func TestTMQCaller(t *testing.T) {
 	}
 
 	// Test FetchRawBlockCall
+	b := 2
 	frbr := &FetchRawBlockResult{
 		Code:      456,
 		BlockSize: 789,
-		Block:     unsafe.Pointer(uintptr(0x67890)),
+		Block:     unsafe.Pointer(&b),
 	}
 	caller.FetchRawBlockCall(frbr.Code, frbr.BlockSize, frbr.Block)
 	result := <-caller.FetchRawBlockResult
@@ -100,7 +102,8 @@ func TestTMQCaller(t *testing.T) {
 	}
 
 	// Test NewConsumerCall
-	consumer := unsafe.Pointer(uintptr(0xabcd))
+	c := 3
+	consumer := unsafe.Pointer(&c)
 	errStr := "some error"
 	caller.NewConsumerCall(consumer, errStr)
 	result2 := <-caller.NewConsumerResult
@@ -137,7 +140,8 @@ func TestTMQCaller(t *testing.T) {
 	}
 
 	// Test GetJsonMetaCall
-	meta := unsafe.Pointer(uintptr(0xeffe))
+	d := 4
+	meta := unsafe.Pointer(&d)
 	caller.GetJsonMetaCall(meta)
 	if <-caller.GetJsonMetaResult != meta {
 		t.Error("GetJsonMetaCall failed")
