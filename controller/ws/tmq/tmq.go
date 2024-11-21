@@ -12,7 +12,6 @@ import (
 	"unsafe"
 
 	"github.com/gin-gonic/gin"
-	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/common"
 	"github.com/taosdata/driver-go/v3/common/parser"
@@ -33,6 +32,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
+	"github.com/taosdata/taosadapter/v3/tools/melody"
 )
 
 type TMQController struct {
@@ -41,7 +41,7 @@ type TMQController struct {
 
 func NewTMQController() *TMQController {
 	tmqM := melody.New()
-	tmqM.UpGrader.EnableCompression = true
+	tmqM.Upgrader.EnableCompression = true
 	tmqM.Config.MaxMessageSize = 0
 
 	tmqM.HandleConnect(func(session *melody.Session) {
@@ -51,9 +51,6 @@ func NewTMQController() *TMQController {
 	})
 
 	tmqM.HandleMessage(func(session *melody.Session, data []byte) {
-		if tmqM.IsClosed() {
-			return
-		}
 		t := session.MustGet(TaosTMQKey).(*TMQ)
 		if t.isClosed() {
 			return
@@ -61,6 +58,9 @@ func NewTMQController() *TMQController {
 		t.wg.Add(1)
 		go func() {
 			defer t.wg.Done()
+			if t.isClosed() {
+				return
+			}
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 			logger := wstool.GetLogger(session)
 			logger.Debugf("get ws message data:%s", data)
@@ -72,7 +72,7 @@ func NewTMQController() *TMQController {
 			}
 			switch action.Action {
 			case wstool.ClientVersion:
-				_ = session.Write(wstool.VersionResp)
+				wstool.WSWriteVersion(session, logger)
 			case TMQSubscribe:
 				var req TMQSubscribeReq
 				err = json.Unmarshal(action.Args, &req)
@@ -1300,16 +1300,15 @@ type WSTMQErrorResp struct {
 }
 
 func wsTMQErrorMsg(ctx context.Context, session *melody.Session, logger *logrus.Entry, code int, message string, action string, reqID uint64, messageID *uint64) {
-	b, _ := json.Marshal(&WSTMQErrorResp{
+	data := &WSTMQErrorResp{
 		Code:      code & 0xffff,
 		Message:   message,
 		Action:    action,
 		ReqID:     reqID,
 		Timing:    wstool.GetDuration(ctx),
 		MessageID: messageID,
-	})
-	logger.Tracef("write json:%s", b)
-	_ = session.Write(b)
+	}
+	wstool.WSWriteJson(session, logger, data)
 }
 
 func canGetData(messageType int32) bool {

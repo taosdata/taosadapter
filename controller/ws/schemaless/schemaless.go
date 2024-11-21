@@ -9,7 +9,6 @@ import (
 	"unsafe"
 
 	"github.com/gin-gonic/gin"
-	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/driver-go/v3/wrapper"
@@ -22,6 +21,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
+	"github.com/taosdata/taosadapter/v3/tools/melody"
 )
 
 type SchemalessController struct {
@@ -30,7 +30,7 @@ type SchemalessController struct {
 
 func NewSchemalessController() *SchemalessController {
 	schemaless := melody.New()
-	schemaless.UpGrader.EnableCompression = true
+	schemaless.Upgrader.EnableCompression = true
 	schemaless.Config.MaxMessageSize = 0
 
 	schemaless.HandleConnect(func(session *melody.Session) {
@@ -40,9 +40,6 @@ func NewSchemalessController() *SchemalessController {
 	})
 
 	schemaless.HandleMessage(func(session *melody.Session, bytes []byte) {
-		if schemaless.IsClosed() {
-			return
-		}
 		t := session.MustGet(taosSchemalessKey).(*TaosSchemaless)
 		if t.closed {
 			return
@@ -50,6 +47,9 @@ func NewSchemalessController() *SchemalessController {
 		t.wg.Add(1)
 		go func() {
 			defer t.wg.Done()
+			if t.closed {
+				return
+			}
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 			logger := wstool.GetLogger(session)
 			logger.Debugf("get ws message data:%s", bytes)
@@ -62,7 +62,7 @@ func NewSchemalessController() *SchemalessController {
 			}
 			switch action.Action {
 			case wstool.ClientVersion:
-				_ = session.Write(wstool.VersionResp)
+				wstool.WSWriteVersion(session, logger)
 			case SchemalessConn:
 				var req schemalessConnReq
 				if err = json.Unmarshal(action.Args, &req); err != nil {

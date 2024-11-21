@@ -2,8 +2,6 @@ module github.com/taosdata/taosadapter/v3
 
 go 1.17
 
-replace github.com/huskar-t/melody => github.com/taosdata/melody v0.0.0-20240407104517-11dcf4a47591
-
 require (
 	collectd.org v0.5.0
 	github.com/gin-contrib/cors v1.4.0
@@ -13,7 +11,6 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/snappy v0.0.4
 	github.com/gorilla/websocket v1.5.0
-	github.com/huskar-t/melody v0.0.0-20240407104517-11dcf4a47591
 	github.com/influxdata/telegraf v1.23.4
 	github.com/json-iterator/go v1.1.12
 	github.com/kardianos/service v1.2.2

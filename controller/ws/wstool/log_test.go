@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/taosdata/taosadapter/v3/tools/melody"
 )
 
 func TestGetDuration(t *testing.T) {
