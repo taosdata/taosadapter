@@ -157,7 +157,7 @@ func (h *messageHandler) stop() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
-		waitCh := make(chan struct{}, 1)
+		waitCh := make(chan struct{})
 		go func() {
 			h.wait.Wait()
 			close(waitCh)
@@ -165,8 +165,12 @@ func (h *messageHandler) stop() {
 
 		select {
 		case <-ctx.Done():
+			h.logger.Warn("wait stop over 1 minute")
+			<-waitCh
+			break
 		case <-waitCh:
 		}
+		h.logger.Debugf("wait stop done")
 		// clean query result and stmt
 		h.queryResults.FreeAll(h.logger)
 		h.stmts.FreeAll(h.logger)

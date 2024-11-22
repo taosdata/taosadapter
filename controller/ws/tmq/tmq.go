@@ -1235,10 +1235,11 @@ func (t *TMQ) Close(logger *logrus.Entry) {
 	}()
 	select {
 	case <-ctx.Done():
-		logger.Error("wait for all goroutines to exit timeout")
+		logger.Warn("wait stop over 1 minute")
+		<-done
 	case <-done:
-		logger.Debug("all goroutines exit")
 	}
+	logger.Debug("wait stop done")
 	isDebug := log.IsDebug()
 
 	defer func() {
