@@ -106,6 +106,11 @@ func TestMode(t *testing.T) {
 
 }
 
+func TestWrongConnect(t *testing.T) {
+	// mock tool.GetWhitelist return error
+
+}
+
 func TestWsQuery(t *testing.T) {
 	s := httptest.NewServer(router)
 	defer s.Close()
@@ -147,12 +152,23 @@ func TestWsQuery(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)
 	assert.Equal(t, 0, connResp.Code, connResp.Message)
+	assert.Equal(t, Connect, connResp.Action)
 
-	// query
-	queryReq := queryRequest{ReqID: 2, Sql: "select * from stb1"}
+	// wrong sql
+	queryReq := queryRequest{ReqID: 2, Sql: "wrong sql"}
 	resp, err = doWebSocket(ws, WSQuery, &queryReq)
 	assert.NoError(t, err)
 	var queryResp queryResponse
+	err = json.Unmarshal(resp, &queryResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(2), queryResp.ReqID)
+	assert.NotEqual(t, 0, queryResp.Code)
+	assert.Equal(t, WSQuery, queryResp.Action)
+
+	// query
+	queryReq = queryRequest{ReqID: 2, Sql: "select * from stb1"}
+	resp, err = doWebSocket(ws, WSQuery, &queryReq)
+	assert.NoError(t, err)
 	err = json.Unmarshal(resp, &queryResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(2), queryResp.ReqID)
@@ -510,7 +526,17 @@ func TestWsQuery(t *testing.T) {
 	assert.Equal(t, 0, fetchResp.Code, fetchResp.Message)
 
 	assert.Equal(t, true, fetchResp.Completed)
-	time.Sleep(time.Second)
+
+	// insert
+	queryReq = queryRequest{ReqID: 14, Sql: `insert into t4 using stb1 tags ('{\"table\":\"t4\"}') values (now-2s,true,2,3,4,5,6,7,8,9,10,11,'中文\"binary','中文nchar','\xaabbcc','point(100 100)')(now-1s,false,12,13,14,15,16,17,18,19,110,111,'中文\"binary','中文nchar','\xaabbcc','point(100 100)')(now,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)`}
+	resp, err = doWebSocket(ws, WSQuery, &queryReq)
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &queryResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(14), queryResp.ReqID)
+	assert.Equal(t, 0, queryResp.Code, queryResp.Message)
+	assert.Equal(t, WSQuery, queryResp.Action)
+	assert.Equal(t, 3, queryResp.AffectedRows)
 }
 
 type FetchRawBlockResponse struct {

@@ -20,6 +20,7 @@ import (
 	stmtCommon "github.com/taosdata/driver-go/v3/common/stmt"
 	"github.com/taosdata/driver-go/v3/types"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
+	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 )
 
@@ -897,4 +898,163 @@ func TestStmtGetParams(t *testing.T) {
 	assert.Equal(t, 0, getParamsResp.Index)
 	assert.Equal(t, 9, getParamsResp.DataType)
 	assert.Equal(t, 8, getParamsResp.Length)
+}
+
+func TestStmtInvalidStmtID(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	// connect
+	reqID := uint64(generator.GetReqID())
+	connReq := connRequest{ReqID: reqID, User: "root", Password: "taosdata"}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp commonResp
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, Connect, connResp.Action)
+	assert.Equal(t, reqID, connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+
+	// prepare
+	reqID = uint64(generator.GetReqID())
+	prepareReq := stmtPrepareRequest{ReqID: reqID, StmtID: 0, SQL: "insert into ? using test_ws_stmt_ws.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"}
+	resp, err = doWebSocket(ws, STMTPrepare, &prepareReq)
+	assert.NoError(t, err)
+	var prepareResp stmtPrepareResponse
+	err = json.Unmarshal(resp, &prepareResp)
+	assert.NoError(t, err)
+	assert.Equal(t, STMTPrepare, prepareResp.Action)
+	assert.Equal(t, reqID, prepareResp.ReqID)
+	assert.NotEqual(t, 0, prepareResp.Code)
+
+	// set table name
+	reqID = uint64(generator.GetReqID())
+	setTableNameReq := stmtSetTableNameRequest{ReqID: reqID, StmtID: prepareResp.StmtID, Name: "d1"}
+	resp, err = doWebSocket(ws, STMTSetTableName, &setTableNameReq)
+	assert.NoError(t, err)
+	var setTableNameResp stmtSetTableNameResponse
+	err = json.Unmarshal(resp, &setTableNameResp)
+	assert.NoError(t, err)
+	assert.Equal(t, STMTSetTableName, setTableNameResp.Action)
+	assert.Equal(t, reqID, setTableNameResp.ReqID)
+	assert.NotEqual(t, 0, setTableNameResp.Code)
+
+	// set tags
+	reqID = uint64(generator.GetReqID())
+	setTagsReq := stmtSetTagsRequest{ReqID: reqID, StmtID: prepareResp.StmtID}
+	resp, err = doWebSocket(ws, STMTSetTags, &setTagsReq)
+	assert.NoError(t, err)
+	var setTagsResp stmtSetTagsResponse
+	err = json.Unmarshal(resp, &setTagsResp)
+	assert.NoError(t, err)
+	assert.Equal(t, STMTSetTags, setTagsResp.Action)
+	assert.Equal(t, reqID, setTagsResp.ReqID)
+	assert.NotEqual(t, 0, setTagsResp.Code)
+
+	// bind
+	reqID = uint64(generator.GetReqID())
+	bindReq := stmtBindRequest{ReqID: reqID, StmtID: prepareResp.StmtID}
+	resp, err = doWebSocket(ws, STMTBind, &bindReq)
+	assert.NoError(t, err)
+	var bindResp stmtBindResponse
+	err = json.Unmarshal(resp, &bindResp)
+	assert.NoError(t, err)
+	assert.Equal(t, STMTBind, bindResp.Action)
+	assert.Equal(t, reqID, bindResp.ReqID)
+	assert.NotEqual(t, 0, bindResp.Code)
+
+	// add batch
+	reqID = uint64(generator.GetReqID())
+	addBatchReq := stmtAddBatchRequest{ReqID: reqID, StmtID: prepareResp.StmtID}
+	resp, err = doWebSocket(ws, STMTAddBatch, &addBatchReq)
+	assert.NoError(t, err)
+	var addBatchResp stmtAddBatchResponse
+	err = json.Unmarshal(resp, &addBatchResp)
+	assert.NoError(t, err)
+	assert.Equal(t, STMTAddBatch, addBatchResp.Action)
+	assert.Equal(t, reqID, addBatchResp.ReqID)
+	assert.NotEqual(t, 0, addBatchResp.Code)
+
+	// exec
+	reqID = uint64(generator.GetReqID())
+	execReq := stmtExecRequest{ReqID: reqID, StmtID: prepareResp.StmtID}
+	resp, err = doWebSocket(ws, STMTExec, &execReq)
+	assert.NoError(t, err)
+	var execResp stmtExecResponse
+	err = json.Unmarshal(resp, &execResp)
+	assert.NoError(t, err)
+	assert.Equal(t, STMTExec, execResp.Action)
+	assert.Equal(t, reqID, execResp.ReqID)
+	assert.NotEqual(t, 0, execResp.Code)
+
+	// use result
+	reqID = uint64(generator.GetReqID())
+	useResultReq := stmtUseResultRequest{ReqID: reqID, StmtID: prepareResp.StmtID}
+	resp, err = doWebSocket(ws, STMTUseResult, &useResultReq)
+	assert.NoError(t, err)
+	var useResultResp stmtUseResultResponse
+	err = json.Unmarshal(resp, &useResultResp)
+	assert.NoError(t, err)
+	assert.Equal(t, STMTUseResult, useResultResp.Action)
+	assert.Equal(t, reqID, useResultResp.ReqID)
+	assert.NotEqual(t, 0, useResultResp.Code)
+
+	// get tag fields
+	reqID = uint64(generator.GetReqID())
+	getTagFieldsReq := stmtGetTagFieldsRequest{ReqID: reqID, StmtID: prepareResp.StmtID}
+	resp, err = doWebSocket(ws, STMTGetTagFields, &getTagFieldsReq)
+	assert.NoError(t, err)
+	var getTagFieldsResp stmtGetTagFieldsResponse
+	err = json.Unmarshal(resp, &getTagFieldsResp)
+	assert.NoError(t, err)
+	assert.Equal(t, STMTGetTagFields, getTagFieldsResp.Action)
+	assert.Equal(t, reqID, getTagFieldsResp.ReqID)
+	assert.NotEqual(t, 0, getTagFieldsResp.Code)
+
+	// get col fields
+	reqID = uint64(generator.GetReqID())
+	getColFieldsReq := stmtGetColFieldsRequest{ReqID: reqID, StmtID: prepareResp.StmtID}
+	resp, err = doWebSocket(ws, STMTGetColFields, &getColFieldsReq)
+	assert.NoError(t, err)
+	var getColFieldsResp stmtGetColFieldsResponse
+	err = json.Unmarshal(resp, &getColFieldsResp)
+	assert.NoError(t, err)
+	assert.Equal(t, STMTGetColFields, getColFieldsResp.Action)
+	assert.Equal(t, reqID, getColFieldsResp.ReqID)
+	assert.NotEqual(t, 0, getColFieldsResp.Code)
+
+	// num params
+	reqID = uint64(generator.GetReqID())
+	numParamsReq := stmtNumParamsRequest{ReqID: reqID, StmtID: prepareResp.StmtID}
+	resp, err = doWebSocket(ws, STMTNumParams, &numParamsReq)
+	assert.NoError(t, err)
+	var numParamsResp stmtNumParamsResponse
+	err = json.Unmarshal(resp, &numParamsResp)
+	assert.NoError(t, err)
+	assert.Equal(t, STMTNumParams, numParamsResp.Action)
+	assert.Equal(t, reqID, numParamsResp.ReqID)
+	assert.NotEqual(t, 0, numParamsResp.Code)
+
+	// get param
+	reqID = uint64(generator.GetReqID())
+	getParamsReq := stmtGetParamRequest{ReqID: reqID, StmtID: prepareResp.StmtID, Index: 0}
+	resp, err = doWebSocket(ws, STMTGetParam, &getParamsReq)
+	assert.NoError(t, err)
+	var getParamsResp stmtGetParamResponse
+	err = json.Unmarshal(resp, &getParamsResp)
+	assert.NoError(t, err)
+	assert.Equal(t, STMTGetParam, getParamsResp.Action)
+	assert.Equal(t, reqID, getParamsResp.ReqID)
+	assert.NotEqual(t, 0, getParamsResp.Code)
+
 }
