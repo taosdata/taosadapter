@@ -559,9 +559,9 @@ func TestConcurrentMessageHandling(t *testing.T) {
 		ws.m.Config.PingPeriod = base / 2
 		ws.m.Config.PongWait = base
 
-		var errorSet atomic.Bool
+		var errorSet uint32
 		ws.m.HandleError(func(s *Session, err error) {
-			errorSet.Store(true)
+			atomic.StoreUint32(&errorSet, 1)
 			done <- struct{}{}
 		})
 
@@ -586,7 +586,7 @@ func TestConcurrentMessageHandling(t *testing.T) {
 
 		<-done
 
-		return errorSet.Load()
+		return atomic.LoadUint32(&errorSet) != 0
 	}
 
 	t.Run("text should error", func(t *testing.T) {
