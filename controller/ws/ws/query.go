@@ -29,7 +29,7 @@ type connRequest struct {
 	Mode     *int   `json:"mode"`
 }
 
-func (h *messageHandler) connect(ctx context.Context, session *melody.Session, action string, req *connRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) connect(ctx context.Context, session *melody.Session, action string, req connRequest, logger *logrus.Entry, isDebug bool) {
 	h.lock(logger, isDebug)
 	defer h.Unlock()
 	if h.closed {
@@ -142,7 +142,7 @@ type queryResponse struct {
 	Precision     int                `json:"precision"`
 }
 
-func (h *messageHandler) query(ctx context.Context, session *melody.Session, action string, req *queryRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) query(ctx context.Context, session *melody.Session, action string, req queryRequest, logger *logrus.Entry, isDebug bool) {
 	sqlType := monitor.WSRecordRequest(req.Sql)
 	logger.Debugf("get query request, sql:%s", req.Sql)
 	s := log.GetLogNow(isDebug)
@@ -170,7 +170,7 @@ func (h *messageHandler) query(ctx context.Context, session *melody.Session, act
 		affectRows := wrapper.TaosAffectedRows(result.Res)
 		logger.Debugf("affected_rows %d cost:%s", affectRows, log.GetLogDuration(isDebug, s))
 		syncinterface.FreeResult(result.Res, logger, isDebug)
-		resp := queryResponse{
+		resp := &queryResponse{
 			Action:       action,
 			ReqID:        req.ReqID,
 			Timing:       wstool.GetDuration(ctx),
@@ -192,7 +192,7 @@ func (h *messageHandler) query(ctx context.Context, session *melody.Session, act
 	queryResult := QueryResult{TaosResult: result.Res, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision}
 	idx := h.queryResults.Add(&queryResult)
 	logger.Trace("add result to list finished")
-	resp := queryResponse{
+	resp := &queryResponse{
 		Action:        action,
 		ReqID:         req.ReqID,
 		Timing:        wstool.GetDuration(ctx),

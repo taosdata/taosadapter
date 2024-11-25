@@ -48,7 +48,7 @@ type fetchResponse struct {
 	Rows      int    `json:"rows"`
 }
 
-func (h *messageHandler) fetch(ctx context.Context, session *melody.Session, action string, req *fetchRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) fetch(ctx context.Context, session *melody.Session, action string, req fetchRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Tracef("get result by id, id:%d", req.ID)
 	item := h.queryResults.Get(req.ID)
 	if item == nil {
@@ -74,7 +74,7 @@ func (h *messageHandler) fetch(ctx context.Context, session *melody.Session, act
 		item.Unlock()
 		logger.Trace("fetch raw block completed")
 		h.queryResults.FreeResultByID(req.ID, logger)
-		resp := fetchResponse{
+		resp := &fetchResponse{
 			Action:    action,
 			ReqID:     req.ReqID,
 			Timing:    wstool.GetDuration(ctx),
@@ -101,7 +101,7 @@ func (h *messageHandler) fetch(ctx context.Context, session *melody.Session, act
 	logger.Debugf("get_raw_block result:%p, cost:%s", item.Block, log.GetLogDuration(isDebug, s))
 	item.Size = result.N
 	item.Unlock()
-	resp := fetchResponse{
+	resp := &fetchResponse{
 		Action:  action,
 		ReqID:   req.ReqID,
 		Timing:  wstool.GetDuration(ctx),
@@ -117,7 +117,7 @@ type fetchBlockRequest struct {
 	ID    uint64 `json:"id"`
 }
 
-func (h *messageHandler) fetchBlock(ctx context.Context, session *melody.Session, action string, req *fetchBlockRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) fetchBlock(ctx context.Context, session *melody.Session, action string, req fetchBlockRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Tracef("fetch block, id:%d", req.ID)
 	item, locked := h.resultValidateAndLock(ctx, session, action, req.ReqID, req.ID, logger)
 	if !locked {
@@ -227,7 +227,7 @@ type numFieldsResponse struct {
 	NumFields int    `json:"num_fields"`
 }
 
-func (h *messageHandler) numFields(ctx context.Context, session *melody.Session, action string, req *numFieldsRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) numFields(ctx context.Context, session *melody.Session, action string, req numFieldsRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Tracef("num fields, result_id:%d", req.ResultID)
 	item, locked := h.resultValidateAndLock(ctx, session, action, req.ReqID, req.ResultID, logger)
 	if !locked {

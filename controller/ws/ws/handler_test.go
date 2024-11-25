@@ -45,6 +45,28 @@ func TestDropUser(t *testing.T) {
 	assert.Error(t, err, resp)
 }
 
+func Test_WrongJsonRequest(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+	err = ws.WriteMessage(websocket.TextMessage, []byte("{wrong json}"))
+	assert.NoError(t, err)
+	_, message, err := ws.ReadMessage()
+	assert.NoError(t, err)
+	var resp commonResp
+	err = json.Unmarshal(message, &resp)
+	assert.NoError(t, err)
+	assert.NotEqual(t, 0, resp.Code)
+}
+
 func Test_WrongJsonProtocol(t *testing.T) {
 	s := httptest.NewServer(router)
 	defer s.Close()

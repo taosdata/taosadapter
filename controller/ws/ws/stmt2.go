@@ -34,7 +34,7 @@ type stmt2InitResponse struct {
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) stmt2Init(ctx context.Context, session *melody.Session, action string, req *stmt2InitRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmt2Init(ctx context.Context, session *melody.Session, action string, req stmt2InitRequest, logger *logrus.Entry, isDebug bool) {
 	handle, caller := async.GlobalStmt2CallBackCallerPool.Get()
 	stmtInit := syncinterface.TaosStmt2Init(h.conn, int64(req.ReqID), req.SingleStbInsert, req.SingleTableBindOnce, handle, logger, isDebug)
 	if stmtInit == nil {
@@ -47,7 +47,7 @@ func (h *messageHandler) stmt2Init(ctx context.Context, session *melody.Session,
 	stmtItem := &StmtItem{stmt: stmtInit, handler: handle, caller: caller, isStmt2: true}
 	h.stmts.Add(stmtItem)
 	logger.Tracef("stmt2 init sucess, stmt_id:%d, stmt pointer:%p", stmtItem.index, stmtInit)
-	resp := stmt2InitResponse{
+	resp := &stmt2InitResponse{
 		Action: action,
 		ReqID:  req.ReqID,
 		Timing: wstool.GetDuration(ctx),
@@ -100,7 +100,7 @@ type stmt2PrepareResponse struct {
 	FieldsCount int              `json:"fields_count"`
 }
 
-func (h *messageHandler) stmt2Prepare(ctx context.Context, session *melody.Session, action string, req *stmt2PrepareRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmt2Prepare(ctx context.Context, session *melody.Session, action string, req stmt2PrepareRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Debugf("stmt2 prepare, stmt_id:%d, sql:%s", req.StmtID, req.SQL)
 	stmtItem, locked := h.stmt2ValidateAndLock(ctx, session, action, req.ReqID, req.StmtID, logger, isDebug)
 	if !locked {
@@ -223,7 +223,7 @@ type stmt2GetFieldsResponse struct {
 	TagFields  []*stmtCommon.StmtField `json:"tag_fields"`
 }
 
-func (h *messageHandler) stmt2GetFields(ctx context.Context, session *melody.Session, action string, req *stmt2GetFieldsRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmt2GetFields(ctx context.Context, session *melody.Session, action string, req stmt2GetFieldsRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Tracef("stmt2 get col fields, stmt_id:%d", req.StmtID)
 	stmtItem, locked := h.stmt2ValidateAndLock(ctx, session, action, req.ReqID, req.StmtID, logger, isDebug)
 	if !locked {
@@ -288,7 +288,7 @@ type stmt2ExecResponse struct {
 	Affected int    `json:"affected"`
 }
 
-func (h *messageHandler) stmt2Exec(ctx context.Context, session *melody.Session, action string, req *stmt2ExecRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmt2Exec(ctx context.Context, session *melody.Session, action string, req stmt2ExecRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Tracef("stmt2 execute, stmt_id:%d", req.StmtID)
 	stmtItem, locked := h.stmt2ValidateAndLock(ctx, session, action, req.ReqID, req.StmtID, logger, isDebug)
 	if !locked {
@@ -307,7 +307,7 @@ func (h *messageHandler) stmt2Exec(ctx context.Context, session *melody.Session,
 	result := <-stmtItem.caller.ExecResult
 	logger.Debugf("stmt2 execute wait callback finish, affected:%d, res:%p, n:%d, cost:%s", result.Affected, result.Res, result.N, log.GetLogDuration(isDebug, s))
 	stmtItem.result = result.Res
-	resp := stmt2ExecResponse{
+	resp := &stmt2ExecResponse{
 		Action:   action,
 		ReqID:    req.ReqID,
 		Timing:   wstool.GetDuration(ctx),
@@ -337,7 +337,7 @@ type stmt2UseResultResponse struct {
 	Precision     int                `json:"precision"`
 }
 
-func (h *messageHandler) stmt2UseResult(ctx context.Context, session *melody.Session, action string, req *stmt2UseResultRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmt2UseResult(ctx context.Context, session *melody.Session, action string, req stmt2UseResultRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Tracef("stmt2 use result, stmt_id:%d", req.StmtID)
 	stmtItem, locked := h.stmt2ValidateAndLock(ctx, session, action, req.ReqID, req.StmtID, logger, isDebug)
 	if !locked {
@@ -380,7 +380,7 @@ type stmt2CloseResponse struct {
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) stmt2Close(ctx context.Context, session *melody.Session, action string, req *stmt2CloseRequest, logger *logrus.Entry) {
+func (h *messageHandler) stmt2Close(ctx context.Context, session *melody.Session, action string, req stmt2CloseRequest, logger *logrus.Entry) {
 	logger.Tracef("stmt2 close, stmt_id:%d", req.StmtID)
 	err := h.stmts.FreeStmtByID(req.StmtID, true, logger)
 	if err != nil {
@@ -389,7 +389,7 @@ func (h *messageHandler) stmt2Close(ctx context.Context, session *melody.Session
 		return
 	}
 	logger.Tracef("stmt2 close success, stmt_id:%d", req.StmtID)
-	resp := stmt2CloseResponse{
+	resp := &stmt2CloseResponse{
 		Action: action,
 		ReqID:  req.ReqID,
 		Timing: wstool.GetDuration(ctx),

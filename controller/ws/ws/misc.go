@@ -23,7 +23,7 @@ type getCurrentDBResponse struct {
 	DB      string `json:"db"`
 }
 
-func (h *messageHandler) getCurrentDB(ctx context.Context, session *melody.Session, action string, req *getCurrentDBRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) getCurrentDB(ctx context.Context, session *melody.Session, action string, req getCurrentDBRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Tracef("get current db")
 	db, err := syncinterface.TaosGetCurrentDB(h.conn, logger, isDebug)
 	if err != nil {
@@ -54,7 +54,7 @@ type getServerInfoResponse struct {
 	Info    string `json:"info"`
 }
 
-func (h *messageHandler) getServerInfo(ctx context.Context, session *melody.Session, action string, req *getServerInfoRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) getServerInfo(ctx context.Context, session *melody.Session, action string, req getServerInfoRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Trace("get server info")
 	serverInfo := syncinterface.TaosGetServerInfo(h.conn, logger, isDebug)
 	resp := &getServerInfoResponse{

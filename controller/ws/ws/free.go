@@ -9,7 +9,7 @@ type freeResultRequest struct {
 	ID    uint64 `json:"id"`
 }
 
-func (h *messageHandler) freeResult(req *freeResultRequest, logger *logrus.Entry) {
+func (h *messageHandler) freeResult(req freeResultRequest, logger *logrus.Entry) {
 	logger.Tracef("free result by id, id:%d", req.ID)
 	h.queryResults.FreeResultByID(req.ID, logger)
 }

@@ -36,7 +36,7 @@ type stmtInitResponse struct {
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) stmtInit(ctx context.Context, session *melody.Session, action string, req *stmtInitRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmtInit(ctx context.Context, session *melody.Session, action string, req stmtInitRequest, logger *logrus.Entry, isDebug bool) {
 	stmtInit := syncinterface.TaosStmtInitWithReqID(h.conn, int64(req.ReqID), logger, isDebug)
 	if stmtInit == nil {
 		errStr := wrapper.TaosStmtErrStr(stmtInit)
@@ -47,7 +47,7 @@ func (h *messageHandler) stmtInit(ctx context.Context, session *melody.Session, 
 	stmtItem := &StmtItem{stmt: stmtInit}
 	h.stmts.Add(stmtItem)
 	logger.Tracef("stmt init sucess, stmt_id:%d, stmt pointer:%p", stmtItem.index, stmtInit)
-	resp := stmtInitResponse{
+	resp := &stmtInitResponse{
 		Action: action,
 		ReqID:  req.ReqID,
 		Timing: wstool.GetDuration(ctx),
@@ -92,7 +92,7 @@ func (h *messageHandler) stmtValidateAndLock(ctx context.Context, session *melod
 	return stmtItem, true
 }
 
-func (h *messageHandler) stmtPrepare(ctx context.Context, session *melody.Session, action string, req *stmtPrepareRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmtPrepare(ctx context.Context, session *melody.Session, action string, req stmtPrepareRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Debugf("stmt prepare, stmt_id:%d, sql:%s", req.StmtID, req.SQL)
 	stmtItem, locked := h.stmtValidateAndLock(ctx, session, action, req.ReqID, req.StmtID, logger, isDebug)
 	if !locked {
@@ -116,7 +116,7 @@ func (h *messageHandler) stmtPrepare(ctx context.Context, session *melody.Sessio
 	}
 	logger.Tracef("stmt is insert:%t", isInsert)
 	stmtItem.isInsert = isInsert
-	resp := stmtPrepareResponse{
+	resp := &stmtPrepareResponse{
 		Action:   action,
 		ReqID:    req.ReqID,
 		Timing:   wstool.GetDuration(ctx),
@@ -141,7 +141,7 @@ type stmtSetTableNameResponse struct {
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) stmtSetTableName(ctx context.Context, session *melody.Session, action string, req *stmtSetTableNameRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmtSetTableName(ctx context.Context, session *melody.Session, action string, req stmtSetTableNameRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Tracef("stmt set table name, stmt_id:%d, name:%s", req.StmtID, req.Name)
 	stmtItem, locked := h.stmtValidateAndLock(ctx, session, action, req.ReqID, req.StmtID, logger, isDebug)
 	if !locked {
@@ -156,7 +156,7 @@ func (h *messageHandler) stmtSetTableName(ctx context.Context, session *melody.S
 		return
 	}
 	logger.Tracef("stmt set table name success, stmt_id:%d", req.StmtID)
-	resp := stmtSetTableNameResponse{
+	resp := &stmtSetTableNameResponse{
 		Action: action,
 		ReqID:  req.ReqID,
 		Timing: wstool.GetDuration(ctx),
@@ -180,7 +180,7 @@ type stmtSetTagsResponse struct {
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) stmtSetTags(ctx context.Context, session *melody.Session, action string, req *stmtSetTagsRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmtSetTags(ctx context.Context, session *melody.Session, action string, req stmtSetTagsRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Tracef("stmt set tags, stmt_id:%d, tags:%s", req.StmtID, req.Tags)
 	stmtItem, locked := h.stmtValidateAndLock(ctx, session, action, req.ReqID, req.StmtID, logger, isDebug)
 	if !locked {
@@ -200,7 +200,7 @@ func (h *messageHandler) stmtSetTags(ctx context.Context, session *melody.Sessio
 	logger.Tracef("stmt tag nums:%d", tagNums)
 	if tagNums == 0 {
 		logger.Trace("no tags")
-		resp := stmtSetTagsResponse{
+		resp := &stmtSetTagsResponse{
 			Action: action,
 			ReqID:  req.ReqID,
 			Timing: wstool.GetDuration(ctx),
@@ -227,7 +227,7 @@ func (h *messageHandler) stmtSetTags(ctx context.Context, session *melody.Sessio
 		return
 	}
 	logger.Trace("stmt set tags success")
-	resp := stmtSetTagsResponse{
+	resp := &stmtSetTagsResponse{
 		Action: action,
 		ReqID:  req.ReqID,
 		Timing: wstool.GetDuration(ctx),
@@ -251,7 +251,7 @@ type stmtBindResponse struct {
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) stmtBind(ctx context.Context, session *melody.Session, action string, req *stmtBindRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmtBind(ctx context.Context, session *melody.Session, action string, req stmtBindRequest, logger *logrus.Entry, isDebug bool) {
 	stmtItem, locked := h.stmtValidateAndLock(ctx, session, action, req.ReqID, req.StmtID, logger, isDebug)
 	if !locked {
 		return
@@ -269,7 +269,7 @@ func (h *messageHandler) stmtBind(ctx context.Context, session *melody.Session, 
 	}()
 	if colNums == 0 {
 		logger.Trace("no columns")
-		resp := stmtBindResponse{
+		resp := &stmtBindResponse{
 			Action: action,
 			ReqID:  req.ReqID,
 			Timing: wstool.GetDuration(ctx),
@@ -307,7 +307,7 @@ func (h *messageHandler) stmtBind(ctx context.Context, session *melody.Session, 
 		return
 	}
 	logger.Trace("stmt bind success")
-	resp := stmtBindResponse{
+	resp := &stmtBindResponse{
 		Action: action,
 		ReqID:  req.ReqID,
 		Timing: wstool.GetDuration(ctx),
@@ -330,7 +330,7 @@ type stmtAddBatchResponse struct {
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) stmtAddBatch(ctx context.Context, session *melody.Session, action string, req *stmtAddBatchRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmtAddBatch(ctx context.Context, session *melody.Session, action string, req stmtAddBatchRequest, logger *logrus.Entry, isDebug bool) {
 	stmtItem, locked := h.stmtValidateAndLock(ctx, session, action, req.ReqID, req.StmtID, logger, isDebug)
 	if !locked {
 		return
@@ -344,7 +344,7 @@ func (h *messageHandler) stmtAddBatch(ctx context.Context, session *melody.Sessi
 		return
 	}
 	logger.Trace("stmt add batch success")
-	resp := stmtAddBatchResponse{
+	resp := &stmtAddBatchResponse{
 		Action: action,
 		ReqID:  req.ReqID,
 		Timing: wstool.GetDuration(ctx),
@@ -368,7 +368,7 @@ type stmtExecResponse struct {
 	Affected int    `json:"affected"`
 }
 
-func (h *messageHandler) stmtExec(ctx context.Context, session *melody.Session, action string, req *stmtExecRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmtExec(ctx context.Context, session *melody.Session, action string, req stmtExecRequest, logger *logrus.Entry, isDebug bool) {
 	stmtItem, locked := h.stmtValidateAndLock(ctx, session, action, req.ReqID, req.StmtID, logger, isDebug)
 	if !locked {
 		return
@@ -384,7 +384,7 @@ func (h *messageHandler) stmtExec(ctx context.Context, session *melody.Session, 
 	s := log.GetLogNow(isDebug)
 	affected := wrapper.TaosStmtAffectedRowsOnce(stmtItem.stmt)
 	logger.Debugf("stmt_affected_rows_once, affected:%d, cost:%s", affected, log.GetLogDuration(isDebug, s))
-	resp := stmtExecResponse{
+	resp := &stmtExecResponse{
 		Action:   action,
 		ReqID:    req.ReqID,
 		Timing:   wstool.GetDuration(ctx),
@@ -399,7 +399,7 @@ type stmtCloseRequest struct {
 	StmtID uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) stmtClose(ctx context.Context, session *melody.Session, action string, req *stmtCloseRequest, logger *logrus.Entry) {
+func (h *messageHandler) stmtClose(ctx context.Context, session *melody.Session, action string, req stmtCloseRequest, logger *logrus.Entry) {
 	logger.Tracef("stmt close, stmt_id:%d", req.StmtID)
 	err := h.stmts.FreeStmtByID(req.StmtID, false, logger)
 	if err != nil {
@@ -425,7 +425,7 @@ type stmtGetTagFieldsResponse struct {
 	Fields  []*stmtCommon.StmtField `json:"fields,omitempty"`
 }
 
-func (h *messageHandler) stmtGetTagFields(ctx context.Context, session *melody.Session, action string, req *stmtGetTagFieldsRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmtGetTagFields(ctx context.Context, session *melody.Session, action string, req stmtGetTagFieldsRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Tracef("stmt get tag fields, stmt_id:%d", req.StmtID)
 	stmtItem, locked := h.stmtValidateAndLock(ctx, session, action, req.ReqID, req.StmtID, logger, isDebug)
 	if !locked {
@@ -444,7 +444,7 @@ func (h *messageHandler) stmtGetTagFields(ctx context.Context, session *melody.S
 	}()
 	if tagNums == 0 {
 		logger.Trace("no tags")
-		resp := stmtGetTagFieldsResponse{
+		resp := &stmtGetTagFieldsResponse{
 			Action: action,
 			ReqID:  req.ReqID,
 			Timing: wstool.GetDuration(ctx),
@@ -456,7 +456,7 @@ func (h *messageHandler) stmtGetTagFields(ctx context.Context, session *melody.S
 	s := log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(tagNums, tagFields)
 	logger.Debugf("stmt parse fields cost:%s", log.GetLogDuration(isDebug, s))
-	resp := stmtGetTagFieldsResponse{
+	resp := &stmtGetTagFieldsResponse{
 		Action: action,
 		ReqID:  req.ReqID,
 		Timing: wstool.GetDuration(ctx),
@@ -481,7 +481,7 @@ type stmtGetColFieldsResponse struct {
 	Fields  []*stmtCommon.StmtField `json:"fields"`
 }
 
-func (h *messageHandler) stmtGetColFields(ctx context.Context, session *melody.Session, action string, req *stmtGetColFieldsRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmtGetColFields(ctx context.Context, session *melody.Session, action string, req stmtGetColFieldsRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Tracef("stmt get col fields, stmt_id:%d", req.StmtID)
 	stmtItem, locked := h.stmtValidateAndLock(ctx, session, action, req.ReqID, req.StmtID, logger, isDebug)
 	if !locked {
@@ -500,7 +500,7 @@ func (h *messageHandler) stmtGetColFields(ctx context.Context, session *melody.S
 	}()
 	if colNums == 0 {
 		logger.Trace("no columns")
-		resp := stmtGetColFieldsResponse{
+		resp := &stmtGetColFieldsResponse{
 			Action: action,
 			ReqID:  req.ReqID,
 			Timing: wstool.GetDuration(ctx),
@@ -512,7 +512,7 @@ func (h *messageHandler) stmtGetColFields(ctx context.Context, session *melody.S
 	s := log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(colNums, colFields)
 	logger.Debugf("stmt parse fields cost:%s", log.GetLogDuration(isDebug, s))
-	resp := stmtGetColFieldsResponse{
+	resp := &stmtGetColFieldsResponse{
 		Action: action,
 		ReqID:  req.ReqID,
 		Timing: wstool.GetDuration(ctx),
@@ -542,7 +542,7 @@ type stmtUseResultResponse struct {
 	Precision     int                `json:"precision"`
 }
 
-func (h *messageHandler) stmtUseResult(ctx context.Context, session *melody.Session, action string, req *stmtUseResultRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmtUseResult(ctx context.Context, session *melody.Session, action string, req stmtUseResultRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Tracef("stmt use result, stmt_id:%d", req.StmtID)
 	stmtItem, locked := h.stmtValidateAndLock(ctx, session, action, req.ReqID, req.StmtID, logger, isDebug)
 	if !locked {
@@ -601,7 +601,7 @@ type stmtNumParamsResponse struct {
 	NumParams int    `json:"num_params"`
 }
 
-func (h *messageHandler) stmtNumParams(ctx context.Context, session *melody.Session, action string, req *stmtNumParamsRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmtNumParams(ctx context.Context, session *melody.Session, action string, req stmtNumParamsRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Tracef("stmt num params, stmt_id:%d", req.StmtID)
 	stmtItem, locked := h.stmtValidateAndLock(ctx, session, action, req.ReqID, req.StmtID, logger, isDebug)
 	if !locked {
@@ -616,7 +616,7 @@ func (h *messageHandler) stmtNumParams(ctx context.Context, session *melody.Sess
 		return
 	}
 	logger.Tracef("stmt num params success, stmt_id:%d, num_params:%d", req.StmtID, count)
-	resp := stmtNumParamsResponse{
+	resp := &stmtNumParamsResponse{
 		Action:    action,
 		ReqID:     req.ReqID,
 		Timing:    wstool.GetDuration(ctx),
@@ -644,7 +644,7 @@ type stmtGetParamResponse struct {
 	Length   int    `json:"length"`
 }
 
-func (h *messageHandler) stmtGetParam(ctx context.Context, session *melody.Session, action string, req *stmtGetParamRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmtGetParam(ctx context.Context, session *melody.Session, action string, req stmtGetParamRequest, logger *logrus.Entry, isDebug bool) {
 	logger.Tracef("stmt get param, stmt_id:%d, index:%d", req.StmtID, req.Index)
 	stmtItem, locked := h.stmtValidateAndLock(ctx, session, action, req.ReqID, req.StmtID, logger, isDebug)
 	if !locked {
@@ -699,7 +699,7 @@ func (h *messageHandler) stmtBinarySetTags(ctx context.Context, session *melody.
 	}()
 	if tagNums == 0 {
 		logger.Trace("no tags")
-		resp := stmtSetTagsResponse{
+		resp := &stmtSetTagsResponse{
 			Action: action,
 			ReqID:  reqID,
 			Timing: wstool.GetDuration(ctx),
@@ -730,7 +730,7 @@ func (h *messageHandler) stmtBinarySetTags(ctx context.Context, session *melody.
 		stmtErrorResponse(ctx, session, logger, action, reqID, code, errStr, stmtID)
 		return
 	}
-	resp := stmtSetTagsResponse{
+	resp := &stmtSetTagsResponse{
 		Action: action,
 		ReqID:  reqID,
 		Timing: wstool.GetDuration(ctx),
@@ -765,7 +765,7 @@ func (h *messageHandler) stmtBinaryBind(ctx context.Context, session *melody.Ses
 		}()
 		if colNums == 0 {
 			logger.Trace("no columns")
-			resp := stmtBindResponse{
+			resp := &stmtBindResponse{
 				Action: action,
 				ReqID:  reqID,
 				Timing: wstool.GetDuration(ctx),
@@ -818,7 +818,7 @@ func (h *messageHandler) stmtBinaryBind(ctx context.Context, session *melody.Ses
 		return
 	}
 	logger.Trace("stmt bind param success")
-	resp := stmtBindResponse{
+	resp := &stmtBindResponse{
 		Action: action,
 		ReqID:  reqID,
 		Timing: wstool.GetDuration(ctx),
