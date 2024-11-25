@@ -317,11 +317,13 @@ func TestWsStmt(t *testing.T) {
 
 	// block message
 	// init
-	resp, err = doWebSocket(ws, STMTInit, nil)
+	initReq = map[string]uint64{"req_id": 0x11}
+	resp, err = doWebSocket(ws, STMTInit, &initReq)
 	assert.NoError(t, err)
 	err = json.Unmarshal(resp, &initResp)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, initResp.Code, initResp.Message)
+	assert.Equal(t, uint64(0x11), initResp.ReqID)
 
 	// prepare
 	prepareReq = stmtPrepareRequest{StmtID: initResp.StmtID, SQL: "insert into ? using test_ws_stmt_ws.stb tags(?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"}

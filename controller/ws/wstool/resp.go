@@ -4,7 +4,6 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
 	"github.com/taosdata/taosadapter/v3/version"
@@ -18,10 +17,8 @@ type TDEngineRestfulResp struct {
 	Rows       int              `json:"rows,omitempty"`
 }
 
-var jsonIter = jsoniter.ConfigCompatibleWithStandardLibrary
-
 func WSWriteJson(session *melody.Session, logger *logrus.Entry, data interface{}) {
-	b, err := jsonIter.Marshal(data)
+	b, err := json.Marshal(data)
 	if err != nil {
 		logger.Errorf("marshal json failed:%s, data:%#v", err, data)
 		return
@@ -62,5 +59,5 @@ func init() {
 		Action:  ClientVersion,
 		Version: version.TaosClientVersion,
 	}
-	VersionResp, _ = jsonIter.Marshal(resp)
+	VersionResp, _ = json.Marshal(resp)
 }

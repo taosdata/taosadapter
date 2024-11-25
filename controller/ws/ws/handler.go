@@ -179,13 +179,11 @@ func (h *messageHandler) stop() {
 	})
 }
 
-var jsonIter = jsoniter.ConfigCompatibleWithStandardLibrary
-
 func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 	h.logger.Debugf("get ws message data:%s", data)
 	var request Request
-	err := jsonIter.Unmarshal(data, &request)
+	err := json.Unmarshal(data, &request)
 	if err != nil {
 		h.logger.Errorf("unmarshal request error, request:%s, err:%s", data, err)
 		commonErrorResponse(ctx, session, h.logger, "", 0, 0xffff, "unmarshal request error")
@@ -206,7 +204,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case Connect:
 		action = Connect
 		var req connRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal connect request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, Connect, reqID, 0xffff, "unmarshal connect request error")
@@ -234,7 +232,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case WSQuery:
 		action = WSQuery
 		var req queryRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal query request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal query request error")
@@ -248,7 +246,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case WSFetch:
 		action = WSFetch
 		var req fetchRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal fetch request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal fetch request error")
@@ -262,7 +260,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case WSFetchBlock:
 		action = WSFetchBlock
 		var req fetchBlockRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal fetch block request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal fetch block request error")
@@ -276,7 +274,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case WSFreeResult:
 		action = WSFreeResult
 		var req freeResultRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal free result request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal free result request error")
@@ -290,7 +288,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case WSNumFields:
 		action = WSNumFields
 		var req numFieldsRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal num fields request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal num fields request error")
@@ -305,7 +303,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case SchemalessWrite:
 		action = SchemalessWrite
 		var req schemalessWriteRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal schemaless insert request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal schemaless insert request error")
@@ -320,7 +318,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMTInit:
 		action = STMTInit
 		var req stmtInitRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt init request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt init request error")
@@ -334,7 +332,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMTPrepare:
 		action = STMTPrepare
 		var req stmtPrepareRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt prepare request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt prepare request error")
@@ -348,7 +346,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMTSetTableName:
 		action = STMTSetTableName
 		var req stmtSetTableNameRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt set table name request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt set table name request error")
@@ -362,7 +360,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMTSetTags:
 		action = STMTSetTags
 		var req stmtSetTagsRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt set tags request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt set tags request error")
@@ -376,7 +374,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMTBind:
 		action = STMTBind
 		var req stmtBindRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt bind request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt bind request error")
@@ -390,7 +388,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMTAddBatch:
 		action = STMTAddBatch
 		var req stmtAddBatchRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt add batch request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt add batch request error")
@@ -404,7 +402,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMTExec:
 		action = STMTExec
 		var req stmtExecRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt exec request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt exec request error")
@@ -418,7 +416,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMTClose:
 		action = STMTClose
 		var req stmtCloseRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt close request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt close request error")
@@ -432,7 +430,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMTGetTagFields:
 		action = STMTGetTagFields
 		var req stmtGetTagFieldsRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt get tag fields request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt get tag fields request error")
@@ -446,7 +444,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMTGetColFields:
 		action = STMTGetColFields
 		var req stmtGetColFieldsRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt get col fields request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt get col fields request error")
@@ -460,7 +458,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMTUseResult:
 		action = STMTUseResult
 		var req stmtUseResultRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt use result request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt use result request error")
@@ -474,7 +472,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMTNumParams:
 		action = STMTNumParams
 		var req stmtNumParamsRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt num params request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt num params request error")
@@ -488,7 +486,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMTGetParam:
 		action = STMTGetParam
 		var req stmtGetParamRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt get param request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt get param request error")
@@ -503,7 +501,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMT2Init:
 		action = STMT2Init
 		var req stmt2InitRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt2 init request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt2 init request error")
@@ -517,7 +515,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMT2Prepare:
 		action = STMT2Prepare
 		var req stmt2PrepareRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt2 prepare request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt2 prepare request error")
@@ -531,7 +529,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMT2GetFields:
 		action = STMT2GetFields
 		var req stmt2GetFieldsRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt2 get fields request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt2 get fields request error")
@@ -545,7 +543,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMT2Exec:
 		action = STMT2Exec
 		var req stmt2ExecRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt2 exec request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt2 exec request error")
@@ -559,7 +557,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMT2Result:
 		action = STMT2Result
 		var req stmt2UseResultRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt2 result request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt2 result request error")
@@ -573,7 +571,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case STMT2Close:
 		action = STMT2Close
 		var req stmt2CloseRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal stmt2 close request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt2 close request error")
@@ -588,7 +586,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case WSGetCurrentDB:
 		action = WSGetCurrentDB
 		var req getCurrentDBRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal get current db request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal get current db request error")
@@ -602,7 +600,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case WSGetServerInfo:
 		action = WSGetServerInfo
 		var req getServerInfoRequest
-		if err := jsonIter.Unmarshal(request.Args, &req); err != nil {
+		if err := json.Unmarshal(request.Args, &req); err != nil {
 			h.logger.Errorf("unmarshal get server info request error, request:%s, err:%s", request.Args, err)
 			reqID := getReqID(request.Args)
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal get server info request error")
@@ -663,6 +661,8 @@ func (h *messageHandler) handleMessageBinary(session *melody.Session, message []
 		commonErrorResponse(ctx, session, h.logger, actionStr, reqID, 0xffff, fmt.Sprintf("unknown binary action %d", action))
 	}
 }
+
+var jsonIter = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func getReqID(value json.RawMessage) uint64 {
 	return jsonIter.Get(value, "req_id").ToUint64()
