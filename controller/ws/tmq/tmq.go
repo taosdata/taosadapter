@@ -531,42 +531,6 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		wsTMQErrorMsg(ctx, session, logger, 0xffff, err.Error(), action, req.ReqID, nil)
 		return
 	}
-	conn := wrapper.TMQGetConnect(cPointer)
-	logger.Trace("get whitelist")
-	whitelist, err := tool.GetWhitelist(conn)
-	if err != nil {
-		logger.Errorf("get whitelist error:%s", err.Error())
-		t.wrapperCloseConsumer(logger, isDebug, cPointer)
-		wstool.WSError(ctx, session, logger, err, action, req.ReqID)
-		return
-	}
-	logger.Tracef("check whitelist, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
-	valid := tool.CheckWhitelist(whitelist, t.ip)
-	if !valid {
-		logger.Errorf("whitelist prohibits current IP access, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
-		t.wrapperCloseConsumer(logger, isDebug, cPointer)
-		wstool.WSErrorMsg(ctx, session, logger, 0xffff, "whitelist prohibits current IP access", action, req.ReqID)
-		return
-	}
-	logger.Trace("register change whitelist")
-	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle)
-	if err != nil {
-		logger.Errorf("register change whitelist error:%s", err)
-		t.wrapperCloseConsumer(logger, isDebug, cPointer)
-		wstool.WSError(ctx, session, logger, err, action, req.ReqID)
-		return
-	}
-	logger.Trace("register drop user")
-	err = tool.RegisterDropUser(conn, t.dropUserHandle)
-	if err != nil {
-		logger.Errorf("register drop user error:%s", err)
-		t.wrapperCloseConsumer(logger, isDebug, cPointer)
-		wstool.WSError(ctx, session, logger, err, action, req.ReqID)
-		return
-	}
-	t.conn = conn
-	logger.Trace("start to wait signal")
-	go t.waitSignal(t.logger)
 	topicList := wrapper.TMQListNew()
 	defer func() {
 		wrapper.TMQListDestroy(topicList)
@@ -577,7 +541,7 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		if errCode != 0 {
 			errStr := wrapper.TMQErr2Str(errCode)
 			logger.Errorf("tmq list append error, tpic:%s, code:%d, msg:%s", topic, errCode, errStr)
-			t.wrapperCloseConsumer(logger, isDebug, cPointer)
+			t.closeConsumerWithErrLog(logger, isDebug, cPointer)
 			wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
 			return
 		}
@@ -587,16 +551,60 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	if errCode != 0 {
 		errStr := wrapper.TMQErr2Str(errCode)
 		logger.Errorf("tmq subscribe error:%d %s", errCode, errStr)
-		t.wrapperCloseConsumer(logger, isDebug, cPointer)
+		t.closeConsumerWithErrLog(logger, isDebug, cPointer)
 		wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
 		return
 	}
+	conn := wrapper.TMQGetConnect(cPointer)
+	logger.Trace("get whitelist")
+	whitelist, err := tool.GetWhitelist(conn)
+	if err != nil {
+		logger.Errorf("get whitelist error:%s", err.Error())
+		t.closeConsumerWithErrLog(logger, isDebug, cPointer)
+		wstool.WSError(ctx, session, logger, err, action, req.ReqID)
+		return
+	}
+	logger.Tracef("check whitelist, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
+	valid := tool.CheckWhitelist(whitelist, t.ip)
+	if !valid {
+		logger.Errorf("whitelist prohibits current IP access, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
+		t.closeConsumerWithErrLog(logger, isDebug, cPointer)
+		wstool.WSErrorMsg(ctx, session, logger, 0xffff, "whitelist prohibits current IP access", action, req.ReqID)
+		return
+	}
+	logger.Trace("register change whitelist")
+	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle)
+	if err != nil {
+		logger.Errorf("register change whitelist error:%s", err)
+		t.closeConsumerWithErrLog(logger, isDebug, cPointer)
+		wstool.WSError(ctx, session, logger, err, action, req.ReqID)
+		return
+	}
+	logger.Trace("register drop user")
+	err = tool.RegisterDropUser(conn, t.dropUserHandle)
+	if err != nil {
+		logger.Errorf("register drop user error:%s", err)
+		t.closeConsumerWithErrLog(logger, isDebug, cPointer)
+		wstool.WSError(ctx, session, logger, err, action, req.ReqID)
+		return
+	}
+	t.conn = conn
 	t.consumer = cPointer
+	logger.Trace("start to wait signal")
+	go t.waitSignal(t.logger)
 	wstool.WSWriteJson(session, logger, &TMQSubscribeResp{
 		Action: action,
 		ReqID:  req.ReqID,
 		Timing: wstool.GetDuration(ctx),
 	})
+}
+
+func (t *TMQ) closeConsumerWithErrLog(logger *logrus.Entry, isDebug bool, consumer unsafe.Pointer) {
+	errCode := t.wrapperCloseConsumer(logger, isDebug, consumer)
+	if errCode != 0 {
+		errMsg := wrapper.TMQErr2Str(errCode)
+		logger.Errorf("tmq close consumer error, consumer:%p, code:%d, msg:%s", t.consumer, errCode, errMsg)
+	}
 }
 
 type TMQCommitReq struct {
