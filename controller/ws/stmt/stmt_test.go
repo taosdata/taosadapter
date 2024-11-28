@@ -536,14 +536,14 @@ func TestSTMT(t *testing.T) {
 
 func TestBlock(t *testing.T) {
 	w := httptest.NewRecorder()
-	body := strings.NewReader("drop database if exists test_ws_stmt")
+	body := strings.NewReader("drop database if exists test_ws_stmt_block")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
-	body = strings.NewReader("create database if not exists test_ws_stmt precision 'ns'")
+	body = strings.NewReader("create database if not exists test_ws_stmt_block precision 'ns'")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
@@ -567,7 +567,7 @@ func TestBlock(t *testing.T) {
 		"c14 varchar(20)," +
 		"c15 geometry(100)" +
 		") tags(info json)")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_stmt", body)
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_stmt_block", body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -781,7 +781,7 @@ func TestBlock(t *testing.T) {
 			b, _ := json.Marshal(&StmtPrepareReq{
 				ReqID:  3,
 				StmtID: stmtID,
-				SQL:    "insert into ? using test_ws_stmt.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+				SQL:    "insert into ? using test_ws_stmt_block.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 			})
 			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTPrepare,
@@ -808,7 +808,7 @@ func TestBlock(t *testing.T) {
 			b, _ := json.Marshal(&StmtSetTableNameReq{
 				ReqID:  4,
 				StmtID: stmtID,
-				Name:   "test_ws_stmt.ctb",
+				Name:   "test_ws_stmt_block.ctb",
 			})
 			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTSetTableName,
@@ -1032,7 +1032,7 @@ func TestBlock(t *testing.T) {
 	assert.NoError(t, err)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("select * from stb")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_stmt", body)
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_stmt_block", body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -1040,7 +1040,7 @@ func TestBlock(t *testing.T) {
 	resultBody := fmt.Sprintf(`{"code":0,"column_meta":[["ts","TIMESTAMP",8],["c1","BOOL",1],["c2","TINYINT",1],["c3","SMALLINT",2],["c4","INT",4],["c5","BIGINT",8],["c6","TINYINT UNSIGNED",1],["c7","SMALLINT UNSIGNED",2],["c8","INT UNSIGNED",4],["c9","BIGINT UNSIGNED",8],["c10","FLOAT",4],["c11","DOUBLE",8],["c12","VARCHAR",20],["c13","NCHAR",20],["c14","VARCHAR",20],["c15","GEOMETRY",100],["info","JSON",4095]],"data":[["%s",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar","test_varbinary","010100000000000000000059400000000000005940",{"a":"b"}],["%s",false,22,33,44,55,66,77,88,99,1010,1111,"binary2","nchar2","test_varbinary2","010100000000000000000059400000000000005940",{"a":"b"}],["%s",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":"b"}]],"rows":3}`, now.UTC().Format(layout.LayoutNanoSecond), now.Add(time.Second).UTC().Format(layout.LayoutNanoSecond), now.Add(time.Second*2).UTC().Format(layout.LayoutNanoSecond))
 	assert.Equal(t, resultBody, w.Body.String())
 	w = httptest.NewRecorder()
-	body = strings.NewReader("drop database if exists test_ws_stmt")
+	body = strings.NewReader("drop database if exists test_ws_stmt_block")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
