@@ -21,7 +21,7 @@ func TestInsertInfluxdb(t *testing.T) {
 	}
 	defer wrapper.TaosClose(conn)
 	defer func() {
-		r := wrapper.TaosQuery(conn, "drop database if exists test_capi")
+		r := wrapper.TaosQuery(conn, "drop database if exists test_capi_influxdb")
 		code := wrapper.TaosError(r)
 		if code != 0 {
 			errStr := wrapper.TaosErrorStr(r)
@@ -29,7 +29,7 @@ func TestInsertInfluxdb(t *testing.T) {
 		}
 		wrapper.TaosFreeResult(r)
 	}()
-	r := wrapper.TaosQuery(conn, "create database if not exists test_capi")
+	r := wrapper.TaosQuery(conn, "create database if not exists test_capi_influxdb")
 	code := wrapper.TaosError(r)
 	if code != 0 {
 		errStr := wrapper.TaosErrorStr(r)
@@ -53,7 +53,7 @@ func TestInsertInfluxdb(t *testing.T) {
 			args: args{
 				taosConnect: conn,
 				data:        []byte("measurement,host=host1 field1=2i,field2=2.0,fieldKey=\"Launch 🚀\" 1577836800000000001"),
-				db:          "test_capi",
+				db:          "test_capi_influxdb",
 				ttl:         0,
 			},
 			wantErr: false,
@@ -62,7 +62,7 @@ func TestInsertInfluxdb(t *testing.T) {
 			args: args{
 				taosConnect: conn,
 				data:        []byte("wrong,host=host1 field1=wrong 1577836800000000001"),
-				db:          "test_capi",
+				db:          "test_capi_influxdb",
 				ttl:         100,
 			},
 			wantErr: true,
@@ -71,7 +71,7 @@ func TestInsertInfluxdb(t *testing.T) {
 			args: args{
 				taosConnect: conn,
 				data:        []byte("wrong,host=host1 field1=wrong 1577836800000000001"),
-				db:          "1'test_capi",
+				db:          "1'test_capi_influxdb",
 				ttl:         1000,
 			},
 			wantErr: true,
