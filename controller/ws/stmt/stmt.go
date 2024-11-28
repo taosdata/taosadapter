@@ -172,9 +172,6 @@ func NewSTMTController() *STMTController {
 	})
 
 	stmtM.HandleMessageBinary(func(session *melody.Session, data []byte) {
-		if session.IsClosed() {
-			return
-		}
 		t := session.MustGet(TaosStmtKey).(*TaosStmt)
 		if t.closed {
 			return
