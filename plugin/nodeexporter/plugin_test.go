@@ -12,6 +12,7 @@ import (
 	"github.com/taosdata/driver-go/v3/af"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/log"
 )
 
 var s = `
@@ -37,6 +38,7 @@ test_metric{label="value"} 1.0 1490802350000
 // @description: test node-exporter plugin
 func TestNodeExporter_Gather(t *testing.T) {
 	config.Init()
+	log.ConfigLog()
 	db.PrepareConnection()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, err := w.Write([]byte(s))

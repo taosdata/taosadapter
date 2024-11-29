@@ -15,6 +15,7 @@ import (
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/log"
 )
 
 // @author: xftan
@@ -25,6 +26,7 @@ func TestStatsd(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	p := &Plugin{}
 	config.Init()
+	log.ConfigLog()
 	db.PrepareConnection()
 	viper.Set("statsd.gatherInterval", time.Millisecond)
 	viper.Set("statsd.enable", true)

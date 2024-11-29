@@ -18,6 +18,7 @@ import (
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/log"
 )
 
 // @author: xftan
@@ -30,6 +31,7 @@ func TestOpentsdb(t *testing.T) {
 	defer viper.Set("smlAutoCreateDB", false)
 	config.Init()
 	viper.Set("opentsdb.enable", true)
+	log.ConfigLog()
 	db.PrepareConnection()
 
 	p := Plugin{}
