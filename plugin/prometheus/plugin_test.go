@@ -17,6 +17,7 @@ import (
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/log"
 )
 
 func TestMain(m *testing.M) {
@@ -24,6 +25,7 @@ func TestMain(m *testing.M) {
 	rand.Seed(time.Now().UnixNano())
 	config.Init()
 	viper.Set("prometheus.enable", true)
+	log.ConfigLog()
 	db.PrepareConnection()
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {

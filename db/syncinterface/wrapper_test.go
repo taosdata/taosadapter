@@ -26,6 +26,7 @@ const isDebug = true
 
 func TestMain(m *testing.M) {
 	config.Init()
+	log.ConfigLog()
 	_ = log.SetLevel("trace")
 	db.PrepareConnection()
 	m.Run()

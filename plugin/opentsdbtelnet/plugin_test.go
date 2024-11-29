@@ -15,6 +15,7 @@ import (
 	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/plugin/opentsdbtelnet"
 )
 
@@ -26,6 +27,7 @@ func TestPlugin(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	p := &opentsdbtelnet.Plugin{}
 	config.Init()
+	log.ConfigLog()
 	db.PrepareConnection()
 	viper.Set("opentsdb_telnet.enable", true)
 	viper.Set("opentsdb_telnet.batchSize", 1)

@@ -98,7 +98,7 @@ func TestAsync_TaosExec(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	var logger = logrus.New().WithField("test", "async_test")
+	var logger = log.GetLogger("test").WithField("test", "async_test")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &Async{
