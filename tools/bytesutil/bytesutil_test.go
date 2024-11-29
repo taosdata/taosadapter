@@ -197,4 +197,8 @@ func TestToUnsafeString(t *testing.T) {
 	if !bytes.Equal([]byte("str"), ToUnsafeBytes(s)) {
 		t.Fatalf(`[]bytes(%s) doesnt equal to %s `, s, s)
 	}
+	s = ""
+	if !bytes.Equal([]byte(""), ToUnsafeBytes(s)) {
+		t.Fatalf(`[]bytes(%s) doesnt equal to %s `, s, s)
+	}
 }

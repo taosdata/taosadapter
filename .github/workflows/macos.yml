@@ -122,7 +122,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        go: [ '1.17', '1.20' ]
+        go: [ '1.17', 'stable' ]
     name: Build taosAdapter ${{ matrix.go }}
     steps:
       - name: get cache server by pr
@@ -183,7 +183,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        go: [ '1.17', '1.20' ]
+        go: [ '1.17', 'stable' ]
     name: test taosAdapter ${{ matrix.go }}
     steps:
       - name: get cache server by pr
@@ -256,7 +256,7 @@ jobs:
           DYLD_LIBRARY_PATH: /usr/local/lib:$DYLD_LIBRARY_PATH
         run: cd ./taosadapter && sudo DYLD_LIBRARY_PATH=/usr/local/lib:$DYLD_LIBRARY_PATH go test -v --count=1 ./...
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: always() && (steps.test.outcome == 'failure' || steps.test.outcome == 'cancelled')
         with:
           name: ${{ runner.os }}-${{ matrix.go }}-log

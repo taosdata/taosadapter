@@ -13,7 +13,6 @@ import (
 	"unsafe"
 
 	"github.com/gin-gonic/gin"
-	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/driver-go/v3/common/parser"
 	stmtCommon "github.com/taosdata/driver-go/v3/common/stmt"
@@ -31,6 +30,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
+	"github.com/taosdata/taosadapter/v3/tools/melody"
 )
 
 type STMTController struct {
@@ -39,7 +39,7 @@ type STMTController struct {
 
 func NewSTMTController() *STMTController {
 	stmtM := melody.New()
-	stmtM.UpGrader.EnableCompression = true
+	stmtM.Upgrader.EnableCompression = true
 	stmtM.Config.MaxMessageSize = 0
 
 	stmtM.HandleConnect(func(session *melody.Session) {
@@ -49,9 +49,6 @@ func NewSTMTController() *STMTController {
 	})
 
 	stmtM.HandleMessage(func(session *melody.Session, data []byte) {
-		if stmtM.IsClosed() {
-			return
-		}
 		t := session.MustGet(TaosStmtKey).(*TaosStmt)
 		if t.closed {
 			return
@@ -59,6 +56,9 @@ func NewSTMTController() *STMTController {
 		t.wg.Add(1)
 		go func() {
 			defer t.wg.Done()
+			if t.closed {
+				return
+			}
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
 			logger := wstool.GetLogger(session)
 			logger.Debugf("get ws message data:%s", data)
@@ -71,7 +71,7 @@ func NewSTMTController() *STMTController {
 			}
 			switch action.Action {
 			case wstool.ClientVersion:
-				_ = session.Write(wstool.VersionResp)
+				wstool.WSWriteVersion(session, logger)
 			case STMTConnect:
 				var req StmtConnectReq
 				err = json.Unmarshal(action.Args, &req)
@@ -172,9 +172,6 @@ func NewSTMTController() *STMTController {
 	})
 
 	stmtM.HandleMessageBinary(func(session *melody.Session, data []byte) {
-		if stmtM.IsClosed() {
-			return
-		}
 		t := session.MustGet(TaosStmtKey).(*TaosStmt)
 		if t.closed {
 			return
@@ -182,6 +179,9 @@ func NewSTMTController() *STMTController {
 		t.wg.Add(1)
 		go func() {
 			defer t.wg.Done()
+			if t.closed {
+				return
+			}
 			logger := wstool.GetLogger(session)
 			logger.Tracef("get ws block message data:%+v", data)
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
@@ -197,9 +197,6 @@ func NewSTMTController() *STMTController {
 			block := tools.AddPointer(p0, uintptr(24))
 			columns := parser.RawBlockGetNumOfCols(block)
 			rows := parser.RawBlockGetNumOfRows(block)
-			if stmtM.IsClosed() {
-				return
-			}
 			switch action {
 			case BindMessage:
 				t.bindBlock(ctx, session, reqID, stmtID, int(rows), int(columns), block)
@@ -677,10 +674,10 @@ func (t *TaosStmt) setTags(ctx context.Context, session *melody.Session, req *St
 	s := log.GetLogNow(isDebug)
 	fields := wrapper.StmtParseFields(tagNums, tagFields)
 	logger.Debugf("stmt parse fields cost:%s", log.GetLogDuration(isDebug, s))
-	tags := make([][]driver.Value, tagNums)
-	for i := 0; i < tagNums; i++ {
-		tags[i] = []driver.Value{req.Tags[i]}
-	}
+	//tags := make([][]driver.Value, tagNums)
+	//for i := 0; i < tagNums; i++ {
+	//	tags[i] = []driver.Value{req.Tags[i]}
+	//}
 	s = log.GetLogNow(isDebug)
 	data, err := StmtParseTag(req.Tags, fields)
 	logger.Debugf("stmt parse tag json cost:%s", log.GetLogDuration(isDebug, s))

@@ -11,10 +11,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	tErrors "github.com/taosdata/driver-go/v3/errors"
+	"github.com/taosdata/taosadapter/v3/tools/melody"
 )
 
 func TestWSError(t *testing.T) {
@@ -29,9 +29,6 @@ func TestWSError(t *testing.T) {
 	commonErr := errors.New("test common error")
 	logger := logrus.New().WithField("test", "TestWSError")
 	m.HandleMessage(func(session *melody.Session, data []byte) {
-		if m.IsClosed() {
-			return
-		}
 		switch data[0] {
 		case '1':
 			WSError(ctx, session, logger, taosErr, "test action", reqID)

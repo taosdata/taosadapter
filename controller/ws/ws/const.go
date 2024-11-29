@@ -3,18 +3,20 @@ package ws
 const actionKey = "action"
 const TaosKey = "taos"
 const (
+	//Deprecated
+	//WSWriteRaw                = "write_raw"
+	//WSWriteRawBlock           = "write_raw_block"
+	//WSWriteRawBlockWithFields = "write_raw_block_with_fields"
+
 	Connect = "conn"
 	// websocket
-	WSQuery                   = "query"
-	WSFetch                   = "fetch"
-	WSFetchBlock              = "fetch_block"
-	WSFreeResult              = "free_result"
-	WSWriteRaw                = "write_raw"
-	WSWriteRawBlock           = "write_raw_block"
-	WSWriteRawBlockWithFields = "write_raw_block_with_fields"
-	WSGetCurrentDB            = "get_current_db"
-	WSGetServerInfo           = "get_server_info"
-	WSNumFields               = "num_fields"
+	WSQuery         = "query"
+	WSFetch         = "fetch"
+	WSFetchBlock    = "fetch_block"
+	WSFreeResult    = "free_result"
+	WSGetCurrentDB  = "get_current_db"
+	WSGetServerInfo = "get_server_info"
+	WSNumFields     = "num_fields"
 
 	// schemaless
 	SchemalessWrite = "insert"
@@ -43,10 +45,8 @@ const (
 	STMT2Close     = "stmt2_close"
 )
 
-type messageType uint64
-
 const (
-	_ messageType = iota
+	_ = iota
 	SetTagsMessage
 	BindMessage
 	TMQRawMessage
@@ -57,8 +57,8 @@ const (
 	Stmt2BindMessage = 9
 )
 
-func (m messageType) String() string {
-	switch m {
+func getActionString(binaryAction uint64) string {
+	switch binaryAction {
 	case SetTagsMessage:
 		return "set_tags"
 	case BindMessage:

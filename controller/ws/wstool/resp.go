@@ -4,8 +4,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 
-	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
+	"github.com/taosdata/taosadapter/v3/tools/melody"
 	"github.com/taosdata/taosadapter/v3/version"
 )
 
@@ -25,11 +25,13 @@ func WSWriteJson(session *melody.Session, logger *logrus.Entry, data interface{}
 	}
 	logger.Tracef("write json:%s", b)
 	_ = session.Write(b)
+	logger.Trace("write json done")
 }
 
 func WSWriteBinary(session *melody.Session, data []byte, logger *logrus.Entry) {
 	logger.Tracef("write binary:%+v", data)
 	_ = session.WriteBinary(data)
+	logger.Trace("write binary done")
 }
 
 type WSVersionResp struct {
@@ -40,6 +42,12 @@ type WSVersionResp struct {
 }
 
 var VersionResp []byte
+
+func WSWriteVersion(session *melody.Session, logger *logrus.Entry) {
+	logger.Tracef("write version,%s", VersionResp)
+	_ = session.Write(VersionResp)
+	logger.Trace("write version done")
+}
 
 type WSAction struct {
 	Action string          `json:"action"`
