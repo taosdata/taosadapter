@@ -9,15 +9,16 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/driver-go/v3/af"
-	"github.com/taosdata/driver-go/v3/errors"
-	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/driver/common/parser"
+	"github.com/taosdata/taosadapter/v3/driver/errors"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 )
 
@@ -41,13 +42,10 @@ func TestOpentsdb(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	afC, err := af.NewConnector(conn)
-	assert.NoError(t, err)
 	defer func() {
-		err = afC.Close()
-		assert.NoError(t, err)
+		wrapper.TaosClose(conn)
 	}()
-	_, err = afC.Exec("create database if not exists test_plugin_opentsdb_http_json")
+	err = exec(conn, "drop database if exists test_plugin_opentsdb_http_telnet")
 	assert.NoError(t, err)
 	err = p.Init(router)
 	assert.NoError(t, err)
@@ -82,87 +80,74 @@ func TestOpentsdb(t *testing.T) {
 	assert.Equal(t, 204, w.Code)
 
 	defer func() {
-		r := wrapper.TaosQuery(conn, "drop database if exists test_plugin_opentsdb_http_json")
-		code := wrapper.TaosError(r)
-		if code != 0 {
-			errStr := wrapper.TaosErrorStr(r)
-			t.Error(errors.NewError(code, errStr))
-		}
-		wrapper.TaosFreeResult(r)
-	}()
-	defer func() {
-		r := wrapper.TaosQuery(conn, "drop database if exists test_plugin_opentsdb_http_telnet")
-		code := wrapper.TaosError(r)
-		if code != 0 {
-			errStr := wrapper.TaosErrorStr(r)
-			t.Error(errors.NewError(code, errStr))
-		}
-		wrapper.TaosFreeResult(r)
-	}()
-
-	r, err := afC.Query("select last(_value) from test_plugin_opentsdb_http_json.`sys_cpu_nice`")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer func() {
-		err = r.Close()
+		err = exec(conn, "drop database if exists test_plugin_opentsdb_http_json")
 		assert.NoError(t, err)
 	}()
-	values := make([]driver.Value, 1)
-	err = r.Next(values)
-	assert.NoError(t, err)
-	if int32(values[0].(float64)) != number {
-		t.Errorf("got %f expect %d", values[0], number)
-	}
-
-	r2, err := afC.Query("select last(_value) from test_plugin_opentsdb_http_telnet.`metric`")
-	if err != nil {
-		t.Error(err)
-		return
-	}
 	defer func() {
-		err = r2.Close()
+		err = exec(conn, "drop database if exists test_plugin_opentsdb_http_telnet")
 		assert.NoError(t, err)
 	}()
-	values = make([]driver.Value, 1)
-	err = r2.Next(values)
+	values, err := query(conn, "select last(_value) from test_plugin_opentsdb_http_json.`sys_cpu_nice`")
 	assert.NoError(t, err)
-	if int32(values[0].(float64)) != number {
+	if int32(values[0][0].(float64)) != number {
 		t.Errorf("got %f expect %d", values[0], number)
 	}
-
-	rows, err := afC.Query("select `ttl` from information_schema.ins_tables " +
+	values, err = query(conn, "select last(_value) from test_plugin_opentsdb_http_telnet.`metric`")
+	assert.NoError(t, err)
+	if int32(values[0][0].(float64)) != number {
+		t.Errorf("got %f expect %d", values[0], number)
+	}
+	values, err = query(conn, "select `ttl` from information_schema.ins_tables "+
 		" where db_name='test_plugin_opentsdb_http_json' and stable_name='sys_cpu_nice'")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer func() {
-		err = rows.Close()
-		assert.NoError(t, err)
-	}()
-	values = make([]driver.Value, 1)
-	err = rows.Next(values)
 	assert.NoError(t, err)
-	if values[0].(int32) != 1000 {
+	if values[0][0].(int32) != 1000 {
 		t.Fatal("ttl miss")
 	}
-
-	rows, err = afC.Query("select `ttl` from information_schema.ins_tables " +
+	values, err = query(conn, "select `ttl` from information_schema.ins_tables "+
 		" where db_name='test_plugin_opentsdb_http_telnet' and stable_name='metric'")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer func() {
-		err = rows.Close()
-		assert.NoError(t, err)
-	}()
-	values = make([]driver.Value, 1)
-	err = rows.Next(values)
 	assert.NoError(t, err)
-	if values[0].(int32) != 1000 {
+	if values[0][0].(int32) != 1000 {
 		t.Fatal("ttl miss")
 	}
+}
+
+func exec(conn unsafe.Pointer, sql string) error {
+	res := wrapper.TaosQuery(conn, sql)
+	defer wrapper.TaosFreeResult(res)
+	code := wrapper.TaosError(res)
+	if code != 0 {
+		errStr := wrapper.TaosErrorStr(res)
+		return errors.NewError(code, errStr)
+	}
+	return nil
+}
+
+func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
+	res := wrapper.TaosQuery(conn, sql)
+	defer wrapper.TaosFreeResult(res)
+	code := wrapper.TaosError(res)
+	if code != 0 {
+		errStr := wrapper.TaosErrorStr(res)
+		return nil, errors.NewError(code, errStr)
+	}
+	fileCount := wrapper.TaosNumFields(res)
+	rh, err := wrapper.ReadColumn(res, fileCount)
+	if err != nil {
+		return nil, err
+	}
+	precision := wrapper.TaosResultPrecision(res)
+	var result [][]driver.Value
+	for {
+		columns, errCode, block := wrapper.TaosFetchRawBlock(res)
+		if errCode != 0 {
+			errStr := wrapper.TaosErrorStr(res)
+			return nil, errors.NewError(errCode, errStr)
+		}
+		if columns == 0 {
+			break
+		}
+		r := parser.ReadBlock(block, columns, rh.ColTypes, precision)
+		result = append(result, r...)
+	}
+	return result, nil
 }

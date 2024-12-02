@@ -14,12 +14,12 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/driver-go/v3/common"
-	"github.com/taosdata/driver-go/v3/common/param"
-	"github.com/taosdata/driver-go/v3/common/serializer"
-	stmtCommon "github.com/taosdata/driver-go/v3/common/stmt"
-	"github.com/taosdata/driver-go/v3/types"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
+	"github.com/taosdata/taosadapter/v3/driver/common"
+	"github.com/taosdata/taosadapter/v3/driver/common/param"
+	"github.com/taosdata/taosadapter/v3/driver/common/serializer"
+	stmtCommon "github.com/taosdata/taosadapter/v3/driver/common/stmt"
+	"github.com/taosdata/taosadapter/v3/driver/types"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 )

@@ -6,12 +6,15 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/driver-go/v3/af"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/driver/common/parser"
+	"github.com/taosdata/taosadapter/v3/driver/errors"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 )
 
@@ -52,17 +55,14 @@ func TestNodeExporter_Gather(t *testing.T) {
 	viper.Set("node_exporter.urls", []string{api})
 	viper.Set("node_exporter.gatherDuration", time.Second)
 	viper.Set("node_exporter.ttl", 1000)
-	conn, err := af.Open("", "", "", "", 0)
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	assert.NoError(t, err)
 	defer func() {
-		err = conn.Close()
-		if err != nil {
-			t.Error(err)
-		}
+		wrapper.TaosClose(conn)
 	}()
-	_, err = conn.Exec("create database if not exists node_exporter precision 'ns'")
+	err = exec(conn, "drop database if exists node_exporter")
 	assert.NoError(t, err)
-	err = conn.SelectDB("node_exporter")
+	err = exec(conn, "use node_exporter")
 	assert.NoError(t, err)
 	n := NodeExporter{}
 	err = n.Init(nil)
@@ -70,41 +70,58 @@ func TestNodeExporter_Gather(t *testing.T) {
 	err = n.Start()
 	assert.NoError(t, err)
 	time.Sleep(time.Second * 2)
-	rows, err := conn.Query("select last(`value`) as `value` from node_exporter.test_metric;")
+	values, err := query(conn, "select last(`value`) as `value` from node_exporter.go_gc_duration_seconds;")
 	assert.NoError(t, err)
-	defer func() {
-		err = rows.Close()
-		if err != nil {
-			t.Error(err)
-		}
-	}()
-	assert.Equal(t, 1, len(rows.Columns()))
-	d := make([]driver.Value, 1)
-	err = rows.Next(d)
-	assert.NoError(t, err)
-	assert.Equal(t, float64(1), d[0])
+	assert.Equal(t, float64(1), values[0][0])
 	err = n.Stop()
 	assert.NoError(t, err)
-
-	rows, err = conn.Query("select `ttl` from information_schema.ins_tables " +
+	values, err = query(conn, "select `ttl` from information_schema.ins_tables "+
 		" where db_name='node_exporter' and stable_name='test_metric'")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer func() {
-		err = rows.Close()
-		if err != nil {
-			t.Error(err)
-		}
-	}()
-	values := make([]driver.Value, 1)
-	err = rows.Next(values)
 	assert.NoError(t, err)
-	if values[0].(int32) != 1000 {
+	if values[0][0].(int32) != 1000 {
 		t.Fatal("ttl miss")
 	}
-
-	_, err = conn.Exec("drop database if exists node_exporter")
+	err = exec(conn, "drop database if exists node_exporter")
 	assert.NoError(t, err)
+}
+
+func exec(conn unsafe.Pointer, sql string) error {
+	res := wrapper.TaosQuery(conn, sql)
+	defer wrapper.TaosFreeResult(res)
+	code := wrapper.TaosError(res)
+	if code != 0 {
+		errStr := wrapper.TaosErrorStr(res)
+		return errors.NewError(code, errStr)
+	}
+	return nil
+}
+
+func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
+	res := wrapper.TaosQuery(conn, sql)
+	defer wrapper.TaosFreeResult(res)
+	code := wrapper.TaosError(res)
+	if code != 0 {
+		errStr := wrapper.TaosErrorStr(res)
+		return nil, errors.NewError(code, errStr)
+	}
+	fileCount := wrapper.TaosNumFields(res)
+	rh, err := wrapper.ReadColumn(res, fileCount)
+	if err != nil {
+		return nil, err
+	}
+	precision := wrapper.TaosResultPrecision(res)
+	var result [][]driver.Value
+	for {
+		columns, errCode, block := wrapper.TaosFetchRawBlock(res)
+		if errCode != 0 {
+			errStr := wrapper.TaosErrorStr(res)
+			return nil, errors.NewError(errCode, errStr)
+		}
+		if columns == 0 {
+			break
+		}
+		r := parser.ReadBlock(block, columns, rh.ColTypes, precision)
+		result = append(result, r...)
+	}
+	return result, nil
 }
