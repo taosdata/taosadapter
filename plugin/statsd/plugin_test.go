@@ -40,7 +40,7 @@ func TestStatsd(t *testing.T) {
 	defer func() {
 		wrapper.TaosClose(conn)
 	}()
-	err = exec(conn, "drop database if exists statsd")
+	err = exec(conn, "create database if not exists statsd")
 	assert.NoError(t, err)
 	err = p.Init(nil)
 	assert.NoError(t, err)
@@ -58,13 +58,8 @@ func TestStatsd(t *testing.T) {
 	assert.NoError(t, err)
 	time.Sleep(time.Second)
 	defer func() {
-		r := wrapper.TaosQuery(conn, "drop database if exists statsd")
-		code := wrapper.TaosError(r)
-		if code != 0 {
-			errStr := wrapper.TaosErrorStr(r)
-			t.Error(errors.NewError(code, errStr))
-		}
-		wrapper.TaosFreeResult(r)
+		err = exec(conn, "drop database if exists statsd")
+		assert.NoError(t, err)
 	}()
 	values, err := query(conn, "select last(`value`) from statsd.`foo`")
 	assert.NoError(t, err)

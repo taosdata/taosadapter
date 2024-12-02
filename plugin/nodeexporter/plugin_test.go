@@ -60,7 +60,7 @@ func TestNodeExporter_Gather(t *testing.T) {
 	defer func() {
 		wrapper.TaosClose(conn)
 	}()
-	err = exec(conn, "drop database if exists node_exporter")
+	err = exec(conn, "create database if not exists node_exporter precision 'ns'")
 	assert.NoError(t, err)
 	err = exec(conn, "use node_exporter")
 	assert.NoError(t, err)
@@ -70,7 +70,7 @@ func TestNodeExporter_Gather(t *testing.T) {
 	err = n.Start()
 	assert.NoError(t, err)
 	time.Sleep(time.Second * 2)
-	values, err := query(conn, "select last(`value`) as `value` from node_exporter.go_gc_duration_seconds;")
+	values, err := query(conn, "select last(`value`) as `value` from node_exporter.test_metric;")
 	assert.NoError(t, err)
 	assert.Equal(t, float64(1), values[0][0])
 	err = n.Stop()

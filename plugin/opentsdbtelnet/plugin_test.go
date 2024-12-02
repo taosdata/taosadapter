@@ -41,7 +41,7 @@ func TestPlugin(t *testing.T) {
 	defer func() {
 		wrapper.TaosClose(conn)
 	}()
-	err = exec(conn, "drop database if exists opentsdb_telnet")
+	err = exec(conn, "create database if not exists opentsdb_telnet")
 	assert.NoError(t, err)
 	err = p.Init(nil)
 	assert.NoError(t, err)
