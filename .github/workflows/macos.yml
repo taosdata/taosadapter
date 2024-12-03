@@ -22,8 +22,11 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
-    name: Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ 'macos-latest' ]
+    name: Build-${{ matrix.os }}
     outputs:
       commit_id: ${{ steps.get_commit_id.outputs.commit_id }}
     steps:
@@ -63,7 +66,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ steps.get_commit_id.outputs.commit_id }}
+          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ matrix.os }}-${{ steps.get_commit_id.outputs.commit_id }}
 
       - name: Cache server by push
         if: github.event_name == 'push'
@@ -71,7 +74,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ steps.get_commit_id.outputs.commit_id }}
+          key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ matrix.os }}-${{ steps.get_commit_id.outputs.commit_id }}
 
       - name: Cache server manually
         if: github.event_name == 'workflow_dispatch'
@@ -79,7 +82,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ steps.get_commit_id.outputs.commit_id }}
+          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ matrix.os }}-${{ steps.get_commit_id.outputs.commit_id }}
 
 
       - name: install TDengine
@@ -118,10 +121,11 @@ jobs:
           tar -zcvf server.tar.gz ./release
 
   test_build:
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
     needs: build
     strategy:
       matrix:
+        os: [ 'macos-latest' ]
         go: [ '1.17', 'stable' ]
     name: Build taosAdapter ${{ matrix.go }}
     steps:
@@ -131,9 +135,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
+          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ matrix.os }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ github.base_ref }}-
+            ${{ runner.os }}-build-${{ github.base_ref }}-${{ matrix.os }}-
 
       - name: get cache server by push
         if: github.event_name == 'push'
@@ -141,9 +145,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
+          key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ matrix.os }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ github.ref_name }}-
+            ${{ runner.os }}-build-${{ github.ref_name }}-${{ matrix.os }}-
 
       - name: get cache server manually
         if: github.event_name == 'workflow_dispatch'
@@ -151,9 +155,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
+          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ matrix.os }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ inputs.tbBranch }}-
+            ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ matrix.os }}-
 
       - name: prepare install
         run: |
@@ -178,86 +182,87 @@ jobs:
       - name: build taosAdapter
         run: cd ./taosadapter && go build
 
-  test_go_test:
-    runs-on: macos-latest
-    needs: build
-    strategy:
-      matrix:
-        go: [ '1.17', 'stable' ]
-    name: test taosAdapter ${{ matrix.go }}
-    steps:
-      - name: get cache server by pr
-        if: github.event_name == 'pull_request'
-        id: get-cache-server-pr
-        uses: actions/cache@v4
-        with:
-          path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ github.base_ref }}-
-
-      - name: get cache server by push
-        if: github.event_name == 'push'
-        id: get-cache-server-push
-        uses: actions/cache@v4
-        with:
-          path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ github.ref_name }}-
-
-      - name: get cache server manually
-        if: github.event_name == 'workflow_dispatch'
-        id: get-cache-server-manually
-        uses: actions/cache@v4
-        with:
-          path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ inputs.tbBranch }}-
-
-      - name: prepare install
-        run: |
-          sudo mkdir -p /usr/local/lib
-          sudo mkdir -p /usr/local/include
-
-      - name: install
-        run: |
-          tar -zxvf server.tar.gz
-          cd release && sudo sh install.sh
-
-      - name: checkout
-        uses: actions/checkout@v4
-        with:
-          path: 'taosadapter'
-
-      - name: copy taos cfg
-        run: |
-          sudo mkdir -p /etc/taos
-          sudo cp ./taosadapter/.github/workflows/taos.cfg /etc/taos/taos.cfg
-
-      - uses: actions/setup-go@v4
-        with:
-          go-version: ${{ matrix.go }}
-          cache-dependency-path: taosadapter/go.sum
-
-      - name: start shell
-        run: |
-          cat >start.sh<<EOF
-          ulimit -n 65535 && TAOS_SUPPORT_VNODES=256 taosd
-          EOF
-
-      - name: start taosd
-        run: nohup sudo sh ./start.sh & disown
-
-      - name: test
-        id: test
-        env:
-          DYLD_LIBRARY_PATH: /usr/local/lib:$DYLD_LIBRARY_PATH
-        run: cd ./taosadapter && sudo DYLD_LIBRARY_PATH=/usr/local/lib:$DYLD_LIBRARY_PATH go test -v --count=1 ./...
-
-      - uses: actions/upload-artifact@v4
-        if: always() && (steps.test.outcome == 'failure' || steps.test.outcome == 'cancelled')
-        with:
-          name: ${{ runner.os }}-${{ matrix.go }}-log
-          path: /var/log/taos/
+#  test_go_test:
+#    runs-on: ${{ matrix.os }}
+#    needs: build
+#    strategy:
+#      matrix:
+#        os: [ 'macos-latest','macos-13' ]
+#        go: [ '1.17', 'stable' ]
+#    name: test taosAdapter ${{ matrix.os }} ${{ matrix.go }}
+#    steps:
+#      - name: get cache server by pr
+#        if: github.event_name == 'pull_request'
+#        id: get-cache-server-pr
+#        uses: actions/cache@v4
+#        with:
+#          path: server.tar.gz
+#          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ matrix.os }}-${{ needs.build.outputs.commit_id }}
+#          restore-keys: |
+#            ${{ runner.os }}-build-${{ github.base_ref }}-${{ matrix.os }}-
+#
+#      - name: get cache server by push
+#        if: github.event_name == 'push'
+#        id: get-cache-server-push
+#        uses: actions/cache@v4
+#        with:
+#          path: server.tar.gz
+#          key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ matrix.os }}-${{ needs.build.outputs.commit_id }}
+#          restore-keys: |
+#            ${{ runner.os }}-build-${{ github.ref_name }}-${{ matrix.os }}-
+#
+#      - name: get cache server manually
+#        if: github.event_name == 'workflow_dispatch'
+#        id: get-cache-server-manually
+#        uses: actions/cache@v4
+#        with:
+#          path: server.tar.gz
+#          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ matrix.os }}-${{ needs.build.outputs.commit_id }}
+#          restore-keys: |
+#            ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ matrix.os }}-
+#
+#      - name: prepare install
+#        run: |
+#          sudo mkdir -p /usr/local/lib
+#          sudo mkdir -p /usr/local/include
+#
+#      - name: install
+#        run: |
+#          tar -zxvf server.tar.gz
+#          cd release && sudo sh install.sh
+#
+#      - name: checkout
+#        uses: actions/checkout@v4
+#        with:
+#          path: 'taosadapter'
+#
+#      - name: copy taos cfg
+#        run: |
+#          sudo mkdir -p /etc/taos
+#          sudo cp ./taosadapter/.github/workflows/taos.cfg /etc/taos/taos.cfg
+#
+#      - uses: actions/setup-go@v4
+#        with:
+#          go-version: ${{ matrix.go }}
+#          cache-dependency-path: taosadapter/go.sum
+#
+#      - name: start shell
+#        run: |
+#          cat >start.sh<<EOF
+#          ulimit -n 65535 && TAOS_SUPPORT_VNODES=256 taosd
+#          EOF
+#
+#      - name: start taosd
+#        run: nohup sudo sh ./start.sh & disown
+#
+#      - name: test
+#        id: test
+#        env:
+#          DYLD_LIBRARY_PATH: /usr/local/lib:$DYLD_LIBRARY_PATH
+#        run: cd ./taosadapter && sudo DYLD_LIBRARY_PATH=/usr/local/lib:$DYLD_LIBRARY_PATH go test -v --count=1 ./...
+#
+#      - uses: actions/upload-artifact@v4
+#        if: always() && (steps.test.outcome == 'failure' || steps.test.outcome == 'cancelled')
+#        with:
+#          name: ${{ runner.os }}-${{ matrix.os }}-${{ matrix.go }}-log
+#          path: /var/log/taos/

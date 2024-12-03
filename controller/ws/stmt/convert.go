@@ -10,10 +10,10 @@ import (
 	"unsafe"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/taosdata/driver-go/v3/common"
-	"github.com/taosdata/driver-go/v3/common/parser"
-	stmtCommon "github.com/taosdata/driver-go/v3/common/stmt"
-	"github.com/taosdata/driver-go/v3/types"
+	"github.com/taosdata/taosadapter/v3/driver/common"
+	"github.com/taosdata/taosadapter/v3/driver/common/parser"
+	stmtCommon "github.com/taosdata/taosadapter/v3/driver/common/stmt"
+	"github.com/taosdata/taosadapter/v3/driver/types"
 	"github.com/taosdata/taosadapter/v3/tools"
 )
 

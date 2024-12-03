@@ -8,8 +8,8 @@ import (
 	"unsafe"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 )
 
 func TestMain(m *testing.M) {

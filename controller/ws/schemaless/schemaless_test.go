@@ -14,12 +14,12 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/driver-go/v3/ws/schemaless"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller"
 	_ "github.com/taosdata/taosadapter/v3/controller/rest"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 )
 
@@ -68,7 +68,7 @@ func TestRestful_InitSchemaless(t *testing.T) {
 	}{
 		{
 			name:      "influxdb",
-			protocol:  schemaless.InfluxDBLineProtocol,
+			protocol:  wrapper.InfluxDBLineProtocol,
 			precision: "ms",
 			data: "measurement,host=host1 field1=2i,field2=2.0 1577837300000\n" +
 				"measurement,host=host1 field1=2i,field2=2.0 1577837400000\n" +
@@ -81,7 +81,7 @@ func TestRestful_InitSchemaless(t *testing.T) {
 		},
 		{
 			name:      "opentsdb_telnet",
-			protocol:  schemaless.OpenTSDBTelnetLineProtocol,
+			protocol:  wrapper.OpenTSDBTelnetLineProtocol,
 			precision: "ms",
 			data: "meters.current 1648432611249 10.3 location=California.SanFrancisco group=2\n" +
 				"meters.current 1648432611250 12.6 location=California.SanFrancisco group=2\n" +
@@ -98,7 +98,7 @@ func TestRestful_InitSchemaless(t *testing.T) {
 		},
 		{
 			name:      "opentsdb_json",
-			protocol:  schemaless.OpenTSDBJsonFormatProtocol,
+			protocol:  wrapper.OpenTSDBJsonFormatProtocol,
 			precision: "ms",
 			data: `[
     {
@@ -202,7 +202,7 @@ func TestRestful_InitSchemaless(t *testing.T) {
 			assert.NoError(t, err, string(msg))
 			assert.Equal(t, reqID, schemalessResp.ReqID)
 			assert.Equal(t, 0, schemalessResp.Code, schemalessResp.Message)
-			if c.protocol != schemaless.OpenTSDBJsonFormatProtocol {
+			if c.protocol != wrapper.OpenTSDBJsonFormatProtocol {
 				assert.Equal(t, c.totalRows, schemalessResp.TotalRows)
 			}
 			assert.Equal(t, c.affectedRows, schemalessResp.AffectedRows)

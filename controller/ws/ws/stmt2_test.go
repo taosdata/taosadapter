@@ -13,9 +13,9 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/driver-go/v3/common"
-	stmtCommon "github.com/taosdata/driver-go/v3/common/stmt"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
+	"github.com/taosdata/taosadapter/v3/driver/common"
+	stmtCommon "github.com/taosdata/taosadapter/v3/driver/common/stmt"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 )
 

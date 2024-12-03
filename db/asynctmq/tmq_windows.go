@@ -656,7 +656,7 @@ import "C"
 import (
 	"unsafe"
 
-	"github.com/taosdata/driver-go/v3/wrapper/cgo"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 )
 
 // InitTMQThread tmq_thread *init_tmq_thread()

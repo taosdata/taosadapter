@@ -9,15 +9,16 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/driver-go/v3/af"
-	"github.com/taosdata/driver-go/v3/errors"
-	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/driver/common/parser"
+	"github.com/taosdata/taosadapter/v3/driver/errors"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 )
 
@@ -40,22 +41,14 @@ func TestInfluxdb(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	afC, err := af.NewConnector(conn)
-	assert.NoError(t, err)
 	defer func() {
-		err = afC.Close()
-		assert.NoError(t, err)
+		wrapper.TaosClose(conn)
 	}()
-	_, err = afC.Exec("create database if not exists test_plugin_influxdb")
+	err = exec(conn, "drop database if exists test_plugin_influxdb")
 	assert.NoError(t, err)
 	defer func() {
-		r := wrapper.TaosQuery(conn, "drop database if exists test_plugin_influxdb")
-		code := wrapper.TaosError(r)
-		if code != 0 {
-			errStr := wrapper.TaosErrorStr(r)
-			t.Error(errors.NewError(code, errStr))
-		}
-		wrapper.TaosFreeResult(r)
+		err = exec(conn, "drop database if exists test_plugin_influxdb")
+		assert.NoError(t, err)
 	}()
 	err = p.Init(router)
 	assert.NoError(t, err)
@@ -85,29 +78,14 @@ func TestInfluxdb(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 400, w.Code)
 	time.Sleep(time.Second)
-	r, err := afC.Query("select last(*) from test_plugin_influxdb.`measurement`")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer func() {
-		err = r.Close()
-		assert.NoError(t, err)
-	}()
-	fieldCount := len(r.Columns())
-	values := make([]driver.Value, fieldCount)
-	err = r.Next(values)
+	values, err := query(conn, "select * from test_plugin_influxdb.`measurement`")
 	assert.NoError(t, err)
-	keyMap := map[string]int{}
-	for i, s := range r.Columns() {
-		keyMap[s] = i
-	}
-	if values[3].(string) != "Launch 🚀" {
-		t.Errorf("got %s expect %s", values[3], "Launch 🚀")
+	if values[0][3].(string) != "Launch 🚀" {
+		t.Errorf("got %s expect %s", values[0][3], "Launch 🚀")
 		return
 	}
-	if int32(values[1].(int64)) != number {
-		t.Errorf("got %d expect %d", values[1].(int64), number)
+	if int32(values[0][1].(int64)) != number {
+		t.Errorf("got %d expect %d", values[0][1].(int64), number)
 		return
 	}
 
@@ -117,21 +95,51 @@ func TestInfluxdb(t *testing.T) {
 	req.RemoteAddr = "127.0.0.1:33333"
 	router.ServeHTTP(w, req)
 	time.Sleep(time.Second)
-
-	r, err = afC.Query("select `ttl` from information_schema.ins_tables " +
+	values, err = query(conn, "select `ttl` from information_schema.ins_tables "+
 		" where db_name='test_plugin_influxdb_ttl' and stable_name='measurement_ttl'")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer func() {
-		err = r.Close()
-		assert.NoError(t, err)
-	}()
-	values = make([]driver.Value, 1)
-	err = r.Next(values)
 	assert.NoError(t, err)
-	if values[0].(int32) != 1000 {
+	if values[0][0].(int32) != 1000 {
 		t.Fatal("ttl miss")
 	}
+}
+
+func exec(conn unsafe.Pointer, sql string) error {
+	res := wrapper.TaosQuery(conn, sql)
+	defer wrapper.TaosFreeResult(res)
+	code := wrapper.TaosError(res)
+	if code != 0 {
+		errStr := wrapper.TaosErrorStr(res)
+		return errors.NewError(code, errStr)
+	}
+	return nil
+}
+
+func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
+	res := wrapper.TaosQuery(conn, sql)
+	defer wrapper.TaosFreeResult(res)
+	code := wrapper.TaosError(res)
+	if code != 0 {
+		errStr := wrapper.TaosErrorStr(res)
+		return nil, errors.NewError(code, errStr)
+	}
+	fileCount := wrapper.TaosNumFields(res)
+	rh, err := wrapper.ReadColumn(res, fileCount)
+	if err != nil {
+		return nil, err
+	}
+	precision := wrapper.TaosResultPrecision(res)
+	var result [][]driver.Value
+	for {
+		columns, errCode, block := wrapper.TaosFetchRawBlock(res)
+		if errCode != 0 {
+			errStr := wrapper.TaosErrorStr(res)
+			return nil, errors.NewError(errCode, errStr)
+		}
+		if columns == 0 {
+			break
+		}
+		r := parser.ReadBlock(block, columns, rh.ColTypes, precision)
+		result = append(result, r...)
+	}
+	return result, nil
 }

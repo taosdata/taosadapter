@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/sirupsen/logrus"
-	tErrors "github.com/taosdata/driver-go/v3/errors"
+	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
 )
 
