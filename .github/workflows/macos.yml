@@ -183,7 +183,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        go: [ 'stable' ]
+        go: [ '1.17', 'stable' ]
     name: test taosAdapter ${{ matrix.go }}
     steps:
       - name: get cache server by pr
