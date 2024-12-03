@@ -83,21 +83,16 @@ type stmt2PrepareRequest struct {
 	GetFields bool   `json:"get_fields"`
 }
 
-type prepareFields struct {
-	stmtCommon.StmtField
-	BindType int8 `json:"bind_type"`
-}
-
 type stmt2PrepareResponse struct {
-	Code        int              `json:"code"`
-	Message     string           `json:"message"`
-	Action      string           `json:"action"`
-	ReqID       uint64           `json:"req_id"`
-	Timing      int64            `json:"timing"`
-	StmtID      uint64           `json:"stmt_id"`
-	IsInsert    bool             `json:"is_insert"`
-	Fields      []*prepareFields `json:"fields"`
-	FieldsCount int              `json:"fields_count"`
+	Code        int                     `json:"code"`
+	Message     string                  `json:"message"`
+	Action      string                  `json:"action"`
+	ReqID       uint64                  `json:"req_id"`
+	Timing      int64                   `json:"timing"`
+	StmtID      uint64                  `json:"stmt_id"`
+	IsInsert    bool                    `json:"is_insert"`
+	Fields      []*wrapper.StmtStbField `json:"fields"`
+	FieldsCount int                     `json:"fields_count"`
 }
 
 func (h *messageHandler) stmt2Prepare(ctx context.Context, session *melody.Session, action string, req stmt2PrepareRequest, logger *logrus.Entry, isDebug bool) {
@@ -127,58 +122,18 @@ func (h *messageHandler) stmt2Prepare(ctx context.Context, session *melody.Sessi
 	stmtItem.isInsert = isInsert
 	prepareResp := &stmt2PrepareResponse{StmtID: req.StmtID, IsInsert: isInsert}
 	if req.GetFields {
-		if isInsert {
-			var fields []*prepareFields
-			// get table field
-			_, count, code, errStr := getFields(stmt2, stmtCommon.TAOS_FIELD_TBNAME, logger, isDebug)
-			if code != 0 {
-				logger.Errorf("get table names fields error, code:%d, err:%s", code, errStr)
-				stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, fmt.Sprintf("get table names fields error, %s", errStr), req.StmtID)
-				return
-			}
-			if count == 1 {
-				tableNameFields := &prepareFields{
-					StmtField: stmtCommon.StmtField{},
-					BindType:  stmtCommon.TAOS_FIELD_TBNAME,
-				}
-				fields = append(fields, tableNameFields)
-			}
-			// get tags field
-			tagFields, _, code, errStr := getFields(stmt2, stmtCommon.TAOS_FIELD_TAG, logger, isDebug)
-			if code != 0 {
-				logger.Errorf("get tag fields error, code:%d, err:%s", code, errStr)
-				stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, fmt.Sprintf("get tag fields error, %s", errStr), req.StmtID)
-				return
-			}
-			for i := 0; i < len(tagFields); i++ {
-				fields = append(fields, &prepareFields{
-					StmtField: *tagFields[i],
-					BindType:  stmtCommon.TAOS_FIELD_TAG,
-				})
-			}
-			// get cols field
-			colFields, _, code, errStr := getFields(stmt2, stmtCommon.TAOS_FIELD_COL, logger, isDebug)
-			if code != 0 {
-				logger.Errorf("get col fields error, code:%d, err:%s", code, errStr)
-				stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, fmt.Sprintf("get col fields error, %s", errStr), req.StmtID)
-				return
-			}
-			for i := 0; i < len(colFields); i++ {
-				fields = append(fields, &prepareFields{
-					StmtField: *colFields[i],
-					BindType:  stmtCommon.TAOS_FIELD_COL,
-				})
-			}
-			prepareResp.Fields = fields
-		} else {
-			_, count, code, errStr := getFields(stmt2, stmtCommon.TAOS_FIELD_QUERY, logger, isDebug)
-			if code != 0 {
-				logger.Errorf("get query fields error, code:%d, err:%s", code, errStr)
-				stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, fmt.Sprintf("get query fields error, %s", errStr), req.StmtID)
-				return
-			}
-			prepareResp.FieldsCount = count
+		code, count, fields := syncinterface.TaosStmt2GetStbFields(stmt2, logger, isDebug)
+		if code != 0 {
+			errStr := wrapper.TaosStmt2Error(stmt2)
+			logger.Errorf("stmt2 get fields error, code:%d, err:%s", code, errStr)
+			stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
+			return
 		}
+		defer wrapper.TaosStmt2FreeStbFields(stmt2, fields)
+		stbFields := wrapper.ParseStmt2StbFields(count, fields)
+		prepareResp.Fields = stbFields
+		prepareResp.FieldsCount = count
+
 	}
 	prepareResp.ReqID = req.ReqID
 	prepareResp.Action = action
@@ -298,7 +253,7 @@ func (h *messageHandler) stmt2Exec(ctx context.Context, session *melody.Session,
 	code := syncinterface.TaosStmt2Exec(stmtItem.stmt, logger, isDebug)
 	if code != 0 {
 		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
-		logger.Errorf("stmt2 execute error, err:%s", errStr)
+		logger.Errorf("stmt2 execute error,code:%d, err:%s", code, errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 		return
 	}
@@ -306,6 +261,12 @@ func (h *messageHandler) stmt2Exec(ctx context.Context, session *melody.Session,
 	logger.Tracef("stmt2 execute wait callback, stmt_id:%d", req.StmtID)
 	result := <-stmtItem.caller.ExecResult
 	logger.Debugf("stmt2 execute wait callback finish, affected:%d, res:%p, n:%d, cost:%s", result.Affected, result.Res, result.N, log.GetLogDuration(isDebug, s))
+	if result.N < 0 {
+		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		logger.Errorf("stmt2 execute callback error, code:%d, err:%s", result.N, errStr)
+		stmtErrorResponse(ctx, session, logger, action, req.ReqID, result.N, errStr, req.StmtID)
+		return
+	}
 	stmtItem.result = result.Res
 	resp := &stmt2ExecResponse{
 		Action:   action,
