@@ -179,12 +179,13 @@ jobs:
         run: cd ./taosadapter && go build
 
   test_go_test:
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
     needs: build
     strategy:
       matrix:
+        os: [ 'macos-latest','macos-13' ]
         go: [ '1.17', 'stable' ]
-    name: test taosAdapter ${{ matrix.go }}
+    name: test taosAdapter ${{ matrix.os }} ${{ matrix.go }}
     steps:
       - name: get cache server by pr
         if: github.event_name == 'pull_request'
