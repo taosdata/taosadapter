@@ -643,7 +643,7 @@ func Stmt2Query(t *testing.T, db string, prepareDataSql []string) {
 		ReqID:     3,
 		StmtID:    initResp.StmtID,
 		SQL:       fmt.Sprintf("select * from %s.meters where group_id=? and location=?", db),
-		GetFields: false,
+		GetFields: true,
 	}
 	resp, err = doWebSocket(ws, STMT2Prepare, &prepareReq)
 	assert.NoError(t, err)
@@ -653,6 +653,7 @@ func Stmt2Query(t *testing.T, db string, prepareDataSql []string) {
 	assert.Equal(t, uint64(3), prepareResp.ReqID)
 	assert.Equal(t, 0, prepareResp.Code, prepareResp.Message)
 	assert.False(t, prepareResp.IsInsert)
+	assert.Equal(t, 2, prepareResp.FieldsCount)
 
 	// bind
 	var block bytes.Buffer

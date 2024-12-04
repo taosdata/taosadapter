@@ -509,6 +509,30 @@ func TestTaosStmt2(t *testing.T) {
 		return
 	}
 	assert.True(t, isInsert)
+	code, count, fiels := TaosStmt2GetStbFields(stmt, logger, isDebug)
+	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+		return
+	}
+	assert.Equal(t, 4, count)
+	assert.NotNil(t, fiels)
+	defer func() {
+		wrapper.TaosStmt2FreeFields(stmt, fiels)
+	}()
+	fs := wrapper.ParseStmt2StbFields(count, fiels)
+	assert.Equal(t, 4, len(fs))
+	assert.Equal(t, "tbname", fs[0].Name)
+	assert.Equal(t, int8(common.TSDB_DATA_TYPE_BINARY), fs[0].FieldType)
+	assert.Equal(t, int8(stmtCommon.TAOS_FIELD_TBNAME), fs[0].BindType)
+	assert.Equal(t, "id", fs[1].Name)
+	assert.Equal(t, int8(common.TSDB_DATA_TYPE_INT), fs[1].FieldType)
+	assert.Equal(t, int8(stmtCommon.TAOS_FIELD_TAG), fs[1].BindType)
+	assert.Equal(t, "ts", fs[2].Name)
+	assert.Equal(t, int8(common.TSDB_DATA_TYPE_TIMESTAMP), fs[2].FieldType)
+	assert.Equal(t, int8(stmtCommon.TAOS_FIELD_COL), fs[2].BindType)
+	assert.Equal(t, uint8(common.PrecisionMilliSecond), fs[2].Precision)
+	assert.Equal(t, "v", fs[3].Name)
+	assert.Equal(t, int8(common.TSDB_DATA_TYPE_INT), fs[3].FieldType)
+	assert.Equal(t, int8(stmtCommon.TAOS_FIELD_COL), fs[3].BindType)
 	tableName := "tb1"
 	binds := &stmtCommon.TaosStmt2BindData{
 		TableName: tableName,
