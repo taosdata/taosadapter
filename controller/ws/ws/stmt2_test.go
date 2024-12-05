@@ -69,7 +69,12 @@ func TestWsStmt2(t *testing.T) {
 	assert.Equal(t, 0, initResp.Code, initResp.Message)
 
 	// prepare
-	prepareReq := stmt2PrepareRequest{ReqID: 3, StmtID: initResp.StmtID, SQL: "insert into ct1 using test_ws_stmt2_ws.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"}
+	prepareReq := stmt2PrepareRequest{
+		ReqID:     3,
+		StmtID:    initResp.StmtID,
+		SQL:       "insert into ct1 using test_ws_stmt2_ws.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+		GetFields: true,
+	}
 	resp, err = doWebSocket(ws, STMT2Prepare, &prepareReq)
 	assert.NoError(t, err)
 	var prepareResp stmt2PrepareResponse
@@ -78,27 +83,21 @@ func TestWsStmt2(t *testing.T) {
 	assert.Equal(t, uint64(3), prepareResp.ReqID)
 	assert.Equal(t, 0, prepareResp.Code, prepareResp.Message)
 	assert.True(t, prepareResp.IsInsert)
-
-	// get tag fields
-	getTagFieldsReq := stmt2GetFieldsRequest{ReqID: 5, StmtID: prepareResp.StmtID, FieldTypes: []int8{stmtCommon.TAOS_FIELD_TAG}}
-	resp, err = doWebSocket(ws, STMT2GetFields, &getTagFieldsReq)
-	assert.NoError(t, err)
-	var getTagFieldsResp stmt2GetFieldsResponse
-	err = json.Unmarshal(resp, &getTagFieldsResp)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(5), getTagFieldsResp.ReqID)
-	assert.Equal(t, 0, getTagFieldsResp.Code, getTagFieldsResp.Message)
-
-	// get col fields
-	getColFieldsReq := stmt2GetFieldsRequest{ReqID: 6, StmtID: prepareResp.StmtID, FieldTypes: []int8{stmtCommon.TAOS_FIELD_COL}}
-	resp, err = doWebSocket(ws, STMT2GetFields, &getColFieldsReq)
-	assert.NoError(t, err)
-	var getColFieldsResp stmt2GetFieldsResponse
-	err = json.Unmarshal(resp, &getColFieldsResp)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(6), getColFieldsResp.ReqID)
-	assert.Equal(t, 0, getColFieldsResp.Code, getColFieldsResp.Message)
-
+	assert.Equal(t, 17, len(prepareResp.Fields))
+	var colFields []*stmtCommon.StmtField
+	var tagFields []*stmtCommon.StmtField
+	for i := 0; i < 17; i++ {
+		field := &stmtCommon.StmtField{
+			FieldType: prepareResp.Fields[i].FieldType,
+			Precision: prepareResp.Fields[i].Precision,
+		}
+		switch prepareResp.Fields[i].BindType {
+		case stmtCommon.TAOS_FIELD_COL:
+			colFields = append(colFields, field)
+		case stmtCommon.TAOS_FIELD_TAG:
+			tagFields = append(tagFields, field)
+		}
+	}
 	// bind
 	now := time.Now()
 	cols := [][]driver.Value{
@@ -142,7 +141,7 @@ func TestWsStmt2(t *testing.T) {
 		Tags:      tag,
 		Cols:      cols,
 	}
-	bs, err := stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, getColFieldsResp.ColFields, getTagFieldsResp.TagFields)
+	bs, err := stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, colFields, tagFields)
 	assert.NoError(t, err)
 	bindReq := make([]byte, len(bs)+30)
 	// req_id
@@ -378,201 +377,6 @@ func TestStmt2Prepare(t *testing.T) {
 	assert.Equal(t, false, prepareResp.IsInsert)
 	assert.Nil(t, prepareResp.Fields)
 	assert.Equal(t, 2, prepareResp.FieldsCount)
-}
-
-func TestStmt2GetFields(t *testing.T) {
-	s := httptest.NewServer(router)
-	defer s.Close()
-	code, message := doRestful("drop database if exists test_ws_stmt2_getfields_ws", "")
-	assert.Equal(t, 0, code, message)
-	code, message = doRestful("create database if not exists test_ws_stmt2_getfields_ws precision 'ns'", "")
-	assert.Equal(t, 0, code, message)
-
-	defer doRestful("drop database if exists test_ws_stmt2_getfields_ws", "")
-
-	code, message = doRestful(
-		"create table if not exists stb (ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100)) tags (info json)",
-		"test_ws_stmt2_getfields_ws")
-	assert.Equal(t, 0, code, message)
-
-	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer func() {
-		err = ws.Close()
-		assert.NoError(t, err)
-	}()
-
-	// connect
-	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", DB: "test_ws_stmt2_getfields_ws"}
-	resp, err := doWebSocket(ws, Connect, &connReq)
-	assert.NoError(t, err)
-	var connResp commonResp
-	err = json.Unmarshal(resp, &connResp)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(1), connResp.ReqID)
-	assert.Equal(t, 0, connResp.Code, connResp.Message)
-
-	// init
-	initReq := stmt2InitRequest{
-		ReqID:               0x123,
-		SingleStbInsert:     false,
-		SingleTableBindOnce: false,
-	}
-	resp, err = doWebSocket(ws, STMT2Init, &initReq)
-	assert.NoError(t, err)
-	var initResp stmt2InitResponse
-	err = json.Unmarshal(resp, &initResp)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(0x123), initResp.ReqID)
-	assert.Equal(t, 0, initResp.Code, initResp.Message)
-
-	// prepare
-	prepareReq := stmt2PrepareRequest{
-		ReqID:     3,
-		StmtID:    initResp.StmtID,
-		SQL:       "insert into ctb using test_ws_stmt2_getfields_ws.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-		GetFields: false,
-	}
-	resp, err = doWebSocket(ws, STMT2Prepare, &prepareReq)
-	assert.NoError(t, err)
-	var prepareResp stmt2PrepareResponse
-	err = json.Unmarshal(resp, &prepareResp)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(3), prepareResp.ReqID)
-	assert.Equal(t, 0, prepareResp.Code, prepareResp.Message)
-	assert.Equal(t, true, prepareResp.IsInsert)
-
-	// get fields
-	getFieldsReq := stmt2GetFieldsRequest{
-		ReqID:  4,
-		StmtID: prepareResp.StmtID,
-		FieldTypes: []int8{
-			stmtCommon.TAOS_FIELD_TAG,
-			stmtCommon.TAOS_FIELD_COL,
-		},
-	}
-	resp, err = doWebSocket(ws, STMT2GetFields, &getFieldsReq)
-	assert.NoError(t, err)
-	var getFieldsResp stmt2GetFieldsResponse
-	err = json.Unmarshal(resp, &getFieldsResp)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(4), getFieldsResp.ReqID)
-	assert.Equal(t, 0, getFieldsResp.Code, getFieldsResp.Message)
-	names := [16]string{
-		"ts",
-		"v1",
-		"v2",
-		"v3",
-		"v4",
-		"v5",
-		"v6",
-		"v7",
-		"v8",
-		"v9",
-		"v10",
-		"v11",
-		"v12",
-		"v13",
-		"v14",
-		"v15",
-	}
-	fieldTypes := [16]int8{
-		common.TSDB_DATA_TYPE_TIMESTAMP,
-		common.TSDB_DATA_TYPE_BOOL,
-		common.TSDB_DATA_TYPE_TINYINT,
-		common.TSDB_DATA_TYPE_SMALLINT,
-		common.TSDB_DATA_TYPE_INT,
-		common.TSDB_DATA_TYPE_BIGINT,
-		common.TSDB_DATA_TYPE_UTINYINT,
-		common.TSDB_DATA_TYPE_USMALLINT,
-		common.TSDB_DATA_TYPE_UINT,
-		common.TSDB_DATA_TYPE_UBIGINT,
-		common.TSDB_DATA_TYPE_FLOAT,
-		common.TSDB_DATA_TYPE_DOUBLE,
-		common.TSDB_DATA_TYPE_BINARY,
-		common.TSDB_DATA_TYPE_NCHAR,
-		common.TSDB_DATA_TYPE_VARBINARY,
-		common.TSDB_DATA_TYPE_GEOMETRY,
-	}
-	assert.Equal(t, 16, len(getFieldsResp.ColFields))
-	assert.Equal(t, 1, len(getFieldsResp.TagFields))
-	for i := 0; i < 16; i++ {
-		assert.Equal(t, names[i], getFieldsResp.ColFields[i].Name)
-		assert.Equal(t, fieldTypes[i], getFieldsResp.ColFields[i].FieldType)
-	}
-	assert.Equal(t, "info", getFieldsResp.TagFields[0].Name)
-	assert.Equal(t, int8(common.TSDB_DATA_TYPE_JSON), getFieldsResp.TagFields[0].FieldType)
-
-	// prepare get tablename
-	prepareReq = stmt2PrepareRequest{
-		ReqID:     5,
-		StmtID:    initResp.StmtID,
-		SQL:       "insert into ? using test_ws_stmt2_getfields_ws.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-		GetFields: false,
-	}
-	resp, err = doWebSocket(ws, STMT2Prepare, &prepareReq)
-	assert.NoError(t, err)
-
-	err = json.Unmarshal(resp, &prepareResp)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(5), prepareResp.ReqID)
-	assert.Equal(t, 0, prepareResp.Code, prepareResp.Message)
-	assert.Equal(t, true, prepareResp.IsInsert)
-	// get fields
-	getFieldsReq = stmt2GetFieldsRequest{
-		ReqID:  6,
-		StmtID: prepareResp.StmtID,
-		FieldTypes: []int8{
-			stmtCommon.TAOS_FIELD_TBNAME,
-		},
-	}
-	resp, err = doWebSocket(ws, STMT2GetFields, &getFieldsReq)
-	assert.NoError(t, err)
-	err = json.Unmarshal(resp, &getFieldsResp)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(6), getFieldsResp.ReqID)
-	assert.Equal(t, 0, getFieldsResp.Code, getFieldsResp.Message)
-
-	assert.Nil(t, getFieldsResp.ColFields)
-	assert.Nil(t, getFieldsResp.TagFields)
-	assert.Equal(t, int32(1), getFieldsResp.TableCount)
-
-	// prepare query
-	prepareReq = stmt2PrepareRequest{
-		ReqID:     7,
-		StmtID:    initResp.StmtID,
-		SQL:       "select * from test_ws_stmt2_getfields_ws.stb where ts = ? and v1 = ?",
-		GetFields: false,
-	}
-	resp, err = doWebSocket(ws, STMT2Prepare, &prepareReq)
-	assert.NoError(t, err)
-	err = json.Unmarshal(resp, &prepareResp)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(7), prepareResp.ReqID)
-	assert.Equal(t, 0, prepareResp.Code, prepareResp.Message)
-	assert.Equal(t, false, prepareResp.IsInsert)
-	// get fields
-	getFieldsReq = stmt2GetFieldsRequest{
-		ReqID:  8,
-		StmtID: prepareResp.StmtID,
-		FieldTypes: []int8{
-			stmtCommon.TAOS_FIELD_QUERY,
-		},
-	}
-	resp, err = doWebSocket(ws, STMT2GetFields, &getFieldsReq)
-	assert.NoError(t, err)
-	err = json.Unmarshal(resp, &getFieldsResp)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(8), getFieldsResp.ReqID)
-	assert.Equal(t, 0, getFieldsResp.Code, getFieldsResp.Message)
-
-	assert.Nil(t, getFieldsResp.ColFields)
-	assert.Nil(t, getFieldsResp.TagFields)
-	assert.Equal(t, int32(2), getFieldsResp.QueryCount)
-
 }
 
 func TestStmt2Query(t *testing.T) {
