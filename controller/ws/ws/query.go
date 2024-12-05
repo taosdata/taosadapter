@@ -32,7 +32,7 @@ type connRequest struct {
 func (h *messageHandler) connect(ctx context.Context, session *melody.Session, action string, req connRequest, logger *logrus.Entry, isDebug bool) {
 	h.lock(logger, isDebug)
 	defer h.Unlock()
-	if h.closed {
+	if h.isClosed() {
 		logger.Trace("server closed")
 		return
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -25,7 +26,7 @@ import (
 type messageHandler struct {
 	conn         unsafe.Pointer
 	logger       *logrus.Entry
-	closed       bool
+	closed       uint32
 	once         sync.Once
 	wait         sync.WaitGroup
 	dropUserChan chan struct{}
@@ -75,7 +76,7 @@ func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 			logger.Info("get drop user signal")
 			isDebug := log.IsDebug()
 			h.lock(logger, isDebug)
-			if h.closed {
+			if h.isClosed() {
 				logger.Trace("server closed")
 				h.Unlock()
 				return
@@ -87,7 +88,7 @@ func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 			logger.Info("get whitelist change signal")
 			isDebug := log.IsDebug()
 			h.lock(logger, isDebug)
-			if h.closed {
+			if h.isClosed() {
 				logger.Trace("server closed")
 				h.Unlock()
 				return
@@ -113,6 +114,14 @@ func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 	}
 }
 
+func (h *messageHandler) isClosed() bool {
+	return atomic.LoadUint32(&h.closed) == 1
+}
+
+func (h *messageHandler) setClosed() {
+	atomic.StoreUint32(&h.closed, 1)
+}
+
 func (h *messageHandler) signalExit(logger *logrus.Entry, isDebug bool) {
 	logger.Trace("close session")
 	s := log.GetLogNow(isDebug)
@@ -136,11 +145,11 @@ func (h *messageHandler) Close() {
 	h.Lock()
 	defer h.Unlock()
 
-	if h.closed {
+	if h.isClosed() {
 		h.logger.Trace("server closed")
 		return
 	}
-	h.closed = true
+	h.setClosed()
 	h.stop()
 	close(h.exit)
 }
