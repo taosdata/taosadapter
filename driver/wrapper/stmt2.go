@@ -15,6 +15,7 @@ TAOS_STMT2 * taos_stmt2_init_wrapper(TAOS *taos, int64_t reqid, bool singleStbIn
 */
 import "C"
 import (
+	"bytes"
 	"database/sql/driver"
 	"encoding/binary"
 	"fmt"
@@ -854,4 +855,63 @@ func generateStmt2Binds(count uint32, fieldCount uint32, dataP unsafe.Pointer, f
 		*(**C.TAOS_STMT2_BIND)(bindsPointer) = (*C.TAOS_STMT2_BIND)(binds)
 	}
 	return bindsCList, freePointer, nil
+}
+
+// TaosStmt2GetStbFields int  taos_stmt2_get_stb_fields(TAOS_STMT2 *stmt, int *count, TAOS_FIELD_STB **fields);
+func TaosStmt2GetStbFields(stmt unsafe.Pointer) (code, count int, fields unsafe.Pointer) {
+	code = int(C.taos_stmt2_get_stb_fields(stmt, (*C.int)(unsafe.Pointer(&count)), (**C.TAOS_FIELD_STB)(unsafe.Pointer(&fields))))
+	return
+}
+
+// TaosStmt2FreeStbFields void taos_stmt2_free_stb_fields(TAOS_STMT2 *stmt, TAOS_FIELD_STB *fields);
+func TaosStmt2FreeStbFields(stmt unsafe.Pointer, fields unsafe.Pointer) {
+	C.taos_stmt2_free_stb_fields(stmt, (*C.TAOS_FIELD_STB)(fields))
+}
+
+//typedef struct TAOS_FIELD_STB {
+//char         name[65];
+//int8_t       type;
+//uint8_t      precision;
+//uint8_t      scale;
+//int32_t      bytes;
+//TAOS_FIELD_T field_type;
+//} TAOS_FIELD_STB;
+
+type StmtStbField struct {
+	Name      string `json:"name"`
+	FieldType int8   `json:"field_type"`
+	Precision uint8  `json:"precision"`
+	Scale     uint8  `json:"scale"`
+	Bytes     int32  `json:"bytes"`
+	BindType  int8   `json:"bind_type"`
+}
+
+func ParseStmt2StbFields(num int, fields unsafe.Pointer) []*StmtStbField {
+	if num <= 0 {
+		return nil
+	}
+	if fields == nil {
+		return nil
+	}
+	result := make([]*StmtStbField, num)
+	buf := bytes.NewBufferString("")
+	for i := 0; i < num; i++ {
+		r := &StmtStbField{}
+		field := *(*C.TAOS_FIELD_STB)(unsafe.Pointer(uintptr(fields) + uintptr(C.sizeof_struct_TAOS_FIELD_STB*C.int(i))))
+		for _, c := range field.name {
+			if c == 0 {
+				break
+			}
+			buf.WriteByte(byte(c))
+		}
+		r.Name = buf.String()
+		buf.Reset()
+		r.FieldType = int8(field._type)
+		r.Precision = uint8(field.precision)
+		r.Scale = uint8(field.scale)
+		r.Bytes = int32(field.bytes)
+		r.BindType = int8(field.field_type)
+		result[i] = r
+	}
+	return result
 }
