@@ -72,7 +72,7 @@ func TestWsStmt2(t *testing.T) {
 	prepareReq := stmt2PrepareRequest{
 		ReqID:     3,
 		StmtID:    initResp.StmtID,
-		SQL:       "insert into ct1 using test_ws_stmt2_ws.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+		SQL:       "insert into ? using test_ws_stmt2_ws.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 		GetFields: true,
 	}
 	resp, err = doWebSocket(ws, STMT2Prepare, &prepareReq)
@@ -83,10 +83,10 @@ func TestWsStmt2(t *testing.T) {
 	assert.Equal(t, uint64(3), prepareResp.ReqID)
 	assert.Equal(t, 0, prepareResp.Code, prepareResp.Message)
 	assert.True(t, prepareResp.IsInsert)
-	assert.Equal(t, 17, len(prepareResp.Fields))
+	assert.Equal(t, 18, len(prepareResp.Fields))
 	var colFields []*stmtCommon.StmtField
 	var tagFields []*stmtCommon.StmtField
-	for i := 0; i < 17; i++ {
+	for i := 0; i < 18; i++ {
 		field := &stmtCommon.StmtField{
 			FieldType: prepareResp.Fields[i].FieldType,
 			Precision: prepareResp.Fields[i].Precision,
