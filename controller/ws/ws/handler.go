@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -25,7 +26,7 @@ import (
 type messageHandler struct {
 	conn         unsafe.Pointer
 	logger       *logrus.Entry
-	closed       bool
+	closed       uint32
 	once         sync.Once
 	wait         sync.WaitGroup
 	dropUserChan chan struct{}
@@ -75,7 +76,7 @@ func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 			logger.Info("get drop user signal")
 			isDebug := log.IsDebug()
 			h.lock(logger, isDebug)
-			if h.closed {
+			if h.isClosed() {
 				logger.Trace("server closed")
 				h.Unlock()
 				return
@@ -87,7 +88,7 @@ func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 			logger.Info("get whitelist change signal")
 			isDebug := log.IsDebug()
 			h.lock(logger, isDebug)
-			if h.closed {
+			if h.isClosed() {
 				logger.Trace("server closed")
 				h.Unlock()
 				return
@@ -113,6 +114,14 @@ func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 	}
 }
 
+func (h *messageHandler) isClosed() bool {
+	return atomic.LoadUint32(&h.closed) == 1
+}
+
+func (h *messageHandler) setClosed() {
+	atomic.StoreUint32(&h.closed, 1)
+}
+
 func (h *messageHandler) signalExit(logger *logrus.Entry, isDebug bool) {
 	logger.Trace("close session")
 	s := log.GetLogNow(isDebug)
@@ -136,11 +145,11 @@ func (h *messageHandler) Close() {
 	h.Lock()
 	defer h.Unlock()
 
-	if h.closed {
+	if h.isClosed() {
 		h.logger.Trace("server closed")
 		return
 	}
-	h.closed = true
+	h.setClosed()
 	h.stop()
 	close(h.exit)
 }
@@ -526,20 +535,6 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			config.ReqIDKey: req.ReqID,
 		})
 		h.stmt2Prepare(ctx, session, action, req, logger, log.IsDebug())
-	case STMT2GetFields:
-		action = STMT2GetFields
-		var req stmt2GetFieldsRequest
-		if err := json.Unmarshal(request.Args, &req); err != nil {
-			h.logger.Errorf("unmarshal stmt2 get fields request error, request:%s, err:%s", request.Args, err)
-			reqID := getReqID(request.Args)
-			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt2 get fields request error")
-			return
-		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
-		h.stmt2GetFields(ctx, session, action, req, logger, log.IsDebug())
 	case STMT2Exec:
 		action = STMT2Exec
 		var req stmt2ExecRequest

@@ -235,12 +235,6 @@ func Test_WrongJsonProtocol(t *testing.T) {
 			errorPrefix: "unmarshal stmt2 prepare request error",
 		},
 		{
-			name:        "stmt2 get fields with wrong args",
-			action:      STMT2GetFields,
-			args:        "wrong",
-			errorPrefix: "unmarshal stmt2 get fields request error",
-		},
-		{
 			name:        "stmt2 exec with wrong args",
 			action:      STMT2Exec,
 			args:        "wrong",

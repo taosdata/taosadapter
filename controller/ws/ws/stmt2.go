@@ -4,14 +4,11 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
-	"unsafe"
 
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/async"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
-	stmtCommon "github.com/taosdata/taosadapter/v3/driver/common/stmt"
 	errors2 "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
@@ -139,93 +136,6 @@ func (h *messageHandler) stmt2Prepare(ctx context.Context, session *melody.Sessi
 	prepareResp.Action = action
 	prepareResp.Timing = wstool.GetDuration(ctx)
 	wstool.WSWriteJson(session, logger, prepareResp)
-}
-
-func getFields(stmt2 unsafe.Pointer, fieldType int8, logger *logrus.Entry, isDebug bool) (fields []*stmtCommon.StmtField, count int, code int, errSt string) {
-	var cFields unsafe.Pointer
-	code, count, cFields = syncinterface.TaosStmt2GetFields(stmt2, int(fieldType), logger, isDebug)
-	if code != 0 {
-		errStr := wrapper.TaosStmt2Error(stmt2)
-		logger.Errorf("stmt2 get fields error, field_type:%d, err:%s", fieldType, errStr)
-		return nil, count, code, errStr
-	}
-	defer wrapper.TaosStmt2FreeFields(stmt2, cFields)
-	if count > 0 && cFields != nil {
-		s := log.GetLogNow(isDebug)
-		fields = wrapper.StmtParseFields(count, cFields)
-		logger.Debugf("stmt2 parse fields cost:%s", log.GetLogDuration(isDebug, s))
-		return fields, count, 0, ""
-	}
-	return nil, count, 0, ""
-}
-
-type stmt2GetFieldsRequest struct {
-	ReqID      uint64 `json:"req_id"`
-	StmtID     uint64 `json:"stmt_id"`
-	FieldTypes []int8 `json:"field_types"`
-}
-
-type stmt2GetFieldsResponse struct {
-	Code       int                     `json:"code"`
-	Message    string                  `json:"message"`
-	Action     string                  `json:"action"`
-	ReqID      uint64                  `json:"req_id"`
-	Timing     int64                   `json:"timing"`
-	StmtID     uint64                  `json:"stmt_id"`
-	TableCount int32                   `json:"table_count"`
-	QueryCount int32                   `json:"query_count"`
-	ColFields  []*stmtCommon.StmtField `json:"col_fields"`
-	TagFields  []*stmtCommon.StmtField `json:"tag_fields"`
-}
-
-func (h *messageHandler) stmt2GetFields(ctx context.Context, session *melody.Session, action string, req stmt2GetFieldsRequest, logger *logrus.Entry, isDebug bool) {
-	logger.Tracef("stmt2 get col fields, stmt_id:%d", req.StmtID)
-	stmtItem, locked := h.stmt2ValidateAndLock(ctx, session, action, req.ReqID, req.StmtID, logger, isDebug)
-	if !locked {
-		return
-	}
-	defer stmtItem.Unlock()
-	stmt2GetFieldsResp := &stmt2GetFieldsResponse{StmtID: req.StmtID}
-	for i := 0; i < len(req.FieldTypes); i++ {
-		switch req.FieldTypes[i] {
-		case stmtCommon.TAOS_FIELD_COL:
-			colFields, _, code, errStr := getFields(stmtItem.stmt, stmtCommon.TAOS_FIELD_COL, logger, isDebug)
-			if code != 0 {
-				logger.Errorf("get col fields error, code:%d, err:%s", code, errStr)
-				stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, fmt.Sprintf("get col fields error, %s", errStr), req.StmtID)
-				return
-			}
-			stmt2GetFieldsResp.ColFields = colFields
-		case stmtCommon.TAOS_FIELD_TAG:
-			tagFields, _, code, errStr := getFields(stmtItem.stmt, stmtCommon.TAOS_FIELD_TAG, logger, isDebug)
-			if code != 0 {
-				logger.Errorf("get tag fields error, code:%d, err:%s", code, errStr)
-				stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, fmt.Sprintf("get tag fields error, %s", errStr), req.StmtID)
-				return
-			}
-			stmt2GetFieldsResp.TagFields = tagFields
-		case stmtCommon.TAOS_FIELD_TBNAME:
-			_, count, code, errStr := getFields(stmtItem.stmt, stmtCommon.TAOS_FIELD_TBNAME, logger, isDebug)
-			if code != 0 {
-				logger.Errorf("get table names fields error, code:%d, err:%s", code, errStr)
-				stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, fmt.Sprintf("get table names fields error, %s", errStr), req.StmtID)
-				return
-			}
-			stmt2GetFieldsResp.TableCount = int32(count)
-		case stmtCommon.TAOS_FIELD_QUERY:
-			_, count, code, errStr := getFields(stmtItem.stmt, stmtCommon.TAOS_FIELD_QUERY, logger, isDebug)
-			if code != 0 {
-				logger.Errorf("get query fields error, code:%d, err:%s", code, errStr)
-				stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, fmt.Sprintf("get query fields error, %s", errStr), req.StmtID)
-				return
-			}
-			stmt2GetFieldsResp.QueryCount = int32(count)
-		}
-	}
-	stmt2GetFieldsResp.ReqID = req.ReqID
-	stmt2GetFieldsResp.Action = action
-	stmt2GetFieldsResp.Timing = wstool.GetDuration(ctx)
-	wstool.WSWriteJson(session, logger, stmt2GetFieldsResp)
 }
 
 type stmt2ExecRequest struct {

@@ -37,12 +37,11 @@ const (
 	STMTGetParam     = "stmt_get_param"
 
 	// stmt2
-	STMT2Init      = "stmt2_init"
-	STMT2Prepare   = "stmt2_prepare"
-	STMT2GetFields = "stmt2_get_fields"
-	STMT2Exec      = "stmt2_exec"
-	STMT2Result    = "stmt2_result"
-	STMT2Close     = "stmt2_close"
+	STMT2Init    = "stmt2_init"
+	STMT2Prepare = "stmt2_prepare"
+	STMT2Exec    = "stmt2_exec"
+	STMT2Result  = "stmt2_result"
+	STMT2Close   = "stmt2_close"
 )
 
 const (
