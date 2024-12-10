@@ -510,7 +510,7 @@ func Stmt2Query(t *testing.T, db string, prepareDataSql []string) {
 	assert.Equal(t, 0, useResultResp.Code, useResultResp.Message)
 
 	// fetch
-	fetchReq := fetchRequest{ReqID: 8, ID: useResultResp.ResultID}
+	fetchReq := fetchRequest{ReqID: 8, ID: useResultResp.ID}
 	resp, err = doWebSocket(ws, WSFetch, &fetchReq)
 	assert.NoError(t, err)
 	var fetchResp fetchResponse
@@ -521,7 +521,7 @@ func Stmt2Query(t *testing.T, db string, prepareDataSql []string) {
 	assert.Equal(t, 1, fetchResp.Rows)
 
 	// fetch block
-	fetchBlockReq := fetchBlockRequest{ReqID: 9, ID: useResultResp.ResultID}
+	fetchBlockReq := fetchBlockRequest{ReqID: 9, ID: useResultResp.ID}
 	fetchBlockResp, err := doWebSocket(ws, WSFetchBlock, &fetchBlockReq)
 	assert.NoError(t, err)
 	_, blockResult := parseblock.ParseBlock(fetchBlockResp[8:], useResultResp.FieldsTypes, fetchResp.Rows, useResultResp.Precision)
@@ -531,7 +531,7 @@ func Stmt2Query(t *testing.T, db string, prepareDataSql []string) {
 	assert.Equal(t, float32(0.31), blockResult[0][3])
 
 	// free result
-	freeResultReq, _ := json.Marshal(freeResultRequest{ReqID: 10, ID: useResultResp.ResultID})
+	freeResultReq, _ := json.Marshal(freeResultRequest{ReqID: 10, ID: useResultResp.ID})
 	a, _ := json.Marshal(Request{Action: WSFreeResult, Args: freeResultReq})
 	err = ws.WriteMessage(websocket.TextMessage, a)
 	assert.NoError(t, err)
