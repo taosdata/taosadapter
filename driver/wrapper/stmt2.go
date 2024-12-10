@@ -17,7 +17,6 @@ import "C"
 import (
 	"bytes"
 	"database/sql/driver"
-	"encoding/binary"
 	"fmt"
 	"time"
 	"unsafe"
@@ -27,6 +26,7 @@ import (
 	taosError "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/tools"
+	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 )
 
 // TaosStmt2Init TAOS_STMT2 *taos_stmt2_init(TAOS *taos, TAOS_STMT2_OPTION *option);
@@ -434,7 +434,7 @@ func generateTaosStmt2BindsInsert(multiBind [][]driver.Value, fieldTypes []*stmt
 				if rowData != nil {
 					switch value := rowData.(type) {
 					case string:
-						x := *(*[]byte)(unsafe.Pointer(&value))
+						x := bytesutil.ToUnsafeBytes(value)
 						C.memcpy(unsafe.Pointer(uintptr(p)+uintptr(colOffset[i])), unsafe.Pointer(&x[0]), C.size_t(len(value)))
 					case []byte:
 						C.memcpy(unsafe.Pointer(uintptr(p)+uintptr(colOffset[i])), unsafe.Pointer(&value[0]), C.size_t(len(value)))
@@ -599,7 +599,7 @@ func generateTaosStmt2BindsQuery(multiBind [][]driver.Value) (unsafe.Pointer, []
 			p = unsafe.Pointer(C.malloc(C.size_t(C.uint(valueLength))))
 			needFreePointer = append(needFreePointer, p)
 			bind.buffer_type = C.TSDB_DATA_TYPE_BINARY
-			x := *(*[]byte)(unsafe.Pointer(&rowData))
+			x := bytesutil.ToUnsafeBytes(rowData)
 			C.memcpy(p, unsafe.Pointer(&x[0]), C.size_t(valueLength))
 			lengthList = unsafe.Pointer(C.calloc(C.size_t(C.uint(1)), C.size_t(C.uint(4))))
 			needFreePointer = append(needFreePointer, lengthList)
@@ -611,8 +611,7 @@ func generateTaosStmt2BindsQuery(multiBind [][]driver.Value) (unsafe.Pointer, []
 			p = unsafe.Pointer(C.malloc(C.size_t(C.uint(valueLength))))
 			needFreePointer = append(needFreePointer, p)
 			bind.buffer_type = C.TSDB_DATA_TYPE_BINARY
-			x := *(*[]byte)(unsafe.Pointer(&value))
-			C.memcpy(p, unsafe.Pointer(&x[0]), C.size_t(valueLength))
+			C.memcpy(p, unsafe.Pointer(&value[0]), C.size_t(valueLength))
 			lengthList = unsafe.Pointer(C.calloc(C.size_t(C.uint(1)), C.size_t(C.uint(4))))
 			needFreePointer = append(needFreePointer, lengthList)
 			*(*C.int32_t)(lengthList) = C.int32_t(valueLength)
@@ -662,199 +661,6 @@ func TaosStmt2FreeFields(stmt unsafe.Pointer, fields unsafe.Pointer) {
 // TaosStmt2Error char     *taos_stmt2_error(TAOS_STMT2 *stmt)
 func TaosStmt2Error(stmt unsafe.Pointer) string {
 	return C.GoString(C.taos_stmt2_error(stmt))
-}
-
-func TaosStmt2BindBinary(stmt2 unsafe.Pointer, data []byte, colIdx int32) error {
-	totalLength := binary.LittleEndian.Uint32(data[stmt.TotalLengthPosition:])
-	if totalLength != uint32(len(data)) {
-		return fmt.Errorf("total length not match, expect %d, but get %d", len(data), totalLength)
-	}
-	var freePointer []unsafe.Pointer
-	defer func() {
-		for i := len(freePointer) - 1; i >= 0; i-- {
-			if freePointer[i] != nil {
-				C.free(freePointer[i])
-			}
-		}
-	}()
-	dataP := unsafe.Pointer(C.CBytes(data))
-	freePointer = append(freePointer, dataP)
-	count := binary.LittleEndian.Uint32(data[stmt.CountPosition:])
-	tagCount := binary.LittleEndian.Uint32(data[stmt.TagCountPosition:])
-	colCount := binary.LittleEndian.Uint32(data[stmt.ColCountPosition:])
-	tableNamesOffset := binary.LittleEndian.Uint32(data[stmt.TableNamesOffsetPosition:])
-	tagsOffset := binary.LittleEndian.Uint32(data[stmt.TagsOffsetPosition:])
-	colsOffset := binary.LittleEndian.Uint32(data[stmt.ColsOffsetPosition:])
-	// check table names
-	if tableNamesOffset > 0 {
-		tableNameEnd := tableNamesOffset + count*2
-		// table name lengths out of range
-		if tableNameEnd > totalLength {
-			return fmt.Errorf("table name lengths out of range, total length: %d, tableNamesLengthEnd: %d", totalLength, tableNameEnd)
-		}
-		for i := uint32(0); i < count; i++ {
-			tableNameLength := binary.LittleEndian.Uint16(data[tableNamesOffset+i*2:])
-			tableNameEnd += uint32(tableNameLength)
-		}
-		if tableNameEnd > totalLength {
-			return fmt.Errorf("table names out of range, total length: %d, tableNameTotalLength: %d", totalLength, tableNameEnd)
-		}
-	}
-	// check tags
-	if tagsOffset > 0 {
-		if tagCount == 0 {
-			return fmt.Errorf("tag count is zero, but tags offset is not zero")
-		}
-		tagsEnd := tagsOffset + count*4
-		if tagsEnd > totalLength {
-			return fmt.Errorf("tags lengths out of range, total length: %d, tagsLengthEnd: %d", totalLength, tagsEnd)
-		}
-		for i := uint32(0); i < count; i++ {
-			tagLength := binary.LittleEndian.Uint32(data[tagsOffset+i*4:])
-			if tagLength == 0 {
-				return fmt.Errorf("tag length is zero, data index: %d", i)
-			}
-			tagsEnd += tagLength
-		}
-		if tagsEnd > totalLength {
-			return fmt.Errorf("tags out of range, total length: %d, tagsTotalLength: %d", totalLength, tagsEnd)
-		}
-	}
-	// check cols
-	if colsOffset > 0 {
-		if colCount == 0 {
-			return fmt.Errorf("col count is zero, but cols offset is not zero")
-		}
-		colsEnd := colsOffset + count*4
-		if colsEnd > totalLength {
-			return fmt.Errorf("cols lengths out of range, total length: %d, colsLengthEnd: %d", totalLength, colsEnd)
-		}
-		for i := uint32(0); i < count; i++ {
-			colLength := binary.LittleEndian.Uint32(data[colsOffset+i*4:])
-			if colLength == 0 {
-				return fmt.Errorf("col length is zero, data: %d", i)
-			}
-			colsEnd += colLength
-		}
-		if colsEnd > totalLength {
-			return fmt.Errorf("cols out of range, total length: %d, colsTotalLength: %d", totalLength, colsEnd)
-		}
-	}
-	cBindv := C.TAOS_STMT2_BINDV{}
-	cBindv.count = C.int(count)
-	if tableNamesOffset > 0 {
-		tableNameLengthP := tools.AddPointer(dataP, uintptr(tableNamesOffset))
-		cTableNames := C.malloc(C.size_t(uintptr(count) * PointerSize))
-		freePointer = append(freePointer, cTableNames)
-		tableDataP := tools.AddPointer(tableNameLengthP, uintptr(count)*2)
-		var tableNamesArrayP unsafe.Pointer
-		for i := uint32(0); i < count; i++ {
-			tableNamesArrayP = tools.AddPointer(cTableNames, uintptr(i)*PointerSize)
-			*(**C.char)(tableNamesArrayP) = (*C.char)(tableDataP)
-			tableNameLength := *(*uint16)(tools.AddPointer(tableNameLengthP, uintptr(i*2)))
-			if tableNameLength == 0 {
-				return fmt.Errorf("table name length is zero, data index: %d", i)
-			}
-			tableDataP = tools.AddPointer(tableDataP, uintptr(tableNameLength))
-		}
-		cBindv.tbnames = (**C.char)(cTableNames)
-	} else {
-		cBindv.tbnames = nil
-	}
-	if tagsOffset > 0 {
-		tags, needFreePointer, err := generateStmt2Binds(count, tagCount, dataP, tagsOffset)
-		freePointer = append(freePointer, needFreePointer...)
-		if err != nil {
-			return fmt.Errorf("generate tags error: %s", err.Error())
-		}
-		cBindv.tags = (**C.TAOS_STMT2_BIND)(tags)
-	} else {
-		cBindv.tags = nil
-	}
-	if colsOffset > 0 {
-		cols, needFreePointer, err := generateStmt2Binds(count, colCount, dataP, colsOffset)
-		freePointer = append(freePointer, needFreePointer...)
-		if err != nil {
-			return fmt.Errorf("generate cols error: %s", err.Error())
-		}
-		cBindv.bind_cols = (**C.TAOS_STMT2_BIND)(cols)
-	} else {
-		cBindv.bind_cols = nil
-	}
-	code := int(C.taos_stmt2_bind_param(stmt2, &cBindv, C.int32_t(colIdx)))
-	if code != 0 {
-		errStr := TaosStmt2Error(stmt2)
-		return taosError.NewError(code, errStr)
-	}
-	return nil
-}
-
-func generateStmt2Binds(count uint32, fieldCount uint32, dataP unsafe.Pointer, fieldsOffset uint32) (unsafe.Pointer, []unsafe.Pointer, error) {
-	var freePointer []unsafe.Pointer
-	bindsCList := unsafe.Pointer(C.malloc(C.size_t(uintptr(count) * PointerSize)))
-	freePointer = append(freePointer, bindsCList)
-	// dataLength [count]uint32
-	// length have checked in TaosStmt2BindBinary
-	baseLengthPointer := tools.AddPointer(dataP, uintptr(fieldsOffset))
-	// dataBuffer
-	dataPointer := tools.AddPointer(baseLengthPointer, uintptr(count)*4)
-	var bindsPointer unsafe.Pointer
-	for tableIndex := uint32(0); tableIndex < count; tableIndex++ {
-		bindsPointer = tools.AddPointer(bindsCList, uintptr(tableIndex)*PointerSize)
-		binds := unsafe.Pointer(C.malloc(C.size_t(C.size_t(fieldCount) * C.size_t(unsafe.Sizeof(C.TAOS_STMT2_BIND{})))))
-		freePointer = append(freePointer, binds)
-		var bindDataP unsafe.Pointer
-		var bindDataTotalLength uint32
-		var num int32
-		var haveLength byte
-		var bufferLength uint32
-		for fieldIndex := uint32(0); fieldIndex < fieldCount; fieldIndex++ {
-			// field data
-			bindDataP = dataPointer
-			// totalLength
-			bindDataTotalLength = *(*uint32)(bindDataP)
-			bindDataP = tools.AddPointer(bindDataP, common.UInt32Size)
-			bind := (*C.TAOS_STMT2_BIND)(unsafe.Pointer(uintptr(binds) + uintptr(fieldIndex)*unsafe.Sizeof(C.TAOS_STMT2_BIND{})))
-			// buffer_type
-			bind.buffer_type = *(*C.int)(bindDataP)
-			bindDataP = tools.AddPointer(bindDataP, common.Int32Size)
-			// num
-			num = *(*int32)(bindDataP)
-			bind.num = C.int(num)
-			bindDataP = tools.AddPointer(bindDataP, common.Int32Size)
-			// is_null
-			bind.is_null = (*C.char)(bindDataP)
-			bindDataP = tools.AddPointer(bindDataP, uintptr(num))
-			// haveLength
-			haveLength = *(*byte)(bindDataP)
-			bindDataP = tools.AddPointer(bindDataP, common.Int8Size)
-			if haveLength == 0 {
-				bind.length = nil
-			} else {
-				// length [num]int32
-				bind.length = (*C.int32_t)(bindDataP)
-				bindDataP = tools.AddPointer(bindDataP, common.Int32Size*uintptr(num))
-			}
-			// bufferLength
-			bufferLength = *(*uint32)(bindDataP)
-			bindDataP = tools.AddPointer(bindDataP, common.UInt32Size)
-			// buffer
-			if bufferLength == 0 {
-				bind.buffer = nil
-			} else {
-				bind.buffer = bindDataP
-			}
-			bindDataP = tools.AddPointer(bindDataP, uintptr(bufferLength))
-			// check bind data length
-			bindDataLen := uintptr(bindDataP) - uintptr(dataPointer)
-			if bindDataLen != uintptr(bindDataTotalLength) {
-				return nil, freePointer, fmt.Errorf("bind data length not match, expect %d, but get %d, tableIndex:%d", bindDataTotalLength, bindDataLen, tableIndex)
-			}
-			dataPointer = bindDataP
-		}
-		*(**C.TAOS_STMT2_BIND)(bindsPointer) = (*C.TAOS_STMT2_BIND)(binds)
-	}
-	return bindsCList, freePointer, nil
 }
 
 // TaosStmt2GetStbFields int  taos_stmt2_get_stb_fields(TAOS_STMT2 *stmt, int *count, TAOS_FIELD_STB **fields);

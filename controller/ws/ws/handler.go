@@ -208,7 +208,19 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	// no need connection actions
 	switch request.Action {
 	case wstool.ClientVersion:
-		wstool.WSWriteVersion(session, h.logger)
+		action = wstool.ClientVersion
+		var req versionRequest
+		if err := json.Unmarshal(request.Args, &req); err != nil {
+			h.logger.Errorf("unmarshal version request error, request:%s, err:%s", request.Args, err)
+			reqID := getReqID(request.Args)
+			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal version request error")
+			return
+		}
+		logger := h.logger.WithFields(logrus.Fields{
+			actionKey:       action,
+			config.ReqIDKey: req.ReqID,
+		})
+		h.version(ctx, session, action, req, logger, log.IsDebug())
 		return
 	case Connect:
 		action = Connect
