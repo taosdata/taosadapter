@@ -80,6 +80,10 @@ int go_stmt2_bind_binary(TAOS_STMT2 *stmt, char *data, int32_t col_idx, char *er
     }
     uint16_t *table_name_length_ptr = (uint16_t *) (data + table_names_offset);
     for (int32_t i = 0; i < count; ++i) {
+      if (table_name_length_ptr[i] == 0) {
+		snprintf(err_msg, 128, "table name length is 0, tableIndex: %d", i);
+		return -1;
+	  }
       table_name_end += (uint32_t) table_name_length_ptr[i];
     }
     if (table_name_end > total_length) {
