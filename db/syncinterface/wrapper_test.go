@@ -641,3 +641,26 @@ func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
 	}
 	return result, nil
 }
+
+func TestTaosOptionsConnection(t *testing.T) {
+	reqID := generator.GetReqID()
+	var logger = logger.WithField("test", "TestTaosOptionsConnection").WithField(config.ReqIDKey, reqID)
+	conn, err := TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer TaosClose(conn, logger, isDebug)
+	app := "test_sync_interface"
+	code := TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_APP, &app, logger, isDebug)
+	if code != 0 {
+		errStr := wrapper.TaosErrorStr(nil)
+		t.Error(t, taoserrors.NewError(code, errStr))
+		return
+	}
+	code = TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_APP, nil, logger, isDebug)
+	if code != 0 {
+		errStr := wrapper.TaosErrorStr(nil)
+		t.Error(t, taoserrors.NewError(code, errStr))
+		return
+	}
+}

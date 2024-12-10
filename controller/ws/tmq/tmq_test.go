@@ -3206,3 +3206,91 @@ func TestTMQ_SetMsgConsumeExcluded(t *testing.T) {
 //	resp, err := doWebSocket(ws, wstool.ClientVersion, nil)
 //	assert.Error(t, err, string(resp))
 //}
+
+type httpQueryResp struct {
+	Code       int              `json:"code,omitempty"`
+	Desc       string           `json:"desc,omitempty"`
+	ColumnMeta [][]driver.Value `json:"column_meta,omitempty"`
+	Data       [][]driver.Value `json:"data,omitempty"`
+	Rows       int              `json:"rows,omitempty"`
+}
+
+func restQuery(sql string, db string) *httpQueryResp {
+	w := httptest.NewRecorder()
+	body := strings.NewReader(sql)
+	url := "/rest/sql"
+	if db != "" {
+		url = fmt.Sprintf("/rest/sql/%s", db)
+	}
+	req, _ := http.NewRequest(http.MethodPost, url, body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		return &httpQueryResp{
+			Code: w.Code,
+			Desc: w.Body.String(),
+		}
+	}
+	b, _ := io.ReadAll(w.Body)
+	var res httpQueryResp
+	_ = json.Unmarshal(b, &res)
+	return &res
+}
+
+func TestConnectionOptions(t *testing.T) {
+	dbName := "test_ws_tmq_conn_options"
+	topic := "test_ws_tmq_conn_options_topic"
+
+	before(t, dbName, topic)
+
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/tmq", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	defer func() {
+		err = after(ws, dbName, topic)
+		assert.NoError(t, err)
+	}()
+
+	// subscribe
+	b, _ := json.Marshal(TMQSubscribeReq{
+		User:             "root",
+		Password:         "taosdata",
+		DB:               dbName,
+		GroupID:          "test",
+		Topics:           []string{topic},
+		AutoCommit:       "false",
+		OffsetReset:      "earliest",
+		SessionTimeoutMS: "100000",
+		App:              "tmq_test_conn_protocol",
+		IP:               "192.168.55.55",
+		TZ:               "Asia/Shanghai",
+	})
+	msg, err := doWebSocket(ws, TMQSubscribe, b)
+	assert.NoError(t, err)
+	var subscribeResp TMQSubscribeResp
+	err = json.Unmarshal(msg, &subscribeResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
+
+	// check connection options
+	got := false
+	for i := 0; i < 10; i++ {
+		queryResp := restQuery("select conn_id from performance_schema.perf_connections where user_app = 'tmq_test_conn_protocol' and user_ip = '192.168.55.55'", "")
+		if queryResp.Code == 0 && len(queryResp.Data) > 0 {
+			got = true
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	assert.True(t, got)
+}

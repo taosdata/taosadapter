@@ -6,8 +6,8 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/taosadapter/v3/driver/common"
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
@@ -163,20 +163,7 @@ func TestJsonWriteRawBlock(t *testing.T) {
 	for row := 0; row < blockSize; row++ {
 		builder.WriteArrayStart()
 		for column := 0; column < fieldsCount; column++ {
-			JsonWriteRawBlock(builder, fieldTypes[column], pHeaderList[column], pStartList[column], row, precision, func(builder *jsonbuilder.Stream, ts int64, precision int) {
-				timeBuffer = timeBuffer[:0]
-				switch precision {
-				case common.PrecisionMilliSecond: // milli-second
-					timeBuffer = time.Unix(0, ts*1e6).UTC().AppendFormat(timeBuffer, time.RFC3339Nano)
-				case common.PrecisionMicroSecond: // micro-second
-					timeBuffer = time.Unix(0, ts*1e3).UTC().AppendFormat(timeBuffer, time.RFC3339Nano)
-				case common.PrecisionNanoSecond: // nano-second
-					timeBuffer = time.Unix(0, ts).UTC().AppendFormat(timeBuffer, time.RFC3339Nano)
-				default:
-					panic("unknown precision")
-				}
-				builder.WriteString(string(timeBuffer))
-			})
+			JsonWriteRawBlock(builder, fieldTypes[column], pHeaderList[column], pStartList[column], row, precision, time.UTC, timeBuffer, logrus.New().WithField("test", "test"))
 			if column != fieldsCount-1 {
 				builder.WriteMore()
 				err := builder.Flush()
@@ -191,5 +178,5 @@ func TestJsonWriteRawBlock(t *testing.T) {
 	builder.WriteObjectEnd()
 	err := builder.Flush()
 	assert.NoError(t, err)
-	assert.Equal(t, `{["2022-08-10T07:02:40.5Z",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar","746573745f76617262696e617279","010100000000000000000059400000000000005940",{"a":1}],["2022-08-10T07:02:41.5Z",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":1}]}`, w.String())
+	assert.Equal(t, `{["2022-08-10T07:02:40.500Z",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar","746573745f76617262696e617279","010100000000000000000059400000000000005940",{"a":1}],["2022-08-10T07:02:41.500Z",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":1}]}`, w.String())
 }

@@ -58,7 +58,7 @@ func TestOpentsdb(t *testing.T) {
 	}()
 	w := httptest.NewRecorder()
 	reader := strings.NewReader(fmt.Sprintf("put metric %d %d host=web01 interface=eth0 ", time.Now().Unix(), number))
-	req, _ := http.NewRequest("POST", "/put/telnet/test_plugin_opentsdb_http_telnet?ttl=1000", reader)
+	req, _ := http.NewRequest("POST", "/put/telnet/test_plugin_opentsdb_http_telnet?ttl=1000&app=test_telnet_http", reader)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)
@@ -73,7 +73,7 @@ func TestOpentsdb(t *testing.T) {
        "dc": "lga"
     }
 }`, time.Now().Unix(), number))
-	req, _ = http.NewRequest("POST", "/put/json/test_plugin_opentsdb_http_json?ttl=1000", reader)
+	req, _ = http.NewRequest("POST", "/put/json/test_plugin_opentsdb_http_json?ttl=1000&app=test_json_http", reader)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)

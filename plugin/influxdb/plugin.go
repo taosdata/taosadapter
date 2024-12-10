@@ -9,7 +9,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
+	"github.com/taosdata/taosadapter/v3/driver/common"
 	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/plugin"
@@ -188,6 +191,13 @@ func (p *Influxdb) write(c *gin.Context) {
 		}
 	}()
 	conn := taosConn.TaosConnection
+	app := c.Query("app")
+	if app != "" {
+		errCode := syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_APP, &app, logger, isDebug)
+		if errCode != 0 {
+			logger.Errorf("set app error, app:%s, code:%d, msg:%s", app, errCode, wrapper.TaosErrorStr(nil))
+		}
+	}
 	s = log.GetLogNow(isDebug)
 	logger.Tracef("start insert influxdb, data:%s", data)
 	err = inserter.InsertInfluxdb(conn, data, db, precision, ttl, reqID, tableNameKey, logger)

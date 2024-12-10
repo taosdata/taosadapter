@@ -606,6 +606,20 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			config.ReqIDKey: req.ReqID,
 		})
 		h.getServerInfo(ctx, session, action, req, logger, log.IsDebug())
+	case OptionsConnection:
+		action = OptionsConnection
+		var req optionsConnectionRequest
+		if err := json.Unmarshal(request.Args, &req); err != nil {
+			h.logger.Errorf("unmarshal options connection request error, request:%s, err:%s", request.Args, err)
+			reqID := getReqID(request.Args)
+			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal options connection request error")
+			return
+		}
+		logger := h.logger.WithFields(logrus.Fields{
+			actionKey:       action,
+			config.ReqIDKey: req.ReqID,
+		})
+		h.optionsConnection(ctx, session, action, req, logger, log.IsDebug())
 	default:
 		h.logger.Errorf("unknown action %s", action)
 		reqID := getReqID(request.Args)
