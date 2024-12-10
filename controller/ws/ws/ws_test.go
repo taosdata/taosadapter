@@ -131,11 +131,6 @@ func doWebSocketWithoutResp(ws *websocket.Conn, action string, arg interface{}) 
 	return nil
 }
 
-type versionResponse struct {
-	commonResp
-	Version string
-}
-
 func TestVersion(t *testing.T) {
 	s := httptest.NewServer(router)
 	defer s.Close()
@@ -150,7 +145,7 @@ func TestVersion(t *testing.T) {
 	}()
 	resp, err := doWebSocket(ws, wstool.ClientVersion, nil)
 	assert.NoError(t, err)
-	var versionResp versionResponse
+	var versionResp versionResp
 	err = json.Unmarshal(resp, &versionResp)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, versionResp.Code, versionResp.Message)

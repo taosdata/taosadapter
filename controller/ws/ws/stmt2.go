@@ -200,7 +200,7 @@ type stmt2UseResultResponse struct {
 	ReqID         uint64             `json:"req_id"`
 	Timing        int64              `json:"timing"`
 	StmtID        uint64             `json:"stmt_id"`
-	ResultID      uint64             `json:"result_id"`
+	ID            uint64             `json:"id"`
 	FieldsCount   int                `json:"fields_count"`
 	FieldsNames   []string           `json:"fields_names"`
 	FieldsTypes   jsontype.JsonUint8 `json:"fields_types"`
@@ -227,7 +227,7 @@ func (h *messageHandler) stmt2UseResult(ctx context.Context, session *melody.Ses
 		ReqID:         req.ReqID,
 		Timing:        wstool.GetDuration(ctx),
 		StmtID:        req.StmtID,
-		ResultID:      idx,
+		ID:            idx,
 		FieldsCount:   fieldsCount,
 		FieldsNames:   rowsHeader.ColNames,
 		FieldsTypes:   rowsHeader.ColTypes,

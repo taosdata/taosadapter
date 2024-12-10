@@ -103,6 +103,12 @@ func Test_WrongJsonProtocol(t *testing.T) {
 			errorPrefix: "request no action",
 		},
 		{
+			name:        "version with wrong args",
+			action:      wstool.ClientVersion,
+			args:        "wrong",
+			errorPrefix: "unmarshal version request error",
+		},
+		{
 			name:        "connect with wrong args",
 			action:      Connect,
 			args:        "wrong",

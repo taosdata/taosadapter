@@ -8,6 +8,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	errors2 "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
+	"github.com/taosdata/taosadapter/v3/version"
 )
 
 type getCurrentDBRequest struct {
@@ -62,6 +63,30 @@ func (h *messageHandler) getServerInfo(ctx context.Context, session *melody.Sess
 		ReqID:  req.ReqID,
 		Timing: wstool.GetDuration(ctx),
 		Info:   serverInfo,
+	}
+	wstool.WSWriteJson(session, logger, resp)
+}
+
+type versionRequest struct {
+	ReqID uint64 `json:"req_id"`
+}
+
+type versionResp struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Action  string `json:"action"`
+	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
+	Version string `json:"version"`
+}
+
+func (h *messageHandler) version(ctx context.Context, session *melody.Session, action string, req versionRequest, logger *logrus.Entry, isDebug bool) {
+	logger.Trace("get version")
+	resp := &versionResp{
+		Action:  action,
+		ReqID:   req.ReqID,
+		Timing:  wstool.GetDuration(ctx),
+		Version: version.TaosClientVersion,
 	}
 	wstool.WSWriteJson(session, logger, resp)
 }
