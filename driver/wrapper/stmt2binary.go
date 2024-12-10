@@ -61,7 +61,7 @@ generate_stmt2_binds(char *data, uint32_t count, uint32_t field_count, uint32_t 
 }
 
 
-int taos_stmt2_bind_binary(TAOS_STMT2 *stmt, char *data, int32_t col_idx, char *err_msg) {
+int go_stmt2_bind_binary(TAOS_STMT2 *stmt, char *data, int32_t col_idx, char *err_msg) {
   uint32_t *header = (uint32_t *) data;
   uint32_t total_length = header[0];
   uint32_t count = header[1];
@@ -247,6 +247,9 @@ import (
 
 // TaosStmt2BindBinary bind binary data to stmt2
 func TaosStmt2BindBinary(stmt2 unsafe.Pointer, data []byte, colIdx int32) error {
+	if len(data) < stmt.DataPosition {
+		return fmt.Errorf("data length is less than 28")
+	}
 	totalLength := binary.LittleEndian.Uint32(data[stmt.TotalLengthPosition:])
 	if totalLength != uint32(len(data)) {
 		return fmt.Errorf("total length not match, expect %d, but get %d", len(data), totalLength)
@@ -256,7 +259,7 @@ func TaosStmt2BindBinary(stmt2 unsafe.Pointer, data []byte, colIdx int32) error 
 	errMsg := (*C.char)(C.malloc(128))
 	defer C.free(unsafe.Pointer(errMsg))
 
-	code := C.taos_stmt2_bind_binary(stmt2, (*C.char)(dataP), C.int32_t(colIdx), errMsg)
+	code := C.go_stmt2_bind_binary(stmt2, (*C.char)(dataP), C.int32_t(colIdx), errMsg)
 	if code != 0 {
 		msg := C.GoString(errMsg)
 		return taosError.NewError(int(code), msg)

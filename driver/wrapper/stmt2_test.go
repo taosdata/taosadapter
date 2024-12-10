@@ -4289,6 +4289,18 @@ func TestTaosStmt2BindBinaryParse(t *testing.T) {
 		wantErr assert.ErrorAssertionFunc
 	}{
 		{
+			name: "wrong data length",
+			args: args{
+				sql: "insert into ? values (?,?)",
+				data: []byte{
+					// total Length
+					0x00, 0x00, 0x00, 0x00,
+				},
+				colIdx: -1,
+			},
+			wantErr: assert.Error,
+		},
+		{
 			name: "normal table name",
 			args: args{
 				sql: "insert into ? values (?,?)",
