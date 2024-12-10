@@ -7,7 +7,7 @@ package wrapper
 #include <taos.h>
 
 int
-generate_stmt2_binds(char *data, uint32_t count, uint32_t field_count, uint32_t field_offset,
+go_generate_stmt2_binds(char *data, uint32_t count, uint32_t field_count, uint32_t field_offset,
                    TAOS_STMT2_BIND *bind_struct,
                    TAOS_STMT2_BIND **bind_ptr, char *err_msg) {
   uint32_t *base_length = (uint32_t *) (data + field_offset);
@@ -197,7 +197,7 @@ int go_stmt2_bind_binary(TAOS_STMT2 *stmt, char *data, int32_t col_idx, char *er
     uint32_t struct_index = 0;
     uint32_t ptr_index = 0;
     if (tags_offset > 0) {
-      int code = generate_stmt2_binds(data, count, tag_count, tags_offset, bind_struct, bind_ptr, err_msg);
+      int code = go_generate_stmt2_binds(data, count, tag_count, tags_offset, bind_struct, bind_ptr, err_msg);
       if (code != 0) {
         free(bind_struct);
         free(bind_ptr);
@@ -211,7 +211,7 @@ int go_stmt2_bind_binary(TAOS_STMT2 *stmt, char *data, int32_t col_idx, char *er
     if (cols_offset > 0) {
       TAOS_STMT2_BIND *col_bind_struct = bind_struct + struct_index;
       TAOS_STMT2_BIND **col_bind_ptr = bind_ptr + ptr_index;
-      int code = generate_stmt2_binds(data, count, col_count, cols_offset, col_bind_struct, col_bind_ptr,
+      int code = go_generate_stmt2_binds(data, count, col_count, cols_offset, col_bind_struct, col_bind_ptr,
                                     err_msg);
       if (code != 0) {
         free(bind_struct);
