@@ -210,11 +210,18 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	case wstool.ClientVersion:
 		action = wstool.ClientVersion
 		var req versionRequest
-		if err := json.Unmarshal(request.Args, &req); err != nil {
-			h.logger.Errorf("unmarshal version request error, request:%s, err:%s", request.Args, err)
-			reqID := getReqID(request.Args)
-			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal version request error")
-			return
+		var reqID uint64
+		if request.Args != nil {
+			if err := json.Unmarshal(request.Args, &req); err != nil {
+				h.logger.Errorf("unmarshal version request error, request:%s, err:%s", request.Args, err)
+				reqID := getReqID(request.Args)
+				commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal version request error")
+				return
+			}
+			reqID = req.ReqID
+		}
+		req = versionRequest{
+			ReqID: reqID,
 		}
 		logger := h.logger.WithFields(logrus.Fields{
 			actionKey:       action,

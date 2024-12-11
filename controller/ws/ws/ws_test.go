@@ -151,4 +151,17 @@ func TestVersion(t *testing.T) {
 	assert.Equal(t, 0, versionResp.Code, versionResp.Message)
 	assert.Equal(t, version.TaosClientVersion, versionResp.Version)
 	assert.Equal(t, wstool.ClientVersion, versionResp.Action)
+
+	req := "{\"action\":\"version\"}"
+	err = ws.WriteMessage(websocket.TextMessage, []byte(req))
+	assert.NoError(t, err)
+	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
+
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &versionResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, versionResp.Code, versionResp.Message)
+	assert.Equal(t, version.TaosClientVersion, versionResp.Version)
+	assert.Equal(t, wstool.ClientVersion, versionResp.Action)
 }
