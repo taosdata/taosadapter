@@ -688,12 +688,11 @@ func TestSetConnectionOptions(t *testing.T) {
 	checkResp(t, w)
 
 	defer func() {
+		body := strings.NewReader("drop database if exists rest_test_options")
 		req, _ := http.NewRequest(http.MethodPost, url, body)
 		req.RemoteAddr = "127.0.0.1:33333"
 		req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
 		w = httptest.NewRecorder()
-		body = strings.NewReader("drop database if exists rest_test_options")
-		req.Body = io.NopCloser(body)
 		router.ServeHTTP(w, req)
 		checkResp(t, w)
 	}()
@@ -732,23 +731,21 @@ func TestSetConnectionOptions(t *testing.T) {
 
 	// wrong timezone
 	wrongTZUrl := "/rest/sql?app=rest_test_options&ip=192.168.100.1&tz=xxx"
+	body = strings.NewReader(`select * from rest_test_options.t1 where ts = '2024-12-04 12:34:56.789'`)
 	req, _ = http.NewRequest(http.MethodPost, wrongTZUrl, body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
 	w = httptest.NewRecorder()
-	body = strings.NewReader(`select * from rest_test_options.t1 where ts = '2024-12-04 12:34:56.789'`)
-	req.Body = io.NopCloser(body)
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 400, w.Code)
 
 	// wrong conn_tz
 	wrongConnTZUrl := "/rest/sql?app=rest_test_options&ip=192.168.100.1&conn_tz=xxx"
+	body = strings.NewReader(`select * from rest_test_options.t1 where ts = '2024-12-04 12:34:56.789'`)
 	req, _ = http.NewRequest(http.MethodPost, wrongConnTZUrl, body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
 	w = httptest.NewRecorder()
-	body = strings.NewReader(`select * from rest_test_options.t1 where ts = '2024-12-04 12:34:56.789'`)
-	req.Body = io.NopCloser(body)
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 400, w.Code)
 	// wrong ip

@@ -1616,8 +1616,7 @@ func (t *TMQ) wrapperConsumerNew(logger *logrus.Entry, isDebug bool, tmqConfig u
 	logger.Tracef("new consumer result %x", uintptr(result.Consumer))
 	if len(result.ErrStr) > 0 {
 		err = taoserrors.NewError(-1, result.ErrStr)
-	}
-	if result.Consumer == nil {
+	} else if result.Consumer == nil {
 		err = taoserrors.NewError(-1, "new consumer return nil")
 	}
 	t.asyncLocker.Unlock()
