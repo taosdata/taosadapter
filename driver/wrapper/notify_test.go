@@ -25,10 +25,10 @@ func TestNotify(t *testing.T) {
 		_ = exec(conn, "drop user t_notify")
 	}()
 	_ = exec(conn, "drop user t_notify")
-	err = exec(conn, "create user t_notify pass 'notify'")
+	err = exec(conn, "create user t_notify pass 'notify_123'")
 	assert.NoError(t, err)
 
-	conn2, err := TaosConnect("", "t_notify", "notify", "", 0)
+	conn2, err := TaosConnect("", "t_notify", "notify_123", "", 0)
 	if err != nil {
 		t.Error(err)
 		return
@@ -58,7 +58,7 @@ func TestNotify(t *testing.T) {
 		t.Error(errCode, errStr)
 	}
 
-	err = exec(conn, "alter user t_notify pass 'test'")
+	err = exec(conn, "alter user t_notify pass 'test_123'")
 	assert.NoError(t, err)
 	timeout, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()

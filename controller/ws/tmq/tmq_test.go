@@ -3158,7 +3158,7 @@ func TestTMQ_SetMsgConsumeExcluded(t *testing.T) {
 
 //func TestDropUser(t *testing.T) {
 //	defer doHttpSql("drop user test_tmq_drop_user")
-//	code, message := doHttpSql("create user test_tmq_drop_user pass 'pass'")
+//	code, message := doHttpSql("create user test_tmq_drop_user pass 'pass_123'")
 //	assert.Equal(t, 0, code, message)
 //
 //	dbName := "test_ws_tmq_drop_user"
@@ -3186,7 +3186,7 @@ func TestTMQ_SetMsgConsumeExcluded(t *testing.T) {
 //	// subscribe
 //	b, _ := json.Marshal(TMQSubscribeReq{
 //		User:        "test_tmq_drop_user",
-//		Password:    "pass",
+//		Password:    "pass_123",
 //		DB:          dbName,
 //		GroupID:     "test",
 //		Topics:      []string{topic},

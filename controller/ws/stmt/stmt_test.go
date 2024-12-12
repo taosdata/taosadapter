@@ -1101,10 +1101,10 @@ func TestDropUser(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 	defer doRestful("drop user test_ws_stmt_drop_user", "")
-	code, message := doRestful("create user test_ws_stmt_drop_user pass 'pass'", "")
+	code, message := doRestful("create user test_ws_stmt_drop_user pass 'pass_123'", "")
 	assert.Equal(t, 0, code, message)
 	// connect
-	connReq := &StmtConnectReq{ReqID: 1, User: "test_ws_stmt_drop_user", Password: "pass"}
+	connReq := &StmtConnectReq{ReqID: 1, User: "test_ws_stmt_drop_user", Password: "pass_123"}
 	resp, err := doWebSocket(ws, STMTConnect, &connReq)
 	assert.NoError(t, err)
 	var connResp StmtConnectResp
