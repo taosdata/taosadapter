@@ -751,7 +751,19 @@ func TestSetConnectionOptions(t *testing.T) {
 	req.Body = io.NopCloser(body)
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 400, w.Code)
-	// wrong
+	// wrong ip
+	wrongIPUrl := "/rest/sql?app=rest_test_options&ip=xxx.xxx.xxx.xxx&conn_tz=Europe/Moscow&tz=Asia/Shanghai"
+	req, _ = http.NewRequest(http.MethodPost, wrongIPUrl, body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	w = httptest.NewRecorder()
+	body = strings.NewReader(`select * from rest_test_options.t1 where ts = '2024-12-04 12:34:56.789'`)
+	req.Body = io.NopCloser(body)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	err = json.Unmarshal(w.Body.Bytes(), &result)
+	assert.NoError(t, err)
+	assert.NotEqual(t, 0, result.Code)
 }
 
 func checkResp(t *testing.T, w *httptest.ResponseRecorder) {

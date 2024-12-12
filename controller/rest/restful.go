@@ -238,7 +238,7 @@ func trySetConnectionOptions(c *gin.Context, conn unsafe.Pointer, logger *logrus
 		if val != "" {
 			code := syncinterface.TaosOptionsConnection(conn, options[i], &val, logger, isDebug)
 			if code != httperror.SUCCESS {
-				errStr := wrapper.TaosErrorStr(conn)
+				errStr := wrapper.TaosErrorStr(nil)
 				logger.Errorf("set connection options error, option:%d, val:%s, code:%d, message:%s", options[i], val, code, errStr)
 				TaosErrorResponse(c, logger, code, errStr)
 				return false
