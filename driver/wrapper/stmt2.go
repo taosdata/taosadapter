@@ -35,15 +35,24 @@ func TaosStmt2Init(taosConnect unsafe.Pointer, reqID int64, singleStbInsert bool
 }
 
 // TaosStmt2Prepare int taos_stmt2_prepare(TAOS_STMT2 *stmt, const char *sql, unsigned long length);
-func TaosStmt2Prepare(stmt unsafe.Pointer, sql string) int {
+func TaosStmt2Prepare(stmt2 unsafe.Pointer, sql string) int {
 	cSql := C.CString(sql)
 	cLen := C.ulong(len(sql))
 	defer C.free(unsafe.Pointer(cSql))
-	return int(C.taos_stmt2_prepare(stmt, cSql, cLen))
+	return int(C.taos_stmt2_prepare(stmt2, cSql, cLen))
 }
 
 // TaosStmt2BindParam int         taos_stmt2_bind_param(TAOS_STMT2 *stmt, TAOS_STMT2_BINDV *bindv, int32_t col_idx);
-func TaosStmt2BindParam(stmt unsafe.Pointer, isInsert bool, params []*stmt.TaosStmt2BindData, colTypes, tagTypes []*stmt.StmtField, colIdx int32) error {
+func TaosStmt2BindParam(stmt2 unsafe.Pointer, isInsert bool, params []*stmt.TaosStmt2BindData, fields []*stmt.Stmt2AllField, colIdx int32) error {
+	var colTypes []*stmt.Stmt2AllField
+	var tagTypes []*stmt.Stmt2AllField
+	for i := 0; i < len(fields); i++ {
+		if fields[i].BindType == stmt.TAOS_FIELD_COL {
+			colTypes = append(colTypes, fields[i])
+		} else if fields[i].BindType == stmt.TAOS_FIELD_TAG {
+			tagTypes = append(tagTypes, fields[i])
+		}
+	}
 	count := len(params)
 	if count == 0 {
 		return taosError.NewError(0xffff, "params is empty")
@@ -122,15 +131,15 @@ func TaosStmt2BindParam(stmt unsafe.Pointer, isInsert bool, params []*stmt.TaosS
 	cBindv.bind_cols = (**C.TAOS_STMT2_BIND)(unsafe.Pointer(colList))
 	cBindv.tags = (**C.TAOS_STMT2_BIND)(unsafe.Pointer(tagList))
 	cBindv.tbnames = (**C.char)(tbNames)
-	code := int(C.taos_stmt2_bind_param(stmt, &cBindv, C.int32_t(colIdx)))
+	code := int(C.taos_stmt2_bind_param(stmt2, &cBindv, C.int32_t(colIdx)))
 	if code != 0 {
-		errStr := TaosStmt2Error(stmt)
+		errStr := TaosStmt2Error(stmt2)
 		return taosError.NewError(code, errStr)
 	}
 	return nil
 }
 
-func generateTaosStmt2BindsInsert(multiBind [][]driver.Value, fieldTypes []*stmt.StmtField) (unsafe.Pointer, []unsafe.Pointer, error) {
+func generateTaosStmt2BindsInsert(multiBind [][]driver.Value, fieldTypes []*stmt.Stmt2AllField) (unsafe.Pointer, []unsafe.Pointer, error) {
 	var needFreePointer []unsafe.Pointer
 	if len(multiBind) != len(fieldTypes) {
 		return nil, needFreePointer, fmt.Errorf("data and type length not match, data length: %d, type length: %d", len(multiBind), len(fieldTypes))
@@ -626,84 +635,64 @@ func generateTaosStmt2BindsQuery(multiBind [][]driver.Value) (unsafe.Pointer, []
 }
 
 // TaosStmt2Exec int taos_stmt2_exec(TAOS_STMT2 *stmt, int *affected_rows);
-func TaosStmt2Exec(stmt unsafe.Pointer) int {
-	return int(C.taos_stmt2_exec(stmt, nil))
+func TaosStmt2Exec(stmt2 unsafe.Pointer) int {
+	return int(C.taos_stmt2_exec(stmt2, nil))
 }
 
 // TaosStmt2Close int taos_stmt2_close(TAOS_STMT2 *stmt);
-func TaosStmt2Close(stmt unsafe.Pointer) int {
-	return int(C.taos_stmt2_close(stmt))
+func TaosStmt2Close(stmt2 unsafe.Pointer) int {
+	return int(C.taos_stmt2_close(stmt2))
 }
 
 // TaosStmt2IsInsert int taos_stmt2_is_insert(TAOS_STMT2 *stmt, int *insert);
-func TaosStmt2IsInsert(stmt unsafe.Pointer) (is bool, errorCode int) {
+func TaosStmt2IsInsert(stmt2 unsafe.Pointer) (is bool, errorCode int) {
 	p := C.malloc(C.size_t(4))
 	isInsert := (*C.int)(p)
 	defer C.free(p)
-	errorCode = int(C.taos_stmt2_is_insert(stmt, isInsert))
+	errorCode = int(C.taos_stmt2_is_insert(stmt2, isInsert))
 	return int(*isInsert) == 1, errorCode
 }
 
-// TaosStmt2GetFields int  taos_stmt2_get_fields(TAOS_STMT2 *stmt, TAOS_FIELD_T field_type, int *count, TAOS_FIELD_E **fields);
-func TaosStmt2GetFields(stmt unsafe.Pointer, fieldType int) (code, count int, fields unsafe.Pointer) {
-	code = int(C.taos_stmt2_get_fields(stmt, C.TAOS_FIELD_T(fieldType), (*C.int)(unsafe.Pointer(&count)), (**C.TAOS_FIELD_E)(unsafe.Pointer(&fields))))
-	return
-}
-
-// TaosStmt2FreeFields void taos_stmt2_free_fields(TAOS_STMT2 *stmt, TAOS_FIELD_E *fields);
-func TaosStmt2FreeFields(stmt unsafe.Pointer, fields unsafe.Pointer) {
+// TaosStmt2FreeFields void taos_stmt2_free_fields(TAOS_STMT2 *stmt, TAOS_FIELD_ALL *fields);
+func TaosStmt2FreeFields(stmt2 unsafe.Pointer, fields unsafe.Pointer) {
 	if fields == nil {
 		return
 	}
-	C.taos_stmt2_free_fields(stmt, (*C.TAOS_FIELD_E)(fields))
+	C.taos_stmt2_free_fields(stmt2, (*C.TAOS_FIELD_ALL)(fields))
 }
 
 // TaosStmt2Error char     *taos_stmt2_error(TAOS_STMT2 *stmt)
-func TaosStmt2Error(stmt unsafe.Pointer) string {
-	return C.GoString(C.taos_stmt2_error(stmt))
+func TaosStmt2Error(stmt2 unsafe.Pointer) string {
+	return C.GoString(C.taos_stmt2_error(stmt2))
 }
 
-// TaosStmt2GetStbFields int  taos_stmt2_get_stb_fields(TAOS_STMT2 *stmt, int *count, TAOS_FIELD_STB **fields);
-func TaosStmt2GetStbFields(stmt unsafe.Pointer) (code, count int, fields unsafe.Pointer) {
-	code = int(C.taos_stmt2_get_stb_fields(stmt, (*C.int)(unsafe.Pointer(&count)), (**C.TAOS_FIELD_STB)(unsafe.Pointer(&fields))))
+// TaosStmt2GetFields int  taos_stmt2_get_fields(TAOS_STMT2 *stmt, int *count, TAOS_FIELD_ALL **fields);
+func TaosStmt2GetFields(stmt2 unsafe.Pointer) (code, count int, fields unsafe.Pointer) {
+	code = int(C.taos_stmt2_get_fields(stmt2, (*C.int)(unsafe.Pointer(&count)), (**C.TAOS_FIELD_ALL)(unsafe.Pointer(&fields))))
 	return
 }
 
-// TaosStmt2FreeStbFields void taos_stmt2_free_stb_fields(TAOS_STMT2 *stmt, TAOS_FIELD_STB *fields);
-func TaosStmt2FreeStbFields(stmt unsafe.Pointer, fields unsafe.Pointer) {
-	C.taos_stmt2_free_stb_fields(stmt, (*C.TAOS_FIELD_STB)(fields))
-}
-
-//typedef struct TAOS_FIELD_STB {
+//typedef struct TAOS_FIELD_ALL {
 //char         name[65];
 //int8_t       type;
 //uint8_t      precision;
 //uint8_t      scale;
 //int32_t      bytes;
 //TAOS_FIELD_T field_type;
-//} TAOS_FIELD_STB;
+//} TAOS_FIELD_ALL;
 
-type StmtStbField struct {
-	Name      string `json:"name"`
-	FieldType int8   `json:"field_type"`
-	Precision uint8  `json:"precision"`
-	Scale     uint8  `json:"scale"`
-	Bytes     int32  `json:"bytes"`
-	BindType  int8   `json:"bind_type"`
-}
-
-func ParseStmt2StbFields(num int, fields unsafe.Pointer) []*StmtStbField {
+func Stmt2ParseAllFields(num int, fields unsafe.Pointer) []*stmt.Stmt2AllField {
 	if num <= 0 {
 		return nil
 	}
 	if fields == nil {
 		return nil
 	}
-	result := make([]*StmtStbField, num)
+	result := make([]*stmt.Stmt2AllField, num)
 	buf := bytes.NewBufferString("")
 	for i := 0; i < num; i++ {
-		r := &StmtStbField{}
-		field := *(*C.TAOS_FIELD_STB)(unsafe.Pointer(uintptr(fields) + uintptr(C.sizeof_struct_TAOS_FIELD_STB*C.int(i))))
+		r := &stmt.Stmt2AllField{}
+		field := *(*C.TAOS_FIELD_ALL)(unsafe.Pointer(uintptr(fields) + uintptr(C.sizeof_struct_TAOS_FIELD_ALL*C.int(i))))
 		for _, c := range field.name {
 			if c == 0 {
 				break
