@@ -7,6 +7,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	errors2 "github.com/taosdata/taosadapter/v3/driver/errors"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
 	"github.com/taosdata/taosadapter/v3/version"
 )
@@ -89,4 +90,31 @@ func (h *messageHandler) version(ctx context.Context, session *melody.Session, a
 		Version: version.TaosClientVersion,
 	}
 	wstool.WSWriteJson(session, logger, resp)
+}
+
+type optionsConnectionRequest struct {
+	ReqID   uint64    `json:"req_id"`
+	Options []*option `json:"options"`
+}
+type option struct {
+	Option int     `json:"option"`
+	Value  *string `json:"value"`
+}
+
+func (h *messageHandler) optionsConnection(ctx context.Context, session *melody.Session, action string, req optionsConnectionRequest, logger *logrus.Entry, isDebug bool) {
+	logger.Trace("options connection")
+	for i := 0; i < len(req.Options); i++ {
+		code := syncinterface.TaosOptionsConnection(h.conn, req.Options[i].Option, req.Options[i].Value, logger, isDebug)
+		if code != 0 {
+			errStr := wrapper.TaosErrorStr(nil)
+			val := "<nil>"
+			if req.Options[i].Value != nil {
+				val = *req.Options[i].Value
+			}
+			logger.Errorf("options connection error, option:%d, value:%s, code:%d, err:%s", req.Options[i].Option, val, code, errStr)
+			commonErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr)
+			return
+		}
+	}
+	commonSuccessResponse(ctx, session, logger, action, req.ReqID)
 }

@@ -26,10 +26,10 @@ func TestDropUser(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 	defer doRestful("drop user test_ws_drop_user", "")
-	code, message := doRestful("create user test_ws_drop_user pass 'pass'", "")
+	code, message := doRestful("create user test_ws_drop_user pass 'pass_123'", "")
 	assert.Equal(t, 0, code, message)
 	// connect
-	connReq := connRequest{ReqID: 1, User: "test_ws_drop_user", Password: "pass"}
+	connReq := connRequest{ReqID: 1, User: "test_ws_drop_user", Password: "pass_123"}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
 	var connResp commonResp
@@ -269,6 +269,12 @@ func Test_WrongJsonProtocol(t *testing.T) {
 			action:      WSGetServerInfo,
 			args:        "wrong",
 			errorPrefix: "unmarshal get server info request error",
+		},
+		{
+			name:        "options connection with wrong args",
+			action:      OptionsConnection,
+			args:        "wrong",
+			errorPrefix: "unmarshal options connection request error",
 		},
 		{
 			name:        "unknown action",

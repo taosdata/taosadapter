@@ -421,3 +421,15 @@ func TaosStmt2GetStbFields(stmt2 unsafe.Pointer, logger *logrus.Entry, isDebug b
 	thread.SyncLocker.Unlock()
 	return code, count, fields
 }
+
+func TaosOptionsConnection(conn unsafe.Pointer, option int, value *string, logger *logrus.Entry, isDebug bool) int {
+	if value == nil {
+		logger.Tracef("call taos_options_connection, conn:%p, option:%d, value:<nil>", conn, option)
+	} else {
+		logger.Tracef("call taos_options_connection, conn:%p, option:%d, value:%s", conn, option, *value)
+	}
+	s := log.GetLogNow(isDebug)
+	code := wrapper.TaosOptionsConnection(conn, option, value)
+	logger.Debugf("taos_options_connection finish, code:%d, cost:%s", code, log.GetLogDuration(isDebug, s))
+	return code
+}

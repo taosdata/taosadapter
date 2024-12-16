@@ -11,7 +11,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
+	"github.com/taosdata/taosadapter/v3/driver/common"
 	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/plugin"
@@ -152,6 +155,13 @@ func (p *Plugin) insertJson(c *gin.Context) {
 			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
+	app := c.Query("app")
+	if app != "" {
+		errCode := syncinterface.TaosOptionsConnection(taosConn.TaosConnection, common.TSDB_OPTION_CONNECTION_USER_APP, &app, logger, isDebug)
+		if errCode != 0 {
+			logger.Errorf("set app error, app:%s, code:%d, msg:%s", app, errCode, wrapper.TaosErrorStr(nil))
+		}
+	}
 	s = log.GetLogNow(isDebug)
 	logger.Debugf("insert json payload, data:%s, db:%s, ttl:%d, table_name_key:%s", data, db, ttl, tableNameKey)
 	err = inserter.InsertOpentsdbJson(taosConn.TaosConnection, data, db, ttl, reqID, tableNameKey, logger)
@@ -271,6 +281,13 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 			logger.WithError(putErr).Errorln("connect pool put error")
 		}
 	}()
+	app := c.Query("app")
+	if app != "" {
+		errCode := syncinterface.TaosOptionsConnection(taosConn.TaosConnection, common.TSDB_OPTION_CONNECTION_USER_APP, &app, logger, isDebug)
+		if errCode != 0 {
+			logger.Errorf("set app error, app:%s, code:%d, msg:%s", app, errCode, wrapper.TaosErrorStr(nil))
+		}
+	}
 	s = log.GetLogNow(isDebug)
 	logger.Debugf("insert telnet payload, lines:%v, db:%s, ttl:%d, table_name_key: %s", lines, db, ttl, tableNameKey)
 	err = inserter.InsertOpentsdbTelnetBatch(taosConn.TaosConnection, lines, db, ttl, reqID, tableNameKey, logger)

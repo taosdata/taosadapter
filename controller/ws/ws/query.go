@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"unsafe"
 
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
@@ -12,7 +13,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/driver/common"
-	errors2 "github.com/taosdata/taosadapter/v3/driver/errors"
+	taoserrors "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
@@ -27,6 +28,9 @@ type connRequest struct {
 	Password string `json:"password"`
 	DB       string `json:"db"`
 	Mode     *int   `json:"mode"`
+	TZ       string `json:"tz"`
+	App      string `json:"app"`
+	IP       string `json:"ip"`
 }
 
 func (h *messageHandler) connect(ctx context.Context, session *melody.Session, action string, req connRequest, logger *logrus.Entry, isDebug bool) {
@@ -45,10 +49,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	conn, err := syncinterface.TaosConnect("", req.User, req.Password, req.DB, 0, logger, isDebug)
 
 	if err != nil {
-		logger.Errorf("connect to TDengine error, err:%s", err)
-		var taosErr *errors2.TaosError
-		errors.As(err, &taosErr)
-		commonErrorResponse(ctx, session, logger, action, req.ReqID, int(taosErr.Code), taosErr.ErrStr)
+		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "connect to TDengine error")
 		return
 	}
 	logger.Trace("get whitelist")
@@ -56,19 +57,14 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	whitelist, err := tool.GetWhitelist(conn)
 	logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		logger.Errorf("get whitelist error, err:%s", err)
-		syncinterface.TaosClose(conn, logger, isDebug)
-		var taosErr *errors2.TaosError
-		errors.As(err, &taosErr)
-		commonErrorResponse(ctx, session, logger, action, req.ReqID, int(taosErr.Code), taosErr.ErrStr)
+		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "get whitelist error")
 		return
 	}
 	logger.Tracef("check whitelist, ip:%s, whitelist:%s", h.ipStr, tool.IpNetSliceToString(whitelist))
 	valid := tool.CheckWhitelist(whitelist, h.ip)
 	if !valid {
-		logger.Errorf("ip not in whitelist, ip:%s, whitelist:%s", h.ipStr, tool.IpNetSliceToString(whitelist))
-		syncinterface.TaosClose(conn, logger, isDebug)
-		commonErrorResponse(ctx, session, logger, action, req.ReqID, 0xffff, "whitelist prohibits current IP access")
+		err = errors.New("ip not in whitelist")
+		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "ip not in whitelist")
 		return
 	}
 	s = log.GetLogNow(isDebug)
@@ -76,11 +72,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	err = tool.RegisterChangeWhitelist(conn, h.whitelistChangeHandle)
 	logger.Debugf("register whitelist change cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		logger.Errorf("register whitelist change error, err:%s", err)
-		syncinterface.TaosClose(conn, logger, isDebug)
-		var taosErr *errors2.TaosError
-		errors.As(err, &taosErr)
-		commonErrorResponse(ctx, session, logger, action, req.ReqID, int(taosErr.Code), taosErr.ErrStr)
+		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "register whitelist change error")
 		return
 	}
 	s = log.GetLogNow(isDebug)
@@ -88,11 +80,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	err = tool.RegisterDropUser(conn, h.dropUserHandle)
 	logger.Debugf("register drop user cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
-		logger.Errorf("register drop user error, err:%s", err)
-		syncinterface.TaosClose(conn, logger, isDebug)
-		var taosErr *errors2.TaosError
-		errors.As(err, &taosErr)
-		commonErrorResponse(ctx, session, logger, action, req.ReqID, int(taosErr.Code), taosErr.ErrStr)
+		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "register drop user error")
 		return
 	}
 	if req.Mode != nil {
@@ -103,15 +91,44 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 			code := wrapper.TaosSetConnMode(conn, common.TAOS_CONN_MODE_BI, 1)
 			logger.Trace("set connection mode to BI done")
 			if code != 0 {
-				logger.Errorf("set connection mode to BI error, err:%s", wrapper.TaosErrorStr(nil))
-				syncinterface.TaosClose(conn, logger, isDebug)
-				commonErrorResponse(ctx, session, logger, action, req.ReqID, code, wrapper.TaosErrorStr(nil))
+				handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, wrapper.TaosErrorStr(nil)), "set connection mode to BI error")
 				return
 			}
 		default:
-			syncinterface.TaosClose(conn, logger, isDebug)
-			logger.Tracef("unexpected mode:%d", *req.Mode)
-			commonErrorResponse(ctx, session, logger, action, req.ReqID, 0xffff, fmt.Sprintf("unexpected mode:%d", *req.Mode))
+			err = fmt.Errorf("unexpected mode:%d", *req.Mode)
+			handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, err.Error())
+			return
+		}
+	}
+	// set connection ip
+	clientIP := h.ipStr
+	if req.IP != "" {
+		clientIP = req.IP
+	}
+	logger.Tracef("set connection ip, ip:%s", clientIP)
+	code := syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_IP, &clientIP, logger, isDebug)
+	logger.Trace("set connection ip done")
+	if code != 0 {
+		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, wrapper.TaosErrorStr(nil)), "set connection ip error")
+		return
+	}
+	// set timezone
+	if req.TZ != "" {
+		logger.Tracef("set timezone, tz:%s", req.TZ)
+		code = syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_TIMEZONE, &req.TZ, logger, isDebug)
+		logger.Trace("set timezone done")
+		if code != 0 {
+			handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, wrapper.TaosErrorStr(nil)), "set timezone error")
+			return
+		}
+	}
+	// set connection app
+	if req.App != "" {
+		logger.Tracef("set app, app:%s", req.App)
+		code = syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_APP, &req.App, logger, isDebug)
+		logger.Trace("set app done")
+		if code != 0 {
+			handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, wrapper.TaosErrorStr(nil)), "set app error")
 			return
 		}
 	}
@@ -119,6 +136,22 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	logger.Trace("start wait signal goroutine")
 	go h.waitSignal(h.logger)
 	commonSuccessResponse(ctx, session, logger, action, req.ReqID)
+}
+
+func handleConnectError(ctx context.Context, conn unsafe.Pointer, session *melody.Session, logger *logrus.Entry, isDebug bool, action string, reqID uint64, err error, errorExt string) {
+	var code int
+	var errStr string
+	taosError, ok := err.(*taoserrors.TaosError)
+	if ok {
+		code = int(taosError.Code)
+		errStr = taosError.ErrStr
+	} else {
+		code = 0xffff
+		errStr = err.Error()
+	}
+	logger.Errorf("%s, code:%d, message:%s", errorExt, code, errStr)
+	syncinterface.TaosClose(conn, logger, isDebug)
+	commonErrorResponse(ctx, session, logger, action, reqID, code, errStr)
 }
 
 type queryRequest struct {

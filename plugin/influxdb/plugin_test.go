@@ -61,19 +61,19 @@ func TestInfluxdb(t *testing.T) {
 	}()
 	w := httptest.NewRecorder()
 	reader := strings.NewReader(fmt.Sprintf("measurement,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
-	req, _ := http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb", reader)
+	req, _ := http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb&app=test_influxdb", reader)
 	req.RemoteAddr = "127.0.0.1:33333"
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 204, w.Code)
 	w = httptest.NewRecorder()
 	reader = strings.NewReader("measurement,host=host1 field1=a1")
-	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb", reader)
+	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb&app=test_influxdb", reader)
 	req.RemoteAddr = "127.0.0.1:33333"
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 500, w.Code)
 	w = httptest.NewRecorder()
 	reader = strings.NewReader(fmt.Sprintf("measurement,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
-	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata", reader)
+	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata&app=test_influxdb", reader)
 	req.RemoteAddr = "127.0.0.1:33333"
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 400, w.Code)
@@ -91,7 +91,7 @@ func TestInfluxdb(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	reader = strings.NewReader(fmt.Sprintf("measurement_ttl,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
-	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb_ttl&ttl=1000", reader)
+	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb_ttl&ttl=1000&app=test_influxdb", reader)
 	req.RemoteAddr = "127.0.0.1:33333"
 	router.ServeHTTP(w, req)
 	time.Sleep(time.Second)

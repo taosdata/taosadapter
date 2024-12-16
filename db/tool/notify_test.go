@@ -266,13 +266,13 @@ func TestRegisterChangePass(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	assert.NoError(t, err)
 	defer wrapper.TaosClose(conn)
-	err = exec(conn, "create user test_notify pass 'notify'")
+	err = exec(conn, "create user test_notify pass 'notify_123'")
 	assert.NoError(t, err)
 	defer func() {
 		// ignore error
 		_ = exec(conn, "drop user test_notify")
 	}()
-	conn2, err := wrapper.TaosConnect("", "test_notify", "notify", "", 0)
+	conn2, err := wrapper.TaosConnect("", "test_notify", "notify_123", "", 0)
 	assert.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
@@ -285,7 +285,7 @@ func TestRegisterChangePass(t *testing.T) {
 	}
 	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel2()
-	err = exec(conn, "alter user test_notify pass 'test'")
+	err = exec(conn, "alter user test_notify pass 'test_123'")
 	assert.NoError(t, err)
 	select {
 	case data := <-c:
@@ -301,13 +301,13 @@ func TestRegisterDropUser(t *testing.T) {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	assert.NoError(t, err)
 	defer wrapper.TaosClose(conn)
-	err = exec(conn, "create user test_drop_user pass 'notify'")
+	err = exec(conn, "create user test_drop_user pass 'notify_123'")
 	assert.NoError(t, err)
 	defer func() {
 		// ignore error
 		_ = exec(conn, "drop user test_drop_user")
 	}()
-	conn2, err := wrapper.TaosConnect("", "test_drop_user", "notify", "", 0)
+	conn2, err := wrapper.TaosConnect("", "test_drop_user", "notify_123", "", 0)
 	assert.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()

@@ -42,6 +42,9 @@ const (
 	STMT2Exec    = "stmt2_exec"
 	STMT2Result  = "stmt2_result"
 	STMT2Close   = "stmt2_close"
+
+	// options
+	OptionsConnection = "options_connection"
 )
 
 const (

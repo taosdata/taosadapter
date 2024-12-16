@@ -3,15 +3,17 @@ package ctools
 import (
 	"math"
 	"strconv"
+	"time"
 	"unsafe"
 
+	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	"github.com/taosdata/taosadapter/v3/tools"
+	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
+	"github.com/taosdata/taosadapter/v3/tools/layout"
 )
-
-type FormatTimeFunc func(builder *jsonbuilder.Stream, ts int64, precision int)
 
 func IsVarDataType(colType uint8) bool {
 	return colType == common.TSDB_DATA_TYPE_BINARY || colType == common.TSDB_DATA_TYPE_NCHAR || colType == common.TSDB_DATA_TYPE_JSON || colType == common.TSDB_DATA_TYPE_VARBINARY || colType == common.TSDB_DATA_TYPE_GEOMETRY
@@ -87,9 +89,20 @@ func WriteRawJsonDouble(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row 
 	builder.WriteFloat64(math.Float64frombits(*((*uint64)(tools.AddPointer(pStart, uintptr(row)*parser.Float64Size)))))
 }
 
-func WriteRawJsonTime(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row int, precision int, timeFormat FormatTimeFunc) {
-	value := *((*int64)(tools.AddPointer(pStart, uintptr(row)*parser.Int64Size)))
-	timeFormat(builder, value, precision)
+func WriteRawJsonTime(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row int, precision int, location *time.Location, timeBuffer []byte, logger *logrus.Entry) {
+	ts := *((*int64)(tools.AddPointer(pStart, uintptr(row)*parser.Int64Size)))
+	timeBuffer = timeBuffer[:0]
+	switch precision {
+	case common.PrecisionMilliSecond: // milli-second
+		timeBuffer = time.Unix(ts/1e3, (ts%1e3)*1e6).In(location).AppendFormat(timeBuffer, layout.LayoutMillSecond)
+	case common.PrecisionMicroSecond: // micro-second
+		timeBuffer = time.Unix(ts/1e6, (ts%1e6)*1e3).In(location).AppendFormat(timeBuffer, layout.LayoutMicroSecond)
+	case common.PrecisionNanoSecond: // nano-second
+		timeBuffer = time.Unix(0, ts).In(location).AppendFormat(timeBuffer, layout.LayoutNanoSecond)
+	default:
+		logger.Errorf("unknown precision:%d", precision)
+	}
+	builder.WriteString(bytesutil.ToUnsafeString(timeBuffer))
 }
 
 func WriteRawJsonBinary(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
@@ -167,7 +180,7 @@ func WriteRawJsonJson(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointe
 	}
 }
 
-func JsonWriteRawBlock(builder *jsonbuilder.Stream, colType uint8, pHeader, pStart unsafe.Pointer, row int, precision int, timeFormat FormatTimeFunc) {
+func JsonWriteRawBlock(builder *jsonbuilder.Stream, colType uint8, pHeader, pStart unsafe.Pointer, row int, precision int, location *time.Location, timeBuffer []byte, logger *logrus.Entry) {
 	if IsVarDataType(colType) {
 		switch colType {
 		case uint8(common.TSDB_DATA_TYPE_BINARY):
@@ -209,7 +222,7 @@ func JsonWriteRawBlock(builder *jsonbuilder.Stream, colType uint8, pHeader, pSta
 			case uint8(common.TSDB_DATA_TYPE_DOUBLE):
 				WriteRawJsonDouble(builder, pStart, row)
 			case uint8(common.TSDB_DATA_TYPE_TIMESTAMP):
-				WriteRawJsonTime(builder, pStart, row, precision, timeFormat)
+				WriteRawJsonTime(builder, pStart, row, precision, location, timeBuffer, logger)
 			}
 		}
 	}

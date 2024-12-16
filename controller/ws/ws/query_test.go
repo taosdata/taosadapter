@@ -62,14 +62,6 @@ func TestWSConnect(t *testing.T) {
 	assert.Equal(t, "duplicate connections", connResp.Message)
 }
 
-type TestConnRequest struct {
-	ReqID    uint64 `json:"req_id"`
-	User     string `json:"user"`
-	Password string `json:"password"`
-	DB       string `json:"db"`
-	Mode     int    `json:"mode"`
-}
-
 func TestMode(t *testing.T) {
 	s := httptest.NewServer(router)
 	defer s.Close()
@@ -84,7 +76,7 @@ func TestMode(t *testing.T) {
 	}()
 
 	wrongMode := 999
-	connReq := TestConnRequest{ReqID: 1, User: "root", Password: "taosdata", Mode: wrongMode}
+	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", Mode: &wrongMode}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
 	var connResp commonResp
@@ -96,7 +88,7 @@ func TestMode(t *testing.T) {
 
 	//bi
 	biMode := 0
-	connReq = TestConnRequest{ReqID: 1, User: "root", Password: "taosdata", Mode: biMode}
+	connReq = connRequest{ReqID: 1, User: "root", Password: "taosdata", Mode: &biMode}
 	resp, err = doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
 	err = json.Unmarshal(resp, &connResp)
@@ -106,9 +98,38 @@ func TestMode(t *testing.T) {
 
 }
 
-func TestWrongConnect(t *testing.T) {
-	// mock tool.GetWhitelist return error
+func TestConnectionOptions(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", IP: "192.168.44.55", App: "ws_test_conn_protocol", TZ: "Asia/Shanghai"}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp commonResp
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
 
+	// check connection options
+	got := false
+	for i := 0; i < 10; i++ {
+		queryResp := restQuery("select conn_id from performance_schema.perf_connections where user_app = 'ws_test_conn_protocol' and user_ip = '192.168.44.55'", "")
+		if queryResp.Code == 0 && len(queryResp.Data) > 0 {
+			got = true
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	assert.True(t, got)
 }
 
 func TestWsQuery(t *testing.T) {
