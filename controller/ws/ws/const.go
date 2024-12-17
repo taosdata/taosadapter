@@ -3,18 +3,20 @@ package ws
 const actionKey = "action"
 const TaosKey = "taos"
 const (
+	//Deprecated
+	//WSWriteRaw                = "write_raw"
+	//WSWriteRawBlock           = "write_raw_block"
+	//WSWriteRawBlockWithFields = "write_raw_block_with_fields"
+
 	Connect = "conn"
 	// websocket
-	WSQuery                   = "query"
-	WSFetch                   = "fetch"
-	WSFetchBlock              = "fetch_block"
-	WSFreeResult              = "free_result"
-	WSWriteRaw                = "write_raw"
-	WSWriteRawBlock           = "write_raw_block"
-	WSWriteRawBlockWithFields = "write_raw_block_with_fields"
-	WSGetCurrentDB            = "get_current_db"
-	WSGetServerInfo           = "get_server_info"
-	WSNumFields               = "num_fields"
+	WSQuery         = "query"
+	WSFetch         = "fetch"
+	WSFetchBlock    = "fetch_block"
+	WSFreeResult    = "free_result"
+	WSGetCurrentDB  = "get_current_db"
+	WSGetServerInfo = "get_server_info"
+	WSNumFields     = "num_fields"
 
 	// schemaless
 	SchemalessWrite = "insert"
@@ -35,18 +37,18 @@ const (
 	STMTGetParam     = "stmt_get_param"
 
 	// stmt2
-	STMT2Init      = "stmt2_init"
-	STMT2Prepare   = "stmt2_prepare"
-	STMT2GetFields = "stmt2_get_fields"
-	STMT2Exec      = "stmt2_exec"
-	STMT2Result    = "stmt2_result"
-	STMT2Close     = "stmt2_close"
+	STMT2Init    = "stmt2_init"
+	STMT2Prepare = "stmt2_prepare"
+	STMT2Exec    = "stmt2_exec"
+	STMT2Result  = "stmt2_result"
+	STMT2Close   = "stmt2_close"
+
+	// options
+	OptionsConnection = "options_connection"
 )
 
-type messageType uint64
-
 const (
-	_ messageType = iota
+	_ = iota
 	SetTagsMessage
 	BindMessage
 	TMQRawMessage
@@ -57,8 +59,8 @@ const (
 	Stmt2BindMessage = 9
 )
 
-func (m messageType) String() string {
-	switch m {
+func getActionString(binaryAction uint64) string {
+	switch binaryAction {
 	case SetTagsMessage:
 		return "set_tags"
 	case BindMessage:

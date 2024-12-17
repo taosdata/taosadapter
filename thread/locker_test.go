@@ -23,9 +23,11 @@ func TestNewLocker(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			locker := NewLocker(tt.args.count)
 			locker.Lock()
+			a := 1
+			_ = a
 			locker.Unlock()
 		})
 	}

@@ -8,16 +8,16 @@ import (
 	"unsafe"
 
 	"github.com/sirupsen/logrus"
-	tErrors "github.com/taosdata/driver-go/v3/errors"
-	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
+	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 )
 
-var FetchRowError = errors.New("fetch row error")
+var ErrFetchRowError = errors.New("fetch row error")
 var GlobalAsync *Async
 
 type Async struct {
@@ -72,35 +72,34 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, logger *logrus.Entry, isDeb
 		if result.N == 0 {
 			logger.Trace("fetch finished")
 			return execResult, nil
-		} else {
-			res = result.Res
-			for i := 0; i < result.N; i++ {
-				var row unsafe.Pointer
-				logger.Tracef("get thread lock for fetch row, row:%d", i)
-				s = log.GetLogNow(isDebug)
-				thread.AsyncLocker.Lock()
-				logger.Debugf("get thread lock for fetch row cost:%s", log.GetLogDuration(isDebug, s))
-				s = log.GetLogNow(isDebug)
-				row = wrapper.TaosFetchRow(res)
-				logger.Debugf("taos_fetch_row finish, row:%p, cost:%s", row, log.GetLogDuration(isDebug, s))
-				thread.AsyncLocker.Unlock()
-				lengths := wrapper.FetchLengths(res, len(rowsHeader.ColNames))
-				logger.Tracef("fetch lengths:%d", lengths)
-				values := make([]driver.Value, len(rowsHeader.ColNames))
-				for j := range rowsHeader.ColTypes {
-					if row == nil {
-						logger.Error("fetch row error, row is nil")
-						return nil, FetchRowError
-					}
-					v := wrapper.FetchRow(row, j, rowsHeader.ColTypes[j], lengths[j], precision, timeFormat)
-					if vv, is := v.([]byte); is {
-						v = json.RawMessage(vv)
-					}
-					values[j] = v
+		}
+		res = result.Res
+		for i := 0; i < result.N; i++ {
+			var row unsafe.Pointer
+			logger.Tracef("get thread lock for fetch row, row:%d", i)
+			s = log.GetLogNow(isDebug)
+			thread.AsyncLocker.Lock()
+			logger.Debugf("get thread lock for fetch row cost:%s", log.GetLogDuration(isDebug, s))
+			s = log.GetLogNow(isDebug)
+			row = wrapper.TaosFetchRow(res)
+			logger.Debugf("taos_fetch_row finish, row:%p, cost:%s", row, log.GetLogDuration(isDebug, s))
+			thread.AsyncLocker.Unlock()
+			lengths := wrapper.FetchLengths(res, len(rowsHeader.ColNames))
+			logger.Tracef("fetch lengths:%d", lengths)
+			values := make([]driver.Value, len(rowsHeader.ColNames))
+			for j := range rowsHeader.ColTypes {
+				if row == nil {
+					logger.Error("fetch row error, row is nil")
+					return nil, ErrFetchRowError
 				}
-				logger.Tracef("get data, %v", values)
-				execResult.Data = append(execResult.Data, values)
+				v := wrapper.FetchRow(row, j, rowsHeader.ColTypes[j], lengths[j], precision, timeFormat)
+				if vv, is := v.([]byte); is {
+					v = json.RawMessage(vv)
+				}
+				values[j] = v
 			}
+			logger.Tracef("get data, %v", values)
+			execResult.Data = append(execResult.Data, values)
 		}
 	}
 }

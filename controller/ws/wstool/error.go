@@ -2,10 +2,10 @@ package wstool
 
 import (
 	"context"
-	"encoding/json"
 
-	"github.com/huskar-t/melody"
-	tErrors "github.com/taosdata/driver-go/v3/errors"
+	"github.com/sirupsen/logrus"
+	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
+	"github.com/taosdata/taosadapter/v3/tools/melody"
 )
 
 type WSErrorResp struct {
@@ -16,21 +16,21 @@ type WSErrorResp struct {
 	Timing  int64  `json:"timing"`
 }
 
-func WSErrorMsg(ctx context.Context, session *melody.Session, code int, message string, action string, reqID uint64) {
-	b, _ := json.Marshal(&WSErrorResp{
+func WSErrorMsg(ctx context.Context, session *melody.Session, logger *logrus.Entry, code int, message string, action string, reqID uint64) {
+	data := &WSErrorResp{
 		Code:    code & 0xffff,
 		Message: message,
 		Action:  action,
 		ReqID:   reqID,
 		Timing:  GetDuration(ctx),
-	})
-	session.Write(b)
+	}
+	WSWriteJson(session, logger, data)
 }
-func WSError(ctx context.Context, session *melody.Session, err error, action string, reqID uint64) {
+func WSError(ctx context.Context, session *melody.Session, logger *logrus.Entry, err error, action string, reqID uint64) {
 	e, is := err.(*tErrors.TaosError)
 	if is {
-		WSErrorMsg(ctx, session, int(e.Code)&0xffff, e.ErrStr, action, reqID)
+		WSErrorMsg(ctx, session, logger, int(e.Code)&0xffff, e.ErrStr, action, reqID)
 	} else {
-		WSErrorMsg(ctx, session, 0xffff, err.Error(), action, reqID)
+		WSErrorMsg(ctx, session, logger, 0xffff, err.Error(), action, reqID)
 	}
 }

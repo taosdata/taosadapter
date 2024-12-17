@@ -6,7 +6,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/taosdata/driver-go/v3/wrapper/cgo"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 )
 
 type FetchRawBlockResult struct {
@@ -206,11 +206,9 @@ func (c *TMQHandlerPool) Put(handler *TMQHandler) {
 		}
 		c.mu.Unlock()
 		return
-	} else {
-		c.handlers <- handler
-		c.mu.Unlock()
-		return
 	}
+	c.handlers <- handler
+	c.mu.Unlock()
 }
 
 var GlobalTMQHandlerPoll = NewHandlerPool(10000)

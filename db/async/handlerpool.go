@@ -5,7 +5,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/taosdata/driver-go/v3/wrapper/cgo"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 )
 
 type Result struct {
@@ -97,9 +97,7 @@ func (c *HandlerPool) Put(handler *Handler) {
 		}
 		c.mu.Unlock()
 		return
-	} else {
-		c.handlers <- handler
-		c.mu.Unlock()
-		return
 	}
+	c.handlers <- handler
+	c.mu.Unlock()
 }

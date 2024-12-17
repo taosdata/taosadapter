@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/taosdata/driver-go/v3/common"
+	"github.com/taosdata/taosadapter/v3/driver/common"
 )
 
 func TestParseBlock(t *testing.T) {

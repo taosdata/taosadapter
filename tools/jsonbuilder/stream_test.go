@@ -27,10 +27,12 @@ func Test_writeByte_should_grow_buffer(t *testing.T) {
 func Test_writeBytes_should_grow_buffer(t *testing.T) {
 	should := require.New(t)
 	stream := NewStream(ConfigDefault, nil, 1)
-	stream.Write([]byte{'1', '2'})
+	_, err := stream.Write([]byte{'1', '2'})
+	assert.NoError(t, err)
 	should.Equal("12", string(stream.Buffer()))
 	should.Equal(2, len(stream.buf))
-	stream.Write([]byte{'3', '4', '5', '6', '7'})
+	_, err = stream.Write([]byte{'3', '4', '5', '6', '7'})
+	assert.NoError(t, err)
 	should.Equal("1234567", string(stream.Buffer()))
 	should.Equal(7, len(stream.buf))
 }
@@ -68,7 +70,8 @@ func Test_flush_buffer_should_stop_grow_buffer(t *testing.T) {
 	for i := 0; i < 10000000; i++ {
 		stream.WriteInt(0)
 		stream.WriteMore()
-		stream.Flush()
+		err := stream.Flush()
+		assert.NoError(t, err)
 	}
 	stream.WriteInt(0)
 	stream.WriteArrayEnd()
@@ -91,10 +94,12 @@ func TestStream_Common(t *testing.T) {
 	assert.Equal(t, 0, stream.Buffered())
 	stream.SetBuffer(make([]byte, 0, 512))
 	stream.Reset(writer2)
-	stream.Write([]byte{1})
+	_, err := stream.Write([]byte{1})
+	assert.NoError(t, err)
 	stream.WriteArrayStart()
-	stream.WriteByte(1)
-	stream.Flush()
+	stream.AddByte(1)
+	err = stream.Flush()
+	assert.NoError(t, err)
 	stream.WriteNil()
 	stream.WriteTrue()
 	stream.WriteFalse()
@@ -175,7 +180,8 @@ func TestStr(t *testing.T) {
 	b := &strings.Builder{}
 	stream := BorrowStream(b)
 	stream.WriteString("a\nb")
-	stream.Flush()
+	err := stream.Flush()
+	assert.NoError(t, err)
 	assert.Equal(t, "\"a\\nb\"", b.String())
 }
 
@@ -185,7 +191,8 @@ func TestStrByte(t *testing.T) {
 	stream.WriteStringByte('a')
 	stream.WriteStringByte('\n')
 	stream.WriteStringByte('b')
-	stream.Flush()
+	err := stream.Flush()
+	assert.NoError(t, err)
 	assert.Equal(t, "a\\nb", b.String())
 }
 

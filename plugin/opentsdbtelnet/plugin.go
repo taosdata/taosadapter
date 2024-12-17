@@ -19,6 +19,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/plugin"
 	"github.com/taosdata/taosadapter/v3/schemaless/inserter"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
+	"github.com/taosdata/taosadapter/v3/tools/joinerror"
 )
 
 var logger = log.GetLogger("PLG").WithField("mod", "telnet")
@@ -138,7 +139,7 @@ type Connection struct {
 func (c *Connection) handle() {
 	defer func() {
 		c.l.wg.Done()
-		c.conn.Close()
+		_ = c.conn.Close()
 		c.l.accept <- true
 		c.l.forget(c.id)
 	}()
@@ -214,11 +215,15 @@ func (c *Connection) handle() {
 				}
 				s = s[:len(s)-1]
 				if s == versionCommand {
-					c.conn.Write([]byte{'1'})
+					_, err = c.conn.Write([]byte{'1'})
+					if err != nil {
+						logger.WithError(err).Error("conn write")
+						c.close()
+						return
+					}
 					continue
-				} else {
-					dataChan <- s
 				}
+				dataChan <- s
 			}
 		}
 	}
@@ -233,7 +238,6 @@ func (c *Connection) close() {
 
 func (l *TCPListener) stop() error {
 	close(l.done)
-	l.listener.Close()
 	var tcpConnList []*Connection
 	l.cleanup.Lock()
 	for _, conn := range l.connList {
@@ -244,7 +248,7 @@ func (l *TCPListener) stop() error {
 		conn.close()
 	}
 	l.wg.Wait()
-	return nil
+	return l.listener.Close()
 }
 
 func (p *Plugin) Init(_ gin.IRouter) error {
@@ -284,10 +288,17 @@ func (p *Plugin) Stop() error {
 	if p.done != nil {
 		close(p.done)
 	}
+	var errs []error
 	for _, listener := range p.TCPListeners {
-		listener.stop()
+		err := listener.stop()
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 	p.wg.Wait()
+	if len(errs) > 0 {
+		return joinerror.Join(errs...)
+	}
 	return nil
 }
 

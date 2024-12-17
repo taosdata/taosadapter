@@ -106,7 +106,7 @@ jobs:
     runs-on: windows-2022
     strategy:
       matrix:
-        go: [ '1.20' ]
+        go: [ 'stable' ]
     name: Go ${{ matrix.go }}
     steps:
       - name: get cache server by pr

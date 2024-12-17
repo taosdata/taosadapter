@@ -1,5 +1,6 @@
 package jsontype
 
+// JsonUint8 is a wrapper for []uint8 to implement json.Marshaler interface.
 type JsonUint8 []uint8
 
 var digits []uint32
@@ -26,6 +27,7 @@ func writeFirstBuf(space []byte, v uint32) []byte {
 	return space
 }
 
+// MarshalJSON implements the json.Marshaler interface.
 func (m JsonUint8) MarshalJSON() ([]byte, error) {
 	if m == nil {
 		return []byte("null"), nil

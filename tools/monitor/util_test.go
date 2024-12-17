@@ -5,13 +5,19 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestReadUint(t *testing.T) {
 	// Valid uint64 number in a file
 	validPath := "valid_uint.txt"
-	os.WriteFile(validPath, []byte("123456"), 0644)
-	defer os.Remove(validPath)
+	err := os.WriteFile(validPath, []byte("123456"), 0644)
+	assert.NoError(t, err)
+	defer func() {
+		err := os.Remove(validPath)
+		assert.NoError(t, err)
+	}()
 
 	result, err := readUint(validPath)
 	if err != nil || result != 123456 {

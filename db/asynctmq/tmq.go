@@ -1,6 +1,7 @@
 //go:build !windows
 // +build !windows
 
+// Package asynctmq is a cgo wrapper for TDengine tmq API
 package asynctmq
 
 /*
@@ -642,7 +643,7 @@ import "C"
 import (
 	"unsafe"
 
-	"github.com/taosdata/driver-go/v3/wrapper/cgo"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 )
 
 // InitTMQThread tmq_thread *init_tmq_thread()
@@ -696,10 +697,12 @@ func TaosaTMQConsumerCloseA(tmqThread unsafe.Pointer, tmq unsafe.Pointer, caller
 	C.taosa_tmq_consumer_close_a_wrapper((*C.tmq_thread)(tmqThread), (*C.tmq_t)(tmq), C.uintptr_t(caller))
 }
 
+// TaosaTMQGetRawA malloc tmq_raw_data
 func TaosaInitTMQRaw() unsafe.Pointer {
 	return unsafe.Pointer(C.malloc(C.sizeof_struct_tmq_raw_data))
 }
 
+// TaosaFreeTMQRaw free tmq_raw_data
 func TaosaFreeTMQRaw(raw unsafe.Pointer) {
 	C.free(raw)
 }

@@ -4,8 +4,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 
-	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
+	"github.com/taosdata/taosadapter/v3/tools/melody"
 	"github.com/taosdata/taosadapter/v3/version"
 )
 
@@ -18,14 +18,20 @@ type TDEngineRestfulResp struct {
 }
 
 func WSWriteJson(session *melody.Session, logger *logrus.Entry, data interface{}) {
-	b, _ := json.Marshal(data)
+	b, err := json.Marshal(data)
+	if err != nil {
+		logger.Errorf("marshal json failed:%s, data:%#v", err, data)
+		return
+	}
 	logger.Tracef("write json:%s", b)
-	session.Write(b)
+	_ = session.Write(b)
+	logger.Trace("write json done")
 }
 
 func WSWriteBinary(session *melody.Session, data []byte, logger *logrus.Entry) {
 	logger.Tracef("write binary:%+v", data)
-	session.WriteBinary(data)
+	_ = session.WriteBinary(data)
+	logger.Trace("write binary done")
 }
 
 type WSVersionResp struct {
@@ -36,6 +42,12 @@ type WSVersionResp struct {
 }
 
 var VersionResp []byte
+
+func WSWriteVersion(session *melody.Session, logger *logrus.Entry) {
+	logger.Tracef("write version,%s", VersionResp)
+	_ = session.Write(VersionResp)
+	logger.Trace("write version done")
+}
 
 type WSAction struct {
 	Action string          `json:"action"`

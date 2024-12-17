@@ -21,6 +21,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/layout"
 )
 
 var router *gin.Engine
@@ -342,7 +343,7 @@ func TestWrongEmptySql(t *testing.T) {
 
 type ErrorReader struct{}
 
-func (e *ErrorReader) Read(p []byte) (n int, err error) {
+func (e *ErrorReader) Read(_ []byte) (n int, err error) {
 	return 0, errors.New("forced read error")
 }
 
@@ -673,4 +674,99 @@ func TestInternalError(t *testing.T) {
 	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestSetConnectionOptions(t *testing.T) {
+	config.Conf.RestfulRowLimit = -1
+	w := httptest.NewRecorder()
+	body := strings.NewReader("create database if not exists rest_test_options")
+	url := "/rest/sql?app=rest_test_options&ip=192.168.100.1&conn_tz=Europe/Moscow&tz=Asia/Shanghai"
+	req, _ := http.NewRequest(http.MethodPost, url, body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	router.ServeHTTP(w, req)
+	checkResp(t, w)
+
+	defer func() {
+		body := strings.NewReader("drop database if exists rest_test_options")
+		req, _ := http.NewRequest(http.MethodPost, url, body)
+		req.RemoteAddr = "127.0.0.1:33333"
+		req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		checkResp(t, w)
+	}()
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("create table if not exists rest_test_options.t1(ts timestamp,v1 bool)")
+	req.Body = io.NopCloser(body)
+	router.ServeHTTP(w, req)
+	checkResp(t, w)
+
+	w = httptest.NewRecorder()
+	ts := "2024-12-04 12:34:56.789"
+	body = strings.NewReader(fmt.Sprintf(`insert into rest_test_options.t1 values ('%s',true)`, ts))
+	req.Body = io.NopCloser(body)
+	router.ServeHTTP(w, req)
+	checkResp(t, w)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader(`select * from rest_test_options.t1 where ts = '2024-12-04 12:34:56.789'`)
+	req.Body = io.NopCloser(body)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	var result TDEngineRestfulRespDoc
+	err := json.Unmarshal(w.Body.Bytes(), &result)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, result.Code)
+	assert.Equal(t, 1, len(result.Data))
+
+	location, err := time.LoadLocation("Europe/Moscow")
+	assert.NoError(t, err)
+	expectTime, err := time.ParseInLocation("2006-01-02 15:04:05.000", ts, location)
+	assert.NoError(t, err)
+	expectTimeStr := expectTime.Format(layout.LayoutMillSecond)
+	assert.Equal(t, expectTimeStr, result.Data[0][0])
+	t.Log(expectTimeStr, result.Data[0][0])
+
+	// wrong timezone
+	wrongTZUrl := "/rest/sql?app=rest_test_options&ip=192.168.100.1&tz=xxx"
+	body = strings.NewReader(`select * from rest_test_options.t1 where ts = '2024-12-04 12:34:56.789'`)
+	req, _ = http.NewRequest(http.MethodPost, wrongTZUrl, body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 400, w.Code)
+
+	// wrong conn_tz
+	wrongConnTZUrl := "/rest/sql?app=rest_test_options&ip=192.168.100.1&conn_tz=xxx"
+	body = strings.NewReader(`select * from rest_test_options.t1 where ts = '2024-12-04 12:34:56.789'`)
+	req, _ = http.NewRequest(http.MethodPost, wrongConnTZUrl, body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 400, w.Code)
+	// wrong ip
+	wrongIPUrl := "/rest/sql?app=rest_test_options&ip=xxx.xxx.xxx.xxx&conn_tz=Europe/Moscow&tz=Asia/Shanghai"
+	req, _ = http.NewRequest(http.MethodPost, wrongIPUrl, body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	w = httptest.NewRecorder()
+	body = strings.NewReader(`select * from rest_test_options.t1 where ts = '2024-12-04 12:34:56.789'`)
+	req.Body = io.NopCloser(body)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	err = json.Unmarshal(w.Body.Bytes(), &result)
+	assert.NoError(t, err)
+	assert.NotEqual(t, 0, result.Code)
+}
+
+func checkResp(t *testing.T, w *httptest.ResponseRecorder) {
+	assert.Equal(t, 200, w.Code)
+	var result TDEngineRestfulRespDoc
+	err := json.Unmarshal(w.Body.Bytes(), &result)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, result.Code)
 }

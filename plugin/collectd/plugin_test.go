@@ -7,16 +7,17 @@ import (
 	"net"
 	"testing"
 	"time"
+	"unsafe"
 
 	"collectd.org/api"
 	"collectd.org/network"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/driver-go/v3/af"
-	"github.com/taosdata/driver-go/v3/errors"
-	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/driver/common/parser"
+	"github.com/taosdata/taosadapter/v3/driver/errors"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 )
 
 // @author: xftan
@@ -28,13 +29,14 @@ func TestCollectd(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	afC, err := af.NewConnector(conn)
+	defer func() {
+		wrapper.TaosClose(conn)
+	}()
+	err = exec(conn, "drop database if exists collectd")
 	assert.NoError(t, err)
-	defer afC.Close()
-	_, err = afC.Exec("drop database if exists collectd")
+	err = exec(conn, "create database if not exists collectd")
 	assert.NoError(t, err)
-	_, err = afC.Exec("create database if not exists collectd")
-	assert.NoError(t, err)
+	//nolint:staticcheck
 	rand.Seed(time.Now().UnixNano())
 	p := &Plugin{}
 	config.Init()
@@ -75,7 +77,10 @@ func TestCollectd(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer c.Close()
+	defer func() {
+		err = c.Close()
+		assert.NoError(t, err)
+	}()
 	_, err = c.Write(bytes)
 	if err != nil {
 		t.Error(err)
@@ -92,30 +97,60 @@ func TestCollectd(t *testing.T) {
 		}
 		wrapper.TaosFreeResult(r)
 	}()
-	r, err := afC.Query("select last(`value`) from collectd.`cpu_value`")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer r.Close()
-	values := make([]driver.Value, 1)
-	err = r.Next(values)
+	values, err := query(conn, "select last(`value`) from collectd.`cpu_value`")
 	assert.NoError(t, err)
-	if int32(values[0].(float64)) != number {
+	if int32(values[0][0].(float64)) != number {
 		t.Errorf("got %f expect %d", values[0], number)
 	}
 
-	r, err = afC.Query("select `ttl` from information_schema.ins_tables " +
+	values, err = query(conn, "select `ttl` from information_schema.ins_tables "+
 		" where db_name='collectd' and stable_name='cpu_value'")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	defer r.Close()
-	values = make([]driver.Value, 1)
-	err = r.Next(values)
-	assert.NoError(t, err)
-	if values[0].(int32) != 1000 {
+	if values[0][0].(int32) != 1000 {
 		t.Fatal("ttl miss")
 	}
+}
+
+func exec(conn unsafe.Pointer, sql string) error {
+	res := wrapper.TaosQuery(conn, sql)
+	defer wrapper.TaosFreeResult(res)
+	code := wrapper.TaosError(res)
+	if code != 0 {
+		errStr := wrapper.TaosErrorStr(res)
+		return errors.NewError(code, errStr)
+	}
+	return nil
+}
+
+func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
+	res := wrapper.TaosQuery(conn, sql)
+	defer wrapper.TaosFreeResult(res)
+	code := wrapper.TaosError(res)
+	if code != 0 {
+		errStr := wrapper.TaosErrorStr(res)
+		return nil, errors.NewError(code, errStr)
+	}
+	fileCount := wrapper.TaosNumFields(res)
+	rh, err := wrapper.ReadColumn(res, fileCount)
+	if err != nil {
+		return nil, err
+	}
+	precision := wrapper.TaosResultPrecision(res)
+	var result [][]driver.Value
+	for {
+		columns, errCode, block := wrapper.TaosFetchRawBlock(res)
+		if errCode != 0 {
+			errStr := wrapper.TaosErrorStr(res)
+			return nil, errors.NewError(errCode, errStr)
+		}
+		if columns == 0 {
+			break
+		}
+		r := parser.ReadBlock(block, columns, rh.ColTypes, precision)
+		result = append(result, r...)
+	}
+	return result, nil
 }

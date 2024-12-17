@@ -2,13 +2,13 @@ package ws
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/huskar-t/melody"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
+	"github.com/taosdata/taosadapter/v3/tools/melody"
 )
 
 func init() {
@@ -25,7 +25,7 @@ func (ws *webSocketCtl) Init(ctl gin.IRouter) {
 		logger := log.GetLogger("WSC").WithFields(logrus.Fields{
 			config.SessionIDKey: sessionID})
 		if err := ws.m.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": logger}); err != nil {
-			panic(err)
+			logger.Errorf("handle request error: %v", err)
 		}
 	})
 }
@@ -33,7 +33,7 @@ func (ws *webSocketCtl) Init(ctl gin.IRouter) {
 func initController() *webSocketCtl {
 	m := melody.New()
 	m.Config.MaxMessageSize = 0
-	m.UpGrader.EnableCompression = true
+	m.Upgrader.EnableCompression = true
 
 	m.HandleConnect(func(session *melody.Session) {
 		logger := wstool.GetLogger(session)
@@ -41,16 +41,32 @@ func initController() *webSocketCtl {
 		session.Set(TaosKey, newHandler(session))
 	})
 	m.HandleMessage(func(session *melody.Session, data []byte) {
-		if m.IsClosed() {
+		h := session.MustGet(TaosKey).(*messageHandler)
+		if h.isClosed() {
 			return
 		}
-		session.MustGet(TaosKey).(*messageHandler).handleMessage(session, data)
+		h.wait.Add(1)
+		go func() {
+			defer h.wait.Done()
+			if h.isClosed() {
+				return
+			}
+			h.handleMessage(session, data)
+		}()
 	})
-	m.HandleMessageBinary(func(session *melody.Session, bytes []byte) {
-		if m.IsClosed() {
+	m.HandleMessageBinary(func(session *melody.Session, data []byte) {
+		h := session.MustGet(TaosKey).(*messageHandler)
+		if h.isClosed() {
 			return
 		}
-		session.MustGet(TaosKey).(*messageHandler).handleMessageBinary(session, bytes)
+		h.wait.Add(1)
+		go func() {
+			defer h.wait.Done()
+			if h.isClosed() {
+				return
+			}
+			h.handleMessageBinary(session, data)
+		}()
 	})
 	m.HandleClose(func(session *melody.Session, i int, s string) error {
 		logger := wstool.GetLogger(session)

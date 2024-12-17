@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/huskar-t/melody"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/melody"
 )
 
 func TestGetDuration(t *testing.T) {
@@ -21,7 +21,7 @@ func TestGetDuration(t *testing.T) {
 }
 
 func TestGetLogger(t *testing.T) {
-	logger := logrus.New()
+	logger := log.GetLogger("test")
 	session := &melody.Session{}
 	session.Set("logger", logger.WithField("test_field", "test_value"))
 	entry := GetLogger(session)
@@ -29,7 +29,7 @@ func TestGetLogger(t *testing.T) {
 }
 
 func TestLogWSError(t *testing.T) {
-	logger := logrus.New()
+	logger := log.GetLogger("test")
 	session := &melody.Session{}
 	session.Set("logger", logger.WithField("test_field", "test_value"))
 	LogWSError(session, nil)

@@ -10,8 +10,8 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/prometheus/prometheus/prompb"
-	tErrors "github.com/taosdata/driver-go/v3/errors"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
+	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/plugin"
@@ -36,7 +36,7 @@ func (p *Plugin) Init(r gin.IRouter) error {
 		return nil
 	}
 	r.Use(plugin.Auth(func(c *gin.Context, code int, err error) {
-		c.AbortWithError(code, err)
+		_ = c.AbortWithError(code, err)
 	}))
 	r.POST("remote_read/:db", func(c *gin.Context) {
 		if monitor.QueryPaused() {

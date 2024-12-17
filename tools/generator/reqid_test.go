@@ -33,11 +33,11 @@ func TestGetReqID(t *testing.T) {
 	// Call GetReqID multiple times
 	for i := 0; i < 100; i++ {
 		// Check if the reqIncrement resets after it exceeds 0x00ffffffffffffff
-		id := GetReqID()
+		GetReqID()
 
 		// Check if the ID is unique
 		atomic.StoreInt64(&reqIncrement, 0x00ffffffffffffff+1)
-		id = GetReqID()
+		id := GetReqID()
 		if _, exists := ids[id]; exists {
 			if id != int64(config.Conf.InstanceID)<<56|1 {
 				t.Errorf("GetReqID() returned a duplicate ID: %v", id)

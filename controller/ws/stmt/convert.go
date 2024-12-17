@@ -10,10 +10,10 @@ import (
 	"unsafe"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/taosdata/driver-go/v3/common"
-	"github.com/taosdata/driver-go/v3/common/parser"
-	stmtCommon "github.com/taosdata/driver-go/v3/common/stmt"
-	"github.com/taosdata/driver-go/v3/types"
+	"github.com/taosdata/taosadapter/v3/driver/common"
+	"github.com/taosdata/taosadapter/v3/driver/common/parser"
+	stmtCommon "github.com/taosdata/taosadapter/v3/driver/common/stmt"
+	"github.com/taosdata/taosadapter/v3/driver/types"
 	"github.com/taosdata/taosadapter/v3/tools"
 )
 
@@ -217,7 +217,7 @@ func BlockConvert(block unsafe.Pointer, blockSize int, fields []*stmtCommon.Stmt
 	nullBitMapOffset := uintptr(parser.BitmapLen(blockSize))
 	lengthOffset := parser.RawBlockGetColumnLengthOffset(colCount)
 	pHeader := tools.AddPointer(block, parser.RawBlockGetColDataOffset(colCount))
-	pStart := pHeader
+	var pStart unsafe.Pointer
 	length := 0
 	for column := 0; column < colCount; column++ {
 		r[column] = make([]driver.Value, blockSize)
@@ -285,9 +285,8 @@ func ItemIsNull(pHeader unsafe.Pointer, row int) bool {
 func rawConvertBool(pStart unsafe.Pointer, row int, _ ...interface{}) driver.Value {
 	if (*((*byte)(tools.AddPointer(pStart, uintptr(row)*1)))) != 0 {
 		return types.TaosBool(true)
-	} else {
-		return types.TaosBool(false)
 	}
+	return types.TaosBool(false)
 }
 
 func rawConvertTinyint(pStart unsafe.Pointer, row int, _ ...interface{}) driver.Value {

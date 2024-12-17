@@ -2609,12 +2609,8 @@ github.com/swaggo/swag v1.8.8/go.mod h1:ezQVUUhly8dludpVk+/PuwJWvLLanB13ygV5Pr9e
 github.com/syndtr/gocapability v0.0.0-20170704070218-db04d3cc01c8/go.mod h1:hkRG7XYTFWNJGYcbNJQlaLq0fg1yr4J4t/NcTQtrfww=
 github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2/go.mod h1:hkRG7XYTFWNJGYcbNJQlaLq0fg1yr4J4t/NcTQtrfww=
 github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635/go.mod h1:hkRG7XYTFWNJGYcbNJQlaLq0fg1yr4J4t/NcTQtrfww=
-github.com/taosdata/driver-go/v3 v3.5.1-0.20241101015534-8fb37f82db51 h1:diWG8X6vBAERTPk9DnsMfcFH/gN5s9v/WZ2C+gJMcs4=
-github.com/taosdata/driver-go/v3 v3.5.1-0.20241101015534-8fb37f82db51/go.mod h1:H2vo/At+rOPY1aMzUV9P49SVX7NlXb3LAbKw+MCLrmU=
 github.com/taosdata/file-rotatelogs/v2 v2.5.2 h1:6ryjwDdKqQtWrkVq9OKj4gvMING/f+fDluMAAe2DIXQ=
 github.com/taosdata/file-rotatelogs/v2 v2.5.2/go.mod h1:Qm99Lh0iMZouGgyy++JgTqKvP5FQw1ruR5jkWF7e1n0=
-github.com/taosdata/melody v0.0.0-20240407104517-11dcf4a47591 h1:JT7pgLJpQvmSGPAFVWJZG/bPyuAio0uY3cb7AKyfhGY=
-github.com/taosdata/melody v0.0.0-20240407104517-11dcf4a47591/go.mod h1:pfxtyQ9i9meRbS4BJBZ9YkE7upPetr0KKqcOCfi4nqY=
 github.com/tbrandon/mbserver v0.0.0-20170611213546-993e1772cc62/go.mod h1:qUzPVlSj2UgxJkVbH0ZwuuiR46U8RBMDT5KLY78Ifpw=
 github.com/tchap/go-patricia v2.2.6+incompatible/go.mod h1:bmLyhP68RS6kStMGxByiQ23RP/odRBOTVjwp2cDyi6I=
 github.com/tdakkota/asciicheck v0.0.0-20200416200610-e657995f937b/go.mod h1:yHp0ai0Z9gUljN3o0xMhYJnH/IcvkdTBOX2fmJ93JEM=

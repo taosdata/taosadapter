@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"github.com/taosdata/driver-go/v3/common"
+	"github.com/taosdata/taosadapter/v3/driver/common"
 )
 
 type Config struct {

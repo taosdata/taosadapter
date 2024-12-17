@@ -6,16 +6,20 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/sirupsen/logrus"
-	"github.com/taosdata/driver-go/v3/errors"
-	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/spf13/viper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/driver/errors"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
+	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/schemaless/capi"
 )
 
 func TestMain(m *testing.M) {
+	viper.Set("logLevel", "trace")
+	viper.Set("uploadKeeper.enable", false)
 	config.Init()
+	log.ConfigLog()
 	db.PrepareConnection()
 	m.Run()
 }
@@ -31,7 +35,7 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 	}
 	defer wrapper.TaosClose(conn)
 	defer func() {
-		r := wrapper.TaosQuery(conn, "drop database if exists test_capi")
+		r := wrapper.TaosQuery(conn, "drop database if exists test_capi_opentsdb")
 		code := wrapper.TaosError(r)
 		if code != 0 {
 			errStr := wrapper.TaosErrorStr(r)
@@ -39,7 +43,7 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 		}
 		wrapper.TaosFreeResult(r)
 	}()
-	r := wrapper.TaosQuery(conn, "create database if not exists test_capi")
+	r := wrapper.TaosQuery(conn, "create database if not exists test_capi_opentsdb")
 	code := wrapper.TaosError(r)
 	if code != 0 {
 		errStr := wrapper.TaosErrorStr(r)
@@ -62,7 +66,7 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 			args: args{
 				taosConnect: conn,
 				data:        "df.data.df_complex.used 1636539620 21393473536 fqdn=vm130  status=production",
-				db:          "test_capi",
+				db:          "test_capi_opentsdb",
 				ttl:         100,
 			},
 			wantErr: false,
@@ -71,7 +75,7 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 			args: args{
 				taosConnect: conn,
 				data:        "df.data.df_complex.used 163653962000 21393473536 fqdn=vm130  status=production",
-				db:          "test_capi",
+				db:          "test_capi_opentsdb",
 			},
 			wantErr: true,
 		}, {
@@ -79,7 +83,7 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 			args: args{
 				taosConnect: conn,
 				data:        "df.data.df_complex.used 1636539620 21393473536 fqdn=vm130  status=production",
-				db:          "1'test_capi",
+				db:          "1'test_capi_opentsdb",
 				ttl:         1000,
 			},
 			wantErr: true,
@@ -88,16 +92,16 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 			args: args{
 				taosConnect: conn,
 				data:        "",
-				db:          "test_capi",
+				db:          "test_capi_opentsdb",
 				ttl:         1000,
 			},
 			wantErr: false,
 		},
 	}
-	logger := logrus.New().WithField("test", "TestInsertOpentsdbTelnet")
+	logger := log.GetLogger("test").WithField("test", "TestInsertOpentsdbTelnet")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := capi.InsertOpentsdbTelnet(tt.args.taosConnect, []string{tt.args.data}, tt.args.db, tt.args.ttl, 0, "", logger); (err != nil) != tt.wantErr {
+			if err := capi.InsertOpentsdbTelnet(tt.args.taosConnect, []string{tt.args.data}, tt.args.db, tt.args.ttl, 0, "", logger.WithField("name", tt.name)); (err != nil) != tt.wantErr {
 				t.Errorf("InsertOpentsdbTelnet() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -120,7 +124,7 @@ func BenchmarkTelnet(b *testing.B) {
 		}
 		wrapper.TaosFreeResult(r)
 	}()
-	logger := logrus.New().WithField("test", "BenchmarkTelnet")
+	logger := log.GetLogger("test").WithField("test", "BenchmarkTelnet")
 	for i := 0; i < b.N; i++ {
 		//`sys.if.bytes.out`,`host`=web01,`interface`=eth0
 		//t_98df8453856519710bfc2f1b5f8202cf
@@ -144,7 +148,7 @@ func TestInsertOpentsdbJson(t *testing.T) {
 	now := time.Now().Unix()
 	defer wrapper.TaosClose(conn)
 	defer func() {
-		r := wrapper.TaosQuery(conn, "drop database if exists test_capi")
+		r := wrapper.TaosQuery(conn, "drop database if exists test_capi_opentsdb_json")
 		code := wrapper.TaosError(r)
 		if code != 0 {
 			errStr := wrapper.TaosErrorStr(r)
@@ -152,7 +156,7 @@ func TestInsertOpentsdbJson(t *testing.T) {
 		}
 		wrapper.TaosFreeResult(r)
 	}()
-	r := wrapper.TaosQuery(conn, "create database if not exists test_capi")
+	r := wrapper.TaosQuery(conn, "create database if not exists test_capi_opentsdb_json")
 	code := wrapper.TaosError(r)
 	if code != 0 {
 		errStr := wrapper.TaosErrorStr(r)
@@ -184,7 +188,7 @@ func TestInsertOpentsdbJson(t *testing.T) {
        "dc": "lga"
     }
 }`, now)),
-				db:  "test_capi",
+				db:  "test_capi_opentsdb_json",
 				ttl: 100,
 			},
 			wantErr: false,
@@ -202,7 +206,7 @@ func TestInsertOpentsdbJson(t *testing.T) {
        "dc": "lga"
     }
 }`, now)),
-				db:  "test_capi",
+				db:  "test_capi_opentsdb_json",
 				ttl: 0,
 			},
 			wantErr: false,
@@ -220,7 +224,7 @@ func TestInsertOpentsdbJson(t *testing.T) {
        "dc": "lga"
     }
 }`),
-				db: "1'test_capi",
+				db: "1'test_capi_opentsdb_json",
 			},
 			wantErr: true,
 		}, {
@@ -228,13 +232,13 @@ func TestInsertOpentsdbJson(t *testing.T) {
 			args: args{
 				taosConnect: conn,
 				data:        nil,
-				db:          "test_capi",
+				db:          "test_capi_opentsdb_json",
 				ttl:         1000,
 			},
 			wantErr: false,
 		},
 	}
-	logger := logrus.New().WithField("test", "TestInsertOpentsdbJson")
+	logger := log.GetLogger("test").WithField("test", "TestInsertOpentsdbJson")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := capi.InsertOpentsdbJson(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.ttl, 0, "", logger); (err != nil) != tt.wantErr {
@@ -252,7 +256,7 @@ func TestInsertOpentsdbTelnetBatch(t *testing.T) {
 	}
 	defer wrapper.TaosClose(conn)
 	defer func() {
-		r := wrapper.TaosQuery(conn, "drop database if exists test_capi")
+		r := wrapper.TaosQuery(conn, "drop database if exists test_capi_opentsdb_batch")
 		code := wrapper.TaosError(r)
 		if code != 0 {
 			errStr := wrapper.TaosErrorStr(r)
@@ -260,7 +264,7 @@ func TestInsertOpentsdbTelnetBatch(t *testing.T) {
 		}
 		wrapper.TaosFreeResult(r)
 	}()
-	r := wrapper.TaosQuery(conn, "create database if not exists test_capi")
+	r := wrapper.TaosQuery(conn, "create database if not exists test_capi_opentsdb_batch")
 	code := wrapper.TaosError(r)
 	if code != 0 {
 		errStr := wrapper.TaosErrorStr(r)
@@ -286,13 +290,13 @@ func TestInsertOpentsdbTelnetBatch(t *testing.T) {
 					"df.data.df_complex.used 1636539620 21393473536 fqdn=vm130  status=production",
 					"df.data.df_complex.used 1636539621 21393473536 fqdn=vm129  status=production",
 				},
-				db:  "test_capi",
+				db:  "test_capi_opentsdb_batch",
 				ttl: 100,
 			},
 			wantErr: false,
 		},
 	}
-	logger := logrus.New().WithField("test", "TestInsertOpentsdbTelnetBatch")
+	logger := log.GetLogger("test").WithField("test", "TestInsertOpentsdbTelnetBatch")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := capi.InsertOpentsdbTelnet(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.ttl, 0, "", logger); (err != nil) != tt.wantErr {

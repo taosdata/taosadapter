@@ -5,18 +5,20 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	tErrors "github.com/taosdata/driver-go/v3/errors"
-	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
+	"github.com/taosdata/taosadapter/v3/log"
 )
 
 func TestMain(m *testing.M) {
 	viper.Set("smlAutoCreateDB", true)
+	viper.Set("logLevel", "trace")
 	config.Init()
+	log.ConfigLog()
 	db.PrepareConnection()
 	m.Run()
 	viper.Set("smlAutoCreateDB", false)
@@ -26,7 +28,6 @@ func TestMain(m *testing.M) {
 // @date: 2021/12/14 15:05
 // @description: test creat database with connection
 func TestCreateDBWithConnection(t *testing.T) {
-	db.PrepareConnection()
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Error(err)
@@ -52,7 +53,7 @@ func TestCreateDBWithConnection(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := CreateDBWithConnection(tt.args.connection, logrus.New().WithField("test", "TestCreateDBWithConnection"), false, tt.args.db, 0); (err != nil) != tt.wantErr {
+			if err := CreateDBWithConnection(tt.args.connection, log.GetLogger("test").WithField("test", "TestCreateDBWithConnection"), false, tt.args.db, 0); (err != nil) != tt.wantErr {
 				t.Errorf("CreateDBWithConnection() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			code := wrapper.TaosSelectDB(tt.args.connection, tt.args.db)
@@ -107,7 +108,7 @@ func TestSchemalessSelectDB(t *testing.T) {
 				return
 			}
 			wrapper.TaosFreeResult(result)
-			if err := SchemalessSelectDB(tt.args.taosConnect, logrus.New().WithField("test", "TestSchemalessSelectDB"), false, tt.args.db, 0); (err != nil) != tt.wantErr {
+			if err := SchemalessSelectDB(tt.args.taosConnect, log.GetLogger("test").WithField("test", "TestSchemalessSelectDB"), false, tt.args.db, 0); (err != nil) != tt.wantErr {
 				t.Errorf("selectDB() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			r := wrapper.TaosQuery(tt.args.taosConnect, fmt.Sprintf("drop database if exists %s", tt.args.db))

@@ -6,14 +6,14 @@ import (
 	"unsafe"
 
 	"github.com/sirupsen/logrus"
-	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 )
 
 func TestMain(m *testing.M) {
 	config.Init()
-	log.SetLevel("trace")
+	_ = log.SetLevel("trace")
 	m.Run()
 }
 
@@ -48,7 +48,7 @@ func TestAsync_TaosExec(t *testing.T) {
 			args: args{
 				taosConnect: conn,
 				sql:         "select 1",
-				timeFormat: func(ts int64, precision int) driver.Value {
+				timeFormat: func(ts int64, _ int) driver.Value {
 					return ts
 				},
 			},
@@ -98,7 +98,7 @@ func TestAsync_TaosExec(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	var logger = logrus.New().WithField("test", "async_test")
+	var logger = log.GetLogger("test").WithField("test", "async_test")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &Async{

@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"time"
-	_ "time/tzdata"
+	_ "time/tzdata" // load time zone data
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/gzip"

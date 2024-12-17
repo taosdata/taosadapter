@@ -8,9 +8,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/huskar-t/melody"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/melody"
 )
 
 func TestWSWriteJson(t *testing.T) {
@@ -22,11 +22,8 @@ func TestWSWriteJson(t *testing.T) {
 		Action:  "version",
 		Version: "1.0.0",
 	}
-	m.HandleMessage(func(session *melody.Session, msg []byte) {
-		if m.IsClosed() {
-			return
-		}
-		logger := logrus.New().WithField("test", "TestWSWriteJson")
+	m.HandleMessage(func(session *melody.Session, _ []byte) {
+		logger := log.GetLogger("test").WithField("test", "TestWSWriteJson")
 		session.Set("logger", logger)
 		WSWriteJson(session, logger, data)
 	})
@@ -42,7 +39,10 @@ func TestWSWriteJson(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
 	err = ws.WriteMessage(websocket.TextMessage, []byte{'1'})
 	assert.NoError(t, err)
 	wt, resp, err := ws.ReadMessage()

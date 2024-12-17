@@ -6,12 +6,28 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/driver-go/v3/common"
-	"github.com/taosdata/driver-go/v3/common/parser"
+	"github.com/taosdata/taosadapter/v3/driver/common"
+	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
 )
+
+type testHook struct {
+	hasError bool
+}
+
+func (t *testHook) Levels() []logrus.Level {
+	return []logrus.Level{logrus.ErrorLevel}
+}
+
+func (t *testHook) Fire(entry *logrus.Entry) error {
+	if entry.Level == logrus.ErrorLevel {
+		t.hasError = true
+	}
+	return nil
+}
 
 func TestJsonWriteRawBlock(t *testing.T) {
 	raw := []byte{
@@ -134,65 +150,111 @@ func TestJsonWriteRawBlock(t *testing.T) {
 		0x07, 0x00,
 		0x7b, 0x22, 0x61, 0x22, 0x3a, 0x31, 0x7d,
 	}
-	w := &strings.Builder{}
-	builder := jsonbuilder.BorrowStream(w)
-	defer jsonbuilder.ReturnStream(builder)
 	fieldsCount := 17
 	fieldTypes := []uint8{9, 1, 2, 3, 4, 5, 11, 12, 13, 14, 6, 7, 8, 10, 16, 20, 15}
 	blockSize := 2
-	precision := 0
 	pHeaderList := make([]unsafe.Pointer, fieldsCount)
 	pStartList := make([]unsafe.Pointer, fieldsCount)
 	nullBitMapOffset := uintptr(BitmapLen(blockSize))
 	block := unsafe.Pointer(&raw[0])
 	lengthOffset := parser.RawBlockGetColumnLengthOffset(fieldsCount)
 	tmpPHeader := tools.AddPointer(block, parser.RawBlockGetColDataOffset(fieldsCount))
-	tmpPStart := tmpPHeader
 	for column := 0; column < fieldsCount; column++ {
 		colLength := *((*int32)(unsafe.Pointer(uintptr(block) + lengthOffset + uintptr(column)*parser.Int32Size)))
 		if IsVarDataType(fieldTypes[column]) {
 			pHeaderList[column] = tmpPHeader
-			tmpPStart = tools.AddPointer(tmpPHeader, uintptr(4*blockSize))
-			pStartList[column] = tmpPStart
+			pStartList[column] = tools.AddPointer(tmpPHeader, uintptr(4*blockSize))
 		} else {
 			pHeaderList[column] = tmpPHeader
-			tmpPStart = tools.AddPointer(tmpPHeader, nullBitMapOffset)
-			pStartList[column] = tmpPStart
+			pStartList[column] = tools.AddPointer(tmpPHeader, nullBitMapOffset)
 		}
-		tmpPHeader = tools.AddPointer(tmpPStart, uintptr(colLength))
+		tmpPHeader = tools.AddPointer(pStartList[column], uintptr(colLength))
 	}
-	timeBuffer := make([]byte, 0, 30)
-	builder.WriteObjectStart()
-	for row := 0; row < blockSize; row++ {
-		builder.WriteArrayStart()
-		for column := 0; column < fieldsCount; column++ {
-			JsonWriteRawBlock(builder, fieldTypes[column], pHeaderList[column], pStartList[column], row, precision, func(builder *jsonbuilder.Stream, ts int64, precision int) {
-				timeBuffer = timeBuffer[:0]
-				switch precision {
-				case common.PrecisionMilliSecond: // milli-second
-					timeBuffer = time.Unix(0, ts*1e6).UTC().AppendFormat(timeBuffer, time.RFC3339Nano)
-				case common.PrecisionMicroSecond: // micro-second
-					timeBuffer = time.Unix(0, ts*1e3).UTC().AppendFormat(timeBuffer, time.RFC3339Nano)
-				case common.PrecisionNanoSecond: // nano-second
-					timeBuffer = time.Unix(0, ts).UTC().AppendFormat(timeBuffer, time.RFC3339Nano)
-				default:
-					panic("unknown precision")
+	cnLocation, _ := time.LoadLocation("Asia/Shanghai")
+	tests := []struct {
+		name        string
+		precision   int
+		timeZone    *time.Location
+		expect      string
+		expectError bool
+	}{
+		{
+			name:      "ms",
+			precision: common.PrecisionMilliSecond,
+			timeZone:  time.UTC,
+			expect:    `{["2022-08-10T07:02:40.500Z",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar","746573745f76617262696e617279","010100000000000000000059400000000000005940",{"a":1}],["2022-08-10T07:02:41.500Z",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":1}]}`,
+		},
+		{
+			name:      "ns",
+			precision: common.PrecisionNanoSecond,
+			timeZone:  time.UTC,
+			expect:    `{["1970-01-01T00:27:40.114960500Z",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar","746573745f76617262696e617279","010100000000000000000059400000000000005940",{"a":1}],["1970-01-01T00:27:40.114961500Z",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":1}]}`,
+		},
+		{
+			name:      "us",
+			precision: common.PrecisionMicroSecond,
+			timeZone:  time.UTC,
+			expect:    `{["1970-01-20T05:08:34.960500Z",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar","746573745f76617262696e617279","010100000000000000000059400000000000005940",{"a":1}],["1970-01-20T05:08:34.961500Z",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":1}]}`,
+		},
+		{
+			name:      "ms_cn",
+			precision: common.PrecisionMilliSecond,
+			timeZone:  cnLocation,
+			expect:    `{["2022-08-10T15:02:40.500+08:00",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar","746573745f76617262696e617279","010100000000000000000059400000000000005940",{"a":1}],["2022-08-10T15:02:41.500+08:00",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":1}]}`,
+		},
+		{
+			name:      "ns_cn",
+			precision: common.PrecisionNanoSecond,
+			timeZone:  cnLocation,
+			expect:    `{["1970-01-01T08:27:40.114960500+08:00",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar","746573745f76617262696e617279","010100000000000000000059400000000000005940",{"a":1}],["1970-01-01T08:27:40.114961500+08:00",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":1}]}`,
+		},
+		{
+			name:      "us_cn",
+			precision: common.PrecisionMicroSecond,
+			timeZone:  cnLocation,
+			expect:    `{["1970-01-20T13:08:34.960500+08:00",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar","746573745f76617262696e617279","010100000000000000000059400000000000005940",{"a":1}],["1970-01-20T13:08:34.961500+08:00",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":1}]}`,
+		},
+		{
+			name:        "invalid precision",
+			precision:   -1,
+			timeZone:    cnLocation,
+			expectError: true,
+		},
+	}
+	for _, tt := range tests {
+		hook := &testHook{}
+		logger := logrus.New()
+		logger.AddHook(hook)
+		t.Run(tt.name, func(t *testing.T) {
+			w := &strings.Builder{}
+			builder := jsonbuilder.BorrowStream(w)
+			defer jsonbuilder.ReturnStream(builder)
+			builder.WriteObjectStart()
+			timeBuffer := make([]byte, 0, 35)
+			for row := 0; row < blockSize; row++ {
+				builder.WriteArrayStart()
+				for column := 0; column < fieldsCount; column++ {
+					JsonWriteRawBlock(builder, fieldTypes[column], pHeaderList[column], pStartList[column], row, tt.precision, tt.timeZone, timeBuffer, logger.WithField("test", "test"))
+					if column != fieldsCount-1 {
+						builder.WriteMore()
+						err := builder.Flush()
+						assert.NoError(t, err)
+					}
 				}
-				builder.WriteString(string(timeBuffer))
-			})
-			if column != fieldsCount-1 {
-				builder.WriteMore()
-				err := builder.Flush()
-				assert.NoError(t, err)
+				builder.WriteArrayEnd()
+				if row != blockSize-1 {
+					builder.WriteMore()
+				}
 			}
-		}
-		builder.WriteArrayEnd()
-		if row != blockSize-1 {
-			builder.WriteMore()
-		}
+			builder.WriteObjectEnd()
+			err := builder.Flush()
+			assert.NoError(t, err)
+			if tt.expectError {
+				assert.True(t, hook.hasError)
+			} else {
+				assert.False(t, hook.hasError)
+				assert.Equal(t, tt.expect, w.String())
+			}
+		})
 	}
-	builder.WriteObjectEnd()
-	err := builder.Flush()
-	assert.NoError(t, err)
-	assert.Equal(t, `{["2022-08-10T07:02:40.5Z",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar","746573745f76617262696e617279","010100000000000000000059400000000000005940",{"a":1}],["2022-08-10T07:02:41.5Z",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":1}]}`, w.String())
 }

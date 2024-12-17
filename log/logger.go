@@ -60,14 +60,18 @@ func NewFileHook(formatter logrus.Formatter, writer io.WriteCloser) *FileHook {
 				//can be optimized by tryLock
 				fh.Lock()
 				if fh.buf.Len() > 0 {
-					fh.flush()
+					// flush log ignore error, because it have been printed to stderr
+					_ = fh.flush()
 				}
 				fh.Unlock()
 			case <-exit:
 				fh.Lock()
-				fh.flush()
+				_ = fh.flush()
 				fh.Unlock()
-				writer.Close()
+				err := writer.Close()
+				if err != nil {
+					_, _ = fmt.Fprintln(os.Stderr, "close log file error:", err)
+				}
 				ticker.Stop()
 				close(finish)
 				return
@@ -106,7 +110,7 @@ func (f *FileHook) flush() error {
 	_, err := f.writer.Write(f.buf.Bytes())
 	f.buf.Reset()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "write log error:", err)
+		_, _ = fmt.Fprintln(os.Stderr, "write log error:", err)
 	}
 	return err
 }
@@ -134,9 +138,9 @@ func ConfigLog() {
 		if err != nil {
 			panic(err)
 		}
-		fmt.Fprintln(writer, "==================================================")
-		fmt.Fprintln(writer, "                new log file")
-		fmt.Fprintln(writer, "==================================================")
+		_, _ = fmt.Fprintln(writer, "==================================================")
+		_, _ = fmt.Fprintln(writer, "                new log file")
+		_, _ = fmt.Fprintln(writer, "==================================================")
 		hook := NewFileHook(globalLogFormatter, writer)
 		logger.AddHook(hook)
 		if config.Conf.Log.EnableRecordHttpSql {
@@ -252,14 +256,11 @@ func (t *TaosLogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		keys = append(keys, k)
 	}
 	for _, k := range keys {
-		v := entry.Data[k]
-		if k == config.ReqIDKey && v == nil {
-			continue
-		}
+		value := entry.Data[k]
 		b.WriteString(", ")
 		b.WriteString(k)
 		b.WriteByte(':')
-		fmt.Fprintf(b, "%v", v)
+		fmt.Fprintf(b, "%v", value)
 	}
 
 	b.WriteByte('\n')

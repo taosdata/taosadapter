@@ -6,9 +6,9 @@ import (
 	"unsafe"
 
 	"github.com/sirupsen/logrus"
-	"github.com/taosdata/driver-go/v3/types"
-	"github.com/taosdata/driver-go/v3/wrapper"
-	"github.com/taosdata/driver-go/v3/wrapper/cgo"
+	"github.com/taosdata/taosadapter/v3/driver/types"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
 )
@@ -362,13 +362,13 @@ func TaosStmt2IsInsert(stmt2 unsafe.Pointer, logger *logrus.Entry, isDebug bool)
 	return isInsert, code
 }
 
-func TaosStmt2GetFields(stmt2 unsafe.Pointer, fieldType int, logger *logrus.Entry, isDebug bool) (code, count int, fields unsafe.Pointer) {
-	logger.Tracef("call taos_stmt2_get_fields, stmt2:%p, fieldType:%d", stmt2, fieldType)
+func TaosStmt2GetFields(stmt2 unsafe.Pointer, logger *logrus.Entry, isDebug bool) (code, count int, fields unsafe.Pointer) {
+	logger.Tracef("call taos_stmt2_get_fields, stmt2:%p", stmt2)
 	s := log.GetLogNow(isDebug)
 	thread.SyncLocker.Lock()
 	logger.Debugf("get thread lock for taos_stmt2_get_fields cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
-	code, count, fields = wrapper.TaosStmt2GetFields(stmt2, fieldType)
+	code, count, fields = wrapper.TaosStmt2GetFields(stmt2)
 	logger.Debugf("taos_stmt2_get_fields finish, code:%d, count:%d, fields:%p, cost:%s", code, count, fields, log.GetLogDuration(isDebug, s))
 	thread.SyncLocker.Unlock()
 	return code, count, fields
@@ -408,4 +408,16 @@ func TaosStmt2BindBinary(stmt2 unsafe.Pointer, data []byte, colIdx int32, logger
 	logger.Debugf("taos_stmt_bind_binary finish, err:%v, cost:%s", err, log.GetLogDuration(isDebug, s))
 	thread.SyncLocker.Unlock()
 	return err
+}
+
+func TaosOptionsConnection(conn unsafe.Pointer, option int, value *string, logger *logrus.Entry, isDebug bool) int {
+	if value == nil {
+		logger.Tracef("call taos_options_connection, conn:%p, option:%d, value:<nil>", conn, option)
+	} else {
+		logger.Tracef("call taos_options_connection, conn:%p, option:%d, value:%s", conn, option, *value)
+	}
+	s := log.GetLogNow(isDebug)
+	code := wrapper.TaosOptionsConnection(conn, option, value)
+	logger.Debugf("taos_options_connection finish, code:%d, cost:%s", code, log.GetLogDuration(isDebug, s))
+	return code
 }

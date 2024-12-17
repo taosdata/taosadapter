@@ -1616,7 +1616,7 @@ func TestTCP(t *testing.T) {
 		if len(acc.Metrics) > 0 {
 			break
 		}
-		if time.Now().Sub(start) > time.Second*5 {
+		if time.Since(start) > time.Second*5 {
 			t.Fatal("timeout waiting for metrics")
 		}
 	}
@@ -1665,7 +1665,7 @@ func TestUdp(t *testing.T) {
 		if len(acc.Metrics) > 0 {
 			break
 		}
-		if time.Now().Sub(start) > time.Second*5 {
+		if time.Since(start) > time.Second*5 {
 			t.Fatal("timeout waiting for metrics")
 		}
 	}

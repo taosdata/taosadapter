@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -33,8 +34,8 @@ func TestMain(m *testing.M) {
 	viper.Set("logLevel", "trace")
 	viper.Set("uploadKeeper.enable", false)
 	config.Init()
-	db.PrepareConnection()
 	log.ConfigLog()
+	db.PrepareConnection()
 	gin.SetMode(gin.ReleaseMode)
 	router = gin.New()
 	controllers := controller.GetControllers()
@@ -91,7 +92,6 @@ func TestSTMT(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer ws.Close()
 	const (
 		AfterConnect = iota + 1
 		AfterInit
@@ -366,6 +366,7 @@ func TestSTMT(t *testing.T) {
 					nil,
 				},
 			})
+			assert.NoError(t, err)
 			b, _ := json.Marshal(&StmtBindReq{
 				ReqID:   5,
 				StmtID:  stmtID,
@@ -512,7 +513,8 @@ func TestSTMT(t *testing.T) {
 		return
 	}
 	<-finish
-	ws.Close()
+	err = ws.Close()
+	assert.NoError(t, err)
 	time.Sleep(time.Second)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("select * from st")
@@ -534,14 +536,14 @@ func TestSTMT(t *testing.T) {
 
 func TestBlock(t *testing.T) {
 	w := httptest.NewRecorder()
-	body := strings.NewReader("drop database if exists test_ws_stmt")
+	body := strings.NewReader("drop database if exists test_ws_stmt_block")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
-	body = strings.NewReader("create database if not exists test_ws_stmt precision 'ns'")
+	body = strings.NewReader("create database if not exists test_ws_stmt_block precision 'ns'")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
@@ -565,7 +567,7 @@ func TestBlock(t *testing.T) {
 		"c14 varchar(20)," +
 		"c15 geometry(100)" +
 		") tags(info json)")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_stmt", body)
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_stmt_block", body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -721,7 +723,6 @@ func TestBlock(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer ws.Close()
 	const (
 		AfterConnect = iota + 1
 		AfterInit
@@ -780,7 +781,7 @@ func TestBlock(t *testing.T) {
 			b, _ := json.Marshal(&StmtPrepareReq{
 				ReqID:  3,
 				StmtID: stmtID,
-				SQL:    "insert into ? using test_ws_stmt.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+				SQL:    "insert into ? using test_ws_stmt_block.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 			})
 			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTPrepare,
@@ -807,7 +808,7 @@ func TestBlock(t *testing.T) {
 			b, _ := json.Marshal(&StmtSetTableNameReq{
 				ReqID:  4,
 				StmtID: stmtID,
-				Name:   "test_ws_stmt.ctb",
+				Name:   "test_ws_stmt_block.ctb",
 			})
 			action, _ := json.Marshal(&wstool.WSAction{
 				Action: STMTSetTableName,
@@ -1027,10 +1028,11 @@ func TestBlock(t *testing.T) {
 		return
 	}
 	<-finish
-	ws.Close()
+	err = ws.Close()
+	assert.NoError(t, err)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("select * from stb")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_stmt", body)
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_stmt_block", body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -1038,11 +1040,82 @@ func TestBlock(t *testing.T) {
 	resultBody := fmt.Sprintf(`{"code":0,"column_meta":[["ts","TIMESTAMP",8],["c1","BOOL",1],["c2","TINYINT",1],["c3","SMALLINT",2],["c4","INT",4],["c5","BIGINT",8],["c6","TINYINT UNSIGNED",1],["c7","SMALLINT UNSIGNED",2],["c8","INT UNSIGNED",4],["c9","BIGINT UNSIGNED",8],["c10","FLOAT",4],["c11","DOUBLE",8],["c12","VARCHAR",20],["c13","NCHAR",20],["c14","VARCHAR",20],["c15","GEOMETRY",100],["info","JSON",4095]],"data":[["%s",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar","test_varbinary","010100000000000000000059400000000000005940",{"a":"b"}],["%s",false,22,33,44,55,66,77,88,99,1010,1111,"binary2","nchar2","test_varbinary2","010100000000000000000059400000000000005940",{"a":"b"}],["%s",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":"b"}]],"rows":3}`, now.UTC().Format(layout.LayoutNanoSecond), now.Add(time.Second).UTC().Format(layout.LayoutNanoSecond), now.Add(time.Second*2).UTC().Format(layout.LayoutNanoSecond))
 	assert.Equal(t, resultBody, w.Body.String())
 	w = httptest.NewRecorder()
-	body = strings.NewReader("drop database if exists test_ws_stmt")
+	body = strings.NewReader("drop database if exists test_ws_stmt_block")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
+}
+
+type restResp struct {
+	Code int    `json:"code"`
+	Desc string `json:"desc"`
+}
+
+func doRestful(sql string, db string) (code int, message string) {
+	w := httptest.NewRecorder()
+	body := strings.NewReader(sql)
+	url := "/rest/sql"
+	if db != "" {
+		url = fmt.Sprintf("/rest/sql/%s", db)
+	}
+	req, _ := http.NewRequest(http.MethodPost, url, body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		return w.Code, w.Body.String()
+	}
+	b, _ := io.ReadAll(w.Body)
+	var res restResp
+	_ = json.Unmarshal(b, &res)
+	return res.Code, res.Desc
+}
+
+func doWebSocket(ws *websocket.Conn, action string, arg interface{}) (resp []byte, err error) {
+	var b []byte
+	if arg != nil {
+		b, _ = json.Marshal(arg)
+	}
+	a, _ := json.Marshal(wstool.WSAction{Action: action, Args: b})
+	err = ws.WriteMessage(websocket.TextMessage, a)
+	if err != nil {
+		return nil, err
+	}
+	_, message, err := ws.ReadMessage()
+	return message, err
+}
+
+func TestDropUser(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/stmt", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+	defer doRestful("drop user test_ws_stmt_drop_user", "")
+	code, message := doRestful("create user test_ws_stmt_drop_user pass 'pass_123'", "")
+	assert.Equal(t, 0, code, message)
+	// connect
+	connReq := &StmtConnectReq{ReqID: 1, User: "test_ws_stmt_drop_user", Password: "pass_123"}
+	resp, err := doWebSocket(ws, STMTConnect, &connReq)
+	assert.NoError(t, err)
+	var connResp StmtConnectResp
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+	// drop user
+	code, message = doRestful("drop user test_ws_stmt_drop_user", "")
+	assert.Equal(t, 0, code, message)
+	time.Sleep(time.Second * 3)
+	resp, err = doWebSocket(ws, wstool.ClientVersion, nil)
+	assert.Error(t, err, resp)
 }

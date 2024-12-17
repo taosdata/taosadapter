@@ -268,7 +268,7 @@ func StartUpload() {
 		go func() {
 			nextUploadTime := getNextUploadTime()
 			logger.Debugf("start upload keeper when %s", nextUploadTime.Format("2006-01-02 15:04:05.000000000"))
-			startTimer := time.NewTimer(nextUploadTime.Sub(time.Now()))
+			startTimer := time.NewTimer(time.Until(nextUploadTime))
 			<-startTimer.C
 			startTimer.Stop()
 			go func() {
@@ -352,7 +352,7 @@ func doRequest(client *http.Client, data []byte, reqID int64) error {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	logger.Debugf("upload_id:0x%x, upload to keeper success", reqID)
 	if resp.StatusCode != http.StatusOK {
 		logger.Errorf("upload_id:0x%x, upload keeper error, code: %d", reqID, resp.StatusCode)

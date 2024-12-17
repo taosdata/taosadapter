@@ -4,11 +4,10 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/sirupsen/logrus"
-	"github.com/taosdata/driver-go/v3/errors"
-	"github.com/taosdata/driver-go/v3/wrapper"
+	"github.com/taosdata/taosadapter/v3/driver/errors"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
+	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/schemaless/capi"
-	"github.com/taosdata/taosadapter/v3/schemaless/proto"
 )
 
 // @author: xftan
@@ -22,7 +21,7 @@ func TestInsertInfluxdb(t *testing.T) {
 	}
 	defer wrapper.TaosClose(conn)
 	defer func() {
-		r := wrapper.TaosQuery(conn, "drop database if exists test_capi")
+		r := wrapper.TaosQuery(conn, "drop database if exists test_capi_influxdb")
 		code := wrapper.TaosError(r)
 		if code != 0 {
 			errStr := wrapper.TaosErrorStr(r)
@@ -30,7 +29,7 @@ func TestInsertInfluxdb(t *testing.T) {
 		}
 		wrapper.TaosFreeResult(r)
 	}()
-	r := wrapper.TaosQuery(conn, "create database if not exists test_capi")
+	r := wrapper.TaosQuery(conn, "create database if not exists test_capi_influxdb")
 	code := wrapper.TaosError(r)
 	if code != 0 {
 		errStr := wrapper.TaosErrorStr(r)
@@ -47,7 +46,6 @@ func TestInsertInfluxdb(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    *proto.InfluxResult
 		wantErr bool
 	}{
 		{
@@ -55,7 +53,7 @@ func TestInsertInfluxdb(t *testing.T) {
 			args: args{
 				taosConnect: conn,
 				data:        []byte("measurement,host=host1 field1=2i,field2=2.0,fieldKey=\"Launch 🚀\" 1577836800000000001"),
-				db:          "test_capi",
+				db:          "test_capi_influxdb",
 				ttl:         0,
 			},
 			wantErr: false,
@@ -64,7 +62,7 @@ func TestInsertInfluxdb(t *testing.T) {
 			args: args{
 				taosConnect: conn,
 				data:        []byte("wrong,host=host1 field1=wrong 1577836800000000001"),
-				db:          "test_capi",
+				db:          "test_capi_influxdb",
 				ttl:         100,
 			},
 			wantErr: true,
@@ -73,7 +71,7 @@ func TestInsertInfluxdb(t *testing.T) {
 			args: args{
 				taosConnect: conn,
 				data:        []byte("wrong,host=host1 field1=wrong 1577836800000000001"),
-				db:          "1'test_capi",
+				db:          "1'test_capi_influxdb",
 				ttl:         1000,
 			},
 			wantErr: true,
@@ -81,7 +79,7 @@ func TestInsertInfluxdb(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logger := logrus.New().WithField("test", "TestInsertInfluxdb")
+			logger := log.GetLogger("test").WithField("test", "TestInsertInfluxdb").WithField("name", tt.name)
 			err := capi.InsertInfluxdb(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.precision, tt.args.ttl, 0, "", logger)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("InsertInfluxdb() error = %v, wantErr %v", err, tt.wantErr)

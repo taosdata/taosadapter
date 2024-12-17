@@ -1,4 +1,5 @@
 package httperror
+// Code generated from TDengine. DO NOT EDIT.
 
 const (
 	SUCCESS                      = 0x0
@@ -127,12 +128,12 @@ const (
 	TSDB_CODE_PAR_INVALID_FILL_TIME_RANGE = 0x263B
 )
 
-// 502
-
+// RPC_NETWORK_UNAVAIL return 502 status code
 const (
 	RPC_NETWORK_UNAVAIL = 0x000B
 )
 
+// ErrorMsgMap is the map of error code and error message.
 var ErrorMsgMap = map[int]string{
 	TSDB_CODE_RPC_AUTH_FAILURE:   "Authentication failure",
 	HTTP_SERVER_OFFLINE:          "http server is not onlin",

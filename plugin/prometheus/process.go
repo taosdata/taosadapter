@@ -16,13 +16,13 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/prometheus/prompb"
-	"github.com/taosdata/driver-go/v3/common"
-	tErrors "github.com/taosdata/driver-go/v3/errors"
-	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/async"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/db/tool"
+	"github.com/taosdata/taosadapter/v3/driver/common"
+	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	prompbWrite "github.com/taosdata/taosadapter/v3/plugin/prometheus/proto/write"
@@ -72,14 +72,12 @@ func processWrite(taosConn unsafe.Pointer, req *prompbWrite.WriteRequest, db str
 				}
 				logger.Debug("retry processWrite cost", time.Since(start))
 				return nil
-			} else {
-				logger.WithError(err).Error(bp.String())
-				return err
 			}
-		} else {
 			logger.WithError(err).Error(bp.String())
 			return err
 		}
+		logger.WithError(err).Error(bp.String())
+		return err
 	}
 	return nil
 }
@@ -120,7 +118,7 @@ func generateWriteSql(timeseries []prompbWrite.TimeSeries, sql *bytes.Buffer, tt
 			jsonBuilder.WriteString(bytesutil.ToUnsafeString(timeseries[i].Labels[labelIndex].Value))
 		}
 		jsonBuilder.WriteObjectEnd()
-		jsonBuilder.Flush()
+		_ = jsonBuilder.Flush()
 		sql.Write(escapeBytes(bb.B))
 		sql.WriteString("') ")
 		if ttl > 0 {
@@ -140,7 +138,7 @@ func generateWriteSql(timeseries []prompbWrite.TimeSeries, sql *bytes.Buffer, tt
 			} else if math.IsInf(sample.Value, 0) {
 				sql.WriteString("null")
 			} else {
-				fmt.Fprintf(sql, "%v", sample.Value)
+				_, _ = fmt.Fprintf(sql, "%v", sample.Value)
 			}
 			sql.WriteString(") ")
 		}
@@ -268,7 +266,7 @@ func generateReadSql(query *prompb.Query) (string, error) {
 	}
 	if config.Conf.RestfulRowLimit > -1 {
 		sql.WriteString(" limit ")
-		fmt.Fprintf(sql, "%d", config.Conf.RestfulRowLimit)
+		_, _ = fmt.Fprintf(sql, "%d", config.Conf.RestfulRowLimit)
 	}
 
 	return sql.String(), nil

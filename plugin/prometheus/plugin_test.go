@@ -14,15 +14,18 @@ import (
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	"github.com/taosdata/driver-go/v3/wrapper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper"
+	"github.com/taosdata/taosadapter/v3/log"
 )
 
 func TestMain(m *testing.M) {
+	//nolint:staticcheck
 	rand.Seed(time.Now().UnixNano())
 	config.Init()
 	viper.Set("prometheus.enable", true)
+	log.ConfigLog()
 	db.PrepareConnection()
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
@@ -47,7 +50,9 @@ func TestPrometheus(t *testing.T) {
 	err = p.Start()
 	assert.NoError(t, err)
 	number := rand.Float64()
-	defer p.Stop()
+	defer func() {
+		_ = p.Stop()
+	}()
 	w := httptest.NewRecorder()
 	now := time.Now().UnixNano() / 1e6
 	var wReq = prompb.WriteRequest{
@@ -133,7 +138,9 @@ func TestPrometheusEscapeString(t *testing.T) {
 	err = p.Start()
 	assert.NoError(t, err)
 	number := rand.Float64()
-	defer p.Stop()
+	defer func() {
+		_ = p.Stop()
+	}()
 	w := httptest.NewRecorder()
 	now := time.Now().UnixNano() / 1e6
 	var wReq = prompb.WriteRequest{
@@ -216,7 +223,9 @@ func TestPrometheusWithTTL(t *testing.T) {
 	err = p.Start()
 	assert.NoError(t, err)
 	number := rand.Float64()
-	defer p.Stop()
+	defer func() {
+		_ = p.Stop()
+	}()
 	w := httptest.NewRecorder()
 	now := time.Now().UnixNano() / 1e6
 	var wReq = prompb.WriteRequest{
@@ -302,7 +311,9 @@ func TestPrometheusEscape(t *testing.T) {
 	err = p.Start()
 	assert.NoError(t, err)
 	number := rand.Float64()
-	defer p.Stop()
+	defer func() {
+		_ = p.Stop()
+	}()
 	w := httptest.NewRecorder()
 	now := time.Now().UnixNano() / 1e6
 	var wReq = prompb.WriteRequest{
@@ -387,7 +398,9 @@ func TestPrometheusWithLimit(t *testing.T) {
 	err = p.Start()
 	assert.NoError(t, err)
 	number := rand.Float64()
-	defer p.Stop()
+	defer func() {
+		_ = p.Stop()
+	}()
 	w := httptest.NewRecorder()
 	now := time.Now().UnixNano() / 1e6
 	var wReq = prompb.WriteRequest{

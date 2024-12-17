@@ -80,11 +80,11 @@ func (stream *Stream) WritePure(p []byte) {
 	stream.buf = append(stream.buf, p...)
 }
 
-func (stream *Stream) WriteByte(c byte) {
+// AddByte writes a single byte.
+func (stream *Stream) AddByte(c byte) {
 	stream.writeByte(c)
 }
 
-// WriteByte writes a single byte.
 func (stream *Stream) writeByte(c byte) {
 	stream.buf = append(stream.buf, c)
 }

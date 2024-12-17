@@ -10,8 +10,8 @@ import "C"
 import (
 	"unsafe"
 
-	"github.com/taosdata/driver-go/v3/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/db/asynctmq/tmqhandle"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 )
 
 //export AdapterTMQPollCallback
