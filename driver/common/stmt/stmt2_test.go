@@ -18,10 +18,11 @@ func TestMarshalBinary(t *testing.T) {
 		largeTableName += "a"
 	}
 	type args struct {
-		t        []*TaosStmt2BindData
-		isInsert bool
-		tagType  []*StmtField
-		colType  []*StmtField
+		t         []*TaosStmt2BindData
+		isInsert  bool
+		fieldType []*Stmt2AllField
+		//tagType  []*StmtField
+		//colType  []*StmtField
 	}
 	tests := []struct {
 		name    string
@@ -43,9 +44,8 @@ func TestMarshalBinary(t *testing.T) {
 						TableName: "test2",
 					},
 				},
-				isInsert: true,
-				tagType:  nil,
-				colType:  nil,
+				isInsert:  true,
+				fieldType: nil,
 			},
 			want: []byte{
 				// total Length
@@ -84,9 +84,8 @@ func TestMarshalBinary(t *testing.T) {
 						TableName: largeTableName,
 					},
 				},
-				isInsert: true,
-				tagType:  nil,
-				colType:  nil,
+				isInsert:  true,
+				fieldType: nil,
 			},
 			want:    nil,
 			wantErr: true,
@@ -208,58 +207,73 @@ func TestMarshalBinary(t *testing.T) {
 					},
 				},
 				isInsert: true,
-				tagType: []*StmtField{
+				fieldType: []*Stmt2AllField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TIMESTAMP,
 						Precision: common.PrecisionMilliSecond,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_BOOL,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_TINYINT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_SMALLINT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_INT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_BIGINT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_FLOAT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_DOUBLE,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_UTINYINT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_USMALLINT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_UINT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_UBIGINT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_BINARY,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_NCHAR,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_GEOMETRY,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_VARBINARY,
+						BindType:  TAOS_FIELD_TAG,
 					},
 				},
-				colType: nil,
 			},
 			want: []byte{
 				// total Length
@@ -898,106 +912,137 @@ func TestMarshalBinary(t *testing.T) {
 					},
 				},
 				isInsert: true,
-				tagType: []*StmtField{
+				fieldType: []*Stmt2AllField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TIMESTAMP,
 						Precision: common.PrecisionMilliSecond,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_BOOL,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_TINYINT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_SMALLINT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_INT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_BIGINT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_FLOAT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_DOUBLE,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_UTINYINT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_USMALLINT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_UINT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_UBIGINT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_BINARY,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_NCHAR,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_GEOMETRY,
+						BindType:  TAOS_FIELD_TAG,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_VARBINARY,
+						BindType:  TAOS_FIELD_TAG,
 					},
-				},
-				colType: []*StmtField{
+
 					{
 						FieldType: common.TSDB_DATA_TYPE_TIMESTAMP,
 						Precision: common.PrecisionMilliSecond,
+						BindType:  TAOS_FIELD_COL,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_BOOL,
+						BindType:  TAOS_FIELD_COL,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_TINYINT,
+						BindType:  TAOS_FIELD_COL,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_SMALLINT,
+						BindType:  TAOS_FIELD_COL,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_INT,
+						BindType:  TAOS_FIELD_COL,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_BIGINT,
+						BindType:  TAOS_FIELD_COL,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_FLOAT,
+						BindType:  TAOS_FIELD_COL,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_DOUBLE,
+						BindType:  TAOS_FIELD_COL,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_UTINYINT,
+						BindType:  TAOS_FIELD_COL,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_USMALLINT,
+						BindType:  TAOS_FIELD_COL,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_UINT,
+						BindType:  TAOS_FIELD_COL,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_UBIGINT,
+						BindType:  TAOS_FIELD_COL,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_BINARY,
+						BindType:  TAOS_FIELD_COL,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_NCHAR,
+						BindType:  TAOS_FIELD_COL,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_GEOMETRY,
+						BindType:  TAOS_FIELD_COL,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_VARBINARY,
+						BindType:  TAOS_FIELD_COL,
 					},
 				},
 			},
@@ -1757,18 +1802,19 @@ func TestMarshalBinary(t *testing.T) {
 						Tags: []driver.Value{int32(3)},
 					},
 				},
-				colType: []*StmtField{
+				fieldType: []*Stmt2AllField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_TIMESTAMP,
 						Precision: common.PrecisionMilliSecond,
+						BindType:  TAOS_FIELD_COL,
 					},
 					{
 						FieldType: common.TSDB_DATA_TYPE_BIGINT,
+						BindType:  TAOS_FIELD_COL,
 					},
-				},
-				tagType: []*StmtField{
 					{
 						FieldType: common.TSDB_DATA_TYPE_INT,
+						BindType:  TAOS_FIELD_TAG,
 					},
 				},
 				isInsert: true,
@@ -1884,10 +1930,9 @@ func TestMarshalBinary(t *testing.T) {
 		{
 			name: "empty",
 			args: args{
-				t:        nil,
-				isInsert: false,
-				tagType:  nil,
-				colType:  nil,
+				t:         nil,
+				isInsert:  false,
+				fieldType: nil,
 			},
 			want:    nil,
 			wantErr: true,
@@ -1900,9 +1945,8 @@ func TestMarshalBinary(t *testing.T) {
 						Tags: []driver.Value{int32(1)},
 					},
 				},
-				isInsert: true,
-				tagType:  nil,
-				colType:  nil,
+				isInsert:  true,
+				fieldType: nil,
 			},
 			want:    nil,
 			wantErr: true,
@@ -1919,9 +1963,8 @@ func TestMarshalBinary(t *testing.T) {
 						},
 					},
 				},
-				isInsert: true,
-				tagType:  nil,
-				colType:  nil,
+				isInsert:  true,
+				fieldType: nil,
 			},
 			want:    nil,
 			wantErr: true,
@@ -1939,10 +1982,12 @@ func TestMarshalBinary(t *testing.T) {
 					},
 				},
 				isInsert: false,
-				tagType: []*StmtField{{
-					FieldType: common.TSDB_DATA_TYPE_INT,
-				}},
-				colType: nil,
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_INT,
+						BindType:  TAOS_FIELD_TAG,
+					},
+				},
 			},
 			want:    nil,
 			wantErr: true,
@@ -1960,10 +2005,12 @@ func TestMarshalBinary(t *testing.T) {
 					},
 				},
 				isInsert: false,
-				tagType:  nil,
-				colType: []*StmtField{{
-					FieldType: common.TSDB_DATA_TYPE_INT,
-				}},
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_INT,
+						BindType:  TAOS_FIELD_COL,
+					},
+				},
 			},
 			want:    nil,
 			wantErr: true,
@@ -1987,9 +2034,8 @@ func TestMarshalBinary(t *testing.T) {
 						},
 					},
 				},
-				isInsert: false,
-				tagType:  nil,
-				colType:  nil,
+				isInsert:  false,
+				fieldType: nil,
 			},
 			want:    nil,
 			wantErr: true,
@@ -2002,9 +2048,8 @@ func TestMarshalBinary(t *testing.T) {
 						TableName: "table1",
 					},
 				},
-				isInsert: false,
-				tagType:  nil,
-				colType:  nil,
+				isInsert:  false,
+				fieldType: nil,
 			},
 			want:    nil,
 			wantErr: true,
@@ -2017,9 +2062,8 @@ func TestMarshalBinary(t *testing.T) {
 						Tags: []driver.Value{int32(1)},
 					},
 				},
-				isInsert: false,
-				tagType:  nil,
-				colType:  nil,
+				isInsert:  false,
+				fieldType: nil,
 			},
 			want:    nil,
 			wantErr: true,
@@ -2030,9 +2074,8 @@ func TestMarshalBinary(t *testing.T) {
 				t: []*TaosStmt2BindData{
 					{},
 				},
-				isInsert: false,
-				tagType:  nil,
-				colType:  nil,
+				isInsert:  false,
+				fieldType: nil,
 			},
 			want:    nil,
 			wantErr: true,
@@ -2050,9 +2093,8 @@ func TestMarshalBinary(t *testing.T) {
 						},
 					},
 				},
-				isInsert: false,
-				tagType:  nil,
-				colType:  nil,
+				isInsert:  false,
+				fieldType: nil,
 			},
 			want:    nil,
 			wantErr: true,
@@ -2064,8 +2106,12 @@ func TestMarshalBinary(t *testing.T) {
 					Tags: []driver.Value{int32(1)},
 				}},
 				isInsert: true,
-				tagType:  []*StmtField{{FieldType: common.TSDB_DATA_TYPE_BOOL}},
-				colType:  nil,
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_BOOL,
+						BindType:  TAOS_FIELD_TAG,
+					},
+				},
 			},
 			want:    nil,
 			wantErr: true,
@@ -2077,8 +2123,12 @@ func TestMarshalBinary(t *testing.T) {
 					Tags: []driver.Value{true},
 				}},
 				isInsert: true,
-				tagType:  []*StmtField{{FieldType: common.TSDB_DATA_TYPE_TINYINT}},
-				colType:  nil,
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_TINYINT,
+						BindType:  TAOS_FIELD_TAG,
+					},
+				},
 			},
 			want:    nil,
 			wantErr: true,
@@ -2090,8 +2140,12 @@ func TestMarshalBinary(t *testing.T) {
 					Tags: []driver.Value{true},
 				}},
 				isInsert: true,
-				tagType:  []*StmtField{{FieldType: common.TSDB_DATA_TYPE_SMALLINT}},
-				colType:  nil,
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_SMALLINT,
+						BindType:  TAOS_FIELD_TAG,
+					},
+				},
 			},
 			want:    nil,
 			wantErr: true,
@@ -2103,8 +2157,12 @@ func TestMarshalBinary(t *testing.T) {
 					Tags: []driver.Value{true},
 				}},
 				isInsert: true,
-				tagType:  []*StmtField{{FieldType: common.TSDB_DATA_TYPE_INT}},
-				colType:  nil,
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_INT,
+						BindType:  TAOS_FIELD_TAG,
+					},
+				},
 			},
 			want:    nil,
 			wantErr: true,
@@ -2116,8 +2174,12 @@ func TestMarshalBinary(t *testing.T) {
 					Tags: []driver.Value{true},
 				}},
 				isInsert: true,
-				tagType:  []*StmtField{{FieldType: common.TSDB_DATA_TYPE_BIGINT}},
-				colType:  nil,
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_BIGINT,
+						BindType:  TAOS_FIELD_TAG,
+					},
+				},
 			},
 			want:    nil,
 			wantErr: true,
@@ -2129,8 +2191,12 @@ func TestMarshalBinary(t *testing.T) {
 					Tags: []driver.Value{true},
 				}},
 				isInsert: true,
-				tagType:  []*StmtField{{FieldType: common.TSDB_DATA_TYPE_UTINYINT}},
-				colType:  nil,
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_UTINYINT,
+						BindType:  TAOS_FIELD_TAG,
+					},
+				},
 			},
 			want:    nil,
 			wantErr: true,
@@ -2142,8 +2208,12 @@ func TestMarshalBinary(t *testing.T) {
 					Tags: []driver.Value{true},
 				}},
 				isInsert: true,
-				tagType:  []*StmtField{{FieldType: common.TSDB_DATA_TYPE_USMALLINT}},
-				colType:  nil,
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_USMALLINT,
+						BindType:  TAOS_FIELD_TAG,
+					},
+				},
 			},
 			want:    nil,
 			wantErr: true,
@@ -2155,8 +2225,12 @@ func TestMarshalBinary(t *testing.T) {
 					Tags: []driver.Value{true},
 				}},
 				isInsert: true,
-				tagType:  []*StmtField{{FieldType: common.TSDB_DATA_TYPE_UINT}},
-				colType:  nil,
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_UINT,
+						BindType:  TAOS_FIELD_TAG,
+					},
+				},
 			},
 			want:    nil,
 			wantErr: true,
@@ -2168,8 +2242,12 @@ func TestMarshalBinary(t *testing.T) {
 					Tags: []driver.Value{true},
 				}},
 				isInsert: true,
-				tagType:  []*StmtField{{FieldType: common.TSDB_DATA_TYPE_UBIGINT}},
-				colType:  nil,
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_UBIGINT,
+						BindType:  TAOS_FIELD_TAG,
+					},
+				},
 			},
 			want:    nil,
 			wantErr: true,
@@ -2181,8 +2259,12 @@ func TestMarshalBinary(t *testing.T) {
 					Tags: []driver.Value{true},
 				}},
 				isInsert: true,
-				tagType:  []*StmtField{{FieldType: common.TSDB_DATA_TYPE_FLOAT}},
-				colType:  nil,
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_FLOAT,
+						BindType:  TAOS_FIELD_TAG,
+					},
+				},
 			},
 			want:    nil,
 			wantErr: true,
@@ -2194,8 +2276,12 @@ func TestMarshalBinary(t *testing.T) {
 					Tags: []driver.Value{true},
 				}},
 				isInsert: true,
-				tagType:  []*StmtField{{FieldType: common.TSDB_DATA_TYPE_DOUBLE}},
-				colType:  nil,
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_DOUBLE,
+						BindType:  TAOS_FIELD_TAG,
+					},
+				},
 			},
 			want:    nil,
 			wantErr: true,
@@ -2207,8 +2293,12 @@ func TestMarshalBinary(t *testing.T) {
 					Tags: []driver.Value{true},
 				}},
 				isInsert: true,
-				tagType:  []*StmtField{{FieldType: common.TSDB_DATA_TYPE_BINARY}},
-				colType:  nil,
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_BINARY,
+						BindType:  TAOS_FIELD_TAG,
+					},
+				},
 			},
 			want:    nil,
 			wantErr: true,
@@ -2220,8 +2310,12 @@ func TestMarshalBinary(t *testing.T) {
 					Tags: []driver.Value{true},
 				}},
 				isInsert: true,
-				tagType:  []*StmtField{{FieldType: common.TSDB_DATA_TYPE_TIMESTAMP}},
-				colType:  nil,
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_TIMESTAMP,
+						BindType:  TAOS_FIELD_TAG,
+					},
+				},
 			},
 			want:    nil,
 			wantErr: true,
@@ -2240,8 +2334,12 @@ func TestMarshalBinary(t *testing.T) {
 					},
 				},
 				isInsert: true,
-				tagType:  nil,
-				colType:  []*StmtField{{FieldType: common.TSDB_DATA_TYPE_TIMESTAMP}},
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_TIMESTAMP,
+						BindType:  TAOS_FIELD_COL,
+					},
+				},
 			},
 			want: []byte{
 				// total Length
@@ -2288,9 +2386,8 @@ func TestMarshalBinary(t *testing.T) {
 						{false},
 					},
 				}},
-				isInsert: false,
-				tagType:  nil,
-				colType:  nil,
+				isInsert:  false,
+				fieldType: nil,
 			},
 			want: []byte{
 				// total Length
@@ -2336,9 +2433,8 @@ func TestMarshalBinary(t *testing.T) {
 						{customInt(1)},
 					},
 				}},
-				isInsert: false,
-				tagType:  nil,
-				colType:  nil,
+				isInsert:  false,
+				fieldType: nil,
 			},
 			want:    nil,
 			wantErr: true,
@@ -2352,8 +2448,12 @@ func TestMarshalBinary(t *testing.T) {
 					},
 				}},
 				isInsert: true,
-				tagType:  nil,
-				colType:  []*StmtField{{FieldType: common.TSDB_DATA_TYPE_NULL}},
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_NULL,
+						BindType:  TAOS_FIELD_COL,
+					},
+				},
 			},
 			want:    nil,
 			wantErr: true,
@@ -2366,9 +2466,8 @@ func TestMarshalBinary(t *testing.T) {
 						Cols: nil,
 					},
 				},
-				isInsert: true,
-				tagType:  nil,
-				colType:  []*StmtField{},
+				isInsert:  true,
+				fieldType: nil,
 			},
 			want:    nil,
 			wantErr: true,
@@ -2380,8 +2479,12 @@ func TestMarshalBinary(t *testing.T) {
 					Tags: []driver.Value{int64(1726803356466)},
 				}},
 				isInsert: true,
-				tagType:  []*StmtField{{FieldType: common.TSDB_DATA_TYPE_TIMESTAMP}},
-				colType:  nil,
+				fieldType: []*Stmt2AllField{
+					{
+						FieldType: common.TSDB_DATA_TYPE_TIMESTAMP,
+						BindType:  TAOS_FIELD_TAG,
+					},
+				},
 			},
 			want: []byte{
 				// total Length
@@ -2422,7 +2525,7 @@ func TestMarshalBinary(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MarshalStmt2Binary(tt.args.t, tt.args.isInsert, tt.args.colType, tt.args.tagType)
+			got, err := MarshalStmt2Binary(tt.args.t, tt.args.isInsert, tt.args.fieldType)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MarshalStmt2Binary() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -2430,8 +2533,4 @@ func TestMarshalBinary(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
-}
-
-func TestT(t *testing.T) {
-
 }

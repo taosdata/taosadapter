@@ -362,13 +362,13 @@ func TaosStmt2IsInsert(stmt2 unsafe.Pointer, logger *logrus.Entry, isDebug bool)
 	return isInsert, code
 }
 
-func TaosStmt2GetFields(stmt2 unsafe.Pointer, fieldType int, logger *logrus.Entry, isDebug bool) (code, count int, fields unsafe.Pointer) {
-	logger.Tracef("call taos_stmt2_get_fields, stmt2:%p, fieldType:%d", stmt2, fieldType)
+func TaosStmt2GetFields(stmt2 unsafe.Pointer, logger *logrus.Entry, isDebug bool) (code, count int, fields unsafe.Pointer) {
+	logger.Tracef("call taos_stmt2_get_fields, stmt2:%p", stmt2)
 	s := log.GetLogNow(isDebug)
 	thread.SyncLocker.Lock()
 	logger.Debugf("get thread lock for taos_stmt2_get_fields cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
-	code, count, fields = wrapper.TaosStmt2GetFields(stmt2, fieldType)
+	code, count, fields = wrapper.TaosStmt2GetFields(stmt2)
 	logger.Debugf("taos_stmt2_get_fields finish, code:%d, count:%d, fields:%p, cost:%s", code, count, fields, log.GetLogDuration(isDebug, s))
 	thread.SyncLocker.Unlock()
 	return code, count, fields
@@ -408,18 +408,6 @@ func TaosStmt2BindBinary(stmt2 unsafe.Pointer, data []byte, colIdx int32, logger
 	logger.Debugf("taos_stmt_bind_binary finish, err:%v, cost:%s", err, log.GetLogDuration(isDebug, s))
 	thread.SyncLocker.Unlock()
 	return err
-}
-
-func TaosStmt2GetStbFields(stmt2 unsafe.Pointer, logger *logrus.Entry, isDebug bool) (code, count int, fields unsafe.Pointer) {
-	logger.Tracef("call taos_stmt2_get_stb_fields, stmt2:%p", stmt2)
-	s := log.GetLogNow(isDebug)
-	thread.SyncLocker.Lock()
-	logger.Debugf("get thread lock for taos_stmt2_get_stb_fields cost:%s", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	code, count, fields = wrapper.TaosStmt2GetStbFields(stmt2)
-	logger.Debugf("taos_stmt2_get_stb_fields finish, code:%d, count:%d, fields:%p, cost:%s", code, count, fields, log.GetLogDuration(isDebug, s))
-	thread.SyncLocker.Unlock()
-	return code, count, fields
 }
 
 func TaosOptionsConnection(conn unsafe.Pointer, option int, value *string, logger *logrus.Entry, isDebug bool) int {

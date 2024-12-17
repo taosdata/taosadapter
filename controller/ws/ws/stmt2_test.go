@@ -84,20 +84,6 @@ func TestWsStmt2(t *testing.T) {
 	assert.Equal(t, 0, prepareResp.Code, prepareResp.Message)
 	assert.True(t, prepareResp.IsInsert)
 	assert.Equal(t, 18, len(prepareResp.Fields))
-	var colFields []*stmtCommon.StmtField
-	var tagFields []*stmtCommon.StmtField
-	for i := 0; i < 18; i++ {
-		field := &stmtCommon.StmtField{
-			FieldType: prepareResp.Fields[i].FieldType,
-			Precision: prepareResp.Fields[i].Precision,
-		}
-		switch prepareResp.Fields[i].BindType {
-		case stmtCommon.TAOS_FIELD_COL:
-			colFields = append(colFields, field)
-		case stmtCommon.TAOS_FIELD_TAG:
-			tagFields = append(tagFields, field)
-		}
-	}
 	// bind
 	now := time.Now()
 	cols := [][]driver.Value{
@@ -141,7 +127,7 @@ func TestWsStmt2(t *testing.T) {
 		Tags:      tag,
 		Cols:      cols,
 	}
-	bs, err := stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, colFields, tagFields)
+	bs, err := stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, prepareResp.Fields)
 	assert.NoError(t, err)
 	bindReq := make([]byte, len(bs)+30)
 	// req_id
@@ -475,7 +461,7 @@ func Stmt2Query(t *testing.T, db string, prepareDataSql []string) {
 			},
 		},
 	}
-	b, err := stmtCommon.MarshalStmt2Binary(params, false, nil, nil)
+	b, err := stmtCommon.MarshalStmt2Binary(params, false, nil)
 	assert.NoError(t, err)
 	block.Write(b)
 
@@ -702,21 +688,7 @@ func TestStmt2BindWithStbFields(t *testing.T) {
 		Tags:      tag,
 		Cols:      cols,
 	}
-	var colFields []*stmtCommon.StmtField
-	var tagFields []*stmtCommon.StmtField
-	for i := 0; i < 18; i++ {
-		field := &stmtCommon.StmtField{
-			FieldType: prepareResp.Fields[i].FieldType,
-			Precision: prepareResp.Fields[i].Precision,
-		}
-		switch prepareResp.Fields[i].BindType {
-		case stmtCommon.TAOS_FIELD_COL:
-			colFields = append(colFields, field)
-		case stmtCommon.TAOS_FIELD_TAG:
-			tagFields = append(tagFields, field)
-		}
-	}
-	bs, err := stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, colFields, tagFields)
+	bs, err := stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, prepareResp.Fields)
 	assert.NoError(t, err)
 	bindReq := make([]byte, len(bs)+30)
 	// req_id

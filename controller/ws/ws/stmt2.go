@@ -9,6 +9,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/async"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
+	"github.com/taosdata/taosadapter/v3/driver/common/stmt"
 	errors2 "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
@@ -81,15 +82,15 @@ type stmt2PrepareRequest struct {
 }
 
 type stmt2PrepareResponse struct {
-	Code        int                     `json:"code"`
-	Message     string                  `json:"message"`
-	Action      string                  `json:"action"`
-	ReqID       uint64                  `json:"req_id"`
-	Timing      int64                   `json:"timing"`
-	StmtID      uint64                  `json:"stmt_id"`
-	IsInsert    bool                    `json:"is_insert"`
-	Fields      []*wrapper.StmtStbField `json:"fields"`
-	FieldsCount int                     `json:"fields_count"`
+	Code        int                   `json:"code"`
+	Message     string                `json:"message"`
+	Action      string                `json:"action"`
+	ReqID       uint64                `json:"req_id"`
+	Timing      int64                 `json:"timing"`
+	StmtID      uint64                `json:"stmt_id"`
+	IsInsert    bool                  `json:"is_insert"`
+	Fields      []*stmt.Stmt2AllField `json:"fields"`
+	FieldsCount int                   `json:"fields_count"`
 }
 
 func (h *messageHandler) stmt2Prepare(ctx context.Context, session *melody.Session, action string, req stmt2PrepareRequest, logger *logrus.Entry, isDebug bool) {
@@ -119,15 +120,15 @@ func (h *messageHandler) stmt2Prepare(ctx context.Context, session *melody.Sessi
 	stmtItem.isInsert = isInsert
 	prepareResp := &stmt2PrepareResponse{StmtID: req.StmtID, IsInsert: isInsert}
 	if req.GetFields {
-		code, count, fields := syncinterface.TaosStmt2GetStbFields(stmt2, logger, isDebug)
+		code, count, fields := syncinterface.TaosStmt2GetFields(stmt2, logger, isDebug)
 		if code != 0 {
 			errStr := wrapper.TaosStmt2Error(stmt2)
 			logger.Errorf("stmt2 get fields error, code:%d, err:%s", code, errStr)
 			stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 			return
 		}
-		defer wrapper.TaosStmt2FreeStbFields(stmt2, fields)
-		stbFields := wrapper.ParseStmt2StbFields(count, fields)
+		defer wrapper.TaosStmt2FreeFields(stmt2, fields)
+		stbFields := wrapper.Stmt2ParseAllFields(count, fields)
 		prepareResp.Fields = stbFields
 		prepareResp.FieldsCount = count
 

@@ -509,16 +509,16 @@ func TestTaosStmt2(t *testing.T) {
 		return
 	}
 	assert.True(t, isInsert)
-	code, count, fiels := TaosStmt2GetStbFields(stmt, logger, isDebug)
+	code, count, fields := TaosStmt2GetFields(stmt, logger, isDebug)
 	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
 		return
 	}
 	assert.Equal(t, 4, count)
-	assert.NotNil(t, fiels)
+	assert.NotNil(t, fields)
 	defer func() {
-		wrapper.TaosStmt2FreeFields(stmt, fiels)
+		wrapper.TaosStmt2FreeFields(stmt, fields)
 	}()
-	fs := wrapper.ParseStmt2StbFields(count, fiels)
+	fs := wrapper.Stmt2ParseAllFields(count, fields)
 	assert.Equal(t, 4, len(fs))
 	assert.Equal(t, "tbname", fs[0].Name)
 	assert.Equal(t, int8(common.TSDB_DATA_TYPE_BINARY), fs[0].FieldType)
@@ -537,45 +537,37 @@ func TestTaosStmt2(t *testing.T) {
 	binds := &stmtCommon.TaosStmt2BindData{
 		TableName: tableName,
 	}
-	bs, err := stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, nil, nil)
+	bs, err := stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, nil)
 	assert.NoError(t, err)
 	err = TaosStmt2BindBinary(stmt, bs, -1, logger, isDebug)
 	assert.NoError(t, err)
 
-	code, num, fields := TaosStmt2GetFields(stmt, stmtCommon.TAOS_FIELD_COL, logger, isDebug)
+	code, num, fields2 := TaosStmt2GetFields(stmt, logger, isDebug)
 	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
 		return
 	}
-	assert.Equal(t, 2, num)
+	assert.Equal(t, 3, num)
 	assert.NotNil(t, fields)
 	defer func() {
-		wrapper.TaosStmt2FreeFields(stmt, fields)
+		wrapper.TaosStmt2FreeFields(stmt, fields2)
 	}()
-	colFields := wrapper.StmtParseFields(num, fields)
-	assert.Equal(t, 2, len(colFields))
-	assert.Equal(t, "ts", colFields[0].Name)
-	assert.Equal(t, int8(common.TSDB_DATA_TYPE_TIMESTAMP), colFields[0].FieldType)
-	assert.Equal(t, "v", colFields[1].Name)
-	assert.Equal(t, int8(common.TSDB_DATA_TYPE_INT), colFields[1].FieldType)
-	code, num, tags := TaosStmt2GetFields(stmt, stmtCommon.TAOS_FIELD_TAG, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
-		return
-	}
-	assert.Equal(t, 1, num)
-	assert.NotNil(t, tags)
-	defer func() {
-		wrapper.TaosStmt2FreeFields(stmt, tags)
-	}()
-	tagFields := wrapper.StmtParseFields(num, tags)
-	assert.Equal(t, 1, len(tagFields))
-	assert.Equal(t, "id", tagFields[0].Name)
-	assert.Equal(t, int8(common.TSDB_DATA_TYPE_INT), tagFields[0].FieldType)
-
+	fsAfterBindTableName := wrapper.Stmt2ParseAllFields(num, fields2)
+	assert.Equal(t, 3, len(fsAfterBindTableName))
+	assert.Equal(t, "id", fsAfterBindTableName[0].Name)
+	assert.Equal(t, int8(common.TSDB_DATA_TYPE_INT), fsAfterBindTableName[0].FieldType)
+	assert.Equal(t, int8(stmtCommon.TAOS_FIELD_TAG), fsAfterBindTableName[0].BindType)
+	assert.Equal(t, "ts", fsAfterBindTableName[1].Name)
+	assert.Equal(t, int8(common.TSDB_DATA_TYPE_TIMESTAMP), fsAfterBindTableName[1].FieldType)
+	assert.Equal(t, int8(stmtCommon.TAOS_FIELD_COL), fsAfterBindTableName[1].BindType)
+	assert.Equal(t, uint8(common.PrecisionMilliSecond), fsAfterBindTableName[1].Precision)
+	assert.Equal(t, "v", fsAfterBindTableName[2].Name)
+	assert.Equal(t, int8(common.TSDB_DATA_TYPE_INT), fsAfterBindTableName[2].FieldType)
+	assert.Equal(t, int8(stmtCommon.TAOS_FIELD_COL), fsAfterBindTableName[2].BindType)
 	binds = &stmtCommon.TaosStmt2BindData{
 		Tags: []driver.Value{int32(1)},
 	}
 
-	bs, err = stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, nil, tagFields)
+	bs, err = stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, fsAfterBindTableName[0:1])
 	assert.NoError(t, err)
 	err = TaosStmt2BindBinary(stmt, bs, -1, logger, isDebug)
 	assert.NoError(t, err)
@@ -587,7 +579,7 @@ func TestTaosStmt2(t *testing.T) {
 			{int32(100), int32(101)},
 		},
 	}
-	bs, err = stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, colFields, nil)
+	bs, err = stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, fsAfterBindTableName[1:])
 	assert.NoError(t, err)
 	err = TaosStmt2BindBinary(stmt, bs, -1, logger, isDebug)
 	assert.NoError(t, err)
