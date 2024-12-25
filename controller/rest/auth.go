@@ -113,7 +113,7 @@ func CheckAuth(c *gin.Context) {
 		c.Set(PasswordKey, info.Password)
 		return
 	}
-	if strings.HasPrefix(auth, "Basic") {
+	if strings.HasPrefix(auth, "Basic") && len(auth) > 6 {
 		user, password, err := tools.DecodeBasic(auth[6:])
 		if err != nil {
 			UnAuthResponse(c, logger, httperror.HTTP_INVALID_BASIC_AUTH)
@@ -129,7 +129,7 @@ func CheckAuth(c *gin.Context) {
 		})
 		c.Set(UserKey, user)
 		c.Set(PasswordKey, password)
-	} else if strings.HasPrefix(auth, "Taosd") {
+	} else if strings.HasPrefix(auth, "Taosd") && len(auth) > 6 {
 		user, password, err := DecodeDes(auth[6:])
 		if err != nil {
 			UnAuthResponse(c, logger, httperror.HTTP_INVALID_TAOSD_AUTH)
