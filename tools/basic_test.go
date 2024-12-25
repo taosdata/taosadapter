@@ -34,7 +34,8 @@ func TestDecodeBasic(t *testing.T) {
 			wantUser:     "root",
 			wantPassword: "taosdata",
 			wantErr:      false,
-		}, {
+		},
+		{
 			name: "wrong base64",
 			args: args{
 				auth: "wrong base64",
@@ -42,7 +43,8 @@ func TestDecodeBasic(t *testing.T) {
 			wantUser:     "",
 			wantPassword: "",
 			wantErr:      true,
-		}, {
+		},
+		{
 			name: "wrong split",
 			args: args{
 				auth: "cm9vdHRhb3NkYXRh",
@@ -50,6 +52,15 @@ func TestDecodeBasic(t *testing.T) {
 			wantUser:     "",
 			wantPassword: "",
 			wantErr:      true,
+		},
+		{
+			name: "special char",
+			args: args{
+				auth: "dGVzdDoxIXFAIyQlXiYqKCktXys9W117fTo7Pjw/fH4sLg==",
+			},
+			wantUser:     "test",
+			wantPassword: "1!q@#$%^&*()-_+=[]{}:;><?|~,.",
+			wantErr:      false,
 		},
 	}
 	for _, tt := range tests {

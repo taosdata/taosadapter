@@ -11,7 +11,7 @@ func DecodeBasic(auth string) (user, password string, err error) {
 	if err != nil {
 		return "", "", err
 	}
-	sl := strings.Split(string(b), ":")
+	sl := strings.SplitN(string(b), ":", 2)
 	if len(sl) != 2 {
 		return "", "", errors.New("wrong basic auth")
 	}

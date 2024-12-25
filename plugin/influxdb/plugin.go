@@ -239,7 +239,7 @@ func getAuth(c *gin.Context) {
 	auth := c.GetHeader("Authorization")
 	if len(auth) != 0 {
 		auth = strings.TrimSpace(auth)
-		if strings.HasPrefix(auth, "Basic") {
+		if strings.HasPrefix(auth, "Basic") && len(auth) > 6 {
 			user, password, err := tools.DecodeBasic(auth[6:])
 			if err == nil {
 				c.Set(plugin.UserKey, user)
