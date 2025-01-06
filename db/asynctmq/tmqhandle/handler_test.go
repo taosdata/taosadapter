@@ -24,8 +24,9 @@ func TestTMQHandlerPool(t *testing.T) {
 
 		caller := handler.Caller
 		pollRes := unsafe.Pointer(&struct{}{})
-		caller.PollCall(pollRes)
-		if <-caller.PollResult != pollRes {
+		caller.PollCall(pollRes, 0, "")
+		res := <-caller.PollResult
+		if res.Res != pollRes {
 			t.Errorf("PollCall failed")
 		}
 
@@ -72,8 +73,9 @@ func TestTMQCaller(t *testing.T) {
 	// Test PollCall
 	a := 1
 	res := unsafe.Pointer(&a)
-	caller.PollCall(res)
-	if <-caller.PollResult != res {
+	caller.PollCall(res, 0, "")
+	pollRes := <-caller.PollResult
+	if pollRes.Res != res {
 		t.Error("PollCall failed")
 	}
 

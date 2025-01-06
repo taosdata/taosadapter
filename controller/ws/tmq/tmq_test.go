@@ -3380,7 +3380,7 @@ func TestPollError(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 0, pollResp.Code, string(msg))
 	// sleep
-	time.Sleep(time.Second * 20)
+	time.Sleep(time.Second * 5)
 	// poll
 	b, _ = json.Marshal(TMQPollReq{ReqID: 1, BlockingTime: 500})
 	msg, err = doWebSocket(ws, TMQPoll, b)
