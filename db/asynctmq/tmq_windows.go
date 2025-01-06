@@ -45,7 +45,7 @@ typedef struct tmq_thread {
     HANDLE thread;
 } tmq_thread;
 
-typedef void (*adapter_tmq_poll_a_cb)(uintptr_t param, void *res);
+typedef void (*adapter_tmq_poll_a_cb)(uintptr_t param, void *res, int32_t code, const char* errstr);
 
 typedef void(*adapter_tmq_free_result_cb)(uintptr_t param);
 
@@ -207,7 +207,15 @@ unsigned int worker(void *arg) {
             case TAOSA_TMQ_POLL: {
                 poll_task *task = (poll_task *) thread_info->task;
                 void *res = tmq_consumer_poll(task->tmq, task->timeout);
-                task->cb(task->param, res);
+                if (res == NULL) {
+                    int32_t code = taos_errno(NULL);
+                    if (code != 0) {
+                        const char *errstr = taos_errstr(NULL);
+                        task->cb(task->param, res, code, errstr);
+                        break;
+                    }
+                }
+                task->cb(task->param, res, 0, NULL);
                 break;
             }
             case TAOSA_TMQ_FREE: {
@@ -558,7 +566,7 @@ void adapter_tmq_position(tmq_thread *thread_info, tmq_t *tmq, char *topic_name,
     LeaveCriticalSection(&(thread_info->lock));
 }
 
-extern void AdapterTMQPollCallback(uintptr_t param, void *res);
+extern void AdapterTMQPollCallback(uintptr_t param, void *res, int32_t code, const char* errstr);
 
 extern void AdapterTMQFreeResultCallback(uintptr_t param);
 
