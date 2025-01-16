@@ -733,7 +733,7 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 		}
 		t.nextTime = now.Add(t.autocommitInterval)
 	}
-	message, closed := t.wrapperPoll(logger, isDebug, req.BlockingTime)
+	pollResult, closed := t.wrapperPoll(logger, isDebug, req.BlockingTime)
 	if closed {
 		logger.Trace("server closed")
 	}
@@ -741,6 +741,7 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 		Action: action,
 		ReqID:  req.ReqID,
 	}
+	message := pollResult.Res
 	if message != nil {
 		messageType := wrapper.TMQGetResType(message)
 		if messageTypeIsValid(messageType) {
@@ -781,7 +782,11 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 			return
 		}
 	}
-
+	if pollResult.Code != 0 {
+		logger.Errorf("tmq poll error, code:%d, msg:%s", pollResult.Code, pollResult.ErrStr)
+		wsTMQErrorMsg(ctx, session, logger, int(pollResult.Code), pollResult.ErrStr, action, req.ReqID, nil)
+		return
+	}
 	resp.Timing = wstool.GetDuration(ctx)
 	wstool.WSWriteJson(session, logger, resp)
 }
@@ -1641,7 +1646,7 @@ func (t *TMQ) wrapperCommit(logger *logrus.Entry, isDebug bool) (int32, bool) {
 	return errCode, false
 }
 
-func (t *TMQ) wrapperPoll(logger *logrus.Entry, isDebug bool, blockingTime int64) (unsafe.Pointer, bool) {
+func (t *TMQ) wrapperPoll(logger *logrus.Entry, isDebug bool, blockingTime int64) (*tmqhandle.PollResult, bool) {
 	logger.Tracef("call tmq_poll, consumer:%p", t.consumer)
 	s := log.GetLogNow(isDebug)
 	t.asyncLocker.Lock()
@@ -1652,10 +1657,10 @@ func (t *TMQ) wrapperPoll(logger *logrus.Entry, isDebug bool, blockingTime int64
 	logger.Debugf("tmq_poll get async lock cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	asynctmq.TaosaTMQPollA(t.thread, t.consumer, blockingTime, t.handler.Handler)
-	message := <-t.handler.Caller.PollResult
+	result := <-t.handler.Caller.PollResult
 	t.asyncLocker.Unlock()
-	logger.Debugf("tmq_poll finish, res:%p, cost:%s", message, log.GetLogDuration(isDebug, s))
-	return message, false
+	logger.Debugf("tmq_poll finish, res:%p, code:%d, errmsg:%s, cost:%s", result.Res, result.Code, result.ErrStr, log.GetLogDuration(isDebug, s))
+	return result, false
 }
 
 func (t *TMQ) wrapperFreeResult(logger *logrus.Entry, isDebug bool) bool {

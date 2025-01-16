@@ -15,10 +15,10 @@ import (
 )
 
 //export AdapterTMQPollCallback
-func AdapterTMQPollCallback(handle C.uintptr_t, res *C.TAOS_RES) {
+func AdapterTMQPollCallback(handle C.uintptr_t, res *C.TAOS_RES, code int, errstr *C.char) {
 	h := cgo.Handle(handle)
 	caller := h.Value().(*tmqhandle.TMQCaller)
-	caller.PollCall(unsafe.Pointer(res))
+	caller.PollCall(unsafe.Pointer(res), int32(code), C.GoString(errstr))
 }
 
 //export AdapterTMQFreeResultCallback
