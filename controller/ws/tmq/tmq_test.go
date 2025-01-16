@@ -3372,17 +3372,33 @@ func TestPollError(t *testing.T) {
 	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
 
 	// poll
-	b, _ = json.Marshal(TMQPollReq{ReqID: 0, BlockingTime: 500})
+	b, _ = json.Marshal(TMQPollReq{ReqID: 100, BlockingTime: 500})
 	msg, err = doWebSocket(ws, TMQPoll, b)
 	assert.NoError(t, err)
 	var pollResp TMQPollResp
 	err = json.Unmarshal(msg, &pollResp)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, pollResp.Code, string(msg))
+	for {
+		// poll until no message and no error
+		b, _ = json.Marshal(TMQPollReq{ReqID: 101, BlockingTime: 500})
+		msg, err = doWebSocket(ws, TMQPoll, b)
+		assert.NoError(t, err)
+		err = json.Unmarshal(msg, &pollResp)
+		assert.NoError(t, err)
+		if pollResp.Code != 0 {
+			t.Errorf("poll error: %s", pollResp.Message)
+			return
+		}
+		if !pollResp.HaveMessage {
+			break
+		}
+	}
+	t.Log("sleep 5s to wait for timeout")
 	// sleep
 	time.Sleep(time.Second * 5)
 	// poll
-	b, _ = json.Marshal(TMQPollReq{ReqID: 1, BlockingTime: 500})
+	b, _ = json.Marshal(TMQPollReq{ReqID: 102, BlockingTime: 500})
 	msg, err = doWebSocket(ws, TMQPoll, b)
 	assert.NoError(t, err)
 	err = json.Unmarshal(msg, &pollResp)
