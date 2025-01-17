@@ -30,8 +30,14 @@ type ListTopicsResult struct {
 	Topics []string
 }
 
+type PollResult struct {
+	Code   int32
+	Res    unsafe.Pointer
+	ErrStr string
+}
+
 type TMQCaller struct {
-	PollResult               chan unsafe.Pointer
+	PollResult               chan *PollResult
 	FreeResult               chan struct{}
 	CommitResult             chan int32
 	SubscribeResult          chan int32
@@ -50,7 +56,7 @@ type TMQCaller struct {
 
 func NewTMQCaller() *TMQCaller {
 	return &TMQCaller{
-		PollResult:               make(chan unsafe.Pointer, 1),
+		PollResult:               make(chan *PollResult, 1),
 		FreeResult:               make(chan struct{}, 1),
 		CommitResult:             make(chan int32, 1),
 		SubscribeResult:          make(chan int32, 1),
@@ -68,8 +74,12 @@ func NewTMQCaller() *TMQCaller {
 	}
 }
 
-func (c *TMQCaller) PollCall(res unsafe.Pointer) {
-	c.PollResult <- res
+func (c *TMQCaller) PollCall(res unsafe.Pointer, code int32, errStr string) {
+	c.PollResult <- &PollResult{
+		Code:   code,
+		Res:    res,
+		ErrStr: errStr,
+	}
 }
 
 func (c *TMQCaller) FreeCall() {
