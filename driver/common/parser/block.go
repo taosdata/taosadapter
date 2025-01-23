@@ -3,6 +3,7 @@ package parser
 import (
 	"database/sql/driver"
 	"math"
+	"strconv"
 	"unsafe"
 
 	"github.com/taosdata/taosadapter/v3/driver/common"
@@ -70,6 +71,14 @@ func RawBlockGetColInfo(rawBlock unsafe.Pointer, infos []RawBlockColInfo) {
 	}
 }
 
+func RawBlockGetDecimalInfo(rawBlock unsafe.Pointer, colIndex int) (uint8, uint8, uint8) {
+	offset := ColInfoOffset + ColInfoSize*uintptr(colIndex)
+	scale := *((*uint8)(tools.AddPointer(rawBlock, offset+UInt8Size)))
+	precision := *((*uint8)(tools.AddPointer(rawBlock, offset+2*UInt8Size)))
+	bytes := *((*uint8)(tools.AddPointer(rawBlock, offset+4*UInt8Size)))
+	return bytes, precision, scale
+}
+
 func RawBlockGetColumnLengthOffset(colCount int) uintptr {
 	return ColInfoOffset + uintptr(colCount)*ColInfoSize
 }
@@ -108,7 +117,7 @@ type rawConvertFunc func(pStart unsafe.Pointer, row int, arg ...interface{}) dri
 
 type rawConvertVarDataFunc func(pHeader, pStart unsafe.Pointer, row int) driver.Value
 
-var rawConvertFuncSlice = [15]rawConvertFunc{}
+var rawConvertFuncSlice = [22]rawConvertFunc{}
 
 var rawConvertVarDataSlice = [21]rawConvertVarDataFunc{}
 
@@ -169,6 +178,27 @@ func rawConvertTime(pStart unsafe.Pointer, row int, arg ...interface{}) driver.V
 		return arg[1].(FormatTimeFunc)(*((*int64)(tools.AddPointer(pStart, uintptr(row)*Int64Size))), arg[0].(int))
 	}
 	panic("convertTime error")
+}
+
+func rawConvertDecimal64(pStart unsafe.Pointer, row int, arg ...interface{}) driver.Value {
+	if len(arg) != 1 {
+		panic("convertDecimal error")
+	}
+	scale := int(arg[0].(uint8))
+	value := *((*int64)(tools.AddPointer(pStart, uintptr(row)*Int64Size)))
+	str := strconv.FormatInt(value, 10)
+	return tools.FormatDecimal(str, scale)
+}
+
+func rawConvertDecimal128(pStart unsafe.Pointer, row int, arg ...interface{}) driver.Value {
+	if len(arg) != 1 {
+		panic("convertDecimal error")
+	}
+	scale := int(arg[0].(uint8))
+	lo := *((*uint64)(tools.AddPointer(pStart, uintptr(row)*Int64Size*2)))
+	hi := *((*int64)(tools.AddPointer(pStart, uintptr(row)*Int64Size*2+UInt64Size)))
+	str := tools.FormatI128(hi, lo)
+	return tools.FormatDecimal(str, scale)
 }
 
 func rawConvertVarBinary(pHeader, pStart unsafe.Pointer, row int) driver.Value {
@@ -264,6 +294,14 @@ func ReadBlock(block unsafe.Pointer, blockSize int, colTypes []uint8, precision 
 		} else {
 			convertF := rawConvertFuncSlice[colTypes[column]]
 			pStart = tools.AddPointer(pHeader, nullBitMapOffset)
+			var args []interface{}
+			switch colTypes[column] {
+			case common.TSDB_DATA_TYPE_TIMESTAMP:
+				args = []interface{}{precision}
+			case common.TSDB_DATA_TYPE_DECIMAL, common.TSDB_DATA_TYPE_DECIMAL64:
+				_, _, scale := RawBlockGetDecimalInfo(block, column)
+				args = []interface{}{scale}
+			}
 			for row := 0; row < blockSize; row++ {
 				if column == 0 {
 					r[row] = make([]driver.Value, colCount)
@@ -271,7 +309,7 @@ func ReadBlock(block unsafe.Pointer, blockSize int, colTypes []uint8, precision 
 				if ItemIsNull(pHeader, row) {
 					r[row][column] = nil
 				} else {
-					r[row][column] = convertF(pStart, row, precision)
+					r[row][column] = convertF(pStart, row, args)
 				}
 			}
 		}
@@ -365,6 +403,8 @@ func init() {
 	rawConvertFuncSlice[uint8(common.TSDB_DATA_TYPE_FLOAT)] = rawConvertFloat
 	rawConvertFuncSlice[uint8(common.TSDB_DATA_TYPE_DOUBLE)] = rawConvertDouble
 	rawConvertFuncSlice[uint8(common.TSDB_DATA_TYPE_TIMESTAMP)] = rawConvertTime
+	rawConvertFuncSlice[uint8(common.TSDB_DATA_TYPE_DECIMAL64)] = rawConvertDecimal64
+	rawConvertFuncSlice[uint8(common.TSDB_DATA_TYPE_DECIMAL)] = rawConvertDecimal128
 
 	rawConvertVarDataSlice[uint8(common.TSDB_DATA_TYPE_BINARY)] = rawConvertBinary
 	rawConvertVarDataSlice[uint8(common.TSDB_DATA_TYPE_NCHAR)] = rawConvertNchar
