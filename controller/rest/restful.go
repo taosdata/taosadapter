@@ -386,6 +386,7 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 	fetched := false
 	pHeaderList := make([]unsafe.Pointer, fieldsCount)
 	pStartList := make([]unsafe.Pointer, fieldsCount)
+	scaleList := make([]int, fieldsCount)
 	timeBuffer := make([]byte, 0, 30)
 	for {
 		if config.Conf.RestfulRowLimit > -1 && total == config.Conf.RestfulRowLimit {
@@ -409,6 +410,13 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 		logger.Tracef("get fetch result, rows:%d", result.N)
 		block := wrapper.TaosGetRawBlock(res)
 		logger.Trace("start parse block")
+		blockLen := int(parser.RawBlockGetLength(block))
+		for i := 0; i < blockLen; i++ {
+			fmt.Printf("0x%02x,", *(*byte)(unsafe.Pointer(uintptr(block) + uintptr(i))))
+			if i%16 == 15 {
+				fmt.Println()
+			}
+		}
 		blockSize := result.N
 		nullBitMapOffset := uintptr(ctools.BitmapLen(blockSize))
 		lengthOffset := parser.RawBlockGetColumnLengthOffset(fieldsCount)
@@ -421,6 +429,10 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 			} else {
 				pHeaderList[column] = tmpPHeader
 				pStartList[column] = tools.AddPointer(tmpPHeader, nullBitMapOffset)
+				if rowsHeader.ColTypes[column] == common.TSDB_DATA_TYPE_DECIMAL64 || rowsHeader.ColTypes[column] == common.TSDB_DATA_TYPE_DECIMAL {
+					_, _, scale := parser.RawBlockGetDecimalInfo(block, column)
+					scaleList[column] = int(scale)
+				}
 			}
 			tmpPHeader = tools.AddPointer(pStartList[column], uintptr(colLength))
 		}
@@ -435,7 +447,7 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 				if returnObj {
 					builder.WriteObjectField(rowsHeader.ColNames[column])
 				}
-				ctools.JsonWriteRawBlock(builder, rowsHeader.ColTypes[column], pHeaderList[column], pStartList[column], row, precision, location, timeBuffer, logger)
+				ctools.JsonWriteRawBlock(builder, rowsHeader.ColTypes[column], pHeaderList[column], pStartList[column], row, precision, location, timeBuffer, scaleList[column], logger)
 				if column != fieldsCount-1 {
 					builder.WriteMore()
 				}
