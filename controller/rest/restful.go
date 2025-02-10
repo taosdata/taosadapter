@@ -72,7 +72,7 @@ func prepareCtx(c *gin.Context) {
 	if timing == "true" {
 		c.Set(RequireTiming, true)
 	}
-	c.Set(StartTimeKey, time.Now().UnixNano())
+	c.Set(StartTimeKey, time.Now())
 	var reqID int64
 	var err error
 	if reqIDStr := c.Query("req_id"); len(reqIDStr) != 0 {
@@ -263,7 +263,7 @@ var (
 
 func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect unsafe.Pointer, sql string, reqID int64, sqlType sqltype.SqlType, returnObj bool, location *time.Location) {
 	_, calculateTiming := c.Get(RequireTiming)
-	st := c.MustGet(StartTimeKey)
+	st := c.MustGet(StartTimeKey).(time.Time)
 	flushTiming := int64(0)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
@@ -314,7 +314,9 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 			if err != nil {
 				return
 			}
-			_, err = w.Write([]byte(strconv.FormatInt(time.Now().UnixNano()-st.(int64), 10)))
+			duration := time.Since(st).Nanoseconds()
+			duration = avoidNegativeDuration(duration)
+			_, err = w.Write([]byte(strconv.FormatInt(duration, 10)))
 			if err != nil {
 				return
 			}
@@ -465,7 +467,9 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 	builder.WriteInt(total)
 	if calculateTiming {
 		builder.WritePure(Timing)
-		builder.WriteInt64(time.Now().UnixNano() - st.(int64) - flushTiming)
+		duration := time.Since(st).Nanoseconds() - flushTiming
+		duration = avoidNegativeDuration(duration)
+		builder.WriteInt64(duration)
 	}
 	builder.WriteObjectEnd()
 	err = forceFlush(w, builder)
@@ -473,6 +477,13 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 		logger.Errorf("force flush error:%s", err)
 	}
 	logger.Trace("send response finished")
+}
+
+func avoidNegativeDuration(duration int64) int64 {
+	if duration < 0 {
+		return 0
+	}
+	return duration
 }
 
 func tryFlush(w gin.ResponseWriter, builder *jsonbuilder.Stream, calculateTiming bool) (int64, error) {

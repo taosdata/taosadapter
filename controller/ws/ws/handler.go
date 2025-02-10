@@ -189,7 +189,7 @@ func (h *messageHandler) stop() {
 }
 
 func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
-	ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
+	ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
 	h.logger.Debugf("get ws message data:%s", data)
 	var request Request
 	err := json.Unmarshal(data, &request)
@@ -657,7 +657,7 @@ func (h *messageHandler) handleMessageBinary(session *melody.Session, message []
 	action := *(*uint64)(tools.AddPointer(p0, uintptr(16)))
 	h.logger.Debugf("get ws message binary QID:0x%x, resourceID:%d, action:%d", reqID, resourceID, action)
 
-	ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
+	ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
 	actionStr := getActionString(action)
 	logger := h.logger.WithField(actionKey, actionStr).WithField(config.ReqIDKey, reqID)
 
