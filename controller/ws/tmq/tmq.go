@@ -63,7 +63,7 @@ func NewTMQController() *TMQController {
 			if t.isClosed() {
 				return
 			}
-			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
+			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
 			logger := wstool.GetLogger(session)
 			logger.Debugf("get ws message data:%s", data)
 			var action wstool.WSAction

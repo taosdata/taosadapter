@@ -59,7 +59,7 @@ func NewSTMTController() *STMTController {
 			if t.closed {
 				return
 			}
-			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
+			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
 			logger := wstool.GetLogger(session)
 			logger.Debugf("get ws message data:%s", data)
 			var action wstool.WSAction
@@ -184,7 +184,7 @@ func NewSTMTController() *STMTController {
 			}
 			logger := wstool.GetLogger(session)
 			logger.Tracef("get ws block message data:%+v", data)
-			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
+			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
 			//p0 uin64  req_id
 			//p0+8 uint64  stmt_id
 			//p0+16 uint64 (1 (set tag) 2 (bind))

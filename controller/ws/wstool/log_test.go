@@ -13,11 +13,16 @@ import (
 )
 
 func TestGetDuration(t *testing.T) {
-	startTime := time.Now().UnixNano()
+	startTime := time.Now()
 	ctx := context.WithValue(context.Background(), StartTimeKey, startTime)
 	time.Sleep(100 * time.Millisecond)
 	duration := GetDuration(ctx)
 	assert.Greater(t, duration, int64(0))
+
+	startTime = startTime.Add(5 * time.Second)
+	ctx = context.WithValue(context.Background(), StartTimeKey, startTime)
+	duration = GetDuration(ctx)
+	assert.Equal(t, int64(0), duration)
 }
 
 func TestGetLogger(t *testing.T) {

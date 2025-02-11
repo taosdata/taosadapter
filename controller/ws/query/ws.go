@@ -61,7 +61,7 @@ func NewQueryController() *QueryController {
 			if t.closed {
 				return
 			}
-			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
+			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
 			logger := wstool.GetLogger(session)
 			logger.Debugf("get ws message data: %s", data)
 			var action WSAction
@@ -132,7 +132,7 @@ func NewQueryController() *QueryController {
 			if t.closed {
 				return
 			}
-			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
+			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
 			logger := wstool.GetLogger(session)
 			logger.Tracef("get ws block message data:%+v", data)
 			p0 := unsafe.Pointer(&data[0])

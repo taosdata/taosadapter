@@ -103,7 +103,7 @@ type MessageWithTiming struct {
 func errorResp(c *gin.Context, logger *logrus.Entry, httpCode int, code int, msg string) {
 	st, ok := c.Get(StartTimeKey)
 	if ok {
-		timing := time.Now().UnixNano() - st.(int64)
+		timing := time.Since(st.(time.Time)).Nanoseconds()
 		c.AbortWithStatusJSON(httpCode, &MessageWithTiming{
 			Code:   code,
 			Desc:   msg,
