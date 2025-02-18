@@ -19,6 +19,12 @@ func TestDecodeBasic(t *testing.T) {
 	type args struct {
 		auth string
 	}
+	password255 := make([]byte, 255)
+	for i := 0; i < 254; i++ {
+		password255[i] = 'a'
+	}
+	password255[254] = 'b'
+	password255Str := string(password255)
 	tests := []struct {
 		name         string
 		args         args
@@ -60,6 +66,15 @@ func TestDecodeBasic(t *testing.T) {
 			},
 			wantUser:     "test",
 			wantPassword: "1!q@#$%^&*()-_+=[]{}:;><?|~,.",
+			wantErr:      false,
+		},
+		{
+			name: "password 255",
+			args: args{
+				auth: "dGVzdDphYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWI=",
+			},
+			wantUser:     "test",
+			wantPassword: password255Str,
 			wantErr:      false,
 		},
 	}
