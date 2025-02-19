@@ -3057,7 +3057,7 @@ func TestTMQ_FetchRawNew(t *testing.T) {
 
 	// fetch raw new
 	b, _ = json.Marshal(TMQFetchRawReq{ReqID: 100, MessageID: pollResp.MessageID})
-	msg, err = doWebSocket(ws, TMQFetchRawNew, b)
+	msg, err = doWebSocket(ws, TMQFetchRawData, b)
 	assert.NoError(t, err)
 	resp := parseFetchRawNewResponse(msg)
 	assert.Equal(t, uint64(0xffffffffffffffff), resp.Flag, resp.Flag)
@@ -3085,7 +3085,7 @@ func TestTMQ_FetchRawNew(t *testing.T) {
 
 	// fetch wrong
 	b, _ = json.Marshal(TMQFetchRawReq{ReqID: 100, MessageID: 8000})
-	msg, err = doWebSocket(ws, TMQFetchRawNew, b)
+	msg, err = doWebSocket(ws, TMQFetchRawData, b)
 	assert.NoError(t, err)
 	resp = parseFetchRawNewResponse(msg)
 	assert.Equal(t, uint64(0xffffffffffffffff), resp.Flag, resp.Flag)
@@ -3545,7 +3545,7 @@ func TestConsumeRawdata(t *testing.T) {
 				assert.NotEqual(t, 0, fetchJsonMetaResp.Code, fetchJsonMetaResp)
 			}
 			b, _ = json.Marshal(TMQFetchRawReq{ReqID: 100, MessageID: pollResp.MessageID})
-			msg, err = doWebSocket(ws, TMQFetchRawNew, b)
+			msg, err = doWebSocket(ws, TMQFetchRawData, b)
 			assert.NoError(t, err)
 			resp := parseFetchRawNewResponse(msg)
 			assert.Equal(t, uint64(0xffffffffffffffff), resp.Flag, resp.Flag)

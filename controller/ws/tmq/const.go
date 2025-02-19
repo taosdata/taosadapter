@@ -16,7 +16,7 @@ const (
 	TMQCommitted          = "committed"
 	TMQPosition           = "position"
 	TMQListTopics         = "list_topics"
-	TMQFetchRawNew        = "fetch_raw_data" // tmq_get_raw
+	TMQFetchRawData       = "fetch_raw_data" // tmq_get_raw
 )
 const (
 	TMQRawMessage         = 3

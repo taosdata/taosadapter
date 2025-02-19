@@ -131,7 +131,7 @@ func NewTMQController() *TMQController {
 					return
 				}
 				t.fetchRawBlock(ctx, session, &req)
-			case TMQFetchRawNew:
+			case TMQFetchRawData:
 				var req TMQFetchRawReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
@@ -1013,7 +1013,7 @@ func (t *TMQ) fetchRawBlock(ctx context.Context, session *melody.Session, req *T
 }
 
 func (t *TMQ) fetchRawBlockNew(ctx context.Context, session *melody.Session, req *TMQFetchRawReq) {
-	action := TMQFetchRawNew
+	action := TMQFetchRawData
 	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
 	logger.Tracef("fetch raw request:%+v", req)
 	if t.consumer == nil {
