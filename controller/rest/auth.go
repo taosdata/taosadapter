@@ -39,16 +39,18 @@ func DecodeDes(auth string) (user, password string, err error) {
 	if err != nil {
 		return "", "", err
 	}
-	if len(d) != 48 {
+	if len(d) < 48 || len(d)%8 != 0 {
 		return "", "", errors.New("wrong des length")
 	}
+	batch := len(d) / 8
 	block, _ := des.NewCipher(desKey)
 	b := pool.BytesPoolGet()
 	defer pool.BytesPoolPut(b)
-	for i := 0; i < 6; i++ {
+	for i := 0; i < batch; i++ {
 		origData := make([]byte, 8)
 		block.Decrypt(origData, d[i*8:+(i+1)*8])
 		b.Write(origData)
+		// user is 24 bytes
 		if i == 2 {
 			user, err = b.ReadString(0)
 			if err == nil {
@@ -65,32 +67,43 @@ func DecodeDes(auth string) (user, password string, err error) {
 }
 
 func EncodeDes(user, password string) (string, error) {
-	if len(user) > 24 || len(password) > 24 {
-		return "", errors.New("wrong user or password length")
+	if len(user) > 24 {
+		return "", errors.New("wrong user length")
 	}
-
-	b := make([]byte, 48)
-	for i := 0; i < len(user); i++ {
-		b[i] = user[i]
+	var key string
+	buf := pool.BytesPoolGet()
+	defer pool.BytesPoolPut(buf)
+	totalLen := 48
+	if len(password) > 24 {
+		totalLen = nearestMultipleOfEight(24 + len(password))
 	}
-	for i := 0; i < len(password); i++ {
-		b[i+24] = password[i]
-	}
-	v, exist := tokenCache.Get(string(b))
+	b := make([]byte, totalLen)
+	// user
+	copy(b, user)
+	// password
+	copy(b[24:], password)
+	key = string(b)
+	v, exist := tokenCache.Get(key)
 	if exist {
 		return v.(string), nil
 	}
+
 	block, _ := des.NewCipher(desKey)
-	buf := pool.BytesPoolGet()
-	defer pool.BytesPoolPut(buf)
-	for i := 0; i < 6; i++ {
+	batch := totalLen / 8
+	for i := 0; i < batch; i++ {
 		d := make([]byte, 8)
 		block.Encrypt(d, b[i*8:(i+1)*8])
 		buf.Write(d)
 	}
 	data := base64.StdEncoding.EncodeToString(buf.Bytes())
-	tokenCache.SetDefault(string(b), data)
+	if len(key) != 0 {
+		tokenCache.SetDefault(key, data)
+	}
 	return data, nil
+}
+
+func nearestMultipleOfEight(n int) int {
+	return (n + 7) / 8 * 8
 }
 
 const (

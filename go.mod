@@ -27,7 +27,7 @@ require (
 	github.com/spf13/viper v1.14.0
 	github.com/stretchr/testify v1.9.0
 	github.com/swaggo/swag v1.8.8
-	github.com/taosdata/file-rotatelogs/v2 v2.5.2
+	github.com/taosdata/file-rotatelogs/v2 v2.5.3
 	go.uber.org/automaxprocs v1.5.1
 	golang.org/x/sync v0.1.0
 )

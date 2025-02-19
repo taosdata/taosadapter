@@ -20,7 +20,7 @@ import (
 func TestWSError(t *testing.T) {
 	m := melody.New()
 	m.Config.MaxMessageSize = 4 * 1024 * 1024
-	ctx := context.WithValue(context.Background(), StartTimeKey, time.Now().UnixNano())
+	ctx := context.WithValue(context.Background(), StartTimeKey, time.Now())
 	reqID := uint64(12345)
 	taosErr := &tErrors.TaosError{
 		Code:   1001,

@@ -1,416 +1,125 @@
+<!-- omit in toc -->
 # taosAdapter
 
-[中文版](./README-CN.md)
-
-taosAdapter is a TDengine’s companion tool and is a bridge/adapter between TDengine cluster and application. It provides an easy-to-use and efficient way to ingest data from data collections agents(like Telegraf, StatsD, collectd) directly. It also provides InfluxDB/OpenTSDB compatible data ingestion interface to allow InfluxDB/OpenTSDB applications to immigrate to TDengine seamlessly.
-
-taosAdapter provides the following functions.
-
-- RESTful interface
-- Compatible with InfluxDB v1 write interface
-- Compatible with OpenTSDB JSON and telnet format write
-- Seamless connect to Telegraf
-- Seamless connect to collectD
-- Seamless connect to StatsD
-- Support Prometheus remote_read and remote_write
-
-## taosAdapter architecture
-
-![taosAdapter-architecture](taosAdapter-architecture-for-public.png)
-
-## taosAdapter deployment
-
-### Install taosAdapter
-
-taosAdapter is part of the TDengine server from TDengine v2.4.0.0. You don't need any additional steps to install taosAdapter if you already installed TDengine server. You can download TDengine server package (taosAdapter be included in v2.4.0.0 and above version) from the [official website](https://docs.tdengine.com/releases/tdengine/). If you want to deploy taosAdapter on another server, you need to install official TDengine server installation package. If you want to build taosAdapter from source code, you can refer to the [How to build taosAdapter](./BUILD.md) instruction.
-
-### Start/Stop taosAdapter
-
-taosAdapter service is managed by the systemd by default on the Linux system. It can be started by the command `systemctl start taosadapter` and be stopped by the command `systemctl stop taosadapter`.
-
-### Uninstall taosAdapter
-
-The command `rmtaos` will remove the TDengine server software including taosAdapter too.
-
-### Upgrade taosAdapter
-
-taosAdapter only properly run with the same version of TDengine server.
-You need to upgrade TDengine server to upgrade taosAdapter.
-A separate deployed taosAdapter need to upgrade the corresponding version of TDengine server package too.
-
-## taosAdapter's parameters
-
-taosAdapter supports command line parameters, environment variables, and configuration files.
-The default configuration file is `/etc/taos/taosadapter.toml`.
-
-`Command-line parameters take precedence over environment variables take precedence over configuration files`
-
-The command line usage is arg=val such as `taosadapter -p=30000 --debug=true`
-
-```shell
-Usage of taosAdapter:
-      --collectd.db string                           collectd db name. Env "TAOS_ADAPTER_COLLECTD_DB" (default "collectd")
-      --collectd.enable                              enable collectd. Env "TAOS_ADAPTER_COLLECTD_ENABLE" (default true)
-      --collectd.password string                     collectd password. Env "TAOS_ADAPTER_COLLECTD_PASSWORD" (default "taosdata")
-      --collectd.port int                            collectd server port. Env "TAOS_ADAPTER_COLLECTD_PORT" (default 6045)
-      --collectd.ttl int                             collectd data ttl. Env "TAOS_ADAPTER_COLLECTD_TTL"
-      --collectd.user string                         collectd user. Env "TAOS_ADAPTER_COLLECTD_USER" (default "root")
-      --collectd.worker int                          collectd write worker. Env "TAOS_ADAPTER_COLLECTD_WORKER" (default 10)
-  -c, --config string                                config path default /etc/taos/taosadapter.toml
-      --cors.allowAllOrigins                         cors allow all origins. Env "TAOS_ADAPTER_CORS_ALLOW_ALL_ORIGINS" (default true)
-      --cors.allowCredentials                        cors allow credentials. Env "TAOS_ADAPTER_CORS_ALLOW_Credentials"
-      --cors.allowHeaders stringArray                cors allow HEADERS. Env "TAOS_ADAPTER_ALLOW_HEADERS"
-      --cors.allowOrigins stringArray                cors allow origins. Env "TAOS_ADAPTER_ALLOW_ORIGINS"
-      --cors.allowWebSockets                         cors allow WebSockets. Env "TAOS_ADAPTER_CORS_ALLOW_WebSockets"
-      --cors.exposeHeaders stringArray               cors expose headers. Env "TAOS_ADAPTER_Expose_Headers"
-      --debug                                        enable debug mode. Env "TAOS_ADAPTER_DEBUG" (default true)
-      --help                                         Print this help message and exit
-      --influxdb.enable                              enable influxdb. Env "TAOS_ADAPTER_INFLUXDB_ENABLE" (default true)
-      --log.enableRecordHttpSql                      whether to record http sql. Env "TAOS_ADAPTER_LOG_ENABLE_RECORD_HTTP_SQL"
-      --log.path string                              log path. Env "TAOS_ADAPTER_LOG_PATH" (default "/var/log/taos")
-      --log.rotationCount uint                       log rotation count. Env "TAOS_ADAPTER_LOG_ROTATION_COUNT" (default 30)
-      --log.rotationSize string                      log rotation size(KB MB GB), must be a positive integer. Env "TAOS_ADAPTER_LOG_ROTATION_SIZE" (default "1GB")
-      --log.rotationTime duration                    log rotation time. Env "TAOS_ADAPTER_LOG_ROTATION_TIME" (default 24h0m0s)
-      --log.sqlRotationCount uint                    record sql log rotation count. Env "TAOS_ADAPTER_LOG_SQL_ROTATION_COUNT" (default 2)
-      --log.sqlRotationSize string                   record sql log rotation size(KB MB GB), must be a positive integer. Env "TAOS_ADAPTER_LOG_SQL_ROTATION_SIZE" (default "1GB")
-      --log.sqlRotationTime duration                 record sql log rotation time. Env "TAOS_ADAPTER_LOG_SQL_ROTATION_TIME" (default 24h0m0s)
-      --logLevel string                              log level (panic fatal error warn warning info debug trace). Env "TAOS_ADAPTER_LOG_LEVEL" (default "info")
-      --monitor.collectDuration duration             Set monitor duration. Env "TAOS_ADAPTER_MONITOR_COLLECT_DURATION" (default 3s)
-      --monitor.disable                              Whether to disable monitoring. Env "TAOS_ADAPTER_MONITOR_DISABLE"
-      --monitor.identity string                      The identity of the current instance, or 'hostname:port' if it is empty. Env "TAOS_ADAPTER_MONITOR_IDENTITY"
-      --monitor.incgroup                             Whether running in cgroup. Env "TAOS_ADAPTER_MONITOR_INCGROUP"
-      --monitor.password string                      TDengine password. Env "TAOS_ADAPTER_MONITOR_PASSWORD" (default "taosdata")
-      --monitor.pauseAllMemoryThreshold float        Memory percentage threshold for pause all. Env "TAOS_ADAPTER_MONITOR_PAUSE_ALL_MEMORY_THRESHOLD" (default 80)
-      --monitor.pauseQueryMemoryThreshold float      Memory percentage threshold for pause query. Env "TAOS_ADAPTER_MONITOR_PAUSE_QUERY_MEMORY_THRESHOLD" (default 70)
-      --monitor.user string                          TDengine user. Env "TAOS_ADAPTER_MONITOR_USER" (default "root")
-      --monitor.writeInterval duration               Set write to TDengine interval. Env "TAOS_ADAPTER_MONITOR_WRITE_INTERVAL" (default 30s)
-      --monitor.writeToTD                            Whether write metrics to TDengine. Env "TAOS_ADAPTER_MONITOR_WRITE_TO_TD"
-      --node_exporter.caCertFile string              node_exporter ca cert file path. Env "TAOS_ADAPTER_NODE_EXPORTER_CA_CERT_FILE"
-      --node_exporter.certFile string                node_exporter cert file path. Env "TAOS_ADAPTER_NODE_EXPORTER_CERT_FILE"
-      --node_exporter.db string                      node_exporter db name. Env "TAOS_ADAPTER_NODE_EXPORTER_DB" (default "node_exporter")
-      --node_exporter.enable                         enable node_exporter. Env "TAOS_ADAPTER_NODE_EXPORTER_ENABLE"
-      --node_exporter.gatherDuration duration        node_exporter gather duration. Env "TAOS_ADAPTER_NODE_EXPORTER_GATHER_DURATION" (default 5s)
-      --node_exporter.httpBearerTokenString string   node_exporter http bearer token. Env "TAOS_ADAPTER_NODE_EXPORTER_HTTP_BEARER_TOKEN_STRING"
-      --node_exporter.httpPassword string            node_exporter http password. Env "TAOS_ADAPTER_NODE_EXPORTER_HTTP_PASSWORD"
-      --node_exporter.httpUsername string            node_exporter http username. Env "TAOS_ADAPTER_NODE_EXPORTER_HTTP_USERNAME"
-      --node_exporter.insecureSkipVerify             node_exporter skip ssl check. Env "TAOS_ADAPTER_NODE_EXPORTER_INSECURE_SKIP_VERIFY" (default true)
-      --node_exporter.keyFile string                 node_exporter cert key file path. Env "TAOS_ADAPTER_NODE_EXPORTER_KEY_FILE"
-      --node_exporter.password string                node_exporter password. Env "TAOS_ADAPTER_NODE_EXPORTER_PASSWORD" (default "taosdata")
-      --node_exporter.responseTimeout duration       node_exporter response timeout. Env "TAOS_ADAPTER_NODE_EXPORTER_RESPONSE_TIMEOUT" (default 5s)
-      --node_exporter.ttl int                        node_exporter data ttl. Env "TAOS_ADAPTER_NODE_EXPORTER_TTL"
-      --node_exporter.urls strings                   node_exporter urls. Env "TAOS_ADAPTER_NODE_EXPORTER_URLS" (default [http://localhost:9100])
-      --node_exporter.user string                    node_exporter user. Env "TAOS_ADAPTER_NODE_EXPORTER_USER" (default "root")
-      --opentsdb.enable                              enable opentsdb. Env "TAOS_ADAPTER_OPENTSDB_ENABLE" (default true)
-      --opentsdb_telnet.batchSize int                opentsdb_telnet batch size. Env "TAOS_ADAPTER_OPENTSDB_TELNET_BATCH_SIZE" (default 1)
-      --opentsdb_telnet.dbs strings                  opentsdb_telnet db names. Env "TAOS_ADAPTER_OPENTSDB_TELNET_DBS" (default [opentsdb_telnet,collectd_tsdb,icinga2_tsdb,tcollector_tsdb])
-      --opentsdb_telnet.enable                       enable opentsdb telnet,warning: without auth info(default false). Env "TAOS_ADAPTER_OPENTSDB_TELNET_ENABLE"
-      --opentsdb_telnet.flushInterval duration       opentsdb_telnet flush interval (0s means not valid) . Env "TAOS_ADAPTER_OPENTSDB_TELNET_FLUSH_INTERVAL"
-      --opentsdb_telnet.maxTCPConnections int        max tcp connections. Env "TAOS_ADAPTER_OPENTSDB_TELNET_MAX_TCP_CONNECTIONS" (default 250)
-      --opentsdb_telnet.password string              opentsdb_telnet password. Env "TAOS_ADAPTER_OPENTSDB_TELNET_PASSWORD" (default "taosdata")
-      --opentsdb_telnet.ports ints                   opentsdb telnet tcp port. Env "TAOS_ADAPTER_OPENTSDB_TELNET_PORTS" (default [6046,6047,6048,6049])
-      --opentsdb_telnet.tcpKeepAlive                 enable tcp keep alive. Env "TAOS_ADAPTER_OPENTSDB_TELNET_TCP_KEEP_ALIVE"
-      --opentsdb_telnet.ttl int                      opentsdb_telnet data ttl. Env "TAOS_ADAPTER_OPENTSDB_TELNET_TTL"
-      --opentsdb_telnet.user string                  opentsdb_telnet user. Env "TAOS_ADAPTER_OPENTSDB_TELNET_USER" (default "root")
-      --pool.idleTimeout duration                    Set idle connection timeout. Env "TAOS_ADAPTER_POOL_IDLE_TIMEOUT"
-      --pool.maxConnect int                          max connections to taosd. Env "TAOS_ADAPTER_POOL_MAX_CONNECT"
-      --pool.maxIdle int                             max idle connections to taosd. Env "TAOS_ADAPTER_POOL_MAX_IDLE"
-  -P, --port int                                     http port. Env "TAOS_ADAPTER_PORT" (default 6041)
-      --prometheus.enable                            enable prometheus. Env "TAOS_ADAPTER_PROMETHEUS_ENABLE" (default true)
-      --restfulRowLimit int                          restful returns the maximum number of rows (-1 means no limit). Env "TAOS_ADAPTER_RESTFUL_ROW_LIMIT" (default -1)
-      --statsd.allowPendingMessages int              statsd allow pending messages. Env "TAOS_ADAPTER_STATSD_ALLOW_PENDING_MESSAGES" (default 50000)
-      --statsd.db string                             statsd db name. Env "TAOS_ADAPTER_STATSD_DB" (default "statsd")
-      --statsd.deleteCounters                        statsd delete counter cache after gather. Env "TAOS_ADAPTER_STATSD_DELETE_COUNTERS" (default true)
-      --statsd.deleteGauges                          statsd delete gauge cache after gather. Env "TAOS_ADAPTER_STATSD_DELETE_GAUGES" (default true)
-      --statsd.deleteSets                            statsd delete set cache after gather. Env "TAOS_ADAPTER_STATSD_DELETE_SETS" (default true)
-      --statsd.deleteTimings                         statsd delete timing cache after gather. Env "TAOS_ADAPTER_STATSD_DELETE_TIMINGS" (default true)
-      --statsd.enable                                enable statsd. Env "TAOS_ADAPTER_STATSD_ENABLE" (default true)
-      --statsd.gatherInterval duration               statsd gather interval. Env "TAOS_ADAPTER_STATSD_GATHER_INTERVAL" (default 5s)
-      --statsd.maxTCPConnections int                 statsd max tcp connections. Env "TAOS_ADAPTER_STATSD_MAX_TCP_CONNECTIONS" (default 250)
-      --statsd.password string                       statsd password. Env "TAOS_ADAPTER_STATSD_PASSWORD" (default "taosdata")
-      --statsd.port int                              statsd server port. Env "TAOS_ADAPTER_STATSD_PORT" (default 6044)
-      --statsd.protocol string                       statsd protocol [tcp or udp]. Env "TAOS_ADAPTER_STATSD_PROTOCOL" (default "udp")
-      --statsd.tcpKeepAlive                          enable tcp keep alive. Env "TAOS_ADAPTER_STATSD_TCP_KEEP_ALIVE"
-      --statsd.ttl int                               statsd data ttl. Env "TAOS_ADAPTER_STATSD_TTL"
-      --statsd.user string                           statsd user. Env "TAOS_ADAPTER_STATSD_USER" (default "root")
-      --statsd.worker int                            statsd write worker. Env "TAOS_ADAPTER_STATSD_WORKER" (default 10)
-      --taosConfigDir string                         load taos client config path. Env "TAOS_ADAPTER_TAOS_CONFIG_FILE"
-      --version                                      Print the version and exit
-```
-
-Note:
-If you support users using the web browser to access the interfaces, please configure the following CORS parameters according to your practical network setting:
-
-```text
-AllowAllOrigins
-AllowOrigins
-AllowHeaders
-ExposeHeaders
-AllowCredentials
-AllowWebSockets
-```
-
-If not, you don't need to configure them.
-
-Please visit the webpage [https://www.w3.org/wiki/CORS_Enabled](https://www.w3.org/wiki/CORS_Enabled) or [https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CORS](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CORS) for the detailed CORS protocol.
-
-For the default configuration file, see [example/config/taosadapter.toml](./example/config/taosadapter.toml)
-
-## Functions
-
-- Compatible with RESTful interface.
-  [https://docs.tdengine.com/reference/rest-api/](https://docs.tdengine.com/reference/rest-api/)
-- Compatible with InfluxDB v1 write interface.
-  [https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/](https://docs.influxdata.com/influxdb/v2.0/reference/api/influxdb-1x/write/)
-- Compatible with opentsdb JSON and telnet format writing.
-  - <http://opentsdb.net/docs/build/html/api_http/put.html>
-  - <http://opentsdb.net/docs/build/html/api_telnet/put.html>
-- Seamless connection with collectd.
-    collectd is a system statistics collection daemon. Please visit [https://collectd.org/](https://collectd.org/)for detail.
-- Seamless connection with StatsD.
-    StatsD is a daemon for easy but powerful stats aggregation. Please visit [https://github.com/statsd/statsd](https://github.com/statsd/statsd) for detail.
-- Seamless connection with icinga2.
-    icinga2 is an agent to collect check result metrics and performance data. Please visit [https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer](https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer) for detail.
-- Seamless connection with tcollector.
-    TCollector is a client-side process that gathers data from local collectors and pushes the data to OpenTSDB. Please visit [http://opentsdb.net/docs/build/html/user_guide/utilities/tcollector.html](http://opentsdb.net/docs/build/html/user_guide/utilities/tcollector.html) for detail.
-- Seamless connection with node_exporter.
-    NodeExporter is an exporter software for machine metrics. Please visit [https://github.com/prometheus/node_exporter](https://github.com/prometheus/node_exporter) for detail.
-- Support Prometheus remote_read and remote_write
-  remote_read and remote_write are Prometheus data read-write separation cluster solutions. Please visit [https://prometheus.io/blog/2019/10/10/remote-read-meets-streaming/#remote-apis](https://prometheus.io/blog/2019/10/10/remote-read-meets-streaming/#remote-apis) for detail.
-
-## Interface
-
-### TDengine RESTful interface
-
-You can use any http client to access the RESTful interface address `http://<fqdn>:6041/rest/sql` to insert to or query from TDengine. Please refer to the [official documentation](https://docs.taosdata.com/reference/rest-api/) for detail.
-
-### InfluxDB
-
-You can use any http client to access the RESTful interface address `http://<fqdn>:6041/<APIEndPoint>` to insert InfluxDB compatible protocol data to TDengine. The end point is:
-
-```text
-/influxdb/v1/write
-```
-
-Support following InfluxDB query parameters:
-
-- `db` Specify the necessary parameters for the database
-- `precision` time precision non-essential parameter
-- `u` user non-essential parameters
-- `p` password Optional parameter
-
-Note: There is currently not supported token authentication in InfluxDB only supports Basic authentication and query parameter authentication.
-
-### OpenTSDB
-
-You can use any http client to access the RESTful interface address `http://<fqdn>:6041/<APIEndPoint>` to insert OpenTSDB compatible protocol data to TDengine. The end point is:
-
-```text
-/opentsdb/v1/put/json/:db
-/opentsdb/v1/put/telnet/:db
-```
-
-### collectd
-
-#### direct collection
-
-Modify the collectd configuration `/etc/collectd/collectd.conf`. taosAdapter uses 6045 for collectd direct collection data write by default.
-
-```text
-LoadPlugin network
-<Plugin network>
-         Server "127.0.0.1" "6045"
-</Plugin>
-```
-
-#### tsdb writer
-
-Modify the collectd configuration `/etc/collectd/collectd.conf`. taosAdapter uses 6047 for collectd tsdb write by default.
-
-```text
-LoadPlugin write_tsdb
-<Plugin write_tsdb>
-        <Node>
-                Host "localhost"
-                Port "6047"
-                HostTags "status=production"
-                StoreRates false
-                AlwaysAppendDS false
-        </Node>
-</Plugin>
-```
-
-### StatsD
-
-modify the configuration file `path_to_statsd/config.js`
-
-- `backends` add `"./backends/repeater"`
-- `repeater` add `{ host:'host to taosAdapter', port: 6044}`
-
-An example configuration file as below:
-
-```js
-{
-  port: 8125,
-  backends: ["./backends/repeater"],
-  repeater: [{ host: '127.0.0.1', port: 6044}]
-}
-```
-
-### icinga2 OpenTSDB writer
-
-Use icinga2 to collect check result metrics and performance data
+<!-- omit in toc -->
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/taosdata/taosadapter/build.yml)](https://github.com/taosdata/taosadapter/actions/workflows/build.yml)
+[![codecov](https://codecov.io/gh/taosdata/taosadapter/graph/badge.svg?token=WCN19U180U)](https://codecov.io/gh/taosdata/taosadapter)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/m/taosdata/taosadapter)
+![GitHub License](https://img.shields.io/github/license/taosdata/taosadapter)
+![GitHub Tag](https://img.shields.io/github/v/tag/taosdata/taosadapter?label=latest)
+<br />
+[![Twitter Follow](https://img.shields.io/twitter/follow/tdenginedb?label=TDengine&style=social)](https://twitter.com/tdenginedb)
+[![YouTube Channel](https://img.shields.io/badge/Subscribe_@tdengine--white?logo=youtube&style=social)](https://www.youtube.com/@tdengine)
+[![Discord Community](https://img.shields.io/badge/Join_Discord--white?logo=discord&style=social)](https://discord.com/invite/VZdSuUg4pS)
+[![LinkedIn](https://img.shields.io/badge/Follow_LinkedIn--white?logo=linkedin&style=social)](https://www.linkedin.com/company/tdengine)
+[![StackOverflow](https://img.shields.io/badge/Ask_StackOverflow--white?logo=stackoverflow&style=social&logoColor=orange)](https://stackoverflow.com/questions/tagged/tdengine)
 
-- Follow the doc to enable
-  opentsdb-writer [https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer](https://icinga.com/docs/icinga-2/latest/doc/14-features/#opentsdb-writer)
-- Enable taosAdapter configuration `opentsdb_telnet.enable`
-- Modify the configuration file `/etc/icinga2/features-enabled/opentsdb.conf`
+English | [简体中文](./README-CN.md)
 
-```text
-object OpenTsdbWriter "opentsdb" {
-  host = "host to taosAdapter"
-  port = 6048
-}
-```
+<!-- omit in toc -->
 
-### TCollector
+## Table of Contents
 
-TCollector is a client-side process that gathers data from local collectors and pushes the data to OpenTSDB. You run it on all your hosts, and it does the work of sending each host’s data to the TSD (OpenTSDB backend process).
+<!-- omit in toc -->
 
-- Enable taosAdapter configuration `opentsdb_telnet.enable`
-- Modify the TCollector configuration file, modify the OpenTSDB host to the host where taosAdapter is deployed, and modify the port to 6049
+- [1. Introduction](#1-introduction)
+- [2. Documentation](#2-documentation)
+- [3. Prerequisites](#3-prerequisites)
+- [4. Build](#4-build)
+- [5. Testing](#5-testing)
+    - [5.1 Test Execution](#51-test-execution)
+    - [5.2 Test Case Addition](#52-test-case-addition)
+    - [5.3 Performance Testing](#53-performance-testing)
+- [6. CI/CD](#6-cicd)
+- [7. Submitting Issues](#7-submitting-issues)
+- [8. Submitting PRs](#8-submitting-prs)
+- [9. References](#9-references)
+- [10. License](#10-license)
 
-### node_exporter
+## 1. Introduction
 
-Prometheus exporter for hardware and OS metrics exposed by *NIX kernels
+taosAdapter is a companion tool for TDengine, serving as a bridge and adapter between the TDengine cluster and
+applications. It provides an easy and efficient way to ingest data directly from data collection agents (such as
+Telegraf, StatsD, collectd, etc.). It also offers InfluxDB/OpenTSDB compatible data ingestion interfaces, allowing
+InfluxDB/OpenTSDB applications to be seamlessly ported to TDengine. The connectors of TDengine in various languages
+communicate with TDengine through the WebSocket interface, hence the taosAdapter must be installed.
 
-- Enable taosAdapter configuration `node_exporter.enable`
-- Set the relevant configuration of node_exporter
-- Restart taosAdapter
+## 2. Documentation
 
-### prometheus
+- To use taosAdapter, please refer to
+  the [taosAdapter Reference](https://docs.tdengine.com/tdengine-reference/components/taosadapter/).
+- This quick guide is mainly for developers who like to contribute/build/test the taosAdapter by themselves. To learn
+  about TDengine, you can visit the [official documentation](https://docs.tdengine.com).
 
-Remote_read and remote_write are cluster schemes for Prometheus data read-write separation.
-Just use the REMOTE_READ and REMOTE_WRITE URL to point to the URL corresponding to Taosadapter to use Basic authentication.
+## 3. Prerequisites
 
-- Remote_read url: `http://host_to_taosadapter:port (default 6041) /prometheus/v1/remote_read/:db`
-- Remote_write url: `http://host_to_taosadapter:port (default 6041) /Prometheus/v1/remote_write/:db`
+- Go 1.17 or above is installed and CGO is enabled `export CGO_ENABLED=1`.
+- TDengine has been deployed locally. For specific steps, please refer
+  to [Deploy TDengine](https://docs.tdengine.com/get-started/deploy-from-package/). Please make sure taosd has been
+  started.
 
-Basic verification:
+## 4. Build
 
-- Username: TDengine connection username
-- Password: TDengine connection password
+Execute `go build` in the project directory to build the project.
 
-Example Prometheus.yml is as follows:
+## 5. Testing
 
-```yaml
-remote_write:
-  - url: "http://localhost:6041/prometheus/v1/remote_write/prometheus_data"
-    basic_auth:
-      username: root
-      password: taosdata
+### 5.1 Test Execution
 
-remote_read:
-  - url: "http://localhost:6041/prometheus/v1/remote_read/prometheus_data"
-    basic_auth:
-      username: root
-      password: taosdata
-    remote_timeout: 10s
-    read_recent: true
-```
+1. Before running tests, ensure that the TDengine server is installed and the `taosd` is running.
+   The database should be empty.
+2. In the project directory, run `go test ./...` to execute the tests. The tests will connect to the local TDengine
+   server and taosAdapter for testing.
+3. The output result `PASS` means the test passed, while `FAIL` means the test failed. For detailed information, run
+   `go test -v ./...`.
 
-## Memory usage optimization
+### 5.2 Test Case Addition
 
-taosAdapter will monitor itself memory usage during its running. You can adjust its thresholds via two parameters.
-The valid value is from -1 to 100. The unit is the percentage of physical memory on the system.
+Add test cases to the `*_test.go` file to ensure that the test cases cover the new code.
 
-- pauseQueryMemoryThreshold
-- pauseAllMemoryThreshold
+### 5.3 Performance Testing
 
-Query requests will be rejected when the pauseQueryMemoryThreshold is exceeded.
+Performance testing is in progress.
 
-http return
+## 6. CI/CD
 
-- code 503
-- body "query memory exceeds threshold"
+- [Build Workflow](https://github.com/taosdata/taosadapter/actions/workflows/build.yml)
+- [Code Coverage](https://app.codecov.io/gh/taosdata/taosadapter)
 
-All write and query requests will be rejected when the pauseAllMemoryThreshold is exceeded.
+## 7. Submitting Issues
 
-http return
+We welcome the submission of [GitHub Issue](https://github.com/taosdata/taosadapter/issues/new?template=Blank+issue).
+When
+submitting, please provide the following information:
 
-- code 503
-- body "memory exceeds threshold"
+- Description of the issue and whether it is consistently reproducible.
+- taosAdapter version.
+- TDengine version.
 
-The corresponding function will resume when the memory usage falls back below the threshold.
+## 8. Submitting PRs
 
-Status check interface `http://<fqdn>:6041/-/ping`
+We welcome developers to contribute to this project. When submitting PRs, please follow these steps:
 
-- Normal return ``code 200``
-- No parameter Returns `code 503` if memory exceeds pauseAllMemoryThreshold
-- request parameter `action=query` returns `code 503` if memory exceeds pauseQueryMemoryThreshold or pauseAllMemoryThreshold
-
-for the corresponding configuration parameter
-
-```text
-monitor.collectDuration duration             Set monitor duration. Env "TAOS_ADAPTER_MONITOR_COLLECT_DURATION" (default 3s)
-monitor.incgroup                             Whether running in cgroup. Env "TAOS_ADAPTER_MONITOR_INCGROUP"
-monitor.pauseAllMemoryThreshold float        Memory percentage threshold for pause query and insert. Env "TAOS_ADAPTER_MONITOR_PAUSE_ALL_MEMORY_THRESHOLD" (default 80)
-monitor.pauseQueryMemoryThreshold float      Memory percentage threshold for pause query. Env "TAOS_ADAPTER_MONITOR_PAUSE_QUERY_MEMORY_THRESHOLD" (default 70)
-```
-
-You can adjust them according to the specific project scenarios and operation strategies, and it is recommended to use operation monitoring software to monitor system memory status in a timely manner too. You can configure the load balancer to check the interface for checking taosAdapter's running status too.
-
-## taosAdapter monitoring metrics
-
-taosAdapter collects http related metrics, cpu percentage and memory percentage.
-
-### http interface
-
-Provides an [OpenMetrics](https://github.com/OpenObservability/OpenMetrics/blob/main/specification/OpenMetrics.md) interface.
-
-```text
-http://<fqdn>:6041/metrics
-```
-
-### Write to TDengine
-
-taosAdapter supports writing metrics to TDengine.
-
-Related configuration parameters
-
-| **configuration**       | **description**                                                                      | **default values** |
-| ----------------------- | ------------------------------------------------------------------------------------ |--------------------|
-| monitor.collectDuration | cpu and memory collection interval                                                   | 3s                 |
-| monitor.identity        | The identifier of the current taosadapter will be used if not set to 'hostname:port' |                    |
-| monitor.incgroup        | whether running in a cgroup (set to true when running in a container)                | false              |
-| monitor.writeToTD       | Whether to write to TDengine                                                         | false              |
-| monitor.user            | TDengine connection username                                                         | root               |
-| monitor.password        | TDengine connection password                                                         | taosdata           |
-| monitor.writeInterval   | write to TDengine interval                                                           | 30s                |
-
-## Limit on the rows of returned result
-
-taosAdapter controls the rows of result returned by the parameter `restfulRowLimit`, -1 means no limit, default is no limit.
-
-This parameter controls the following interface returns
-
-- `http://<fqdn>:6041/rest/sql`
-- `http://<fqdn>:6041/prometheus/v1/remote_read/:db`
-
-## Troubleshooting
-
-You can use `systemctl status taosadapter` to check the running status of the taosAdapter.
-
-Or you can set `--logLevel` or the environment variable "TAOS_ADAPTER_LOG_LEVEL" to adjust the detail level how many log taosAdapter output. The valid values include panic, fatal, error, warn, warning, info, debug, and trace.
-
-## How to migrate to taosAdapter from old version of TDengine server
-
-In the early version (2.2.x.x or earlier version), TDengine server provided an embedded http service by default. It will compulsorily running with the `taosd` process. As mentioned early, taosAdapter need be manually run by 'systemctl start taosadapter' and has its own process. Some parameters and behaviors are different between the embedded httpd and taosAdapter. Please see below:
-
-| **#** | **embedded httpd**  | **taosAdapter**                                    | **comment**                                                                                                                                                                   |
-| ----- | ------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | httpEnableRecordSql | --logLevel=debug                                   |                                                                                                                                                                               |
-| 2     | httpMaxThreads      | n/a                                                | taosAdapter no need this parameter                                                                                                                                             |
-| 3     | telegrafUseFieldNum | please refer to taosAdapter telegraf configuration |                                                                                                                                                                               |
-| 4     | restfulRowLimit     | restfulRowLimit                                    | default value is 10240 in the embedded httpd. taosAdapter provides restfulRowLimit too but the default value is unlimited. User can set it according to the specific scenario |
-| 5     | httpDebugFlag       | not used                                           | taosAdapter is immune to `httpdDebugFlag`                                                                                                                                     |
-| 6     | httpDBNameMandatory | not used                                           | taosAdapter requests the database name be specified in URL                                                                                                                    |
+1. Fork this project. Please refer
+   to [how to fork a repo](https://docs.github.com/en/get-started/quickstart/fork-a-repo).
+2. Create a new branch from the main branch with a meaningful branch name (`git checkout -b my_branch`).
+3. Modify the code, ensure all unit tests pass, and add new unit tests to verify the changes.
+4. Push the changes to the remote branch (`git push origin my_branch`).
+5. Create a Pull Request on GitHub. Please refer
+   to [how to create a pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request).
+6. After submitting the PR, you can find your PR through
+   the [Pull Request](https://github.com/taosdata/taosadapter/pulls). Click on the corresponding link to see if the CI
+   for
+   your PR has passed. If it has passed, it will display "All checks have passed". Regardless of whether the CI passes
+   or not, you can click "Show all checks" -> "Details" to view the detailed test case logs.
+7. After submitting the PR, if the CI passes, you can find your PR on
+   the [codecov](https://app.codecov.io/gh/taosdata/taosadapter/pulls) page to check the coverage.
+
+## 9. References
+
+- [TDengine Official Website](https://tdengine.com/)
+- [TDengine GitHub](https://github.com/taosdata/TDengine)
+
+## 10. License
+
+[MIT License](./LICENSE)

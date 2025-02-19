@@ -50,7 +50,7 @@ func NewSchemalessController() *SchemalessController {
 			if t.closed {
 				return
 			}
-			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now().UnixNano())
+			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
 			logger := wstool.GetLogger(session)
 			logger.Debugf("get ws message data:%s", bytes)
 			var action wstool.WSAction

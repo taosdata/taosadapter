@@ -179,7 +179,7 @@ func TestAllType(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`select alltype.*,info->'table' from alltype where ts = %d`, now))
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype?row_with_meta=true", body)
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype?row_with_meta=true&timing=true", body)
 	req.RemoteAddr = "127.0.0.1:33333"
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -188,6 +188,7 @@ func TestAllType(t *testing.T) {
 	err = json.Unmarshal(w.Body.Bytes(), &objResult)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, result.Code)
+	assert.Greater(t, objResult.Timing, uint64(0))
 	for i := 0; i < 17; i++ {
 		colName := objResult.ColumnMeta[i+1][0].(string)
 		assert.Equal(t, expect[i], objResult.Data[0][colName])
@@ -769,4 +770,35 @@ func checkResp(t *testing.T, w *httptest.ResponseRecorder) {
 	err := json.Unmarshal(w.Body.Bytes(), &result)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, result.Code)
+}
+
+func Test_avoidNegativeDuration(t *testing.T) {
+	type args struct {
+		duration int64
+	}
+	tests := []struct {
+		name string
+		args args
+		want int64
+	}{
+		{
+			name: "negative",
+			args: args{
+				duration: -1,
+			},
+			want: 0,
+		},
+		{
+			name: "positive",
+			args: args{
+				duration: 1,
+			},
+			want: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, avoidNegativeDuration(tt.args.duration), "avoidNegativeDuration(%v)", tt.args.duration)
+		})
+	}
 }

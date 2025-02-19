@@ -62,7 +62,7 @@ func RegisterGenerateAuth(r gin.IRouter) {
 		user := c.Param("user")
 		password := c.Param("password")
 		key := c.Param("key")
-		if len(user) == 0 || len(user) > 24 || len(password) == 0 || len(password) > 24 || len(key) == 0 {
+		if len(user) == 0 || len(user) > 24 || len(password) == 0 || len(key) == 0 {
 			c.AbortWithStatus(http.StatusBadRequest)
 			return
 		}

@@ -11,7 +11,12 @@ import (
 )
 
 func GetDuration(ctx context.Context) int64 {
-	return time.Now().UnixNano() - ctx.Value(StartTimeKey).(int64)
+	startTime := ctx.Value(StartTimeKey).(time.Time)
+	duration := time.Since(startTime).Nanoseconds()
+	if duration < 0 {
+		return 0
+	}
+	return duration
 }
 
 func GetLogger(session *melody.Session) *logrus.Entry {
