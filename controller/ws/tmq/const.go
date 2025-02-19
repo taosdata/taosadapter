@@ -4,9 +4,9 @@ const TaosTMQKey = "taos_tmq"
 const (
 	TMQSubscribe          = "subscribe"
 	TMQPoll               = "poll"
-	TMQFetch              = "fetch"
+	TMQFetch              = "fetch" // fetch_raw_block
 	TMQFetchBlock         = "fetch_block"
-	TMQFetchRaw           = "fetch_raw"
+	TMQFetchRaw           = "fetch_raw" // tmq_get_raw
 	TMQFetchJsonMeta      = "fetch_json_meta"
 	TMQCommit             = "commit"
 	TMQUnsubscribe        = "unsubscribe"
@@ -16,7 +16,7 @@ const (
 	TMQCommitted          = "committed"
 	TMQPosition           = "position"
 	TMQListTopics         = "list_topics"
-	TMQFetchRawNew        = "fetch_raw_data"
+	TMQFetchRawData       = "fetch_raw_data" // tmq_get_raw
 )
 const (
 	TMQRawMessage         = 3

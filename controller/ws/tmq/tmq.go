@@ -131,7 +131,7 @@ func NewTMQController() *TMQController {
 					return
 				}
 				t.fetchRawBlock(ctx, session, &req)
-			case TMQFetchRawNew:
+			case TMQFetchRawData:
 				var req TMQFetchRawReq
 				err = json.Unmarshal(action.Args, &req)
 				if err != nil {
@@ -400,6 +400,7 @@ type TMQSubscribeReq struct {
 	TZ                   string   `json:"tz"`
 	App                  string   `json:"app"`
 	IP                   string   `json:"ip"`
+	MsgConsumeRawdata    string   `json:"msg_consume_rawdata"`
 }
 
 type TMQSubscribeResp struct {
@@ -519,6 +520,9 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	}
 	if len(req.MaxPollIntervalMS) != 0 {
 		tmqOptions["max.poll.interval.ms"] = req.MaxPollIntervalMS
+	}
+	if len(req.MsgConsumeRawdata) != 0 {
+		tmqOptions["msg.consume.rawdata"] = req.MsgConsumeRawdata
 	}
 	var errCode int32
 	for k, v := range tmqOptions {
@@ -1009,7 +1013,7 @@ func (t *TMQ) fetchRawBlock(ctx context.Context, session *melody.Session, req *T
 }
 
 func (t *TMQ) fetchRawBlockNew(ctx context.Context, session *melody.Session, req *TMQFetchRawReq) {
-	action := TMQFetchRawNew
+	action := TMQFetchRawData
 	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
 	logger.Tracef("fetch raw request:%+v", req)
 	if t.consumer == nil {
@@ -1090,6 +1094,11 @@ func (t *TMQ) fetchJsonMeta(ctx context.Context, session *melody.Session, req *T
 		return
 	}
 	message := t.tmpMessage
+	if !canGetMeta(message.Type) {
+		logger.Errorf("message type can not get meta, type:%d", message.Type)
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, fmt.Sprintf("message type can not get meta, type: %d", message.Type), action, req.ReqID, &req.MessageID)
+		return
+	}
 	if message.Index != req.MessageID {
 		logger.Errorf("message ID are not equal, req:%d, message:%d", req.MessageID, message.Index)
 		wsTMQErrorMsg(ctx, session, logger, 0xffff, "message ID is not equal", action, req.ReqID, &req.MessageID)
@@ -1368,9 +1377,13 @@ func canGetData(messageType int32) bool {
 	return messageType == common.TMQ_RES_DATA || messageType == common.TMQ_RES_METADATA
 }
 
+func canGetMeta(messageType int32) bool {
+	return messageType == common.TMQ_RES_TABLE_META || messageType == common.TMQ_RES_METADATA
+}
+
 func messageTypeIsValid(messageType int32) bool {
 	switch messageType {
-	case common.TMQ_RES_DATA, common.TMQ_RES_TABLE_META, common.TMQ_RES_METADATA:
+	case common.TMQ_RES_DATA, common.TMQ_RES_TABLE_META, common.TMQ_RES_METADATA, common.TMQ_RES_RAWDATA:
 		return true
 	}
 	return false
