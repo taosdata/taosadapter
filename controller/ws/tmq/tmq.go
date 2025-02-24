@@ -380,27 +380,28 @@ func (t *TMQ) lock(logger *logrus.Entry, isDebug bool) {
 }
 
 type TMQSubscribeReq struct {
-	ReqID                uint64   `json:"req_id"`
-	User                 string   `json:"user"`
-	Password             string   `json:"password"`
-	DB                   string   `json:"db"`
-	GroupID              string   `json:"group_id"`
-	ClientID             string   `json:"client_id"`
-	OffsetRest           string   `json:"offset_rest"` // typo
-	OffsetReset          string   `json:"offset_reset"`
-	Topics               []string `json:"topics"`
-	AutoCommit           string   `json:"auto_commit"`
-	AutoCommitIntervalMS string   `json:"auto_commit_interval_ms"`
-	SnapshotEnable       string   `json:"snapshot_enable"`
-	WithTableName        string   `json:"with_table_name"`
-	EnableBatchMeta      string   `json:"enable_batch_meta"`
-	MsgConsumeExcluded   string   `json:"msg_consume_excluded"`
-	SessionTimeoutMS     string   `json:"session_timeout_ms"`
-	MaxPollIntervalMS    string   `json:"max_poll_interval_ms"`
-	TZ                   string   `json:"tz"`
-	App                  string   `json:"app"`
-	IP                   string   `json:"ip"`
-	MsgConsumeRawdata    string   `json:"msg_consume_rawdata"`
+	ReqID                uint64            `json:"req_id"`
+	User                 string            `json:"user"`
+	Password             string            `json:"password"`
+	DB                   string            `json:"db"`
+	GroupID              string            `json:"group_id"`
+	ClientID             string            `json:"client_id"`
+	OffsetRest           string            `json:"offset_rest"` // typo
+	OffsetReset          string            `json:"offset_reset"`
+	Topics               []string          `json:"topics"`
+	AutoCommit           string            `json:"auto_commit"`
+	AutoCommitIntervalMS string            `json:"auto_commit_interval_ms"`
+	SnapshotEnable       string            `json:"snapshot_enable"`
+	WithTableName        string            `json:"with_table_name"`
+	EnableBatchMeta      string            `json:"enable_batch_meta"`
+	MsgConsumeExcluded   string            `json:"msg_consume_excluded"`
+	SessionTimeoutMS     string            `json:"session_timeout_ms"`
+	MaxPollIntervalMS    string            `json:"max_poll_interval_ms"`
+	TZ                   string            `json:"tz"`
+	App                  string            `json:"app"`
+	IP                   string            `json:"ip"`
+	MsgConsumeRawdata    string            `json:"msg_consume_rawdata"`
+	Config               map[string]string `json:"config"`
 }
 
 type TMQSubscribeResp struct {
@@ -411,13 +412,20 @@ type TMQSubscribeResp struct {
 	Timing  int64  `json:"timing"`
 }
 
+var ignoreSubscribeConfig = map[string]struct{}{
+	"td.connect.user": {},
+	"td.connect.pass": {},
+	"td.connect.ip":   {},
+	"td.connect.port": {},
+}
+
 func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSubscribeReq) {
 	action := TMQSubscribe
 	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
 	logger.Tracef("subscribe request:%+v", req)
 	// lock for consumer and unsubscribed
-	// used for subscribe,unsubscribe and
+	// used for subscribe and unsubscribe
 	t.lock(logger, isDebug)
 	defer t.Unlock()
 	if t.isClosed() {
@@ -463,6 +471,11 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	defer func() {
 		wrapper.TMQConfDestroy(tmqConfig)
 	}()
+	// reset autocommit and autocommit interval
+	t.isAutoCommit = false
+	t.autocommitInterval = time.Second * 5
+	t.nextTime = time.Time{}
+
 	var tmqOptions = make(map[string]string)
 	if len(req.GroupID) != 0 {
 		tmqOptions["group.id"] = req.GroupID
@@ -472,42 +485,6 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	}
 	if len(req.DB) != 0 {
 		tmqOptions["td.connect.db"] = req.DB
-	}
-	offsetReset := req.OffsetRest
-
-	if len(req.OffsetReset) != 0 {
-		offsetReset = req.OffsetReset
-	}
-	if len(offsetReset) != 0 {
-		tmqOptions["auto.offset.reset"] = offsetReset
-	}
-	tmqOptions["td.connect.user"] = req.User
-	tmqOptions["td.connect.pass"] = req.Password
-	if len(req.WithTableName) != 0 {
-		tmqOptions["msg.with.table.name"] = req.WithTableName
-	}
-	if len(req.MsgConsumeExcluded) != 0 {
-		tmqOptions["msg.consume.excluded"] = req.MsgConsumeExcluded
-	}
-	// autocommit always false
-	tmqOptions["enable.auto.commit"] = "false"
-	if len(req.AutoCommit) != 0 {
-		var err error
-		t.isAutoCommit, err = strconv.ParseBool(req.AutoCommit)
-		if err != nil {
-			logger.Errorf("parse auto commit:%s as bool error:%s", req.AutoCommit, err)
-			wsTMQErrorMsg(ctx, session, logger, 0xffff, err.Error(), action, req.ReqID, nil)
-			return
-		}
-	}
-	if len(req.AutoCommitIntervalMS) != 0 {
-		autocommitIntervalMS, err := strconv.ParseInt(req.AutoCommitIntervalMS, 10, 64)
-		if err != nil {
-			logger.Errorf("parse auto commit interval:%s as int error:%s", req.AutoCommitIntervalMS, err)
-			wsTMQErrorMsg(ctx, session, logger, 0xffff, err.Error(), action, req.ReqID, nil)
-			return
-		}
-		t.autocommitInterval = time.Duration(autocommitIntervalMS) * time.Millisecond
 	}
 	if len(req.SnapshotEnable) != 0 {
 		tmqOptions["experimental.snapshot.enable"] = req.SnapshotEnable
@@ -524,6 +501,61 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	if len(req.MsgConsumeRawdata) != 0 {
 		tmqOptions["msg.consume.rawdata"] = req.MsgConsumeRawdata
 	}
+	if len(req.WithTableName) != 0 {
+		tmqOptions["msg.with.table.name"] = req.WithTableName
+	}
+	if len(req.MsgConsumeExcluded) != 0 {
+		tmqOptions["msg.consume.excluded"] = req.MsgConsumeExcluded
+	}
+	if len(req.AutoCommit) != 0 {
+		tmqOptions["enable.auto.commit"] = req.AutoCommit
+	}
+	if len(req.AutoCommitIntervalMS) != 0 {
+		tmqOptions["auto.commit.interval.ms"] = req.AutoCommitIntervalMS
+	}
+	tmqOptions["td.connect.user"] = req.User
+	tmqOptions["td.connect.pass"] = req.Password
+	offsetReset := req.OffsetRest
+	if len(req.OffsetReset) != 0 {
+		offsetReset = req.OffsetReset
+	}
+	if len(offsetReset) != 0 {
+		tmqOptions["auto.offset.reset"] = offsetReset
+	}
+
+	// set config
+	for k, v := range req.Config {
+		if _, ok := ignoreSubscribeConfig[k]; ok {
+			continue
+		}
+		tmqOptions[k] = v
+	}
+
+	// autocommit always false
+	if v, exists := tmqOptions["enable.auto.commit"]; exists {
+		var err error
+		autoCommit, err := strconv.ParseBool(v)
+		if err != nil {
+			logger.Errorf("parse auto commit:%s as bool error:%s", v, err)
+			wsTMQErrorMsg(ctx, session, logger, 0xffff, err.Error(), action, req.ReqID, nil)
+			return
+		}
+		t.isAutoCommit = autoCommit
+	}
+	tmqOptions["enable.auto.commit"] = "false"
+
+	// autocommit interval
+	if v, exists := tmqOptions["auto.commit.interval.ms"]; exists {
+		autocommitIntervalMS, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			logger.Errorf("parse auto commit interval:%s as int error:%s", v, err)
+			wsTMQErrorMsg(ctx, session, logger, 0xffff, err.Error(), action, req.ReqID, nil)
+			return
+		}
+		t.autocommitInterval = time.Duration(autocommitIntervalMS) * time.Millisecond
+	}
+
+	// set tmq config
 	var errCode int32
 	for k, v := range tmqOptions {
 		errCode = wrapper.TMQConfSet(tmqConfig, k, v)

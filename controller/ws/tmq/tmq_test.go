@@ -3418,7 +3418,7 @@ func TestConsumeRawdata(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("create database failed: %s", message)
 	}
-	code, message = doHttpSql("create topic if not exists test_tmq_meta_ws_topic with meta as DATABASE test_ws_rawdata")
+	code, message = doHttpSql("create topic if not exists test_tmq_rawdata_ws_topic with meta as DATABASE test_ws_rawdata")
 	if code != 0 {
 		t.Fatalf("create topic failed: %s", message)
 	}
@@ -3439,7 +3439,7 @@ func TestConsumeRawdata(t *testing.T) {
 		User:                 "root",
 		Password:             "taosdata",
 		GroupID:              "test",
-		Topics:               []string{"test_tmq_meta_ws_topic"},
+		Topics:               []string{"test_tmq_rawdata_ws_topic"},
 		AutoCommit:           "true",
 		AutoCommitIntervalMS: "5000",
 		SnapshotEnable:       "true",
@@ -3675,7 +3675,7 @@ func TestConsumeRawdata(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		time.Sleep(time.Second * 3)
-		code, message := doHttpSql("drop topic if exists test_tmq_meta_ws_topic")
+		code, message := doHttpSql("drop topic if exists test_tmq_rawdata_ws_topic")
 		if code != 0 {
 			t.Log(message)
 			continue
@@ -3806,4 +3806,88 @@ func writeConsumeRawdata(t *testing.T, rawData []byte) {
 	<-finish
 	err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	assert.NoError(t, err)
+}
+
+func TestSetConfig(t *testing.T) {
+	code, message := doHttpSql("create database if not exists test_ws_tmq_set_conf WAL_RETENTION_PERIOD 86400")
+	if code != 0 {
+		t.Fatalf("create database failed: %s", message)
+	}
+	code, message = doHttpSql("create topic if not exists test_ws_tmq_set_conf_topic with meta as DATABASE test_ws_tmq_set_conf")
+	if code != 0 {
+		t.Fatalf("create topic failed: %s", message)
+	}
+	defer func() {
+		for i := 0; i < 5; i++ {
+			time.Sleep(time.Second * 3)
+			code, message := doHttpSql("drop topic if exists test_ws_tmq_set_conf_topic")
+			if code != 0 {
+				t.Log(message)
+				continue
+			}
+			code, message = doHttpSql("drop database if exists test_ws_tmq_set_conf")
+			if code != 0 {
+				t.Log(message)
+				continue
+			}
+			break
+		}
+	}()
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/tmq", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+	init := &TMQSubscribeReq{
+		ReqID:                0,
+		User:                 "root",
+		Password:             "taosdata",
+		GroupID:              "test",
+		Topics:               []string{"test_ws_tmq_set_conf_topic"},
+		AutoCommit:           "true",
+		AutoCommitIntervalMS: "5000",
+		SnapshotEnable:       "true",
+		WithTableName:        "true",
+		OffsetReset:          "earliest",
+		EnableBatchMeta:      "1",
+		SessionTimeoutMS:     "12000",
+		MaxPollIntervalMS:    "300000",
+		MsgConsumeRawdata:    "1",
+		Config: map[string]string{
+			"td.connect.user":         "wrong_user",
+			"td.connect.pass":         "wrong_pass",
+			"td.connect.ip":           "localhost",
+			"td.connect.port":         "6030",
+			"group.id":                "test_conf",
+			"client.id":               "test_conf_client",
+			"auto.offset.reset":       "latest",
+			"enable.auto.commit":      "true",
+			"auto.commit.interval.ms": "5000",
+			"msg.with.table.name":     "true",
+			"session.timeout.ms":      "10000",
+			"max.poll.interval.ms":    "300000",
+		},
+	}
+	b, _ := json.Marshal(init)
+	msg, err := doWebSocket(ws, TMQSubscribe, b)
+	assert.NoError(t, err)
+	var subscribeResp TMQSubscribeResp
+	err = json.Unmarshal(msg, &subscribeResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
+
+	var unsubscribeResp TMQUnsubscribeResp
+	err = json.Unmarshal(msg, &unsubscribeResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, unsubscribeResp.Code, unsubscribeResp.Message)
+
+	err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	assert.NoError(t, err)
+
 }
