@@ -359,6 +359,7 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 	builder := jsonbuilder.BorrowStream(w)
 	defer jsonbuilder.ReturnStream(builder)
 	builder.WritePure(Query2)
+	scaleList := make([]int, fieldsCount)
 	for i := 0; i < fieldsCount; i++ {
 		logger.Tracef("write column meta to client, column:%d, name:%s, column_type:%s, column_len:%d", i, rowsHeader.ColNames[i], rowsHeader.TypeDatabaseName(i), rowsHeader.ColLength[i])
 		builder.WriteArrayStart()
@@ -371,6 +372,7 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 		if i != fieldsCount-1 {
 			builder.WriteMore()
 		}
+		scaleList[i] = int(rowsHeader.Scales[i])
 	}
 	var tmpFlushTiming int64
 	// // try flushing after parsing meta
@@ -386,7 +388,6 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 	fetched := false
 	pHeaderList := make([]unsafe.Pointer, fieldsCount)
 	pStartList := make([]unsafe.Pointer, fieldsCount)
-	scaleList := make([]int, fieldsCount)
 	timeBuffer := make([]byte, 0, 30)
 	for {
 		if config.Conf.RestfulRowLimit > -1 && total == config.Conf.RestfulRowLimit {
@@ -410,13 +411,6 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 		logger.Tracef("get fetch result, rows:%d", result.N)
 		block := wrapper.TaosGetRawBlock(res)
 		logger.Trace("start parse block")
-		blockLen := int(parser.RawBlockGetLength(block))
-		for i := 0; i < blockLen; i++ {
-			fmt.Printf("0x%02x,", *(*byte)(unsafe.Pointer(uintptr(block) + uintptr(i))))
-			if i%16 == 15 {
-				fmt.Println()
-			}
-		}
 		blockSize := result.N
 		nullBitMapOffset := uintptr(ctools.BitmapLen(blockSize))
 		lengthOffset := parser.RawBlockGetColumnLengthOffset(fieldsCount)
@@ -429,10 +423,6 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 			} else {
 				pHeaderList[column] = tmpPHeader
 				pStartList[column] = tools.AddPointer(tmpPHeader, nullBitMapOffset)
-				if rowsHeader.ColTypes[column] == common.TSDB_DATA_TYPE_DECIMAL64 || rowsHeader.ColTypes[column] == common.TSDB_DATA_TYPE_DECIMAL {
-					_, _, scale := parser.RawBlockGetDecimalInfo(block, column)
-					scaleList[column] = int(scale)
-				}
 			}
 			tmpPHeader = tools.AddPointer(pStartList[column], uintptr(colLength))
 		}

@@ -813,7 +813,7 @@ type TMQFetchResp struct {
 	FieldsNames   []string           `json:"fields_names"`
 	FieldsTypes   jsontype.JsonUint8 `json:"fields_types"`
 	FieldsLengths []int64            `json:"fields_lengths"`
-	Precision     int                `json:"precision"`
+	Precision     int                `json:"precision"` // timestamp precision
 }
 
 func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchReq) {

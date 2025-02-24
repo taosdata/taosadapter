@@ -353,7 +353,10 @@ func TestReadRow(t *testing.T) {
 		"c10 float,"+
 		"c11 double,"+
 		"c12 binary(20),"+
-		"c13 nchar(20)"+
+		"c13 nchar(20),"+
+		"c14 varchar(20),"+
+		"c15 geometry(100),"+
+		"c16 decimal(20,4),"+
 		") tags (info json)")
 	code = wrapper.TaosError(res)
 	if code != 0 {
@@ -365,7 +368,7 @@ func TestReadRow(t *testing.T) {
 	wrapper.TaosFreeResult(res)
 	now := time.Now()
 	after1s := now.Add(time.Second)
-	sql := fmt.Sprintf("insert into test_read_row.t0 using test_read_row.all_type tags('{\"a\":1}') values('%s',1,1,1,1,1,1,1,1,1,1,1,'test_binary','test_nchar')('%s',null,null,null,null,null,null,null,null,null,null,null,null,null)", now.Format(time.RFC3339Nano), after1s.Format(time.RFC3339Nano))
+	sql := fmt.Sprintf("insert into test_read_row.t0 using test_read_row.all_type tags('{\"a\":1}') values('%s',1,1,1,1,1,1,1,1,1,1,1,'test_binary','test_nchar','\\xaabbcc','point(100 100)',123456789.123)('%s',null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)", now.Format(time.RFC3339Nano), after1s.Format(time.RFC3339Nano))
 	res = wrapper.TaosQuery(conn, sql)
 	code = wrapper.TaosError(res)
 	if code != 0 {

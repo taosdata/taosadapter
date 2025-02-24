@@ -309,7 +309,7 @@ func ReadBlock(block unsafe.Pointer, blockSize int, colTypes []uint8, precision 
 				if ItemIsNull(pHeader, row) {
 					r[row][column] = nil
 				} else {
-					r[row][column] = convertF(pStart, row, args)
+					r[row][column] = convertF(pStart, row, args...)
 				}
 			}
 		}

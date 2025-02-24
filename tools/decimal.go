@@ -16,9 +16,14 @@ func FormatDecimal(str string, scale int) string {
 	if scale == 0 {
 		return str
 	}
+	builder := strings.Builder{}
+	if strings.HasPrefix(str, "-") {
+		str = str[1:]
+		builder.WriteByte('-')
+	}
+
 	delta := len(str) - scale
 	if delta > 0 {
-		builder := strings.Builder{}
 		builder.Grow(len(str) + 1)
 		builder.WriteString(str[:delta])
 		builder.WriteString(".")
@@ -26,7 +31,6 @@ func FormatDecimal(str string, scale int) string {
 		return builder.String()
 	}
 	delta = -delta
-	builder := strings.Builder{}
 	builder.Grow(len(str) + 2 + delta)
 	builder.WriteString("0.")
 	for i := 0; i < delta; i++ {
