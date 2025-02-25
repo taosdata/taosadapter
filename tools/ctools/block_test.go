@@ -234,7 +234,7 @@ func TestJsonWriteRawBlock(t *testing.T) {
 			for row := 0; row < blockSize; row++ {
 				builder.WriteArrayStart()
 				for column := 0; column < fieldsCount; column++ {
-					JsonWriteRawBlock(builder, fieldTypes[column], pHeaderList[column], pStartList[column], row, tt.precision, tt.timeZone, timeBuffer, logger.WithField("test", "test"))
+					JsonWriteRawBlock(builder, fieldTypes[column], pHeaderList[column], pStartList[column], row, tt.precision, tt.timeZone, timeBuffer, 0, logger.WithField("test", "test"))
 					if column != fieldsCount-1 {
 						builder.WriteMore()
 						err := builder.Flush()
