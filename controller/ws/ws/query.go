@@ -173,6 +173,8 @@ type queryResponse struct {
 	FieldsTypes   jsontype.JsonUint8 `json:"fields_types"`
 	FieldsLengths []int64            `json:"fields_lengths"`
 	Precision     int                `json:"precision"`
+	Precisions    []int64            `json:"precisions"`
+	Scales        []int64            `json:"scales"`
 }
 
 func (h *messageHandler) query(ctx context.Context, session *melody.Session, action string, req queryRequest, logger *logrus.Entry, isDebug bool) {
@@ -235,6 +237,8 @@ func (h *messageHandler) query(ctx context.Context, session *melody.Session, act
 		FieldsLengths: rowsHeader.ColLength,
 		FieldsTypes:   rowsHeader.ColTypes,
 		Precision:     precision,
+		Precisions:    rowsHeader.Precisions,
+		Scales:        rowsHeader.Scales,
 	}
 	wstool.WSWriteJson(session, logger, resp)
 }
@@ -317,6 +321,8 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 		FieldsLengths: rowsHeader.ColLength,
 		FieldsTypes:   rowsHeader.ColTypes,
 		Precision:     precision,
+		Precisions:    rowsHeader.Precisions,
+		Scales:        rowsHeader.Scales,
 	}
 	wstool.WSWriteJson(session, logger, resp)
 }

@@ -105,6 +105,21 @@ func WriteRawJsonTime(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row in
 	builder.WriteString(bytesutil.ToUnsafeString(timeBuffer))
 }
 
+func WriteDecimal64(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row int, scale int) {
+	value := *((*int64)(tools.AddPointer(pStart, uintptr(row)*parser.Int64Size)))
+	str := strconv.FormatInt(value, 10)
+	str = tools.FormatDecimal(str, scale)
+	builder.WriteString(str)
+}
+
+func WriteDecimal128(builder *jsonbuilder.Stream, pStart unsafe.Pointer, row int, scale int) {
+	lo := *((*uint64)(tools.AddPointer(pStart, uintptr(row)*parser.Int64Size*2)))
+	hi := *((*int64)(tools.AddPointer(pStart, uintptr(row)*parser.Int64Size*2+parser.Int64Size)))
+	str := tools.FormatI128(hi, lo)
+	str = tools.FormatDecimal(str, scale)
+	builder.WriteString(str)
+}
+
 func WriteRawJsonBinary(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
 	offset := *((*int32)(tools.AddPointer(pHeader, uintptr(row*4))))
 	if offset == -1 {
@@ -180,7 +195,7 @@ func WriteRawJsonJson(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointe
 	}
 }
 
-func JsonWriteRawBlock(builder *jsonbuilder.Stream, colType uint8, pHeader, pStart unsafe.Pointer, row int, precision int, location *time.Location, timeBuffer []byte, logger *logrus.Entry) {
+func JsonWriteRawBlock(builder *jsonbuilder.Stream, colType uint8, pHeader, pStart unsafe.Pointer, row int, precision int, location *time.Location, timeBuffer []byte, scale int, logger *logrus.Entry) {
 	if IsVarDataType(colType) {
 		switch colType {
 		case uint8(common.TSDB_DATA_TYPE_BINARY):
@@ -223,6 +238,10 @@ func JsonWriteRawBlock(builder *jsonbuilder.Stream, colType uint8, pHeader, pSta
 				WriteRawJsonDouble(builder, pStart, row)
 			case uint8(common.TSDB_DATA_TYPE_TIMESTAMP):
 				WriteRawJsonTime(builder, pStart, row, precision, location, timeBuffer, logger)
+			case uint8(common.TSDB_DATA_TYPE_DECIMAL):
+				WriteDecimal128(builder, pStart, row, scale)
+			case uint8(common.TSDB_DATA_TYPE_DECIMAL64):
+				WriteDecimal64(builder, pStart, row, scale)
 			}
 		}
 	}

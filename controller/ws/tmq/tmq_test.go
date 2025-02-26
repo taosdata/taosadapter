@@ -535,7 +535,10 @@ func TestMeta(t *testing.T) {
 				"c10 float," +
 				"c11 double," +
 				"c12 binary(20)," +
-				"c13 nchar(20)" +
+				"c13 nchar(20)," +
+				"c14 varbinary(20)," +
+				"c15 geometry(100)," +
+				"c16 decimal(20,4)" +
 				")" +
 				"tags(tts timestamp," +
 				"tc1 bool," +
@@ -550,7 +553,9 @@ func TestMeta(t *testing.T) {
 				"tc10 float," +
 				"tc11 double," +
 				"tc12 binary(20)," +
-				"tc13 nchar(20)" +
+				"tc13 nchar(20)," +
+				"tc14 varbinary(20)," +
+				"tc15 geometry(100)" +
 				")")
 			req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_meta", body)
 			req.RemoteAddr = "127.0.0.1:33333"
@@ -709,6 +714,9 @@ func TestMeta(t *testing.T) {
 				{"c11", "DOUBLE", float64(8), ""},
 				{"c12", "VARCHAR", float64(20), ""},
 				{"c13", "NCHAR", float64(20), ""},
+				{"c14", "VARBINARY", float64(20), ""},
+				{"c15", "GEOMETRY", float64(100), ""},
+				{"c16", "DECIMAL(20, 4)", float64(16), ""},
 				{"tts", "TIMESTAMP", float64(8), "TAG"},
 				{"tc1", "BOOL", float64(1), "TAG"},
 				{"tc2", "TINYINT", float64(1), "TAG"},
@@ -723,6 +731,8 @@ func TestMeta(t *testing.T) {
 				{"tc11", "DOUBLE", float64(8), "TAG"},
 				{"tc12", "VARCHAR", float64(20), "TAG"},
 				{"tc13", "NCHAR", float64(20), "TAG"},
+				{"tc14", "VARBINARY", float64(20), "TAG"},
+				{"tc15", "GEOMETRY", float64(100), "TAG"},
 			}
 			for index, values := range expect {
 				for i := 0; i < 4; i++ {
@@ -901,6 +911,9 @@ func TestMeta(t *testing.T) {
 		{"c11", "DOUBLE", float64(8), ""},
 		{"c12", "VARCHAR", float64(20), ""},
 		{"c13", "NCHAR", float64(20), ""},
+		{"c14", "VARBINARY", float64(20), ""},
+		{"c15", "GEOMETRY", float64(100), ""},
+		{"c16", "DECIMAL(20, 4)", float64(16), ""},
 		{"tts", "TIMESTAMP", float64(8), "TAG"},
 		{"tc1", "BOOL", float64(1), "TAG"},
 		{"tc2", "TINYINT", float64(1), "TAG"},
@@ -915,6 +928,8 @@ func TestMeta(t *testing.T) {
 		{"tc11", "DOUBLE", float64(8), "TAG"},
 		{"tc12", "VARCHAR", float64(20), "TAG"},
 		{"tc13", "NCHAR", float64(20), "TAG"},
+		{"tc14", "VARBINARY", float64(20), "TAG"},
+		{"tc15", "GEOMETRY", float64(100), "TAG"},
 	}
 	for index, values := range expect {
 		for i := 0; i < 4; i++ {
@@ -2992,11 +3007,91 @@ func parseFetchRawNewResponse(bs []byte) *fetchRawNewResponse {
 	resp.TMQRawBlock = bs[56+resp.MessageLen : 56+resp.MessageLen+resp.RawBlockLength]
 	return resp
 }
+
+func prepareAllType(t *testing.T, dbName string, topic string) {
+	doHttpSql(fmt.Sprintf("drop topic if exists %s", topic))
+	doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
+	code, message := doHttpSql(fmt.Sprintf("create database if not exists %s WAL_RETENTION_PERIOD 86400", dbName))
+	assert.Equal(t, 0, code, message)
+
+	code, message = doHttpSql(fmt.Sprintf("create table %s.stb (ts timestamp,"+
+		"c1 bool,"+
+		"c2 tinyint,"+
+		"c3 smallint,"+
+		"c4 int,"+
+		"c5 bigint,"+
+		"c6 tinyint unsigned,"+
+		"c7 smallint unsigned,"+
+		"c8 int unsigned,"+
+		"c9 bigint unsigned,"+
+		"c10 float,"+
+		"c11 double,"+
+		"c12 binary(20),"+
+		"c13 nchar(20),"+
+		"c14 varbinary(20),"+
+		"c15 geometry(100),"+
+		"c16 decimal(20,4)"+
+		")"+
+		"tags(tts timestamp,"+
+		"tc1 bool,"+
+		"tc2 tinyint,"+
+		"tc3 smallint,"+
+		"tc4 int,"+
+		"tc5 bigint,"+
+		"tc6 tinyint unsigned,"+
+		"tc7 smallint unsigned,"+
+		"tc8 int unsigned,"+
+		"tc9 bigint unsigned,"+
+		"tc10 float,"+
+		"tc11 double,"+
+		"tc12 binary(20),"+
+		"tc13 nchar(20),"+
+		"tc14 varbinary(20),"+
+		"tc15 geometry(100)"+
+		")", dbName))
+	assert.Equal(t, 0, code, message)
+
+	now := time.Now().Round(time.Millisecond).UTC()
+	nowStr := now.Format(time.RFC3339Nano)
+	code, message = doHttpSql(fmt.Sprintf("create table %s.ctb using %s.stb tags('%s', true,1,1,1,1,1,1,1,1,1,1,'tg','ntg','\\xaabbcc','point(100 100)')", dbName, dbName, nowStr))
+	if code != 0 {
+		t.Fatalf("insert failed: %s", message)
+	}
+	code, message = doHttpSql(fmt.Sprintf("insert into %s.ctb values('%s',true,1,1,1,1,1,1,1,1,1,1,'vl','nvl','\\xaabbcc','point(100 100)',123456789.123)", dbName, nowStr))
+	if code != 0 {
+		t.Fatalf("insert failed: %s", message)
+	}
+	code, message = doHttpSql(fmt.Sprintf("create topic if not exists %s as database %s", topic, dbName))
+	assert.Equal(t, 0, code, message)
+}
+
+func afterAllType(t *testing.T, ws *websocket.Conn, dbName string, topic string) error {
+	b, _ := json.Marshal(TMQUnsubscribeReq{ReqID: 0})
+	_, _ = doWebSocket(ws, TMQUnsubscribe, b)
+	err := ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	if err != nil {
+		return err
+	}
+	for i := 0; i < 5; i++ {
+		time.Sleep(time.Second * 5)
+		code, message := doHttpSql(fmt.Sprintf("drop topic if exists %s", topic))
+		if code != 0 {
+			t.Log("drop topic failed", message)
+			continue
+		}
+		doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
+		if code != 0 {
+			t.Log("drop database failed", message)
+			continue
+		}
+	}
+	return nil
+}
+
 func TestTMQ_FetchRawNew(t *testing.T) {
 	dbName := "test_ws_tmq_fetch_raw_new"
 	topic := "test_ws_tmq_fetch_raw_new_topic"
-
-	before(t, dbName, topic)
+	prepareAllType(t, dbName, topic)
 
 	s := httptest.NewServer(router)
 	defer s.Close()
@@ -3011,7 +3106,7 @@ func TestTMQ_FetchRawNew(t *testing.T) {
 	}()
 
 	defer func() {
-		err = after(ws, dbName, topic)
+		err = afterAllType(t, ws, dbName, topic)
 		assert.NoError(t, err)
 	}()
 
@@ -3023,7 +3118,7 @@ func TestTMQ_FetchRawNew(t *testing.T) {
 		GroupID:     "test",
 		Topics:      []string{topic},
 		AutoCommit:  "false",
-		OffsetReset: "earliest",
+		OffsetReset: "latest",
 	})
 	msg, err := doWebSocket(ws, TMQSubscribe, b)
 	assert.NoError(t, err)
@@ -3042,18 +3137,30 @@ func TestTMQ_FetchRawNew(t *testing.T) {
 	assert.Equal(t, 0, pollResp.Code, string(msg))
 
 	// insert
-	code, message := doHttpSql(fmt.Sprintf("insert into %s.ct0 values (now, 2)", dbName))
+	now := time.Now().Round(time.Millisecond)
+	nowStr := now.Format(time.RFC3339Nano)
+	code, message := doHttpSql(fmt.Sprintf("insert into %s.ctb values('%s',true,1,1,1,1,1,1,1,1,1,1,'vl','nvl','\\xaabbcc','point(100 100)',123456789.123)", dbName, nowStr))
 	assert.Equal(t, 0, code, message)
 
 	// poll
-	b, _ = json.Marshal(TMQPollReq{ReqID: 0, BlockingTime: 500})
-	msg, err = doWebSocket(ws, TMQPoll, b)
-	assert.NoError(t, err)
-	err = json.Unmarshal(msg, &pollResp)
-	assert.NoError(t, err)
-	assert.Equal(t, 0, pollResp.Code, string(msg))
-	assert.True(t, pollResp.HaveMessage, string(msg))
-	assert.True(t, pollResp.Offset >= 0, string(msg))
+	gotMessage := false
+	for i := 0; i < 5; i++ {
+		b, _ = json.Marshal(TMQPollReq{ReqID: 0, BlockingTime: 500})
+		msg, err = doWebSocket(ws, TMQPoll, b)
+		assert.NoError(t, err)
+		err = json.Unmarshal(msg, &pollResp)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, pollResp.Code, string(msg))
+		if pollResp.HaveMessage {
+			gotMessage = true
+			break
+		}
+		assert.True(t, pollResp.HaveMessage, string(msg))
+		assert.True(t, pollResp.Offset >= 0, string(msg))
+	}
+	if !assert.True(t, gotMessage) {
+		return
+	}
 
 	// fetch raw new
 	b, _ = json.Marshal(TMQFetchRawReq{ReqID: 100, MessageID: pollResp.MessageID})
@@ -3078,6 +3185,28 @@ func TestTMQ_FetchRawNew(t *testing.T) {
 			t.Log(schema.Name, schema.ColType, schema.Flag, schema.Bytes, schema.ColID)
 			assert.Equal(t, i+1, schema.ColID)
 		}
+		expect := [][]driver.Value{
+			{
+				now,
+				true,
+				int8(1),
+				int16(1),
+				int32(1),
+				int64(1),
+				uint8(1),
+				uint16(1),
+				uint32(1),
+				uint64(1),
+				float32(1),
+				float64(1),
+				"vl",
+				"nvl",
+				[]byte{0xaa, 0xbb, 0xcc},
+				[]byte{0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40},
+				"123456789.1230",
+			},
+		}
+		assert.Equal(t, expect, data)
 		v, err := json.Marshal(data)
 		assert.NoError(t, err)
 		t.Log(string(v))
@@ -3457,7 +3586,6 @@ func TestConsumeRawdata(t *testing.T) {
 	err = json.Unmarshal(msg, &subscribeResp)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
-
 	code, message = doHttpSql("create table test_ws_rawdata.stb (ts timestamp," +
 		"c1 bool," +
 		"c2 tinyint," +
@@ -3471,7 +3599,10 @@ func TestConsumeRawdata(t *testing.T) {
 		"c10 float," +
 		"c11 double," +
 		"c12 binary(20)," +
-		"c13 nchar(20)" +
+		"c13 nchar(20)," +
+		"c14 varbinary(20)," +
+		"c15 geometry(100)," +
+		"c16 decimal(20,4)" +
 		")" +
 		"tags(tts timestamp," +
 		"tc1 bool," +
@@ -3486,18 +3617,20 @@ func TestConsumeRawdata(t *testing.T) {
 		"tc10 float," +
 		"tc11 double," +
 		"tc12 binary(20)," +
-		"tc13 nchar(20)" +
+		"tc13 nchar(20)," +
+		"tc14 varbinary(20)," +
+		"tc15 geometry(100)" +
 		")")
 	if code != 0 {
 		t.Fatalf("create table failed: %s", message)
 	}
 	now := time.Now().Round(time.Millisecond).UTC()
 	nowStr := now.Format(time.RFC3339Nano)
-	code, message = doHttpSql(fmt.Sprintf("create table test_ws_rawdata.ctb using test_ws_rawdata.stb tags('%s', true,1,1,1,1,1,1,1,1,1,1,'tg','ntg')", nowStr))
+	code, message = doHttpSql(fmt.Sprintf("create table test_ws_rawdata.ctb using test_ws_rawdata.stb tags('%s', true,1,1,1,1,1,1,1,1,1,1,'tg','ntg','\\xaabbcc','point(100 100)')", nowStr))
 	if code != 0 {
 		t.Fatalf("insert failed: %s", message)
 	}
-	code, message = doHttpSql(fmt.Sprintf("insert into test_ws_rawdata.ctb values('%s',true,1,1,1,1,1,1,1,1,1,1,'vl','nvl')", nowStr))
+	code, message = doHttpSql(fmt.Sprintf("insert into test_ws_rawdata.ctb values('%s',true,1,1,1,1,1,1,1,1,1,1,'vl','nvl','\\xaabbcc','point(100 100)',123456789.123)", nowStr))
 	if code != 0 {
 		t.Fatalf("insert failed: %s", message)
 	}
@@ -3609,6 +3742,9 @@ func TestConsumeRawdata(t *testing.T) {
 		{"c11", "DOUBLE", float64(8), ""},
 		{"c12", "VARCHAR", float64(20), ""},
 		{"c13", "NCHAR", float64(20), ""},
+		{"c14", "VARBINARY", float64(20), ""},
+		{"c15", "GEOMETRY", float64(100), ""},
+		{"c16", "DECIMAL(20, 4)", float64(16), ""},
 		{"tts", "TIMESTAMP", float64(8), "TAG"},
 		{"tc1", "BOOL", float64(1), "TAG"},
 		{"tc2", "TINYINT", float64(1), "TAG"},
@@ -3623,6 +3759,8 @@ func TestConsumeRawdata(t *testing.T) {
 		{"tc11", "DOUBLE", float64(8), "TAG"},
 		{"tc12", "VARCHAR", float64(20), "TAG"},
 		{"tc13", "NCHAR", float64(20), "TAG"},
+		{"tc14", "VARBINARY", float64(20), "TAG"},
+		{"tc15", "GEOMETRY", float64(100), "TAG"},
 	}
 	for index, values := range expect {
 		for i := 0; i < 4; i++ {
@@ -3655,6 +3793,9 @@ func TestConsumeRawdata(t *testing.T) {
 			float64(1),
 			"vl",
 			"nvl",
+			"aabbcc",
+			"010100000000000000000059400000000000005940",
+			"123456789.1230",
 			now.Format(layout.LayoutMillSecond),
 			true,
 			float64(1),
@@ -3669,6 +3810,8 @@ func TestConsumeRawdata(t *testing.T) {
 			float64(1),
 			"tg",
 			"ntg",
+			"aabbcc",
+			"010100000000000000000059400000000000005940",
 		},
 	}
 	assert.Equal(t, expect, resp.Data)
