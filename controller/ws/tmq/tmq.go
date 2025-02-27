@@ -57,19 +57,30 @@ func NewTMQController() *TMQController {
 		if t.isClosed() {
 			return
 		}
+		ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
+		logger := wstool.GetLogger(session)
+		logger.Debugf("get ws message data:%s", data)
+		var action wstool.WSAction
+		err := json.Unmarshal(data, &action)
+		if err != nil {
+			logger.Errorf("unmarshal ws request error, err:%s", err)
+			return
+		}
+		if action.Action == TMQPoll {
+			var req TMQPollReq
+			err = json.Unmarshal(action.Args, &req)
+			if err != nil {
+				logger.Errorf("unmarshal poll args, err:%s, args:%s", err.Error(), action.Args)
+				return
+			}
+			req.ctx = ctx
+			t.setPollRequest(&req)
+			return
+		}
 		t.wg.Add(1)
 		go func() {
 			defer t.wg.Done()
 			if t.isClosed() {
-				return
-			}
-			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
-			logger := wstool.GetLogger(session)
-			logger.Debugf("get ws message data:%s", data)
-			var action wstool.WSAction
-			err := json.Unmarshal(data, &action)
-			if err != nil {
-				logger.Errorf("unmarshal ws request error, err:%s", err)
 				return
 			}
 			switch action.Action {
@@ -83,14 +94,6 @@ func NewTMQController() *TMQController {
 					return
 				}
 				t.subscribe(ctx, session, &req)
-			case TMQPoll:
-				var req TMQPollReq
-				err = json.Unmarshal(action.Args, &req)
-				if err != nil {
-					logger.Errorf("unmarshal poll args, err:%s, args:%s", err.Error(), action.Args)
-					return
-				}
-				t.poll(ctx, session, &req)
 			case TMQFetch:
 				var req TMQFetchReq
 				err = json.Unmarshal(action.Args, &req)
@@ -243,9 +246,9 @@ func (s *TMQController) Init(ctl gin.IRouter) {
 }
 
 type TMQ struct {
-	Session               *melody.Session
 	consumer              unsafe.Pointer
 	logger                *logrus.Entry
+	pollReqChan           chan *TMQPollReq
 	tmpMessage            *Message
 	asyncLocker           sync.Mutex
 	thread                unsafe.Pointer
@@ -269,6 +272,25 @@ type TMQ struct {
 	sync.Mutex
 }
 
+func (t *TMQ) setPollRequest(req *TMQPollReq) {
+	select {
+	// try to send poll request to pollReqChan
+	case t.pollReqChan <- req:
+	default:
+		// if pollReqChan is full, try drop the oldest poll request, then send the new poll request
+		select {
+		case r := <-t.pollReqChan:
+			// drop the oldest poll request
+			t.logger.Warnf("drop poll request,req:%+v", r)
+			// send the new poll request
+			t.pollReqChan <- req
+		default:
+			// send the new poll request
+			t.pollReqChan <- req
+		}
+	}
+}
+
 func (t *TMQ) isClosed() bool {
 	t.closedLock.RLock()
 	defer t.closedLock.RUnlock()
@@ -281,6 +303,7 @@ type Message struct {
 	VGroupID int32
 	Offset   int64
 	Type     int32
+	Database string
 	CPointer unsafe.Pointer
 	buffer   []byte
 	sync.Mutex
@@ -306,6 +329,7 @@ func NewTaosTMQ(session *melody.Session) *TMQ {
 		ip:                    ipAddr,
 		ipStr:                 ipAddr.String(),
 		logger:                logger,
+		pollReqChan:           make(chan *TMQPollReq, 1),
 	}
 }
 
@@ -357,6 +381,20 @@ func (t *TMQ) waitSignal(logger *logrus.Entry) {
 			t.Unlock()
 		case <-t.exit:
 			return
+		}
+	}
+}
+
+func (t *TMQ) waitPoll(logger *logrus.Entry) {
+	defer func() {
+		logger.Trace("exit wait poll")
+	}()
+	for {
+		select {
+		case <-t.exit:
+			return
+		case req := <-t.pollReqChan:
+			t.poll(req.ctx, t.session, req)
 		}
 	}
 }
@@ -655,6 +693,7 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	t.consumer = cPointer
 	logger.Trace("start to wait signal")
 	go t.waitSignal(t.logger)
+	go t.waitPoll(t.logger)
 	wstool.WSWriteJson(session, logger, &TMQSubscribeResp{
 		Action: action,
 		ReqID:  req.ReqID,
@@ -727,8 +766,17 @@ func (t *TMQ) commit(ctx context.Context, session *melody.Session, req *TMQCommi
 }
 
 type TMQPollReq struct {
-	ReqID        uint64 `json:"req_id"`
-	BlockingTime int64  `json:"blocking_time"`
+	ReqID        uint64  `json:"req_id"`
+	BlockingTime int64   `json:"blocking_time"`
+	MessageID    *uint64 `json:"message_id"`
+	ctx          context.Context
+}
+
+func (req *TMQPollReq) String() string {
+	if req.MessageID == nil {
+		return fmt.Sprintf("&{ReqID:%d BlockingTime:%d MessageID:nil}", req.ReqID, req.BlockingTime)
+	}
+	return fmt.Sprintf("&{ReqID:%d BlockingTime:%d MessageID:%d}", req.ReqID, req.BlockingTime, *req.MessageID)
 }
 
 type TMQPollResp struct {
@@ -747,12 +795,19 @@ type TMQPollResp struct {
 }
 
 func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq) {
+	t.wg.Add(1)
+	defer t.wg.Done()
 	action := TMQPoll
 	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
 	logger.Tracef("poll request:%+v", req)
 	if t.consumer == nil {
 		logger.Error("tmq not init")
 		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq not init", action, req.ReqID, nil)
+		return
+	}
+	// check whether sending cache message
+	finished := t.checkPollMessageID(ctx, session, req, action, logger)
+	if finished {
 		return
 	}
 	now := time.Now()
@@ -799,12 +854,13 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 			t.tmpMessage.Topic = wrapper.TMQGetTopicName(message)
 			t.tmpMessage.VGroupID = wrapper.TMQGetVgroupID(message)
 			t.tmpMessage.Offset = wrapper.TMQGetVgroupOffset(message)
+			t.tmpMessage.Database = wrapper.TMQGetDBName(message)
 			t.tmpMessage.Type = messageType
 			t.tmpMessage.CPointer = message
 
 			resp.HaveMessage = true
 			resp.Topic = t.tmpMessage.Topic
-			resp.Database = wrapper.TMQGetDBName(message)
+			resp.Database = t.tmpMessage.Database
 			resp.VgroupID = t.tmpMessage.VGroupID
 			resp.MessageID = t.tmpMessage.Index
 			resp.MessageType = messageType
@@ -825,6 +881,42 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 	}
 	resp.Timing = wstool.GetDuration(ctx)
 	wstool.WSWriteJson(session, logger, resp)
+}
+
+func (t *TMQ) checkPollMessageID(ctx context.Context, session *melody.Session, req *TMQPollReq, action string, logger *logrus.Entry) (finish bool) {
+	if req.MessageID == nil {
+		logger.Trace("no message id")
+		return false
+	}
+	messageID := *req.MessageID
+	t.tmpMessage.Lock()
+	defer t.tmpMessage.Unlock()
+	if t.tmpMessage.CPointer == nil {
+		logger.Trace("no cache message")
+		return false
+	}
+	if messageID == t.tmpMessage.Index {
+		logger.Trace("message id equal")
+		return false
+	}
+	// return cache message
+	logger.Warnf("message id not equal, req:%d, cache:%d, will send cache message", messageID, t.tmpMessage.Index)
+	resp := &TMQPollResp{
+		Code:        0,
+		Message:     "",
+		Action:      action,
+		ReqID:       req.ReqID,
+		Timing:      wstool.GetDuration(ctx),
+		HaveMessage: true,
+		Topic:       t.tmpMessage.Topic,
+		Database:    t.tmpMessage.Database,
+		VgroupID:    t.tmpMessage.VGroupID,
+		MessageType: t.tmpMessage.Type,
+		MessageID:   t.tmpMessage.Index,
+		Offset:      t.tmpMessage.Offset,
+	}
+	wstool.WSWriteJson(session, logger, resp)
+	return true
 }
 
 type TMQFetchReq struct {
@@ -1319,6 +1411,7 @@ func (t *TMQ) Close(logger *logrus.Entry) {
 	defer func() {
 		logger.Infof("tmq close end, cost:%s", time.Since(start).String())
 	}()
+	close(t.exit)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	done := make(chan struct{})
@@ -1359,7 +1452,6 @@ func (t *TMQ) Close(logger *logrus.Entry) {
 				logger.Errorf("tmq close consumer error, consumer:%p, code:%d, msg:%s", t.consumer, errCode, errMsg)
 			}
 		}
-		close(t.exit)
 	}()
 	logger.Trace("start to free message")
 	s := log.GetLogNow(isDebug)
