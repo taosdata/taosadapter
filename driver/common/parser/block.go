@@ -2,6 +2,7 @@ package parser
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"math"
 	"strconv"
 	"unsafe"
@@ -117,9 +118,9 @@ type rawConvertFunc func(pStart unsafe.Pointer, row int, arg ...interface{}) dri
 
 type rawConvertVarDataFunc func(pHeader, pStart unsafe.Pointer, row int) driver.Value
 
-var rawConvertFuncSlice = [22]rawConvertFunc{}
+var rawConvertFuncSlice = [common.TSDB_DATA_TYPE_MAX]rawConvertFunc{}
 
-var rawConvertVarDataSlice = [21]rawConvertVarDataFunc{}
+var rawConvertVarDataSlice = [common.TSDB_DATA_TYPE_MAX]rawConvertVarDataFunc{}
 
 func ItemIsNull(pHeader unsafe.Pointer, row int) bool {
 	offset := CharOffset(row)
@@ -260,7 +261,7 @@ func rawConvertJson(pHeader, pStart unsafe.Pointer, row int) driver.Value {
 	return rawConvertVarBinary(pHeader, pStart, row)
 }
 
-func ReadBlockSimple(block unsafe.Pointer, precision int) [][]driver.Value {
+func ReadBlockSimple(block unsafe.Pointer, precision int) ([][]driver.Value, error) {
 	blockSize := RawBlockGetNumOfRows(block)
 	colCount := RawBlockGetNumOfCols(block)
 	colInfo := make([]RawBlockColInfo, colCount)
@@ -273,7 +274,11 @@ func ReadBlockSimple(block unsafe.Pointer, precision int) [][]driver.Value {
 }
 
 // ReadBlock in-place
-func ReadBlock(block unsafe.Pointer, blockSize int, colTypes []uint8, precision int) [][]driver.Value {
+func ReadBlock(block unsafe.Pointer, blockSize int, colTypes []uint8, precision int) ([][]driver.Value, error) {
+	err := validColumnType(colTypes)
+	if err != nil {
+		return nil, err
+	}
 	r := make([][]driver.Value, blockSize)
 	colCount := len(colTypes)
 	nullBitMapOffset := uintptr(BitmapLen(blockSize))
@@ -315,79 +320,19 @@ func ReadBlock(block unsafe.Pointer, blockSize int, colTypes []uint8, precision 
 		}
 		pHeader = tools.AddPointer(pStart, uintptr(colLength))
 	}
-	return r
+	return r, nil
 }
 
-func ReadRow(dest []driver.Value, block unsafe.Pointer, blockSize int, row int, colTypes []uint8, precision int) {
-	colCount := len(colTypes)
-	nullBitMapOffset := uintptr(BitmapLen(blockSize))
-	lengthOffset := RawBlockGetColumnLengthOffset(colCount)
-	pHeader := tools.AddPointer(block, RawBlockGetColDataOffset(colCount))
-	var pStart unsafe.Pointer
-	for column := 0; column < colCount; column++ {
-		colLength := *((*int32)(tools.AddPointer(block, lengthOffset+uintptr(column)*Int32Size)))
-		if IsVarDataType(colTypes[column]) {
-			convertF := rawConvertVarDataSlice[colTypes[column]]
-			pStart = tools.AddPointer(pHeader, Int32Size*uintptr(blockSize))
-			dest[column] = convertF(pHeader, pStart, row)
-		} else {
-			convertF := rawConvertFuncSlice[colTypes[column]]
-			pStart = tools.AddPointer(pHeader, nullBitMapOffset)
-			if ItemIsNull(pHeader, row) {
-				dest[column] = nil
-			} else {
-				dest[column] = convertF(pStart, row, precision)
-			}
+func validColumnType(colTypes []uint8) error {
+	for _, colType := range colTypes {
+		if colType >= common.TSDB_DATA_TYPE_MAX {
+			return fmt.Errorf("invalid column type %d", colType)
 		}
-		pHeader = tools.AddPointer(pStart, uintptr(colLength))
-	}
-}
-
-func ReadBlockWithTimeFormat(block unsafe.Pointer, blockSize int, colTypes []uint8, precision int, formatFunc FormatTimeFunc) [][]driver.Value {
-	r := make([][]driver.Value, blockSize)
-	colCount := len(colTypes)
-	nullBitMapOffset := uintptr(BitmapLen(blockSize))
-	lengthOffset := RawBlockGetColumnLengthOffset(colCount)
-	pHeader := tools.AddPointer(block, RawBlockGetColDataOffset(colCount))
-	var pStart unsafe.Pointer
-	for column := 0; column < colCount; column++ {
-		colLength := *((*int32)(tools.AddPointer(block, lengthOffset+uintptr(column)*Int32Size)))
-		if IsVarDataType(colTypes[column]) {
-			convertF := rawConvertVarDataSlice[colTypes[column]]
-			pStart = tools.AddPointer(pHeader, uintptr(4*blockSize))
-			for row := 0; row < blockSize; row++ {
-				if column == 0 {
-					r[row] = make([]driver.Value, colCount)
-				}
-				r[row][column] = convertF(pHeader, pStart, row)
-			}
-		} else {
-			convertF := rawConvertFuncSlice[colTypes[column]]
-			pStart = tools.AddPointer(pHeader, nullBitMapOffset)
-			for row := 0; row < blockSize; row++ {
-				if column == 0 {
-					r[row] = make([]driver.Value, colCount)
-				}
-				if ItemIsNull(pHeader, row) {
-					r[row][column] = nil
-				} else {
-					r[row][column] = convertF(pStart, row, precision, formatFunc)
-				}
-			}
+		if rawConvertFuncSlice[colType] == nil && rawConvertVarDataSlice[colType] == nil {
+			return fmt.Errorf("unsupported column type %d", colType)
 		}
-		pHeader = tools.AddPointer(pStart, uintptr(colLength))
 	}
-	return r
-}
-
-func ItemRawBlock(colType uint8, pHeader, pStart unsafe.Pointer, row int, precision int, timeFormat FormatTimeFunc) driver.Value {
-	if IsVarDataType(colType) {
-		return rawConvertVarDataSlice[colType](pHeader, pStart, row)
-	}
-	if ItemIsNull(pHeader, row) {
-		return nil
-	}
-	return rawConvertFuncSlice[colType](pStart, row, precision, timeFormat)
+	return nil
 }
 
 func init() {

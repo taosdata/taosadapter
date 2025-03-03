@@ -356,6 +356,7 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 		}
 		return
 	}
+	logger.Tracef("get rowsHeader:%v", rowsHeader)
 	builder := jsonbuilder.BorrowStream(w)
 	defer jsonbuilder.ReturnStream(builder)
 	builder.WritePure(Query2)

@@ -299,7 +299,10 @@ func TestTMQ(t *testing.T) {
 				}
 			}
 		case AfterTMQFetchBlock:
-			_, _, value := parseblock.ParseTmqBlock(message[8:], tmqFetchResp.FieldsTypes, tmqFetchResp.Rows, tmqFetchResp.Precision)
+			_, _, value, err := parseblock.ParseTmqBlock(message[8:], tmqFetchResp.FieldsTypes, tmqFetchResp.Rows, tmqFetchResp.Precision)
+			if err != nil {
+				return err
+			}
 			switch tmqFetchResp.TableName {
 			case "ct0":
 				assert.Equal(t, 1, len(value))
@@ -1322,7 +1325,10 @@ func TestTMQAutoCommit(t *testing.T) {
 				}
 			}
 		case AfterTMQFetchBlock:
-			_, _, value := parseblock.ParseTmqBlock(message[8:], tmqFetchResp.FieldsTypes, tmqFetchResp.Rows, tmqFetchResp.Precision)
+			_, _, value, err := parseblock.ParseTmqBlock(message[8:], tmqFetchResp.FieldsTypes, tmqFetchResp.Rows, tmqFetchResp.Precision)
+			if err != nil {
+				return err
+			}
 			switch tmqFetchResp.TableName {
 			case "ct0":
 				assert.Equal(t, 1, len(value))
@@ -1723,7 +1729,10 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 				}
 			}
 		case AfterTMQFetchBlock:
-			_, _, value := parseblock.ParseTmqBlock(message[8:], tmqFetchResp.FieldsTypes, tmqFetchResp.Rows, tmqFetchResp.Precision)
+			_, _, value, err := parseblock.ParseTmqBlock(message[8:], tmqFetchResp.FieldsTypes, tmqFetchResp.Rows, tmqFetchResp.Precision)
+			if err != nil {
+				return err
+			}
 			switch tmqFetchResp.TableName {
 			case "ct0":
 				assert.Equal(t, 1, len(value))
@@ -1928,7 +1937,10 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 				}
 			}
 		case AfterTMQFetchBlock2:
-			_, _, value := parseblock.ParseTmqBlock(message[8:], tmqFetchResp.FieldsTypes, tmqFetchResp.Rows, tmqFetchResp.Precision)
+			_, _, value, err := parseblock.ParseTmqBlock(message[8:], tmqFetchResp.FieldsTypes, tmqFetchResp.Rows, tmqFetchResp.Precision)
+			if err != nil {
+				return err
+			}
 			assert.Equal(t, 1, len(value))
 			assert.Equal(t, ts1.UnixNano()/1e6, value[0][0].(time.Time).UnixNano()/1e6)
 			assert.Equal(t, int32(1), value[0][1])
@@ -2261,7 +2273,8 @@ func TestTMQSeek(t *testing.T) {
 					mt, message, err = ws.ReadMessage()
 					assert.NoError(t, err)
 					assert.Equal(t, websocket.BinaryMessage, mt)
-					_, _, value := parseblock.ParseTmqBlock(message[8:], tmqFetchResp.FieldsTypes, tmqFetchResp.Rows, tmqFetchResp.Precision)
+					_, _, value, err := parseblock.ParseTmqBlock(message[8:], tmqFetchResp.FieldsTypes, tmqFetchResp.Rows, tmqFetchResp.Precision)
+					assert.NoError(t, err)
 					t.Log(value)
 					rowCount += 1
 
@@ -2467,7 +2480,8 @@ func TestTMQSeek(t *testing.T) {
 					mt, message, err = ws.ReadMessage()
 					assert.NoError(t, err)
 					assert.Equal(t, websocket.BinaryMessage, mt)
-					_, _, value := parseblock.ParseTmqBlock(message[8:], tmqFetchResp.FieldsTypes, tmqFetchResp.Rows, tmqFetchResp.Precision)
+					_, _, value, err := parseblock.ParseTmqBlock(message[8:], tmqFetchResp.FieldsTypes, tmqFetchResp.Rows, tmqFetchResp.Precision)
+					assert.NoError(t, err)
 					t.Log(value)
 					rowCount += 1
 				}
@@ -3180,7 +3194,8 @@ func TestTMQ_FetchRawNew(t *testing.T) {
 	assert.NoError(t, err)
 	for _, info := range blockInfo {
 		t.Log(info.TableName)
-		data := parser.ReadBlockSimple(info.RawBlock, info.Precision)
+		data, err := parser.ReadBlockSimple(info.RawBlock, info.Precision)
+		assert.NoError(t, err)
 		for i, schema := range info.Schema {
 			t.Log(schema.Name, schema.ColType, schema.Flag, schema.Bytes, schema.ColID)
 			assert.Equal(t, i+1, schema.ColID)

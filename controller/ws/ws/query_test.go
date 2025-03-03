@@ -210,7 +210,8 @@ func TestWsQuery(t *testing.T) {
 	fetchBlockReq := fetchBlockRequest{ReqID: 4, ID: queryResp.ID}
 	fetchBlockResp, err := doWebSocket(ws, WSFetchBlock, &fetchBlockReq)
 	assert.NoError(t, err)
-	resultID, blockResult := parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	resultID, blockResult, err := parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), resultID)
 	checkBlockResult(t, blockResult)
 
@@ -262,7 +263,8 @@ func TestWsQuery(t *testing.T) {
 	fetchBlockReq = fetchBlockRequest{ReqID: 8, ID: queryResp.ID}
 	fetchBlockResp, err = doWebSocket(ws, WSFetchBlock, &fetchBlockReq)
 	assert.NoError(t, err)
-	resultID, blockResult = parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	resultID, blockResult, err = parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	assert.NoError(t, err)
 	checkBlockResult(t, blockResult)
 	assert.Equal(t, queryResp.ID, resultID)
 	// fetch
@@ -548,7 +550,8 @@ func TestWsQuery(t *testing.T) {
 	fetchBlockReq = fetchBlockRequest{ReqID: 12, ID: queryResp.ID}
 	fetchBlockResp, err = doWebSocket(ws, WSFetchBlock, &fetchBlockReq)
 	assert.NoError(t, err)
-	resultID, blockResult = parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	resultID, blockResult, err = parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	assert.NoError(t, err)
 	assert.Equal(t, queryResp.ID, resultID)
 	checkBlockResult(t, blockResult)
 	// fetch
@@ -607,7 +610,7 @@ func parseFetchRawBlock(message []byte) *FetchRawBlockResponse {
 	return resp
 }
 
-func ReadBlockSimple(block unsafe.Pointer, precision int) [][]driver.Value {
+func ReadBlockSimple(block unsafe.Pointer, precision int) ([][]driver.Value, error) {
 	blockSize := parser.RawBlockGetNumOfRows(block)
 	colCount := parser.RawBlockGetNumOfCols(block)
 	colInfo := make([]parser.RawBlockColInfo, colCount)
@@ -699,7 +702,8 @@ func TestWsBinaryQuery(t *testing.T) {
 	assert.Equal(t, false, fetchRawBlockResp.Finished)
 	rows := parser.RawBlockGetNumOfRows(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]))
 	assert.Equal(t, int32(3), rows)
-	blockResult := ReadBlockSimple(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]), queryResp.Precision)
+	blockResult, err := ReadBlockSimple(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]), queryResp.Precision)
+	assert.NoError(t, err)
 	checkBlockResult(t, blockResult)
 	rawBlock := fetchRawBlockResp.RawBlock
 
@@ -770,7 +774,8 @@ func TestWsBinaryQuery(t *testing.T) {
 	assert.Equal(t, uint64(7), fetchRawBlockResp.ReqID)
 	assert.Equal(t, uint32(0), fetchRawBlockResp.Code, fetchRawBlockResp.Message)
 	assert.Equal(t, false, fetchRawBlockResp.Finished)
-	blockResult = ReadBlockSimple(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]), queryResp.Precision)
+	blockResult, err = ReadBlockSimple(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]), queryResp.Precision)
+	assert.NoError(t, err)
 	checkBlockResult(t, blockResult)
 	rawBlock = fetchRawBlockResp.RawBlock
 
@@ -1074,7 +1079,8 @@ func TestWsBinaryQuery(t *testing.T) {
 	assert.Equal(t, uint64(11), fetchRawBlockResp.ReqID)
 	assert.Equal(t, uint32(0), fetchRawBlockResp.Code, fetchRawBlockResp.Message)
 	assert.Equal(t, false, fetchRawBlockResp.Finished)
-	blockResult = ReadBlockSimple(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]), queryResp.Precision)
+	blockResult, err = ReadBlockSimple(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]), queryResp.Precision)
+	assert.NoError(t, err)
 	checkBlockResult(t, blockResult)
 
 	buffer.Reset()

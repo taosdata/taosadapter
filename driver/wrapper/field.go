@@ -35,7 +35,7 @@ func ReadColumn(result unsafe.Pointer, count int) (*RowsHeader, error) {
 	}
 	pFields := TaosFetchFieldsE(result)
 	for i := 0; i < count; i++ {
-		field := *(*C.struct_TAOS_FIELD_E)(unsafe.Pointer(uintptr(pFields) + uintptr(C.sizeof_struct_taosField*C.int(i))))
+		field := *(*C.struct_TAOS_FIELD_E)(unsafe.Pointer(uintptr(pFields) + uintptr(C.sizeof_struct_TAOS_FIELD_E*C.int(i))))
 		buf := bytes.NewBufferString("")
 		for _, c := range field.name {
 			if c == 0 {

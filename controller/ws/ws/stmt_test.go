@@ -273,7 +273,8 @@ func TestWsStmt(t *testing.T) {
 	fetchBlockReq := fetchBlockRequest{ID: queryResp.ID}
 	fetchBlockResp, err := doWebSocket(ws, WSFetchBlock, &fetchBlockReq)
 	assert.NoError(t, err)
-	_, blockResult := parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	_, blockResult, err := parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	assert.NoError(t, err)
 	assert.Equal(t, 3, len(blockResult))
 	assert.Equal(t, now.UnixNano(), blockResult[0][0].(time.Time).UnixNano())
 
@@ -557,7 +558,8 @@ func TestWsStmt(t *testing.T) {
 	fetchBlockReq = fetchBlockRequest{ID: queryResp.ID}
 	fetchBlockResp, err = doWebSocket(ws, WSFetchBlock, &fetchBlockReq)
 	assert.NoError(t, err)
-	_, blockResult = parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	_, blockResult, err = parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	assert.NoError(t, err)
 	assert.Equal(t, now.UnixNano(), blockResult[0][0].(time.Time).UnixNano())
 	assert.Equal(t, true, blockResult[0][1])
 	assert.Equal(t, int8(2), blockResult[0][2])
@@ -744,7 +746,8 @@ func StmtQuery(t *testing.T, db string, prepareDataSql []string) {
 	fetchBlockReq := fetchBlockRequest{ReqID: 9, ID: useResultResp.ResultID}
 	fetchBlockResp, err := doWebSocket(ws, WSFetchBlock, &fetchBlockReq)
 	assert.NoError(t, err)
-	_, blockResult := parseblock.ParseBlock(fetchBlockResp[8:], useResultResp.FieldsTypes, fetchResp.Rows, useResultResp.Precision)
+	_, blockResult, err := parseblock.ParseBlock(fetchBlockResp[8:], useResultResp.FieldsTypes, fetchResp.Rows, useResultResp.Precision)
+	assert.NoError(t, err)
 	assert.Equal(t, 1, len(blockResult))
 	assert.Equal(t, float32(10.3), blockResult[0][1])
 	assert.Equal(t, int32(218), blockResult[0][2])
