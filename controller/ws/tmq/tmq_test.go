@@ -3501,12 +3501,12 @@ func TestConsumeRawdata(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("insert failed: %s", message)
 	}
-	b, _ = json.Marshal(&TMQPollReq{
-		ReqID:        3,
-		BlockingTime: 500,
-	})
 	gotRawMessage := false
 	for i := 0; i < 5; i++ {
+		b, _ = json.Marshal(&TMQPollReq{
+			ReqID:        3,
+			BlockingTime: 500,
+		})
 		msg, err = doWebSocket(ws, TMQPoll, b)
 		assert.NoError(t, err)
 		var pollResp TMQPollResp

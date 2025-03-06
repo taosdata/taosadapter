@@ -656,3 +656,17 @@ func TestTaosOptionsConnection(t *testing.T) {
 		return
 	}
 }
+
+func TestTaosValidateSql(t *testing.T) {
+	reqID := generator.GetReqID()
+	var logger = logger.WithField("test", "TestTaosValidateSql").WithField(config.ReqIDKey, reqID)
+	conn, err := TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer TaosClose(conn, logger, isDebug)
+	code := TaosValidateSql(conn, "create database if not exists `syncinterface_test_validate`", logger, isDebug)
+	assert.Equal(t, 0, code)
+	code = TaosValidateSql(conn, "create table syncinterface_test_validate.t(ts timestamp,v int)", logger, isDebug)
+	assert.NotEqual(t, 0, code)
+}

@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/driver/common"
 )
 
@@ -181,4 +183,114 @@ func TestOptionsConnection(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(5), optionsConnectionResp.ReqID)
 	assert.NotEqual(t, 0, optionsConnectionResp.Code)
+}
+
+func TestValidateSql(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+	// connect
+	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata"}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp commonResp
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+	assert.Equal(t, Connect, connResp.Action)
+
+	var buffer bytes.Buffer
+	var validateSqlResp validateSqlResponse
+	// wrong message length
+	wstool.WriteUint64(&buffer, 6) // req id
+	wstool.WriteUint64(&buffer, 0) // message id
+	wstool.WriteUint64(&buffer, uint64(ValidateSQL))
+	wstool.WriteUint16(&buffer, 1) // version
+	wstool.WriteUint32(&buffer, 0) // sql length
+	err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
+	assert.NoError(t, err)
+	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &validateSqlResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 65535, validateSqlResp.Code, validateSqlResp.Message)
+
+	// wrong sql length
+	buffer.Reset()
+	wstool.WriteUint64(&buffer, 6) // req id
+	wstool.WriteUint64(&buffer, 0) // message id
+	wstool.WriteUint64(&buffer, uint64(ValidateSQL))
+	wstool.WriteUint16(&buffer, 1)   // version
+	wstool.WriteUint32(&buffer, 100) // sql length
+	buffer.WriteString("wrong sql length")
+	err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
+	assert.NoError(t, err)
+	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &validateSqlResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 65535, validateSqlResp.Code, validateSqlResp.Message)
+
+	// wrong version
+	buffer.Reset()
+	sql := "select 1"
+	wstool.WriteUint64(&buffer, 6) // req id
+	wstool.WriteUint64(&buffer, 0) // message id
+	wstool.WriteUint64(&buffer, uint64(ValidateSQL))
+	wstool.WriteUint16(&buffer, 100)              // version
+	wstool.WriteUint32(&buffer, uint32(len(sql))) // sql length
+	buffer.WriteString(sql)
+	err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
+	assert.NoError(t, err)
+	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &validateSqlResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 65535, validateSqlResp.Code, validateSqlResp.Message)
+
+	// wrong sql
+	buffer.Reset()
+	sql = "wrong sql"
+	wstool.WriteUint64(&buffer, 6) // req id
+	wstool.WriteUint64(&buffer, 0) // message id
+	wstool.WriteUint64(&buffer, uint64(ValidateSQL))
+	wstool.WriteUint16(&buffer, 1)                // version
+	wstool.WriteUint32(&buffer, uint32(len(sql))) // sql length
+	buffer.WriteString(sql)
+	err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
+	assert.NoError(t, err)
+	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &validateSqlResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, validateSqlResp.Code, validateSqlResp.Message)
+	assert.NotEqual(t, int64(0), validateSqlResp.ResultCode)
+
+	// valid sql
+	buffer.Reset()
+	sql = "select 1"
+	wstool.WriteUint64(&buffer, 6) // req id
+	wstool.WriteUint64(&buffer, 0) // message id
+	wstool.WriteUint64(&buffer, uint64(ValidateSQL))
+	wstool.WriteUint16(&buffer, 1)                // version
+	wstool.WriteUint32(&buffer, uint32(len(sql))) // sql length
+	buffer.WriteString(sql)
+	err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
+	assert.NoError(t, err)
+	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &validateSqlResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, validateSqlResp.Code, validateSqlResp.Message)
+	assert.Equal(t, int64(0), validateSqlResp.ResultCode)
+	assert.Equal(t, "validate_sql", validateSqlResp.Action)
 }
