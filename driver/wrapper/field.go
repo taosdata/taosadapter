@@ -7,7 +7,6 @@ import "C"
 import (
 	"bytes"
 	"fmt"
-	"reflect"
 	"unsafe"
 
 	"github.com/taosdata/taosadapter/v3/driver/common"
@@ -53,7 +52,7 @@ func ReadColumn(result unsafe.Pointer, count int) (*RowsHeader, error) {
 }
 
 func (rh *RowsHeader) TypeDatabaseName(i int) string {
-	name := common.TypeNameMap[int(rh.ColTypes[i])]
+	name := common.TypeNameArray[int(rh.ColTypes[i])]
 	// decimal type return DECIMAL(precision,scale)
 	if rh.ColTypes[i] == common.TSDB_DATA_TYPE_DECIMAL || rh.ColTypes[i] == common.TSDB_DATA_TYPE_DECIMAL64 {
 		precision := rh.Precisions[i]
@@ -61,14 +60,6 @@ func (rh *RowsHeader) TypeDatabaseName(i int) string {
 		name = fmt.Sprintf("%s(%d,%d)", name, precision, scale)
 	}
 	return name
-}
-
-func (rh *RowsHeader) ScanType(i int) reflect.Type {
-	t, exist := common.ColumnTypeMap[int(rh.ColTypes[i])]
-	if !exist {
-		return common.UnknownType
-	}
-	return t
 }
 
 func FetchLengths(res unsafe.Pointer, count int) []int {

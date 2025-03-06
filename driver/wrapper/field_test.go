@@ -1,7 +1,6 @@
 package wrapper
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -102,9 +101,9 @@ func TestFetchLengths(t *testing.T) {
 // @description: test result column database name
 func TestRowsHeader_TypeDatabaseName(t *testing.T) {
 	type fields struct {
-		ColNames  []string
-		ColTypes  []uint8
-		ColLength []int64
+		ColTypes   []uint8
+		Precisions []int64
+		Scales     []int64
 	}
 	type args struct {
 		i int
@@ -275,208 +274,40 @@ func TestRowsHeader_TypeDatabaseName(t *testing.T) {
 			},
 			want: "JSON",
 		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rh := &RowsHeader{
-				ColNames:  tt.fields.ColNames,
-				ColTypes:  tt.fields.ColTypes,
-				ColLength: tt.fields.ColLength,
-			}
-			if got := rh.TypeDatabaseName(tt.args.i); got != tt.want {
-				t.Errorf("TypeDatabaseName() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-// @author: xftan
-// @date: 2022/1/27 17:23
-// @description: test scan result column type
-func TestRowsHeader_ScanType(t *testing.T) {
-	type fields struct {
-		ColNames  []string
-		ColTypes  []uint8
-		ColLength []int64
-	}
-	type args struct {
-		i int
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   reflect.Type
-	}{
 		{
-			name: "unknown",
+			name: "DECIMAL64",
 			fields: fields{
-				ColTypes: []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+				ColTypes:   []uint8{common.TSDB_DATA_TYPE_DECIMAL64, common.TSDB_DATA_TYPE_DECIMAL},
+				Precisions: []int64{8, 20},
+				Scales:     []int64{4, 4},
 			},
 			args: args{
 				i: 0,
 			},
-			want: common.UnknownType,
+			want: "DECIMAL(8,4)",
 		},
 		{
-			name: "BOOL",
+			name: "DECIMAL128",
 			fields: fields{
-				ColTypes: []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+				ColTypes:   []uint8{common.TSDB_DATA_TYPE_DECIMAL64, common.TSDB_DATA_TYPE_DECIMAL},
+				Precisions: []int64{8, 20},
+				Scales:     []int64{4, 4},
 			},
 			args: args{
 				i: 1,
 			},
-			want: common.NullBool,
-		},
-		{
-			name: "TINYINT",
-			fields: fields{
-				ColTypes: []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-			},
-			args: args{
-				i: 2,
-			},
-			want: common.NullInt8,
-		},
-		{
-			name: "SMALLINT",
-			fields: fields{
-				ColTypes: []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-			},
-			args: args{
-				i: 3,
-			},
-			want: common.NullInt16,
-		}, {
-			name: "INT",
-			fields: fields{
-				ColTypes: []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-			},
-			args: args{
-				i: 4,
-			},
-			want: common.NullInt32,
-		},
-		{
-			name: "BIGINT",
-			fields: fields{
-				ColTypes: []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-			},
-			args: args{
-				i: 5,
-			},
-			want: common.NullInt64,
-		},
-		{
-			name: "FLOAT",
-			fields: fields{
-				ColTypes: []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-			},
-			args: args{
-				i: 6,
-			},
-			want: common.NullFloat32,
-		},
-		{
-			name: "DOUBLE",
-			fields: fields{
-				ColTypes: []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-			},
-			args: args{
-				i: 7,
-			},
-			want: common.NullFloat64,
-		},
-		{
-			name: "BINARY",
-			fields: fields{
-				ColTypes: []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-			},
-			args: args{
-				i: 8,
-			},
-			want: common.NullString,
-		},
-		{
-			name: "TIMESTAMP",
-			fields: fields{
-				ColTypes: []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-			},
-			args: args{
-				i: 9,
-			},
-			want: common.NullTime,
-		},
-		{
-			name: "NCHAR",
-			fields: fields{
-				ColTypes: []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-			},
-			args: args{
-				i: 10,
-			},
-			want: common.NullString,
-		},
-		{
-			name: "TINYINT UNSIGNED",
-			fields: fields{
-				ColTypes: []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-			},
-			args: args{
-				i: 11,
-			},
-			want: common.NullUInt8,
-		},
-		{
-			name: "SMALLINT UNSIGNED",
-			fields: fields{
-				ColTypes: []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-			},
-			args: args{
-				i: 12,
-			},
-			want: common.NullUInt16,
-		},
-		{
-			name: "INT UNSIGNED",
-			fields: fields{
-				ColTypes: []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-			},
-			args: args{
-				i: 13,
-			},
-			want: common.NullUInt32,
-		},
-		{
-			name: "BIGINT UNSIGNEDD",
-			fields: fields{
-				ColTypes: []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-			},
-			args: args{
-				i: 14,
-			},
-			want: common.NullUInt64,
-		},
-		{
-			name: "JSON",
-			fields: fields{
-				ColTypes: []uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-			},
-			args: args{
-				i: 15,
-			},
-			want: common.NullJson,
+			want: "DECIMAL(20,4)",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rh := &RowsHeader{
-				ColNames:  tt.fields.ColNames,
-				ColTypes:  tt.fields.ColTypes,
-				ColLength: tt.fields.ColLength,
+				ColTypes:   tt.fields.ColTypes,
+				Precisions: tt.fields.Precisions,
+				Scales:     tt.fields.Scales,
 			}
-			if got := rh.ScanType(tt.args.i); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ScanType() = %v, want %v", got, tt.want)
+			if got := rh.TypeDatabaseName(tt.args.i); got != tt.want {
+				t.Errorf("TypeDatabaseName() = %v, want %v", got, tt.want)
 			}
 		})
 	}

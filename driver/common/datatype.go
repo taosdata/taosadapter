@@ -49,7 +49,7 @@ const (
 	TSDB_DATA_TYPE_DECIMAL_Str   = "DECIMAL"
 )
 
-var TypeNameMap = map[int]string{
+var TypeNameArray = [TSDB_DATA_TYPE_MAX]string{
 	TSDB_DATA_TYPE_NULL:      TSDB_DATA_TYPE_NULL_Str,
 	TSDB_DATA_TYPE_BOOL:      TSDB_DATA_TYPE_BOOL_Str,
 	TSDB_DATA_TYPE_TINYINT:   TSDB_DATA_TYPE_TINYINT_Str,
