@@ -195,18 +195,20 @@ type stmt2UseResultRequest struct {
 }
 
 type stmt2UseResultResponse struct {
-	Code          int                `json:"code"`
-	Message       string             `json:"message"`
-	Action        string             `json:"action"`
-	ReqID         uint64             `json:"req_id"`
-	Timing        int64              `json:"timing"`
-	StmtID        uint64             `json:"stmt_id"`
-	ID            uint64             `json:"id"`
-	FieldsCount   int                `json:"fields_count"`
-	FieldsNames   []string           `json:"fields_names"`
-	FieldsTypes   jsontype.JsonUint8 `json:"fields_types"`
-	FieldsLengths []int64            `json:"fields_lengths"`
-	Precision     int                `json:"precision"`
+	Code             int                `json:"code"`
+	Message          string             `json:"message"`
+	Action           string             `json:"action"`
+	ReqID            uint64             `json:"req_id"`
+	Timing           int64              `json:"timing"`
+	StmtID           uint64             `json:"stmt_id"`
+	ID               uint64             `json:"id"`
+	FieldsCount      int                `json:"fields_count"`
+	FieldsNames      []string           `json:"fields_names"`
+	FieldsTypes      jsontype.JsonUint8 `json:"fields_types"`
+	FieldsLengths    []int64            `json:"fields_lengths"`
+	Precision        int                `json:"precision"`
+	FieldsPrecisions []int64            `json:"fields_precisions"`
+	FieldsScales     []int64            `json:"fields_scales"`
 }
 
 func (h *messageHandler) stmt2UseResult(ctx context.Context, session *melody.Session, action string, req stmt2UseResultRequest, logger *logrus.Entry, isDebug bool) {
@@ -224,16 +226,18 @@ func (h *messageHandler) stmt2UseResult(ctx context.Context, session *melody.Ses
 	queryResult := QueryResult{TaosResult: result, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision, inStmt: true}
 	idx := h.queryResults.Add(&queryResult)
 	resp := &stmt2UseResultResponse{
-		Action:        action,
-		ReqID:         req.ReqID,
-		Timing:        wstool.GetDuration(ctx),
-		StmtID:        req.StmtID,
-		ID:            idx,
-		FieldsCount:   fieldsCount,
-		FieldsNames:   rowsHeader.ColNames,
-		FieldsTypes:   rowsHeader.ColTypes,
-		FieldsLengths: rowsHeader.ColLength,
-		Precision:     precision,
+		Action:           action,
+		ReqID:            req.ReqID,
+		Timing:           wstool.GetDuration(ctx),
+		StmtID:           req.StmtID,
+		ID:               idx,
+		FieldsCount:      fieldsCount,
+		FieldsNames:      rowsHeader.ColNames,
+		FieldsTypes:      rowsHeader.ColTypes,
+		FieldsLengths:    rowsHeader.ColLength,
+		Precision:        precision,
+		FieldsPrecisions: rowsHeader.Precisions,
+		FieldsScales:     rowsHeader.Scales,
 	}
 	wstool.WSWriteJson(session, logger, resp)
 }
