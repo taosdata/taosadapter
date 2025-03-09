@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"github.com/taosdata/taosadapter/v3/db/asynctsc"
+	"github.com/taosdata/taosadapter/v3/tools/threadpool"
 	"os"
 	"runtime"
 
@@ -115,6 +117,14 @@ func Init() {
 		maxSyncMethodLimit = runtime.NumCPU()
 	}
 	thread.SyncLocker = thread.NewLocker(maxSyncMethodLimit)
+	threadConfig := &threadpool.Config{
+		MaxCap:     maxSyncMethodLimit,
+		InitialCap: 1,
+		MaxWait:    1000,
+		Factory:    asynctsc.CreateThread,
+		Close:      asynctsc.DestroyThread,
+	}
+	thread.TSCThreadPool, err = threadpool.NewThreadPool(threadConfig)
 }
 
 // arg > file > env

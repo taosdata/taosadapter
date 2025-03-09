@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/taosdata/taosadapter/v3/db/asynctsc"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -44,11 +45,31 @@ type messageHandler struct {
 	dropUserHandle        cgo.Handle
 }
 
+type cb struct {
+	queryChan chan *asynctsc.QueryResult
+	freeChan  chan struct{}
+}
+
+func newCb() *cb {
+	return &cb{
+		queryChan: make(chan *asynctsc.QueryResult, 1),
+		freeChan:  make(chan struct{}, 1),
+	}
+}
+
+func (c *cb) QueryCall(result *asynctsc.QueryResult) {
+	c.queryChan <- result
+}
+func (c *cb) FreeCall() {
+	c.freeChan <- struct{}{}
+}
+
 func newHandler(session *melody.Session) *messageHandler {
 	logger := wstool.GetLogger(session)
 	ipAddr := iptool.GetRealIP(session.Request)
 	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
 	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
+
 	return &messageHandler{
 		queryResults:          NewQueryResultHolder(),
 		stmts:                 NewStmtHolder(),

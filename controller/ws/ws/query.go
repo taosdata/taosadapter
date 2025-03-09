@@ -1,10 +1,15 @@
 package ws
 
+import "C"
 import (
 	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/taosdata/taosadapter/v3/db/asynctsc"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
+	"github.com/taosdata/taosadapter/v3/thread"
+	"time"
 	"unsafe"
 
 	"github.com/sirupsen/logrus"
@@ -178,68 +183,58 @@ type queryResponse struct {
 func (h *messageHandler) query(ctx context.Context, session *melody.Session, action string, req queryRequest, logger *logrus.Entry, isDebug bool) {
 	sqlType := monitor.WSRecordRequest(req.Sql)
 	logger.Debugf("get query request, sql:%s", req.Sql)
-	s := log.GetLogNow(isDebug)
-	handler := async.GlobalAsync.HandlerPool.Get()
-	defer async.GlobalAsync.HandlerPool.Put(handler)
-	logger.Debugf("get handler cost:%s", log.GetLogDuration(isDebug, s))
-	result := async.GlobalAsync.TaosQuery(h.conn, logger, isDebug, req.Sql, handler, int64(req.ReqID))
-	code := wrapper.TaosError(result.Res)
+	cb := newCb()
+	handle := cgo.NewHandle(cb)
+	s1 := time.Now()
+	th, err := thread.TSCThreadPool.Get()
+	h.logger.Info("get thread cost:", time.Since(s1))
+	if err != nil {
+		panic(err)
+	}
+	asynctsc.AdapterQueryAWithReqID(th, h.conn, req.Sql, handle, int64(req.ReqID))
+	result := <-cb.queryChan
+	s2 := time.Now()
+	thread.TSCThreadPool.Put(th)
+	h.logger.Info("put thread cost:", time.Since(s2))
+	code := result.Code
 	if code != 0 {
 		monitor.WSRecordResult(sqlType, false)
-		errStr := wrapper.TaosErrorStr(result.Res)
-		logger.Errorf("query error, code:%d, message:%s", code, errStr)
-		syncinterface.FreeResult(result.Res, logger, isDebug)
+		errStr := result.Err
+		logger.Errorf("taos query error, code:%d, msg:%s, sql:%s", code, errStr, log.GetLogSql(req.Sql))
 		commonErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr)
 		return
 	}
-
 	monitor.WSRecordResult(sqlType, true)
-	logger.Trace("check is_update_query")
-	s = log.GetLogNow(isDebug)
-	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
-	logger.Debugf("get is_update_query %t, cost:%s", isUpdate, log.GetLogDuration(isDebug, s))
-	if isUpdate {
-		s = log.GetLogNow(isDebug)
-		affectRows := wrapper.TaosAffectedRows(result.Res)
-		logger.Debugf("affected_rows %d cost:%s", affectRows, log.GetLogDuration(isDebug, s))
-		syncinterface.FreeResult(result.Res, logger, isDebug)
+	if result.IsUpdateQuery {
 		resp := &queryResponse{
 			Action:       action,
 			ReqID:        req.ReqID,
 			Timing:       wstool.GetDuration(ctx),
 			IsUpdate:     true,
-			AffectedRows: affectRows,
+			AffectedRows: int(result.AffectedRows),
 		}
 		wstool.WSWriteJson(session, logger, resp)
 		return
 	}
-	s = log.GetLogNow(isDebug)
-	fieldsCount := wrapper.TaosNumFields(result.Res)
-	logger.Debugf("get num_fields:%d, cost:%s", fieldsCount, log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	rowsHeader, _ := wrapper.ReadColumn(result.Res, fieldsCount)
-	logger.Debugf("read column cost:%s", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	precision := wrapper.TaosResultPrecision(result.Res)
-	logger.Debugf("get result_precision:%d, cost:%s", precision, log.GetLogDuration(isDebug, s))
-	queryResult := QueryResult{TaosResult: result.Res, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision}
+	rowsHeader, _ := wrapper.ReadColumnV2(result.Field, result.FieldCount)
+	queryResult := QueryResult{TaosResult: result.Res, FieldsCount: int(result.FieldCount), Header: rowsHeader, precision: result.Precision}
 	idx := h.queryResults.Add(&queryResult)
-	logger.Trace("add result to list finished")
+	logger.Trace("query success")
 	resp := &queryResponse{
 		Action:        action,
 		ReqID:         req.ReqID,
 		Timing:        wstool.GetDuration(ctx),
 		ID:            idx,
-		FieldsCount:   fieldsCount,
+		FieldsCount:   int(result.FieldCount),
 		FieldsNames:   rowsHeader.ColNames,
 		FieldsLengths: rowsHeader.ColLength,
 		FieldsTypes:   rowsHeader.ColTypes,
-		Precision:     precision,
+		Precision:     result.Precision,
 	}
 	wstool.WSWriteJson(session, logger, resp)
 }
 
-func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Session, action string, reqID uint64, message []byte, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) binaryQuery2(ctx context.Context, session *melody.Session, action string, reqID uint64, message []byte, logger *logrus.Entry, isDebug bool) {
 	if len(message) < 31 {
 		commonErrorResponse(ctx, session, logger, action, reqID, 0xffff, "message length is too short")
 		return
@@ -317,6 +312,74 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 		FieldsLengths: rowsHeader.ColLength,
 		FieldsTypes:   rowsHeader.ColTypes,
 		Precision:     precision,
+	}
+	wstool.WSWriteJson(session, logger, resp)
+}
+
+func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Session, action string, reqID uint64, message []byte, logger *logrus.Entry, isDebug bool) {
+	if len(message) < 31 {
+		commonErrorResponse(ctx, session, logger, action, reqID, 0xffff, "message length is too short")
+		return
+	}
+	v := binary.LittleEndian.Uint16(message[24:])
+	var sql []byte
+	if v == BinaryProtocolVersion1 {
+		sqlLen := binary.LittleEndian.Uint32(message[26:])
+		remainMessageLength := len(message) - 30
+		if remainMessageLength < int(sqlLen) {
+			commonErrorResponse(ctx, session, logger, action, reqID, 0xffff, fmt.Sprintf("uncompleted message, sql length:%d, remainMessageLength:%d", sqlLen, remainMessageLength))
+			return
+		}
+		sql = message[30 : 30+sqlLen]
+	} else {
+		logger.Errorf("unknown binary query version:%d", v)
+		commonErrorResponse(ctx, session, logger, action, reqID, 0xffff, fmt.Sprintf("unknown binary query version:%d", v))
+		return
+	}
+	logger.Debugf("binary query, sql:%s", log.GetLogSql(bytesutil.ToUnsafeString(sql)))
+	sqlType := monitor.WSRecordRequest(bytesutil.ToUnsafeString(sql))
+	cb := newCb()
+	handle := cgo.NewHandle(cb)
+	th, err := thread.TSCThreadPool.Get()
+	if err != nil {
+		panic(err)
+	}
+	asynctsc.AdapterQueryAWithReqID(th, h.conn, bytesutil.ToUnsafeString(sql), handle, int64(reqID))
+	result := <-cb.queryChan
+	code := result.Code
+	if code != 0 {
+		monitor.WSRecordResult(sqlType, false)
+		errStr := result.Err
+		logger.Errorf("taos query error, code:%d, msg:%s, sql:%s", code, errStr, log.GetLogSql(bytesutil.ToUnsafeString(sql)))
+		commonErrorResponse(ctx, session, logger, action, reqID, code, errStr)
+		return
+	}
+	monitor.WSRecordResult(sqlType, true)
+	if result.IsUpdateQuery {
+		resp := &queryResponse{
+			Action:       action,
+			ReqID:        reqID,
+			Timing:       wstool.GetDuration(ctx),
+			IsUpdate:     true,
+			AffectedRows: int(result.AffectedRows),
+		}
+		wstool.WSWriteJson(session, logger, resp)
+		return
+	}
+	rowsHeader, _ := wrapper.ReadColumnV2(result.Field, result.FieldCount)
+	queryResult := QueryResult{TaosResult: result.Res, FieldsCount: int(result.FieldCount), Header: rowsHeader, precision: result.Precision}
+	idx := h.queryResults.Add(&queryResult)
+	logger.Trace("query success")
+	resp := &queryResponse{
+		Action:        action,
+		ReqID:         reqID,
+		Timing:        wstool.GetDuration(ctx),
+		ID:            idx,
+		FieldsCount:   int(result.FieldCount),
+		FieldsNames:   rowsHeader.ColNames,
+		FieldsLengths: rowsHeader.ColLength,
+		FieldsTypes:   rowsHeader.ColTypes,
+		Precision:     result.Precision,
 	}
 	wstool.WSWriteJson(session, logger, resp)
 }
