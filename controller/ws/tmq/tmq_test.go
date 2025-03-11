@@ -12,7 +12,6 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 	"unsafe"
@@ -2827,9 +2826,9 @@ func TestTMQ_CommitOffset(t *testing.T) {
 	assert.Equal(t, pollResp.Offset, committedResp.Committed[0], string(msg))
 }
 
-func TestTMQ_PollAfterClose(t *testing.T) {
-	dbName := "test_ws_tmq_poll_after_close"
-	topic := "test_ws_tmq_poll_after_close_topic"
+func TestTMQ_PollWithMessageID(t *testing.T) {
+	dbName := "test_ws_tmq_poll_with_message_id"
+	topic := "test_ws_tmq_poll_with_message_id_topic"
 
 	s := httptest.NewServer(router)
 	defer s.Close()
@@ -2865,19 +2864,9 @@ func TestTMQ_PollAfterClose(t *testing.T) {
 	err = json.Unmarshal(msg, &subscribeResp)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
-	go func() {
-		for i := 0; i < 100; i++ {
-			time.Sleep(time.Millisecond * 100)
-			code, message := doHttpSql(fmt.Sprintf("insert into %s.ct2 values (now, 1, 2, '3')", dbName))
-			if code == 902 {
-				// exited, db not exists
-				return
-			}
-			assert.Equal(t, 0, code, message)
-		}
-	}()
 	// poll
-	b, _ = json.Marshal(TMQPollReq{ReqID: 0, BlockingTime: 500})
+	messageID := uint64(0)
+	b, _ = json.Marshal(TMQPollReq{ReqID: 100, BlockingTime: 500, MessageID: &messageID})
 	msg, err = doWebSocket(ws, TMQPoll, b)
 	assert.NoError(t, err)
 	var pollResp TMQPollResp
@@ -2885,77 +2874,167 @@ func TestTMQ_PollAfterClose(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 0, pollResp.Code, string(msg))
 	assert.True(t, pollResp.HaveMessage, string(msg))
-	type wsRespMsg struct {
-		messageType int
-		p           []byte
-	}
-	waitMap := make(map[uint64]chan *wsRespMsg)
-	type tmqResp struct {
-		ReqID uint64 `json:"req_id"`
-	}
-	go func() {
-		count := 0
-		for {
-			mt, p, err := ws.ReadMessage()
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			t.Log(string(p))
-			count += 1
-			var resp tmqResp
-			err = json.Unmarshal(p, &resp)
-			if err != nil {
-				t.Error(err)
-			}
-			ch := waitMap[resp.ReqID]
-			ch <- &wsRespMsg{messageType: mt, p: p}
-			if count == 10 {
-				break
-			}
-		}
-	}()
-	wg := sync.WaitGroup{}
-	locker := sync.Mutex{}
-	wg.Add(10)
-	for i := 0; i < 10; i++ {
-		ch := make(chan *wsRespMsg, 1)
-		waitMap[uint64(i)] = ch
-		go func(index int) {
-			defer wg.Done()
-			b, _ := json.Marshal(TMQPollReq{ReqID: uint64(index), BlockingTime: 500})
-			t.Log(string(b))
-			locker.Lock()
-			a, _ := json.Marshal(&wstool.WSAction{Action: TMQPoll, Args: b})
-			err = ws.WriteMessage(websocket.TextMessage, a)
-			locker.Unlock()
-			if err != nil {
-				t.Log(index, "poll send failed", err)
-				return
-			}
-			timeout, cancel := context.WithTimeout(context.Background(), time.Second*20)
-			defer cancel()
-			select {
-			case <-timeout.Done():
-				t.Error(timeout)
-			case msg := <-ch:
-				var pollResp TMQPollResp
-				err = json.Unmarshal(msg.p, &pollResp)
-				assert.NoError(t, err)
-				assert.Equal(t, 0, pollResp.Code, string(msg.p))
-			}
-		}(i)
-	}
+	assert.Equal(t, uint64(100), pollResp.ReqID, string(msg))
 
-	wg.Wait()
-	// poll
-	b, _ = json.Marshal(TMQPollReq{ReqID: 0, BlockingTime: 500})
+	// poll with old messageID
+	b, _ = json.Marshal(TMQPollReq{ReqID: 101, BlockingTime: 500, MessageID: &messageID})
 	msg, err = doWebSocket(ws, TMQPoll, b)
 	assert.NoError(t, err)
 	t.Log(string(msg))
-	err = json.Unmarshal(msg, &pollResp)
+	var pollResp2 TMQPollResp
+	err = json.Unmarshal(msg, &pollResp2)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, pollResp.Code, string(msg))
+	assert.True(t, pollResp2.HaveMessage, string(msg))
+	assert.Equal(t, uint64(101), pollResp2.ReqID, string(msg))
+	pollResp2.ReqID = 100
+	pollResp2.Timing = pollResp.Timing
+	assert.Equal(t, pollResp, pollResp2)
+
+	// poll with new messageID
+	messageID = pollResp2.MessageID
+	b, _ = json.Marshal(TMQPollReq{ReqID: 102, BlockingTime: 500, MessageID: &messageID})
+	msg, err = doWebSocket(ws, TMQPoll, b)
+	assert.NoError(t, err)
+	t.Log(string(msg))
+	var pollResp3 TMQPollResp
+	err = json.Unmarshal(msg, &pollResp3)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, pollResp.Code, string(msg))
+	assert.True(t, pollResp3.HaveMessage, string(msg))
+	assert.Equal(t, uint64(102), pollResp3.ReqID, string(msg))
+	assert.NotEqual(t, pollResp2.MessageID, pollResp3.MessageID)
+
+	// poll with old messageID
+	b, _ = json.Marshal(TMQPollReq{ReqID: 103, BlockingTime: 500, MessageID: &messageID})
+	msg, err = doWebSocket(ws, TMQPoll, b)
+	assert.NoError(t, err)
+	t.Log(string(msg))
+	var pollResp4 TMQPollResp
+	err = json.Unmarshal(msg, &pollResp4)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, pollResp.Code, string(msg))
+	assert.True(t, pollResp4.HaveMessage, string(msg))
+	assert.Equal(t, uint64(103), pollResp4.ReqID, string(msg))
+	pollResp4.ReqID = pollResp3.ReqID
+	pollResp4.Timing = pollResp3.Timing
+	assert.Equal(t, pollResp3, pollResp4)
+	latestMessageID := pollResp4.MessageID
+	// poll until no message
+	for {
+		b, _ = json.Marshal(TMQPollReq{ReqID: 104, BlockingTime: 500, MessageID: &messageID})
+		msg, err = doWebSocket(ws, TMQPoll, b)
+		assert.NoError(t, err)
+		t.Log(string(msg))
+		var pollResp5 TMQPollResp
+		err = json.Unmarshal(msg, &pollResp4)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, pollResp.Code, string(msg))
+		if !pollResp5.HaveMessage {
+			break
+		}
+		latestMessageID = pollResp5.MessageID
+	}
+	// poll with new messageID
+	b, _ = json.Marshal(TMQPollReq{ReqID: 105, BlockingTime: 500, MessageID: &latestMessageID})
+	msg, err = doWebSocket(ws, TMQPoll, b)
+	assert.NoError(t, err)
+	t.Log(string(msg))
+	var pollResp6 TMQPollResp
+	err = json.Unmarshal(msg, &pollResp6)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, pollResp.Code, string(msg))
+	assert.False(t, pollResp6.HaveMessage, string(msg))
+	// insert data
+	code, message := doHttpSql(fmt.Sprintf("insert into %s.ct2 values (now, 1, 2, '3')", dbName))
+	assert.Equal(t, 0, code, message)
+	// poll
+	b, _ = json.Marshal(TMQPollReq{ReqID: 106, BlockingTime: 1000, MessageID: &latestMessageID})
+	msg, err = doWebSocket(ws, TMQPoll, b)
+	assert.NoError(t, err)
+	t.Log(string(msg))
+	var pollResp7 TMQPollResp
+	err = json.Unmarshal(msg, &pollResp7)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, pollResp.Code, string(msg))
+	assert.True(t, pollResp7.HaveMessage, string(msg))
+	assert.NotEqual(t, latestMessageID, pollResp7.MessageID)
+	// poll with new messageID
+	latestMessageID = pollResp7.MessageID
+	b, _ = json.Marshal(TMQPollReq{ReqID: 107, BlockingTime: 500, MessageID: &latestMessageID})
+	msg, err = doWebSocket(ws, TMQPoll, b)
+	assert.NoError(t, err)
+	t.Log(string(msg))
+	var pollResp8 TMQPollResp
+	err = json.Unmarshal(msg, &pollResp8)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, pollResp.Code, string(msg))
+	assert.False(t, pollResp8.HaveMessage, string(msg))
+
+	// commit
+	b, _ = json.Marshal(TMQCommitReq{ReqID: 107, MessageID: latestMessageID})
+	msg, err = doWebSocket(ws, TMQCommit, b)
+	assert.NoError(t, err)
+	t.Log(string(msg))
+	var commitResp TMQCommitResp
+	err = json.Unmarshal(msg, &commitResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, commitResp.Code, string(msg))
+
+	// commit all
+	b, _ = json.Marshal(TMQCommitReq{ReqID: 108})
+	msg, err = doWebSocket(ws, TMQCommit, b)
+	assert.NoError(t, err)
+	t.Log(string(msg))
+	err = json.Unmarshal(msg, &commitResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, commitResp.Code, string(msg))
+
+	// unsubscribe
+	b, _ = json.Marshal(TMQUnsubscribeReq{ReqID: 109})
+	msg, err = doWebSocket(ws, TMQUnsubscribe, b)
+	assert.NoError(t, err)
+	t.Log(string(msg))
+	var unsubscribeResp TMQUnsubscribeResp
+	err = json.Unmarshal(msg, &unsubscribeResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, unsubscribeResp.Code, string(msg))
+
+	// subscribe
+	b, _ = json.Marshal(TMQSubscribeReq{
+		Topics: []string{topic},
+	})
+	msg, err = doWebSocket(ws, TMQSubscribe, b)
+	assert.NoError(t, err)
+	t.Log(string(msg))
+	err = json.Unmarshal(msg, &subscribeResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, subscribeResp.Code, string(msg))
+
+	// poll
+	b, _ = json.Marshal(TMQPollReq{ReqID: 107, BlockingTime: 500, MessageID: &latestMessageID})
+	msg, err = doWebSocket(ws, TMQPoll, b)
+	assert.NoError(t, err)
+	t.Log(string(msg))
+	var pollResp9 TMQPollResp
+	err = json.Unmarshal(msg, &pollResp9)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, pollResp.Code, string(msg))
+	assert.False(t, pollResp9.HaveMessage, string(msg))
+	// insert data
+	code, message = doHttpSql(fmt.Sprintf("insert into %s.ct2 values (now, 1, 2, '3')", dbName))
+	assert.Equal(t, 0, code, message)
+	// poll
+	b, _ = json.Marshal(TMQPollReq{ReqID: 107, BlockingTime: 10000, MessageID: &latestMessageID})
+	msg, err = doWebSocket(ws, TMQPoll, b)
+	assert.NoError(t, err)
+	t.Log(string(msg))
+	var pollResp10 TMQPollResp
+	err = json.Unmarshal(msg, &pollResp10)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, pollResp10.Code, string(msg))
+	assert.True(t, pollResp10.HaveMessage, string(msg))
+	assert.Greater(t, pollResp10.MessageID, latestMessageID)
 }
 
 type fetchRawNewResponse struct {
@@ -3890,4 +3969,61 @@ func TestSetConfig(t *testing.T) {
 	err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	assert.NoError(t, err)
 
+}
+
+func TestTMQPollReq_String(t *testing.T) {
+	type fields struct {
+		ReqID        uint64
+		BlockingTime int64
+		MessageID    *uint64
+		ctx          context.Context
+	}
+	messageID := uint64(1)
+	tests := []struct {
+		name   string
+		fields fields
+		want   string
+	}{
+		{
+			name: "no messageid",
+			fields: fields{
+				ReqID:        1,
+				BlockingTime: 500,
+				MessageID:    nil,
+				ctx:          nil,
+			},
+			want: "&{ReqID:1 BlockingTime:500 MessageID:nil}",
+		},
+		{
+			name: "normal",
+			fields: fields{
+				ReqID:        1,
+				BlockingTime: 500,
+				MessageID:    &messageID,
+				ctx:          nil,
+			},
+			want: "&{ReqID:1 BlockingTime:500 MessageID:1}",
+		},
+		{
+			name: "with context",
+			fields: fields{
+				ReqID:        1,
+				BlockingTime: 500,
+				MessageID:    &messageID,
+				ctx:          context.Background(),
+			},
+			want: "&{ReqID:1 BlockingTime:500 MessageID:1}",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &TMQPollReq{
+				ReqID:        tt.fields.ReqID,
+				BlockingTime: tt.fields.BlockingTime,
+				MessageID:    tt.fields.MessageID,
+				ctx:          tt.fields.ctx,
+			}
+			assert.Equalf(t, tt.want, req.String(), "String()")
+		})
+	}
 }
