@@ -670,3 +670,11 @@ func TestTaosValidateSql(t *testing.T) {
 	code = TaosValidateSql(conn, "create table syncinterface_test_validate.t(ts timestamp,v int)", logger, isDebug)
 	assert.NotEqual(t, 0, code)
 }
+
+func TestTaosCheckServerStatus(t *testing.T) {
+	reqID := generator.GetReqID()
+	var logger = logger.WithField("test", "TestTaosCheckServerStatus").WithField(config.ReqIDKey, reqID)
+	status, detail := TaosCheckServerStatus("localhost", 0, logger, isDebug)
+	assert.Equal(t, int32(2), status)
+	assert.Equal(t, "", detail)
+}

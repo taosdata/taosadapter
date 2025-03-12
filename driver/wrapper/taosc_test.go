@@ -713,3 +713,42 @@ func TestTaosOptionsConnection(t *testing.T) {
 	assert.Equal(t, 1, len(values))
 	assert.Equal(t, connID, values[0][0].(uint32))
 }
+
+func TestTaosCheckServerStatus(t *testing.T) {
+	type args struct {
+		fqdn string
+		port int32
+	}
+	tests := []struct {
+		name        string
+		args        args
+		wantStatus  int32
+		wantDetails string
+	}{
+		{
+			name: "localhost",
+			args: args{
+				fqdn: "localhost",
+				port: 0,
+			},
+			wantStatus:  2,
+			wantDetails: "",
+		},
+		{
+			name: "wrong ip",
+			args: args{
+				fqdn: "wrong_ip",
+				port: 0,
+			},
+			wantStatus:  0,
+			wantDetails: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotStatus, gotDetails := TaosCheckServerStatus(tt.args.fqdn, tt.args.port)
+			assert.Equalf(t, tt.wantStatus, gotStatus, "TaosCheckServerStatus(%v, %v)", tt.args.fqdn, tt.args.port)
+			assert.Equalf(t, tt.wantDetails, gotDetails, "TaosCheckServerStatus(%v, %v)", tt.args.fqdn, tt.args.port)
+		})
+	}
+}

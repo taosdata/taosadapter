@@ -244,6 +244,20 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 		})
 		h.connect(ctx, session, action, req, logger, log.IsDebug())
 		return
+	case CheckServerStatus:
+		action = CheckServerStatus
+		var req checkServerStatusRequest
+		if err := json.Unmarshal(request.Args, &req); err != nil {
+			h.logger.Errorf("unmarshal check server status request error, request:%s, err:%s", request.Args, err)
+			reqID := getReqID(request.Args)
+			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal check server status request error")
+			return
+		}
+		logger := h.logger.WithFields(logrus.Fields{
+			actionKey:       action,
+			config.ReqIDKey: req.ReqID,
+		})
+		h.checkServerStatus(ctx, session, action, req, logger, log.IsDebug())
 	}
 
 	// check connection

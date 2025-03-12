@@ -300,3 +300,14 @@ func TaosOptionsConnection(conn unsafe.Pointer, option int, value *string) int {
 	}
 	return int(C.taos_options_connection_wrapper(conn, (C.TSDB_OPTION_CONNECTION)(option), cValue))
 }
+
+// TaosCheckServerStatus TSDB_SERVER_STATUS taos_check_server_status(const char *fqdn, int port, char *details, int maxlen);
+func TaosCheckServerStatus(fqdn string, port int32) (status int32, details string) {
+	cFqdn := C.CString(fqdn)
+	defer C.free(unsafe.Pointer(cFqdn))
+	cDetails := (*C.char)(C.malloc(1024))
+	defer C.free(unsafe.Pointer(cDetails))
+	status = int32(C.taos_check_server_status(cFqdn, C.int(port), cDetails, 1024))
+	details = C.GoString(cDetails)
+	return
+}
