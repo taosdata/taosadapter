@@ -439,7 +439,6 @@ func TaosCheckServerStatus(fqdn string, port int32, logger *logrus.Entry, isDebu
 	s := log.GetLogNow(isDebug)
 	thread.SyncLocker.Lock()
 	logger.Debugf("get thread lock for taos_check_server_status cost:%s", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
 	status, details := wrapper.TaosCheckServerStatus(fqdn, port)
 	logger.Debugf("taos_check_server_status finish, status:%d, detail:%s", status, details)
 	thread.SyncLocker.Unlock()
