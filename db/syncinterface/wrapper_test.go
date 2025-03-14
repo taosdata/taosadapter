@@ -493,24 +493,24 @@ func TestTaosStmt2(t *testing.T) {
 	}
 	handle := cgo.NewHandle(caller)
 	stmt := TaosStmt2Init(conn, reqID, false, false, handle, logger, isDebug)
-	if !assert.NotNil(t, stmt, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.NotNil(t, stmt, wrapper.TaosStmt2Error(stmt)) {
 		return
 	}
 	defer func() {
 		code = TaosStmt2Close(stmt, logger, isDebug)
-		assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt))
+		assert.Equal(t, 0, code, wrapper.TaosStmt2Error(stmt))
 	}()
 	code = TaosStmt2Prepare(stmt, "insert into ? using `syncinterface_test_stmt2`.`stb1` tags(?) values(?,?)", logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.Equal(t, 0, code, wrapper.TaosStmt2Error(stmt)) {
 		return
 	}
 	isInsert, code := TaosStmt2IsInsert(stmt, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.Equal(t, 0, code, wrapper.TaosStmt2Error(stmt)) {
 		return
 	}
 	assert.True(t, isInsert)
 	code, count, fields := TaosStmt2GetFields(stmt, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.Equal(t, 0, code, wrapper.TaosStmt2Error(stmt)) {
 		return
 	}
 	assert.Equal(t, 4, count)
@@ -543,7 +543,7 @@ func TestTaosStmt2(t *testing.T) {
 	assert.NoError(t, err)
 
 	code, num, fields2 := TaosStmt2GetFields(stmt, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.Equal(t, 0, code, wrapper.TaosStmt2Error(stmt)) {
 		return
 	}
 	assert.Equal(t, 3, num)
@@ -585,7 +585,7 @@ func TestTaosStmt2(t *testing.T) {
 	assert.NoError(t, err)
 
 	code = TaosStmt2Exec(stmt, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.Equal(t, 0, code, wrapper.TaosStmt2Error(stmt)) {
 		return
 	}
 	result := <-caller.ExecResult
