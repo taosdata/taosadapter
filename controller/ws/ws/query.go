@@ -160,19 +160,21 @@ type queryRequest struct {
 }
 
 type queryResponse struct {
-	Code          int                `json:"code"`
-	Message       string             `json:"message"`
-	Action        string             `json:"action"`
-	ReqID         uint64             `json:"req_id"`
-	Timing        int64              `json:"timing"`
-	ID            uint64             `json:"id"`
-	IsUpdate      bool               `json:"is_update"`
-	AffectedRows  int                `json:"affected_rows"`
-	FieldsCount   int                `json:"fields_count"`
-	FieldsNames   []string           `json:"fields_names"`
-	FieldsTypes   jsontype.JsonUint8 `json:"fields_types"`
-	FieldsLengths []int64            `json:"fields_lengths"`
-	Precision     int                `json:"precision"`
+	Code             int                `json:"code"`
+	Message          string             `json:"message"`
+	Action           string             `json:"action"`
+	ReqID            uint64             `json:"req_id"`
+	Timing           int64              `json:"timing"`
+	ID               uint64             `json:"id"`
+	IsUpdate         bool               `json:"is_update"`
+	AffectedRows     int                `json:"affected_rows"`
+	FieldsCount      int                `json:"fields_count"`
+	FieldsNames      []string           `json:"fields_names"`
+	FieldsTypes      jsontype.JsonUint8 `json:"fields_types"`
+	FieldsLengths    []int64            `json:"fields_lengths"`
+	Precision        int                `json:"precision"`
+	FieldsPrecisions []int64            `json:"fields_precisions"`
+	FieldsScales     []int64            `json:"fields_scales"`
 }
 
 func (h *messageHandler) query(ctx context.Context, session *melody.Session, action string, req queryRequest, logger *logrus.Entry, isDebug bool) {
@@ -226,15 +228,17 @@ func (h *messageHandler) query(ctx context.Context, session *melody.Session, act
 	idx := h.queryResults.Add(&queryResult)
 	logger.Trace("add result to list finished")
 	resp := &queryResponse{
-		Action:        action,
-		ReqID:         req.ReqID,
-		Timing:        wstool.GetDuration(ctx),
-		ID:            idx,
-		FieldsCount:   fieldsCount,
-		FieldsNames:   rowsHeader.ColNames,
-		FieldsLengths: rowsHeader.ColLength,
-		FieldsTypes:   rowsHeader.ColTypes,
-		Precision:     precision,
+		Action:           action,
+		ReqID:            req.ReqID,
+		Timing:           wstool.GetDuration(ctx),
+		ID:               idx,
+		FieldsCount:      fieldsCount,
+		FieldsNames:      rowsHeader.ColNames,
+		FieldsLengths:    rowsHeader.ColLength,
+		FieldsTypes:      rowsHeader.ColTypes,
+		Precision:        precision,
+		FieldsPrecisions: rowsHeader.Precisions,
+		FieldsScales:     rowsHeader.Scales,
 	}
 	wstool.WSWriteJson(session, logger, resp)
 }
@@ -308,15 +312,17 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 	idx := h.queryResults.Add(&queryResult)
 	logger.Trace("query success")
 	resp := &queryResponse{
-		Action:        action,
-		ReqID:         reqID,
-		Timing:        wstool.GetDuration(ctx),
-		ID:            idx,
-		FieldsCount:   fieldsCount,
-		FieldsNames:   rowsHeader.ColNames,
-		FieldsLengths: rowsHeader.ColLength,
-		FieldsTypes:   rowsHeader.ColTypes,
-		Precision:     precision,
+		Action:           action,
+		ReqID:            reqID,
+		Timing:           wstool.GetDuration(ctx),
+		ID:               idx,
+		FieldsCount:      fieldsCount,
+		FieldsNames:      rowsHeader.ColNames,
+		FieldsLengths:    rowsHeader.ColLength,
+		FieldsTypes:      rowsHeader.ColTypes,
+		Precision:        precision,
+		FieldsPrecisions: rowsHeader.Precisions,
+		FieldsScales:     rowsHeader.Scales,
 	}
 	wstool.WSWriteJson(session, logger, resp)
 }

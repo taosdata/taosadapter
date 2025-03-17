@@ -88,6 +88,7 @@ jobs:
           (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true') ||
           (github.event_name == 'push' && steps.cache-server-push.outputs.cache-hit != 'true')
         run: |
+          sudo apt-get install libgoogle-perftools-dev
           cd TDengine
           mkdir debug
           cd debug
@@ -162,6 +163,7 @@ jobs:
 
       - name: install
         run: |
+          sudo apt-get install libgoogle-perftools-dev
           tar -zxvf server.tar.gz
           cd release && sudo sh install.sh
 
@@ -219,6 +221,7 @@ jobs:
 
       - name: install
         run: |
+          sudo apt-get install libgoogle-perftools-dev
           tar -zxvf server.tar.gz
           cd release && sudo sh install.sh
 
@@ -299,6 +302,7 @@ jobs:
 
       - name: install
         run: |
+          sudo apt-get install libgoogle-perftools-dev
           tar -zxvf server.tar.gz
           cd release && sudo sh install.sh
 
@@ -352,6 +356,7 @@ jobs:
 
       - name: install
         run: |
+          sudo apt-get install libgoogle-perftools-dev
           tar -zxvf server.tar.gz
           cd release && sudo sh install.sh
 

@@ -84,7 +84,10 @@ func TestParseBlock(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := ParseBlock(tt.args.data, tt.args.colTypes, tt.args.rows, tt.args.precision)
+			got, got1, err := ParseBlock(tt.args.data, tt.args.colTypes, tt.args.rows, tt.args.precision)
+			if err != nil {
+				t.Errorf("ParseBlock() err = %v", err)
+			}
 			if got != tt.want {
 				t.Errorf("ParseBlock() got = %v, want %v", got, tt.want)
 			}
@@ -245,7 +248,10 @@ func TestParseTmqBlock(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			id, messageID, result := ParseTmqBlock(tt.args.data, tt.args.colTypes, tt.args.rows, tt.args.precision)
+			id, messageID, result, err := ParseTmqBlock(tt.args.data, tt.args.colTypes, tt.args.rows, tt.args.precision)
+			if err != nil {
+				t.Errorf("ParseTmqBlock() err = %v", err)
+			}
 			if id != tt.id {
 				t.Errorf("ParseTmqBlock() id = %v, want %v", id, tt.id)
 			}

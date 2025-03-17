@@ -183,8 +183,10 @@ func TestWebsocket(t *testing.T) {
 			}
 		case AfterFetchBlock:
 			//block
-			resultID, blockResult = parseblock.ParseBlock(message[8:], queryResult.FieldsTypes, rows, queryResult.Precision)
-
+			resultID, blockResult, err = parseblock.ParseBlock(message[8:], queryResult.FieldsTypes, rows, queryResult.Precision)
+			if err != nil {
+				return err
+			}
 			_ = lengths
 			status = AfterFetch
 			b, _ := json.Marshal(&WSFetchReq{
@@ -652,7 +654,10 @@ func TestWriteBlock(t *testing.T) {
 				return err
 			}
 		case AfterFetchBlock:
-			_, blockResult = parseblock.ParseBlock(message[8:], queryResult.FieldsTypes, rows, queryResult.Precision)
+			_, blockResult, err = parseblock.ParseBlock(message[8:], queryResult.FieldsTypes, rows, queryResult.Precision)
+			if err != nil {
+				return err
+			}
 			status = AfterFetch
 			b, _ := json.Marshal(&WSFetchReq{
 				ReqID: 3,
@@ -1144,7 +1149,10 @@ func TestWriteBlockWithFields(t *testing.T) {
 				return err
 			}
 		case AfterFetchBlock:
-			_, blockResult = parseblock.ParseBlock(message[8:], queryResult.FieldsTypes, rows, queryResult.Precision)
+			_, blockResult, err = parseblock.ParseBlock(message[8:], queryResult.FieldsTypes, rows, queryResult.Precision)
+			if err != nil {
+				return err
+			}
 			status = AfterFetch
 			b, _ := json.Marshal(&WSFetchReq{
 				ReqID: 3,
@@ -1379,7 +1387,10 @@ func TestQueryAllType(t *testing.T) {
 			}
 		case AfterFetchBlock:
 			//block
-			resultID, blockResult = parseblock.ParseBlock(message[8:], queryResult.FieldsTypes, rows, queryResult.Precision)
+			resultID, blockResult, err = parseblock.ParseBlock(message[8:], queryResult.FieldsTypes, rows, queryResult.Precision)
+			if err != nil {
+				return err
+			}
 
 			_ = lengths
 			status = AfterFetch
