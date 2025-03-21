@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/driver/common"
+	"github.com/taosdata/taosadapter/v3/tools/generator"
 )
 
 func TestGetCurrentDB(t *testing.T) {
@@ -293,4 +294,34 @@ func TestValidateSql(t *testing.T) {
 	assert.Equal(t, 0, validateSqlResp.Code, validateSqlResp.Message)
 	assert.Equal(t, int64(0), validateSqlResp.ResultCode)
 	assert.Equal(t, "validate_sql", validateSqlResp.Action)
+}
+
+func TestCheckServerStatus(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+	reqID := uint64(generator.GetReqID())
+	req := checkServerStatusRequest{
+		ReqID: reqID,
+		FQDN:  "localhost",
+		Port:  6030,
+	}
+	resp, err := doWebSocket(ws, CheckServerStatus, &req)
+	t.Log(string(resp))
+	assert.NoError(t, err)
+	var checkServerStatusResp checkServerStatusResponse
+	err = json.Unmarshal(resp, &checkServerStatusResp)
+	assert.NoError(t, err)
+	assert.Equal(t, reqID, checkServerStatusResp.ReqID)
+	assert.Equal(t, 0, checkServerStatusResp.Code, checkServerStatusResp.Message)
+	assert.Equal(t, int32(2), checkServerStatusResp.Status)
+	assert.Equal(t, "", checkServerStatusResp.Details)
 }

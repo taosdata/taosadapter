@@ -356,9 +356,11 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 		}
 		return
 	}
+	logger.Tracef("get rowsHeader:%v", rowsHeader)
 	builder := jsonbuilder.BorrowStream(w)
 	defer jsonbuilder.ReturnStream(builder)
 	builder.WritePure(Query2)
+	scaleList := make([]int, fieldsCount)
 	for i := 0; i < fieldsCount; i++ {
 		logger.Tracef("write column meta to client, column:%d, name:%s, column_type:%s, column_len:%d", i, rowsHeader.ColNames[i], rowsHeader.TypeDatabaseName(i), rowsHeader.ColLength[i])
 		builder.WriteArrayStart()
@@ -371,6 +373,7 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 		if i != fieldsCount-1 {
 			builder.WriteMore()
 		}
+		scaleList[i] = int(rowsHeader.Scales[i])
 	}
 	var tmpFlushTiming int64
 	// // try flushing after parsing meta
@@ -435,7 +438,7 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 				if returnObj {
 					builder.WriteObjectField(rowsHeader.ColNames[column])
 				}
-				ctools.JsonWriteRawBlock(builder, rowsHeader.ColTypes[column], pHeaderList[column], pStartList[column], row, precision, location, timeBuffer, logger)
+				ctools.JsonWriteRawBlock(builder, rowsHeader.ColTypes[column], pHeaderList[column], pStartList[column], row, precision, location, timeBuffer, scaleList[column], logger)
 				if column != fieldsCount-1 {
 					builder.WriteMore()
 				}

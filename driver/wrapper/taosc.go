@@ -117,6 +117,11 @@ func TaosFetchFields(result unsafe.Pointer) unsafe.Pointer {
 	return unsafe.Pointer(C.taos_fetch_fields(result))
 }
 
+// TaosFetchFieldsE TAOS_FIELD_E *taos_fetch_fields_e(TAOS_RES *res); 3.3.6.0
+func TaosFetchFieldsE(result unsafe.Pointer) unsafe.Pointer {
+	return unsafe.Pointer(C.taos_fetch_fields_e(result))
+}
+
 // TaosFetchBlock int taos_fetch_block(TAOS_RES *res, TAOS_ROW *rows);
 func TaosFetchBlock(result unsafe.Pointer) (int, unsafe.Pointer) {
 	var block C.TAOS_ROW
@@ -299,4 +304,15 @@ func TaosOptionsConnection(conn unsafe.Pointer, option int, value *string) int {
 		defer C.free(cValue)
 	}
 	return int(C.taos_options_connection_wrapper(conn, (C.TSDB_OPTION_CONNECTION)(option), cValue))
+}
+
+// TaosCheckServerStatus TSDB_SERVER_STATUS taos_check_server_status(const char *fqdn, int port, char *details, int maxlen);
+func TaosCheckServerStatus(fqdn string, port int32) (status int32, details string) {
+	cFqdn := C.CString(fqdn)
+	defer C.free(unsafe.Pointer(cFqdn))
+	cDetails := (*C.char)(C.calloc(C.size_t(C.uint(1024)), C.size_t(C.uint(1))))
+	defer C.free(unsafe.Pointer(cDetails))
+	status = int32(C.taos_check_server_status(cFqdn, C.int(port), cDetails, 1024))
+	details = C.GoString(cDetails)
+	return
 }

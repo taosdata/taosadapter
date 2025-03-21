@@ -162,3 +162,32 @@ func (h *messageHandler) validateSQL(ctx context.Context, session *melody.Sessio
 	}
 	wstool.WSWriteJson(session, logger, resp)
 }
+
+type checkServerStatusRequest struct {
+	ReqID uint64 `json:"req_id"`
+	FQDN  string `json:"fqdn"`
+	Port  int32  `json:"port"`
+}
+
+type checkServerStatusResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Action  string `json:"action"`
+	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
+	Status  int32  `json:"status"`
+	Details string `json:"details"`
+}
+
+func (h *messageHandler) checkServerStatus(ctx context.Context, session *melody.Session, action string, req checkServerStatusRequest, logger *logrus.Entry, isDebug bool) {
+	logger.Tracef("check server status, fqdn:%s, port:%d", req.FQDN, req.Port)
+	status, details := syncinterface.TaosCheckServerStatus(req.FQDN, req.Port, logger, isDebug)
+	resp := &checkServerStatusResponse{
+		Action:  action,
+		ReqID:   req.ReqID,
+		Timing:  wstool.GetDuration(ctx),
+		Status:  status,
+		Details: details,
+	}
+	wstool.WSWriteJson(session, logger, resp)
+}

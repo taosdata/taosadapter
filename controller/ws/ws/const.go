@@ -45,6 +45,9 @@ const (
 
 	// options
 	OptionsConnection = "options_connection"
+
+	// check_server_status
+	CheckServerStatus = "check_server_status"
 )
 
 const (
