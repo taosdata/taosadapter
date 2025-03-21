@@ -2,9 +2,9 @@ package wrapper
 
 /*
 #cgo CFLAGS: -IC:/TDengine/include -I/usr/include
-#cgo linux LDFLAGS: -L/usr/lib -ltaos
-#cgo windows LDFLAGS: -LC:/TDengine/driver -ltaos
-#cgo darwin LDFLAGS: -L/usr/local/lib -ltaos
+#cgo linux LDFLAGS: -L/usr/lib -ltaosnative
+#cgo windows LDFLAGS: -LC:/TDengine/driver -ltaosnative
+#cgo darwin LDFLAGS: -L/usr/local/lib -ltaosnative
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -307,8 +307,11 @@ func TaosOptionsConnection(conn unsafe.Pointer, option int, value *string) int {
 }
 
 // TaosCheckServerStatus TSDB_SERVER_STATUS taos_check_server_status(const char *fqdn, int port, char *details, int maxlen);
-func TaosCheckServerStatus(fqdn string, port int32) (status int32, details string) {
-	cFqdn := C.CString(fqdn)
+func TaosCheckServerStatus(fqdn *string, port int32) (status int32, details string) {
+	var cFqdn = (*C.char)(nil)
+	if fqdn != nil {
+		cFqdn = C.CString(*fqdn)
+	}
 	defer C.free(unsafe.Pointer(cFqdn))
 	cDetails := (*C.char)(C.calloc(C.size_t(C.uint(1024)), C.size_t(C.uint(1))))
 	defer C.free(unsafe.Pointer(cDetails))
