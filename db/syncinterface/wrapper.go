@@ -434,8 +434,12 @@ func TaosValidateSql(taosConnect unsafe.Pointer, sql string, logger *logrus.Entr
 	return code
 }
 
-func TaosCheckServerStatus(fqdn string, port int32, logger *logrus.Entry, isDebug bool) (int32, string) {
-	logger.Tracef("call taos_check_server_status, fqdn:%s, port:%d", fqdn, port)
+func TaosCheckServerStatus(fqdn *string, port int32, logger *logrus.Entry, isDebug bool) (int32, string) {
+	if fqdn == nil {
+		logger.Tracef("call taos_check_server_status, fqdn: nil, port:%d", port)
+	} else {
+		logger.Tracef("call taos_check_server_status, fqdn:%s, port:%d", *fqdn, port)
+	}
 	s := log.GetLogNow(isDebug)
 	thread.SyncLocker.Lock()
 	logger.Debugf("get thread lock for taos_check_server_status cost:%s", log.GetLogDuration(isDebug, s))
