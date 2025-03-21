@@ -115,11 +115,11 @@ jobs:
           cp ./taosd /bin/
           cp ./libtaos.so.3.9.9.9 /usr/lib
           cp ./librocksdb.so.8.1.1 /usr/lib
+          cp ./libtaosnative.so.3.9.9.9 /usr/lib
           ln -sf /usr/lib/libtaos.so.3.9.9.9 /usr/lib/libtaos.so.1
-          ln -sf /usr/lib/libtaosnative.so.3.9.9.9 /usr/lib/libtaosnative.so.8 ||:
+          ln -sf /usr/lib/libtaosnative.so.3.9.9.9 /usr/lib/libtaosnative.so.1
+          ln -sf /usr/lib/libtaosnative.so.1 /usr/lib/libtaosnative.so
           ln -sf /usr/lib/libtaos.so.1 /usr/lib/libtaos.so
-          ln -sf /usr/lib/librocksdb.so.8.1.1 /usr/lib/librocksdb.so.8 ||:
-          ln -sf /usr/lib/librocksdb.so.8 /usr/lib/librocksdb.so ||:
           cp ./taos.h /usr/include
           EOF
           tar -zcvf server.tar.gz ./release

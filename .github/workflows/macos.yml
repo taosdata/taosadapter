@@ -107,6 +107,7 @@ jobs:
           cp ./TDengine/debug/build/bin/taos ./release/
           cp ./TDengine/debug/build/bin/taosd ./release/
           cp ./TDengine/debug/build/lib/libtaos.3.9.9.9.dylib ./release/
+          cp ./TDengine/debug/build/lib/libtaosnative.3.9.9.9.dylib ./release/
           cp ./TDengine/include/client/taos.h ./release/
           cat >./release/install.sh<<EOF 
           chmod +x ./taos
@@ -114,8 +115,11 @@ jobs:
           cp ./taos /usr/local/bin
           cp ./taosd /usr/local/bin
           cp ./libtaos.3.9.9.9.dylib /usr/local/lib
+          cp ./libtaosnative.3.9.9.9.dylib /usr/local/lib
           ln -sf /usr/local/lib/libtaos.3.9.9.9.dylib /usr/local/lib/libtaos.1.dylib
           ln -sf /usr/local/lib/libtaos.1.dylib /usr/local/lib/libtaos.dylib
+          ln -sf /usr/local/lib/libtaosnative.3.9.9.9.dylib /usr/local/lib/libtaos.1.dylib
+          ln -sf /usr/local/lib/libtaosnative.1.dylib /usr/local/lib/libtaos.dylib
           cp ./taos.h /usr/local/include
           EOF
           tar -zcvf server.tar.gz ./release
