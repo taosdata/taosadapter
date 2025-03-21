@@ -309,15 +309,31 @@ func TestCheckServerStatus(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 	reqID := uint64(generator.GetReqID())
+	localhost := "localhost"
 	req := checkServerStatusRequest{
 		ReqID: reqID,
-		FQDN:  "localhost",
+		FQDN:  &localhost,
 		Port:  6030,
 	}
 	resp, err := doWebSocket(ws, CheckServerStatus, &req)
 	t.Log(string(resp))
 	assert.NoError(t, err)
 	var checkServerStatusResp checkServerStatusResponse
+	err = json.Unmarshal(resp, &checkServerStatusResp)
+	assert.NoError(t, err)
+	assert.Equal(t, reqID, checkServerStatusResp.ReqID)
+	assert.Equal(t, 0, checkServerStatusResp.Code, checkServerStatusResp.Message)
+	assert.Equal(t, int32(2), checkServerStatusResp.Status)
+	assert.Equal(t, "", checkServerStatusResp.Details)
+	reqID = uint64(generator.GetReqID())
+	req = checkServerStatusRequest{
+		ReqID: reqID,
+		FQDN:  nil,
+		Port:  0,
+	}
+	resp, err = doWebSocket(ws, CheckServerStatus, &req)
+	t.Log(string(resp))
+	assert.NoError(t, err)
 	err = json.Unmarshal(resp, &checkServerStatusResp)
 	assert.NoError(t, err)
 	assert.Equal(t, reqID, checkServerStatusResp.ReqID)

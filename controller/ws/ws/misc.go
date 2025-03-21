@@ -164,9 +164,9 @@ func (h *messageHandler) validateSQL(ctx context.Context, session *melody.Sessio
 }
 
 type checkServerStatusRequest struct {
-	ReqID uint64 `json:"req_id"`
-	FQDN  string `json:"fqdn"`
-	Port  int32  `json:"port"`
+	ReqID uint64  `json:"req_id"`
+	FQDN  *string `json:"fqdn"`
+	Port  int32   `json:"port"`
 }
 
 type checkServerStatusResponse struct {
@@ -180,7 +180,11 @@ type checkServerStatusResponse struct {
 }
 
 func (h *messageHandler) checkServerStatus(ctx context.Context, session *melody.Session, action string, req checkServerStatusRequest, logger *logrus.Entry, isDebug bool) {
-	logger.Tracef("check server status, fqdn:%s, port:%d", req.FQDN, req.Port)
+	if req.FQDN == nil {
+		logger.Tracef("check server status, fqdn: nil, port:%d", req.Port)
+	} else {
+		logger.Tracef("check server status, fqdn:%s, port:%d", *req.FQDN, req.Port)
+	}
 	status, details := syncinterface.TaosCheckServerStatus(req.FQDN, req.Port, logger, isDebug)
 	resp := &checkServerStatusResponse{
 		Action:  action,

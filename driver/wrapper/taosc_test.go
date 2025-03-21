@@ -744,10 +744,23 @@ func TestTaosCheckServerStatus(t *testing.T) {
 			wantStatus:  0,
 			wantDetails: "",
 		},
+		{
+			name: "nil",
+			args: args{
+				fqdn: "",
+				port: 0,
+			},
+			wantStatus:  2,
+			wantDetails: "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotStatus, gotDetails := TaosCheckServerStatus(tt.args.fqdn, tt.args.port)
+			strP := &tt.args.fqdn
+			if tt.args.fqdn == "" {
+				strP = nil
+			}
+			gotStatus, gotDetails := TaosCheckServerStatus(strP, tt.args.port)
 			assert.Equalf(t, tt.wantStatus, gotStatus, "TaosCheckServerStatus(%v, %v)", tt.args.fqdn, tt.args.port)
 			assert.Equalf(t, tt.wantDetails, gotDetails, "TaosCheckServerStatus(%v, %v)", tt.args.fqdn, tt.args.port)
 		})
