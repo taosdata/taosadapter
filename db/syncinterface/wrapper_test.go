@@ -677,7 +677,11 @@ func TestTaosValidateSql(t *testing.T) {
 func TestTaosCheckServerStatus(t *testing.T) {
 	reqID := generator.GetReqID()
 	var logger = logger.WithField("test", "TestTaosCheckServerStatus").WithField(config.ReqIDKey, reqID)
-	status, detail := TaosCheckServerStatus("localhost", 0, logger, isDebug)
+	localhost := "localhost"
+	status, detail := TaosCheckServerStatus(&localhost, 0, logger, isDebug)
+	assert.Equal(t, int32(2), status)
+	assert.Equal(t, "", detail)
+	status, detail = TaosCheckServerStatus(nil, 0, logger, isDebug)
 	assert.Equal(t, int32(2), status)
 	assert.Equal(t, "", detail)
 }
