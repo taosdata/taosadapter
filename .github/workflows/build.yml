@@ -90,7 +90,6 @@ jobs:
           (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true') ||
           (github.event_name == 'push' && steps.cache-server-push.outputs.cache-hit != 'true')
         run: |
-          sudo apt-get install libgoogle-perftools-dev
           cd TDengine
           mkdir debug
           cd debug
@@ -106,22 +105,16 @@ jobs:
           mkdir -p ./release
           cp ./TDengine/debug/build/bin/taos ./release/
           cp ./TDengine/debug/build/bin/taosd ./release/
-          cp ./TDengine/debug/build/lib/libtaos.so.3.9.9.9 ./release/
-          cp ./TDengine/debug/build/lib/libtaosnative.so.3.9.9.9 ./release/ ||:
-          cp ./TDengine/debug/build/lib/librocksdb.so.8.1.1 ./release/ ||:
+          cp ./TDengine/debug/build/lib/libtaosnative.so.3.9.9.9 ./release/
           cp ./TDengine/include/client/taos.h ./release/
           cat >./release/install.sh<<EOF 
           chmod +x ./taos
           chmod +x ./taosd
           cp ./taos /bin/
           cp ./taosd /bin/
-          cp ./libtaos.so.3.9.9.9 /usr/lib
-          cp ./librocksdb.so.8.1.1 /usr/lib
           cp ./libtaosnative.so.3.9.9.9 /usr/lib
-          ln -sf /usr/lib/libtaos.so.3.9.9.9 /usr/lib/libtaos.so.1
           ln -sf /usr/lib/libtaosnative.so.3.9.9.9 /usr/lib/libtaosnative.so.1
           ln -sf /usr/lib/libtaosnative.so.1 /usr/lib/libtaosnative.so
-          ln -sf /usr/lib/libtaos.so.1 /usr/lib/libtaos.so
           cp ./taos.h /usr/include
           EOF
           tar -zcvf server.tar.gz ./release
@@ -167,7 +160,6 @@ jobs:
 
       - name: install
         run: |
-          sudo apt-get install libgoogle-perftools-dev
           tar -zxvf server.tar.gz
           cd release && sudo sh install.sh
 
@@ -225,7 +217,6 @@ jobs:
 
       - name: install
         run: |
-          sudo apt-get install libgoogle-perftools-dev
           tar -zxvf server.tar.gz
           cd release && sudo sh install.sh
 
@@ -306,7 +297,6 @@ jobs:
 
       - name: install
         run: |
-          sudo apt-get install libgoogle-perftools-dev
           tar -zxvf server.tar.gz
           cd release && sudo sh install.sh
 
@@ -360,7 +350,6 @@ jobs:
 
       - name: install
         run: |
-          sudo apt-get install libgoogle-perftools-dev
           tar -zxvf server.tar.gz
           cd release && sudo sh install.sh
 
