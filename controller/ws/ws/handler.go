@@ -258,6 +258,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			config.ReqIDKey: req.ReqID,
 		})
 		h.checkServerStatus(ctx, session, action, req, logger, log.IsDebug())
+		return
 	}
 
 	// check connection
