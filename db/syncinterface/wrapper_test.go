@@ -546,28 +546,31 @@ func TestTaosStmt2(t *testing.T) {
 	if !assert.Equal(t, 0, code, wrapper.TaosStmt2Error(stmt)) {
 		return
 	}
-	assert.Equal(t, 3, num)
+	assert.Equal(t, 4, num)
 	assert.NotNil(t, fields)
 	defer func() {
 		wrapper.TaosStmt2FreeFields(stmt, fields2)
 	}()
 	fsAfterBindTableName := wrapper.Stmt2ParseAllFields(num, fields2)
-	assert.Equal(t, 3, len(fsAfterBindTableName))
-	assert.Equal(t, "id", fsAfterBindTableName[0].Name)
-	assert.Equal(t, int8(common.TSDB_DATA_TYPE_INT), fsAfterBindTableName[0].FieldType)
-	assert.Equal(t, int8(stmtCommon.TAOS_FIELD_TAG), fsAfterBindTableName[0].BindType)
-	assert.Equal(t, "ts", fsAfterBindTableName[1].Name)
-	assert.Equal(t, int8(common.TSDB_DATA_TYPE_TIMESTAMP), fsAfterBindTableName[1].FieldType)
-	assert.Equal(t, int8(stmtCommon.TAOS_FIELD_COL), fsAfterBindTableName[1].BindType)
-	assert.Equal(t, uint8(common.PrecisionMilliSecond), fsAfterBindTableName[1].Precision)
-	assert.Equal(t, "v", fsAfterBindTableName[2].Name)
-	assert.Equal(t, int8(common.TSDB_DATA_TYPE_INT), fsAfterBindTableName[2].FieldType)
+	assert.Equal(t, 4, len(fsAfterBindTableName))
+	assert.Equal(t, "tbname", fsAfterBindTableName[0].Name)
+	assert.Equal(t, int8(common.TSDB_DATA_TYPE_BINARY), fsAfterBindTableName[0].FieldType)
+	assert.Equal(t, int8(stmtCommon.TAOS_FIELD_TBNAME), fsAfterBindTableName[0].BindType)
+	assert.Equal(t, "id", fsAfterBindTableName[1].Name)
+	assert.Equal(t, int8(common.TSDB_DATA_TYPE_INT), fsAfterBindTableName[1].FieldType)
+	assert.Equal(t, int8(stmtCommon.TAOS_FIELD_TAG), fsAfterBindTableName[1].BindType)
+	assert.Equal(t, "ts", fsAfterBindTableName[2].Name)
+	assert.Equal(t, int8(common.TSDB_DATA_TYPE_TIMESTAMP), fsAfterBindTableName[2].FieldType)
 	assert.Equal(t, int8(stmtCommon.TAOS_FIELD_COL), fsAfterBindTableName[2].BindType)
+	assert.Equal(t, uint8(common.PrecisionMilliSecond), fsAfterBindTableName[2].Precision)
+	assert.Equal(t, "v", fsAfterBindTableName[3].Name)
+	assert.Equal(t, int8(common.TSDB_DATA_TYPE_INT), fsAfterBindTableName[3].FieldType)
+	assert.Equal(t, int8(stmtCommon.TAOS_FIELD_COL), fsAfterBindTableName[3].BindType)
 	binds = &stmtCommon.TaosStmt2BindData{
 		Tags: []driver.Value{int32(1)},
 	}
 
-	bs, err = stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, fsAfterBindTableName[0:1])
+	bs, err = stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, fsAfterBindTableName[1:2])
 	assert.NoError(t, err)
 	err = TaosStmt2BindBinary(stmt, bs, -1, logger, isDebug)
 	assert.NoError(t, err)
@@ -579,7 +582,7 @@ func TestTaosStmt2(t *testing.T) {
 			{int32(100), int32(101)},
 		},
 	}
-	bs, err = stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, fsAfterBindTableName[1:])
+	bs, err = stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, fsAfterBindTableName[2:])
 	assert.NoError(t, err)
 	err = TaosStmt2BindBinary(stmt, bs, -1, logger, isDebug)
 	assert.NoError(t, err)
