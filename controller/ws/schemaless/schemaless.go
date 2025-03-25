@@ -358,7 +358,7 @@ type schemalessResp struct {
 }
 
 func (t *TaosSchemaless) insert(ctx context.Context, session *melody.Session, req schemalessWriteReq) {
-	action := SchemalessConn
+	action := SchemalessWrite
 	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
 	logger.Tracef("schemaless insert request:%+v", req)
 	isDebug := log.IsDebug()
