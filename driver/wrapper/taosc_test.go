@@ -417,7 +417,8 @@ func TestTaosResultBlock(t *testing.T) {
 					res = r.res
 					block := TaosGetRawBlock(res)
 					assert.NotNil(t, block)
-					values := parser.ReadBlock(block, r.n, rowsHeader.ColTypes, precision)
+					values, err := parser.ReadBlock(block, r.n, rowsHeader.ColTypes, precision)
+					assert.NoError(t, err)
 					_ = values
 					t.Log(values)
 				}
@@ -712,4 +713,56 @@ func TestTaosOptionsConnection(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(values))
 	assert.Equal(t, connID, values[0][0].(uint32))
+}
+
+func TestTaosCheckServerStatus(t *testing.T) {
+	type args struct {
+		fqdn string
+		port int32
+	}
+	tests := []struct {
+		name        string
+		args        args
+		wantStatus  int32
+		wantDetails string
+	}{
+		{
+			name: "localhost",
+			args: args{
+				fqdn: "localhost",
+				port: 0,
+			},
+			wantStatus:  2,
+			wantDetails: "",
+		},
+		{
+			name: "wrong ip",
+			args: args{
+				fqdn: "wrong_ip",
+				port: 0,
+			},
+			wantStatus:  0,
+			wantDetails: "",
+		},
+		{
+			name: "nil",
+			args: args{
+				fqdn: "",
+				port: 0,
+			},
+			wantStatus:  2,
+			wantDetails: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			strP := &tt.args.fqdn
+			if tt.args.fqdn == "" {
+				strP = nil
+			}
+			gotStatus, gotDetails := TaosCheckServerStatus(strP, tt.args.port)
+			assert.Equalf(t, tt.wantStatus, gotStatus, "TaosCheckServerStatus(%v, %v)", tt.args.fqdn, tt.args.port)
+			assert.Equalf(t, tt.wantDetails, gotDetails, "TaosCheckServerStatus(%v, %v)", tt.args.fqdn, tt.args.port)
+		})
+	}
 }

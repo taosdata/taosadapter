@@ -140,11 +140,11 @@ func TestWsQuery(t *testing.T) {
 	code, message = doRestful("create database if not exists test_ws_query", "")
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful(
-		"create table if not exists stb1 (ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100)) tags (info json)",
+		"create table if not exists stb1 (ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100),v16 decimal(20,4)) tags (info json)",
 		"test_ws_query")
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful(
-		`insert into t1 using stb1 tags ('{\"table\":\"t1\"}') values (now-2s,true,2,3,4,5,6,7,8,9,10,11,'中文\"binary','中文nchar','\xaabbcc','point(100 100)')(now-1s,false,12,13,14,15,16,17,18,19,110,111,'中文\"binary','中文nchar','\xaabbcc','point(100 100)')(now,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)`,
+		`insert into t1 using stb1 tags ('{\"table\":\"t1\"}') values (now-2s,true,2,3,4,5,6,7,8,9,10,11,'中文\"binary','中文nchar','\xaabbcc','point(100 100)',4467440737095516.1230)(now-1s,false,12,13,14,15,16,17,18,19,110,111,'中文\"binary','中文nchar','\xaabbcc','point(100 100)',-5467440737095516.1230)(now,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)`,
 		"test_ws_query")
 	assert.Equal(t, 0, code, message)
 
@@ -210,7 +210,8 @@ func TestWsQuery(t *testing.T) {
 	fetchBlockReq := fetchBlockRequest{ReqID: 4, ID: queryResp.ID}
 	fetchBlockResp, err := doWebSocket(ws, WSFetchBlock, &fetchBlockReq)
 	assert.NoError(t, err)
-	resultID, blockResult := parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	resultID, blockResult, err := parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), resultID)
 	checkBlockResult(t, blockResult)
 
@@ -262,7 +263,8 @@ func TestWsQuery(t *testing.T) {
 	fetchBlockReq = fetchBlockRequest{ReqID: 8, ID: queryResp.ID}
 	fetchBlockResp, err = doWebSocket(ws, WSFetchBlock, &fetchBlockReq)
 	assert.NoError(t, err)
-	resultID, blockResult = parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	resultID, blockResult, err = parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	assert.NoError(t, err)
 	checkBlockResult(t, blockResult)
 	assert.Equal(t, queryResp.ID, resultID)
 	// fetch
@@ -493,6 +495,19 @@ func TestWsQuery(t *testing.T) {
 		// bytes
 		0x64, 0x00, 0x00, 0x00,
 
+		// v16
+		0x76, 0x31, 0x36, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00,
+		// type
+		0x11,
+		// padding
+		0x00, 0x00,
+		// bytes
+		0x10, 0x00, 0x00, 0x00,
+
 		// info
 		0x69, 0x6e, 0x66, 0x6f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -535,7 +550,8 @@ func TestWsQuery(t *testing.T) {
 	fetchBlockReq = fetchBlockRequest{ReqID: 12, ID: queryResp.ID}
 	fetchBlockResp, err = doWebSocket(ws, WSFetchBlock, &fetchBlockReq)
 	assert.NoError(t, err)
-	resultID, blockResult = parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	resultID, blockResult, err = parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	assert.NoError(t, err)
 	assert.Equal(t, queryResp.ID, resultID)
 	checkBlockResult(t, blockResult)
 	// fetch
@@ -549,7 +565,7 @@ func TestWsQuery(t *testing.T) {
 	assert.Equal(t, true, fetchResp.Completed)
 
 	// insert
-	queryReq = queryRequest{ReqID: 14, Sql: `insert into t4 using stb1 tags ('{\"table\":\"t4\"}') values (now-2s,true,2,3,4,5,6,7,8,9,10,11,'中文\"binary','中文nchar','\xaabbcc','point(100 100)')(now-1s,false,12,13,14,15,16,17,18,19,110,111,'中文\"binary','中文nchar','\xaabbcc','point(100 100)')(now,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)`}
+	queryReq = queryRequest{ReqID: 14, Sql: `insert into t4 using stb1 tags ('{\"table\":\"t4\"}') values (now-2s,true,2,3,4,5,6,7,8,9,10,11,'中文\"binary','中文nchar','\xaabbcc','point(100 100)',4467440737095516.1230)(now-1s,false,12,13,14,15,16,17,18,19,110,111,'中文\"binary','中文nchar','\xaabbcc','point(100 100)',-5467440737095516.1230)(now,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)`}
 	resp, err = doWebSocket(ws, WSQuery, &queryReq)
 	assert.NoError(t, err)
 	err = json.Unmarshal(resp, &queryResp)
@@ -594,7 +610,7 @@ func parseFetchRawBlock(message []byte) *FetchRawBlockResponse {
 	return resp
 }
 
-func ReadBlockSimple(block unsafe.Pointer, precision int) [][]driver.Value {
+func ReadBlockSimple(block unsafe.Pointer, precision int) ([][]driver.Value, error) {
 	blockSize := parser.RawBlockGetNumOfRows(block)
 	colCount := parser.RawBlockGetNumOfCols(block)
 	colInfo := make([]parser.RawBlockColInfo, colCount)
@@ -615,11 +631,11 @@ func TestWsBinaryQuery(t *testing.T) {
 	code, message = doRestful(fmt.Sprintf("create database if not exists %s", dbName), "")
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful(
-		"create table if not exists stb1 (ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100)) tags (info json)",
+		"create table if not exists stb1 (ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100),v16 decimal(20,4)) tags (info json)",
 		dbName)
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful(
-		`insert into t1 using stb1 tags ('{\"table\":\"t1\"}') values (now-2s,true,2,3,4,5,6,7,8,9,10,11,'中文\"binary','中文nchar','\xaabbcc','point(100 100)')(now-1s,false,12,13,14,15,16,17,18,19,110,111,'中文\"binary','中文nchar','\xaabbcc','point(100 100)')(now,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)`,
+		`insert into t1 using stb1 tags ('{\"table\":\"t1\"}') values (now-2s,true,2,3,4,5,6,7,8,9,10,11,'中文\"binary','中文nchar','\xaabbcc','point(100 100)',4467440737095516.123)(now-1s,false,12,13,14,15,16,17,18,19,110,111,'中文\"binary','中文nchar','\xaabbcc','point(100 100)',-5467440737095516.123)(now,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)`,
 		dbName)
 	assert.Equal(t, 0, code, message)
 
@@ -686,7 +702,8 @@ func TestWsBinaryQuery(t *testing.T) {
 	assert.Equal(t, false, fetchRawBlockResp.Finished)
 	rows := parser.RawBlockGetNumOfRows(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]))
 	assert.Equal(t, int32(3), rows)
-	blockResult := ReadBlockSimple(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]), queryResp.Precision)
+	blockResult, err := ReadBlockSimple(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]), queryResp.Precision)
+	assert.NoError(t, err)
 	checkBlockResult(t, blockResult)
 	rawBlock := fetchRawBlockResp.RawBlock
 
@@ -757,7 +774,8 @@ func TestWsBinaryQuery(t *testing.T) {
 	assert.Equal(t, uint64(7), fetchRawBlockResp.ReqID)
 	assert.Equal(t, uint32(0), fetchRawBlockResp.Code, fetchRawBlockResp.Message)
 	assert.Equal(t, false, fetchRawBlockResp.Finished)
-	blockResult = ReadBlockSimple(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]), queryResp.Precision)
+	blockResult, err = ReadBlockSimple(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]), queryResp.Precision)
+	assert.NoError(t, err)
 	checkBlockResult(t, blockResult)
 	rawBlock = fetchRawBlockResp.RawBlock
 
@@ -994,6 +1012,19 @@ func TestWsBinaryQuery(t *testing.T) {
 		// bytes
 		0x64, 0x00, 0x00, 0x00,
 
+		// v16
+		0x76, 0x31, 0x36, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00,
+		// type
+		0x11,
+		// padding
+		0x00, 0x00,
+		// bytes
+		0x10, 0x00, 0x00, 0x00,
+
 		// info
 		0x69, 0x6e, 0x66, 0x6f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -1048,7 +1079,8 @@ func TestWsBinaryQuery(t *testing.T) {
 	assert.Equal(t, uint64(11), fetchRawBlockResp.ReqID)
 	assert.Equal(t, uint32(0), fetchRawBlockResp.Code, fetchRawBlockResp.Message)
 	assert.Equal(t, false, fetchRawBlockResp.Finished)
-	blockResult = ReadBlockSimple(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]), queryResp.Precision)
+	blockResult, err = ReadBlockSimple(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]), queryResp.Precision)
+	assert.NoError(t, err)
 	checkBlockResult(t, blockResult)
 
 	buffer.Reset()
@@ -1272,6 +1304,7 @@ func checkBlockResult(t *testing.T, blockResult [][]driver.Value) {
 	assert.Equal(t, "中文nchar", blockResult[0][13])
 	assert.Equal(t, []byte{0xaa, 0xbb, 0xcc}, blockResult[0][14])
 	assert.Equal(t, []byte{0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40}, blockResult[0][15])
+	assert.Equal(t, "4467440737095516.1230", blockResult[0][16])
 	assert.Equal(t, false, blockResult[1][1])
 	assert.Equal(t, int8(12), blockResult[1][2])
 	assert.Equal(t, int16(13), blockResult[1][3])
@@ -1287,6 +1320,7 @@ func checkBlockResult(t *testing.T, blockResult [][]driver.Value) {
 	assert.Equal(t, "中文nchar", blockResult[1][13])
 	assert.Equal(t, []byte{0xaa, 0xbb, 0xcc}, blockResult[1][14])
 	assert.Equal(t, []byte{0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40}, blockResult[1][15])
+	assert.Equal(t, "-5467440737095516.1230", blockResult[1][16])
 	assert.Equal(t, nil, blockResult[2][1])
 	assert.Equal(t, nil, blockResult[2][2])
 	assert.Equal(t, nil, blockResult[2][3])
@@ -1302,4 +1336,5 @@ func checkBlockResult(t *testing.T, blockResult [][]driver.Value) {
 	assert.Equal(t, nil, blockResult[2][13])
 	assert.Equal(t, nil, blockResult[2][14])
 	assert.Equal(t, nil, blockResult[2][15])
+	assert.Equal(t, nil, blockResult[2][16])
 }

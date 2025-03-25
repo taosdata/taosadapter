@@ -277,6 +277,12 @@ func Test_WrongJsonProtocol(t *testing.T) {
 			errorPrefix: "unmarshal options connection request error",
 		},
 		{
+			name:        "check_server_status with wrong args",
+			action:      CheckServerStatus,
+			args:        "wrong",
+			errorPrefix: "unmarshal check server status request error",
+		},
+		{
 			name:        "unknown action",
 			action:      "unknown",
 			args:        nil,

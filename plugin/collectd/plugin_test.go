@@ -149,7 +149,10 @@ func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
 		if columns == 0 {
 			break
 		}
-		r := parser.ReadBlock(block, columns, rh.ColTypes, precision)
+		r, err := parser.ReadBlock(block, columns, rh.ColTypes, precision)
+		if err != nil {
+			return nil, err
+		}
 		result = append(result, r...)
 	}
 	return result, nil

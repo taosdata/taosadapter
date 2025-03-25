@@ -2,9 +2,9 @@ package wrapper
 
 /*
 #cgo CFLAGS: -IC:/TDengine/include -I/usr/include
-#cgo linux LDFLAGS: -L/usr/lib -ltaos
-#cgo windows LDFLAGS: -LC:/TDengine/driver -ltaos
-#cgo darwin LDFLAGS: -L/usr/local/lib -ltaos
+#cgo linux LDFLAGS: -L/usr/lib -ltaosnative
+#cgo windows LDFLAGS: -LC:/TDengine/driver -ltaosnative
+#cgo darwin LDFLAGS: -L/usr/local/lib -ltaosnative
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -115,6 +115,11 @@ func TaosAffectedRows(result unsafe.Pointer) int {
 // TaosFetchFields TAOS_FIELD *taos_fetch_fields(TAOS_RES *res);
 func TaosFetchFields(result unsafe.Pointer) unsafe.Pointer {
 	return unsafe.Pointer(C.taos_fetch_fields(result))
+}
+
+// TaosFetchFieldsE TAOS_FIELD_E *taos_fetch_fields_e(TAOS_RES *res); 3.3.6.0
+func TaosFetchFieldsE(result unsafe.Pointer) unsafe.Pointer {
+	return unsafe.Pointer(C.taos_fetch_fields_e(result))
 }
 
 // TaosFetchBlock int taos_fetch_block(TAOS_RES *res, TAOS_ROW *rows);
@@ -299,4 +304,18 @@ func TaosOptionsConnection(conn unsafe.Pointer, option int, value *string) int {
 		defer C.free(cValue)
 	}
 	return int(C.taos_options_connection_wrapper(conn, (C.TSDB_OPTION_CONNECTION)(option), cValue))
+}
+
+// TaosCheckServerStatus TSDB_SERVER_STATUS taos_check_server_status(const char *fqdn, int port, char *details, int maxlen);
+func TaosCheckServerStatus(fqdn *string, port int32) (status int32, details string) {
+	var cFqdn = (*C.char)(nil)
+	if fqdn != nil {
+		cFqdn = C.CString(*fqdn)
+	}
+	defer C.free(unsafe.Pointer(cFqdn))
+	cDetails := (*C.char)(C.calloc(C.size_t(C.uint(1024)), C.size_t(C.uint(1))))
+	defer C.free(unsafe.Pointer(cDetails))
+	status = int32(C.taos_check_server_status(cFqdn, C.int(port), cDetails, 1024))
+	details = C.GoString(cDetails)
+	return
 }

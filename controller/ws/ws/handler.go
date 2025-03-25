@@ -244,6 +244,21 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 		})
 		h.connect(ctx, session, action, req, logger, log.IsDebug())
 		return
+	case CheckServerStatus:
+		action = CheckServerStatus
+		var req checkServerStatusRequest
+		if err := json.Unmarshal(request.Args, &req); err != nil {
+			h.logger.Errorf("unmarshal check server status request error, request:%s, err:%s", request.Args, err)
+			reqID := getReqID(request.Args)
+			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal check server status request error")
+			return
+		}
+		logger := h.logger.WithFields(logrus.Fields{
+			actionKey:       action,
+			config.ReqIDKey: req.ReqID,
+		})
+		h.checkServerStatus(ctx, session, action, req, logger, log.IsDebug())
+		return
 	}
 
 	// check connection
@@ -684,6 +699,8 @@ func (h *messageHandler) handleMessageBinary(session *melody.Session, message []
 		h.fetchRawBlock(ctx, session, reqID, resourceID, message, logger, log.IsDebug())
 	case Stmt2BindMessage:
 		h.stmt2BinaryBind(ctx, session, actionStr, reqID, resourceID, message, logger, log.IsDebug())
+	case ValidateSQL:
+		h.validateSQL(ctx, session, actionStr, reqID, message, logger, log.IsDebug())
 	default:
 		h.logger.Errorf("unknown binary action %d", action)
 		commonErrorResponse(ctx, session, h.logger, actionStr, reqID, 0xffff, fmt.Sprintf("unknown binary action %d", action))

@@ -421,3 +421,30 @@ func TaosOptionsConnection(conn unsafe.Pointer, option int, value *string, logge
 	logger.Debugf("taos_options_connection finish, code:%d, cost:%s", code, log.GetLogDuration(isDebug, s))
 	return code
 }
+
+func TaosValidateSql(taosConnect unsafe.Pointer, sql string, logger *logrus.Entry, isDebug bool) int {
+	logger.Tracef("call taos_validate_sql, taosConnect:%p, sql:%s", taosConnect, sql)
+	s := log.GetLogNow(isDebug)
+	thread.SyncLocker.Lock()
+	logger.Debugf("get thread lock for taos_validate_sql cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	code := wrapper.TaosValidateSql(taosConnect, sql)
+	logger.Debugf("taos_validate_sql finish, code:%d, cost:%s", code, log.GetLogDuration(isDebug, s))
+	thread.SyncLocker.Unlock()
+	return code
+}
+
+func TaosCheckServerStatus(fqdn *string, port int32, logger *logrus.Entry, isDebug bool) (int32, string) {
+	if fqdn == nil {
+		logger.Tracef("call taos_check_server_status, fqdn: nil, port:%d", port)
+	} else {
+		logger.Tracef("call taos_check_server_status, fqdn:%s, port:%d", *fqdn, port)
+	}
+	s := log.GetLogNow(isDebug)
+	thread.SyncLocker.Lock()
+	logger.Debugf("get thread lock for taos_check_server_status cost:%s", log.GetLogDuration(isDebug, s))
+	status, details := wrapper.TaosCheckServerStatus(fqdn, port)
+	logger.Debugf("taos_check_server_status finish, status:%d, detail:%s", status, details)
+	thread.SyncLocker.Unlock()
+	return status, details
+}

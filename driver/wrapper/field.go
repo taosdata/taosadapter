@@ -6,7 +6,7 @@ package wrapper
 import "C"
 import (
 	"bytes"
-	"reflect"
+	"fmt"
 	"unsafe"
 
 	"github.com/taosdata/taosadapter/v3/driver/common"
@@ -14,9 +14,11 @@ import (
 )
 
 type RowsHeader struct {
-	ColNames  []string
-	ColTypes  []uint8
-	ColLength []int64
+	ColNames   []string
+	ColTypes   []uint8
+	ColLength  []int64
+	Precisions []int64
+	Scales     []int64
 }
 
 func ReadColumn(result unsafe.Pointer, count int) (*RowsHeader, error) {
@@ -24,13 +26,15 @@ func ReadColumn(result unsafe.Pointer, count int) (*RowsHeader, error) {
 		return nil, &errors.TaosError{Code: 0xffff, ErrStr: "invalid result"}
 	}
 	rowsHeader := &RowsHeader{
-		ColNames:  make([]string, count),
-		ColTypes:  make([]uint8, count),
-		ColLength: make([]int64, count),
+		ColNames:   make([]string, count),
+		ColTypes:   make([]uint8, count),
+		ColLength:  make([]int64, count),
+		Precisions: make([]int64, count),
+		Scales:     make([]int64, count),
 	}
-	pFields := TaosFetchFields(result)
+	pFields := TaosFetchFieldsE(result)
 	for i := 0; i < count; i++ {
-		field := *(*C.struct_taosField)(unsafe.Pointer(uintptr(pFields) + uintptr(C.sizeof_struct_taosField*C.int(i))))
+		field := *(*C.struct_TAOS_FIELD_E)(unsafe.Pointer(uintptr(pFields) + uintptr(C.sizeof_struct_TAOS_FIELD_E*C.int(i))))
 		buf := bytes.NewBufferString("")
 		for _, c := range field.name {
 			if c == 0 {
@@ -41,20 +45,21 @@ func ReadColumn(result unsafe.Pointer, count int) (*RowsHeader, error) {
 		rowsHeader.ColNames[i] = buf.String()
 		rowsHeader.ColTypes[i] = (uint8)(field._type)
 		rowsHeader.ColLength[i] = int64((uint32)(field.bytes))
+		rowsHeader.Precisions[i] = int64((uint8)(field.precision))
+		rowsHeader.Scales[i] = int64((uint8)(field.scale))
 	}
 	return rowsHeader, nil
 }
 
 func (rh *RowsHeader) TypeDatabaseName(i int) string {
-	return common.TypeNameMap[int(rh.ColTypes[i])]
-}
-
-func (rh *RowsHeader) ScanType(i int) reflect.Type {
-	t, exist := common.ColumnTypeMap[int(rh.ColTypes[i])]
-	if !exist {
-		return common.UnknownType
+	name := common.TypeNameArray[int(rh.ColTypes[i])]
+	// decimal type return DECIMAL(precision,scale)
+	if rh.ColTypes[i] == common.TSDB_DATA_TYPE_DECIMAL || rh.ColTypes[i] == common.TSDB_DATA_TYPE_DECIMAL64 {
+		precision := rh.Precisions[i]
+		scale := rh.Scales[i]
+		name = fmt.Sprintf("%s(%d,%d)", name, precision, scale)
 	}
-	return t
+	return name
 }
 
 func FetchLengths(res unsafe.Pointer, count int) []int {

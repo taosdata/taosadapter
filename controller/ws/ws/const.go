@@ -45,18 +45,21 @@ const (
 
 	// options
 	OptionsConnection = "options_connection"
+
+	// check_server_status
+	CheckServerStatus = "check_server_status"
 )
 
 const (
-	_ = iota
-	SetTagsMessage
-	BindMessage
-	TMQRawMessage
-	RawBlockMessage
-	RawBlockMessageWithFields
-	BinaryQueryMessage
-	FetchRawBlockMessage
-	Stmt2BindMessage = 9
+	SetTagsMessage            = 1
+	BindMessage               = 2
+	TMQRawMessage             = 3
+	RawBlockMessage           = 4
+	RawBlockMessageWithFields = 5
+	BinaryQueryMessage        = 6
+	FetchRawBlockMessage      = 7
+	Stmt2BindMessage          = 9
+	ValidateSQL               = 10
 )
 
 func getActionString(binaryAction uint64) string {
@@ -77,6 +80,8 @@ func getActionString(binaryAction uint64) string {
 		return "fetch_raw_block"
 	case Stmt2BindMessage:
 		return "stmt2_bind"
+	case ValidateSQL:
+		return "validate_sql"
 	default:
 		return "unknown"
 	}

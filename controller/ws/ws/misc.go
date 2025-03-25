@@ -2,12 +2,16 @@ package ws
 
 import (
 	"context"
+	"encoding/binary"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	errors2 "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
+	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
 	"github.com/taosdata/taosadapter/v3/version"
 )
@@ -117,4 +121,77 @@ func (h *messageHandler) optionsConnection(ctx context.Context, session *melody.
 		}
 	}
 	commonSuccessResponse(ctx, session, logger, action, req.ReqID)
+}
+
+type validateSqlResponse struct {
+	Code       int    `json:"code"`
+	Message    string `json:"message"`
+	Action     string `json:"action"`
+	ReqID      uint64 `json:"req_id"`
+	Timing     int64  `json:"timing"`
+	ResultCode int64  `json:"result_code"`
+}
+
+func (h *messageHandler) validateSQL(ctx context.Context, session *melody.Session, action string, reqID uint64, message []byte, logger *logrus.Entry, isDebug bool) {
+	if len(message) < 31 {
+		commonErrorResponse(ctx, session, logger, action, reqID, 0xffff, "message length is too short")
+		return
+	}
+	v := binary.LittleEndian.Uint16(message[24:])
+	var sql []byte
+	if v == BinaryProtocolVersion1 {
+		sqlLen := binary.LittleEndian.Uint32(message[26:])
+		remainMessageLength := len(message) - 30
+		if remainMessageLength < int(sqlLen) {
+			commonErrorResponse(ctx, session, logger, action, reqID, 0xffff, fmt.Sprintf("uncompleted message, sql length:%d, remainMessageLength:%d", sqlLen, remainMessageLength))
+			return
+		}
+		sql = message[30 : 30+sqlLen]
+	} else {
+		logger.Errorf("unknown binary query version:%d", v)
+		commonErrorResponse(ctx, session, logger, action, reqID, 0xffff, fmt.Sprintf("unknown binary query version:%d", v))
+		return
+	}
+	logger.Debugf("validate sql, sql:%s", log.GetLogSql(bytesutil.ToUnsafeString(sql)))
+	code := syncinterface.TaosValidateSql(h.conn, bytesutil.ToUnsafeString(sql), logger, isDebug)
+	resp := &validateSqlResponse{
+		Action:     action,
+		ReqID:      reqID,
+		Timing:     wstool.GetDuration(ctx),
+		ResultCode: int64(code),
+	}
+	wstool.WSWriteJson(session, logger, resp)
+}
+
+type checkServerStatusRequest struct {
+	ReqID uint64  `json:"req_id"`
+	FQDN  *string `json:"fqdn"`
+	Port  int32   `json:"port"`
+}
+
+type checkServerStatusResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Action  string `json:"action"`
+	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
+	Status  int32  `json:"status"`
+	Details string `json:"details"`
+}
+
+func (h *messageHandler) checkServerStatus(ctx context.Context, session *melody.Session, action string, req checkServerStatusRequest, logger *logrus.Entry, isDebug bool) {
+	if req.FQDN == nil {
+		logger.Tracef("check server status, fqdn: nil, port:%d", req.Port)
+	} else {
+		logger.Tracef("check server status, fqdn:%s, port:%d", *req.FQDN, req.Port)
+	}
+	status, details := syncinterface.TaosCheckServerStatus(req.FQDN, req.Port, logger, isDebug)
+	resp := &checkServerStatusResponse{
+		Action:  action,
+		ReqID:   req.ReqID,
+		Timing:  wstool.GetDuration(ctx),
+		Status:  status,
+		Details: details,
+	}
+	wstool.WSWriteJson(session, logger, resp)
 }
