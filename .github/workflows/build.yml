@@ -24,8 +24,11 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    name: Build
+    runs-on: ${{ matrix.os }}
+    name: Build-${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
     outputs:
       commit_id: ${{ steps.get_commit_id.outputs.commit_id }}
     steps:
@@ -65,7 +68,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ steps.get_commit_id.outputs.commit_id }}
+          key: ${{ matrix.os }}-build-${{ github.base_ref }}-${{ steps.get_commit_id.outputs.commit_id }}
 
       - name: Cache server by push
         if: github.event_name == 'push'
@@ -73,7 +76,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ steps.get_commit_id.outputs.commit_id }}
+          key: ${{ matrix.os }}-build-${{ github.ref_name }}-${{ steps.get_commit_id.outputs.commit_id }}
 
       - name: Cache server manually
         if: github.event_name == 'workflow_dispatch'
@@ -81,7 +84,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ steps.get_commit_id.outputs.commit_id }}
+          key: ${{ matrix.os }}-build-${{ inputs.tbBranch }}-${{ steps.get_commit_id.outputs.commit_id }}
 
 
       - name: install TDengine
@@ -120,12 +123,13 @@ jobs:
           tar -zcvf server.tar.gz ./release
 
   test_build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     needs: build
     strategy:
       matrix:
         go: [ '1.17', 'stable' ]
-    name: Build taosAdapter ${{ matrix.go }}
+        os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
+    name: Build taosAdapter ${{ matrix.os }}-${{ matrix.go }}
     steps:
       - name: get cache server by pr
         if: github.event_name == 'pull_request'
@@ -133,9 +137,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
+          key: ${{ matrix.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ github.base_ref }}-
+            ${{ matrix.os }}-build-${{ github.base_ref }}-
 
       - name: get cache server by push
         if: github.event_name == 'push'
@@ -143,9 +147,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
+          key: ${{ matrix.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ github.ref_name }}-
+            ${{ matrix.os }}-build-${{ github.ref_name }}-
 
       - name: cache server manually
         if: github.event_name == 'workflow_dispatch'
@@ -153,9 +157,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
+          key: ${{ matrix.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ inputs.tbBranch }}-
+            ${{ matrix.os }}-build-${{ inputs.tbBranch }}-
 
 
       - name: install
@@ -177,12 +181,13 @@ jobs:
         run: cd ./taosadapter && go build
 
   test_go_test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     needs: build
     strategy:
       matrix:
         go: [ '1.17', 'stable' ]
-    name: test taosAdapter ${{ matrix.go }}
+        os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
+    name: test taosAdapter ${{ matrix.os }}-${{ matrix.go }}
     steps:
       - name: get cache server by pr
         if: github.event_name == 'pull_request'
@@ -190,9 +195,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
+          key: ${{ matrix.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ github.base_ref }}-
+            ${{ matrix.os }}-build-${{ github.base_ref }}-
 
       - name: get cache server by push
         if: github.event_name == 'push'
@@ -200,9 +205,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
+          key: ${{ matrix.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ github.ref_name }}-
+            ${{ matrix.os }}-build-${{ github.ref_name }}-
 
       - name: get cache server manually
         if: github.event_name == 'workflow_dispatch'
@@ -210,9 +215,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
+          key: ${{ matrix.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ inputs.tbBranch }}-
+            ${{ matrix.os }}-build-${{ inputs.tbBranch }}-
 
 
       - name: install
@@ -256,12 +261,15 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always() && (steps.test.outcome == 'failure' || steps.test.outcome == 'cancelled')
         with:
-          name: ${{ runner.os }}-${{ matrix.go }}-log
+          name: ${{ matrix.os }}-${{ matrix.go }}-log
           path: /var/log/taos/
 
   golangci:
     name: lint
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
     needs: build
     steps:
       - name: get cache server by pr
@@ -270,9 +278,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
+          key: ${{ matrix.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ github.base_ref }}-
+            ${{ matrix.os }}-build-${{ github.base_ref }}-
 
       - name: get cache server by push
         if: github.event_name == 'push'
@@ -280,9 +288,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
+          key: ${{ matrix.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ github.ref_name }}-
+            ${{ matrix.os }}-build-${{ github.ref_name }}-
 
       - name: get cache server manually
         if: github.event_name == 'workflow_dispatch'
@@ -290,9 +298,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
+          key: ${{ matrix.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ inputs.tbBranch }}-
+            ${{ matrix.os }}-build-${{ inputs.tbBranch }}-
 
 
       - name: install
@@ -310,12 +318,13 @@ jobs:
           version: latest
 
   test_go_asan:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     needs: build
     strategy:
       matrix:
         go: [ 'stable' ]
-    name: test taosAdapter with asan ${{ matrix.go }}
+        os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
+    name: test taosAdapter with asan ${{ matrix.os }}-${{ matrix.go }}
     steps:
       - name: get cache server by pr
         if: github.event_name == 'pull_request'
@@ -323,9 +332,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
+          key: ${{ matrix.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ github.base_ref }}-
+            ${{ matrix.os }}-build-${{ github.base_ref }}-
 
       - name: get cache server by push
         if: github.event_name == 'push'
@@ -333,9 +342,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
+          key: ${{ matrix.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ github.ref_name }}-
+            ${{ matrix.os }}-build-${{ github.ref_name }}-
 
       - name: get cache server manually
         if: github.event_name == 'workflow_dispatch'
@@ -343,9 +352,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
+          key: ${{ matrix.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ inputs.tbBranch }}-
+            ${{ matrix.os }}-build-${{ inputs.tbBranch }}-
 
 
       - name: install
