@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -86,9 +87,33 @@ func TestLogin(t *testing.T) {
 	req.RemoteAddr = "127.0.0.1:33333"
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 401, w.Code)
+	w = httptest.NewRecorder()
 	req, _ = http.NewRequest(http.MethodGet, "/rest/login/root111111111111111111111111111/password", nil)
 	router.ServeHTTP(w, req)
-	assert.Equal(t, 401, w.Code)
+	assert.Equal(t, 400, w.Code, w.Body)
+	w = httptest.NewRecorder()
+	password := "Aa!@#$%^&*()-_+=[]{}:;><?|~,."
+	body := strings.NewReader(fmt.Sprintf("create user test_login pass '%s'", password))
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = "127.0.0.1:33333"
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code, w.Body.String())
+	w = httptest.NewRecorder()
+	escapedPass := url.PathEscape(password)
+	req, _ = http.NewRequest(http.MethodGet, fmt.Sprintf("/rest/login/test_login/%s", escapedPass), nil)
+	req.RemoteAddr = "127.0.0.1:33333"
+	router.ServeHTTP(w, req)
+	//hW4RbUYsnJP3d0A+Je4RNtryp201ma04/lzvLFFGxbLqp9fzHWNLSX9EkmY7TSyMLvEc3wbv93I=
+	assert.Equal(t, 200, w.Code)
+	resp := struct {
+		Code int    `json:"code,omitempty"`
+		Desc string `json:"desc,omitempty"`
+	}{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, resp.Code)
+	assert.Equal(t, "hW4RbUYsnJP3d0A+Je4RNtryp201ma04/lzvLFFGxbLqp9fzHWNLSX9EkmY7TSyMLvEc3wbv93I=", resp.Desc)
 }
 
 // @author: xftan
