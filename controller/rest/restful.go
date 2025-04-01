@@ -736,7 +736,7 @@ func (ctl *Restful) des(c *gin.Context) {
 	user := c.Param("user")
 	password := c.Param("password")
 	logger := c.MustGet(LoggerKey).(*logrus.Entry)
-	if len(user) == 0 || len(user) > 24 || len(password) == 0 || len(password) > 24 {
+	if len(user) == 0 || len(user) > 24 || len(password) == 0 {
 		logger.Errorf("user or password length error,user length: %d,password length: %d", len(user), len(password))
 		BadRequestResponse(c, logger, httperror.HTTP_GEN_TAOSD_TOKEN_ERR)
 		return
