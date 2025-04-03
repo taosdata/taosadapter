@@ -2,6 +2,9 @@ package thread
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/taosdata/taosadapter/v3/monitor/metrics"
 )
 
 // @author: xftan
@@ -31,4 +34,14 @@ func TestNewLocker(t *testing.T) {
 			locker.Unlock()
 		})
 	}
+}
+
+func TestSetGauge(t *testing.T) {
+	locker := NewLocker(1)
+	g := metrics.NewGauge("test")
+	locker.SetGauge(g)
+	locker.Lock()
+	assert.Equal(t, float64(1), g.Value())
+	locker.Unlock()
+	assert.Equal(t, float64(0), g.Value())
 }

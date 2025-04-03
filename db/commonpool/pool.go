@@ -20,6 +20,8 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
+	"github.com/taosdata/taosadapter/v3/monitor/metrics"
 	"github.com/taosdata/taosadapter/v3/tools/connectpool"
 	"golang.org/x/sync/singleflight"
 )
@@ -40,6 +42,7 @@ type ConnectorPool struct {
 	changePassHandle      cgo.Handle
 	whitelistChangeHandle cgo.Handle
 	dropUserHandle        cgo.Handle
+	gauge                 *metrics.Gauge
 }
 
 func NewConnectorPool(user, password string) (*ConnectorPool, error) {
@@ -163,7 +166,8 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 			}
 		}
 	}()
-
+	gauge := monitor.RecordNewConnectionPool(user)
+	cp.gauge = gauge
 	return cp, nil
 }
 
@@ -192,13 +196,22 @@ func (cp *ConnectorPool) Get() (unsafe.Pointer, error) {
 		}
 		return nil, err
 	}
+	if cp.gauge != nil {
+		cp.gauge.Inc()
+	}
 	return v, nil
 }
 
 func (cp *ConnectorPool) Put(c unsafe.Pointer) error {
 	wrapper.TaosResetCurrentDB(c)
 	wrapper.TaosOptionsConnection(c, common.TSDB_OPTION_CONNECTION_CLEAR, nil)
-	return cp.pool.Put(c)
+	if err := cp.pool.Put(c); err != nil {
+		return err
+	}
+	if cp.gauge != nil {
+		cp.gauge.Dec()
+	}
+	return nil
 }
 
 func (cp *ConnectorPool) Close(c unsafe.Pointer) error {
