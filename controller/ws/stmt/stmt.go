@@ -27,6 +27,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
@@ -43,6 +44,7 @@ func NewSTMTController() *STMTController {
 	stmtM.Config.MaxMessageSize = 0
 
 	stmtM.HandleConnect(func(session *melody.Session) {
+		monitor.RecordWSStmtConn()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws connect")
 		session.Set(TaosStmtKey, NewTaosStmt(session, logger))
@@ -226,6 +228,7 @@ func NewSTMTController() *STMTController {
 	})
 
 	stmtM.HandleDisconnect(func(session *melody.Session) {
+		monitor.RecordWSStmtDisconnect()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws disconnect")
 		t, exist := session.Get(TaosStmtKey)

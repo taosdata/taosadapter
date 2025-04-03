@@ -51,3 +51,21 @@ func TestGaugeMetricName(t *testing.T) {
 		t.Errorf("Expected test, got %s", result)
 	}
 }
+
+func BenchmarkGauge_Inc(b *testing.B) {
+	g := NewGauge("test")
+	for i := 0; i < b.N; i++ {
+		if g != nil {
+			g.Inc()
+		}
+	}
+}
+
+func BenchmarkGauge_Dec(b *testing.B) {
+	g := NewGauge("test")
+	for i := 0; i < b.N; i++ {
+		if g != nil {
+			g.Dec()
+		}
+	}
+}
