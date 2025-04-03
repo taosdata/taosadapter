@@ -421,16 +421,16 @@ type Table struct {
 }
 
 type MetricGroup struct {
-	Tags    []*TagCol `json:"tags"`
-	Metrics []*Column `json:"metrics"`
+	Tags    []*Tag    `json:"tags"`
+	Metrics []*Metric `json:"metrics"`
 }
 
-type TagCol struct {
+type Tag struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
 }
 
-type Column struct {
+type Metric struct {
 	Name  string      `json:"name"`
 	Value interface{} `json:"value"`
 }
@@ -486,13 +486,13 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 		Name: "taosadapter_status",
 		MetricGroups: []*MetricGroup{
 			{
-				Tags: []*TagCol{
+				Tags: []*Tag{
 					{
 						Name:  "endpoint",
 						Value: identity,
 					},
 				},
-				Metrics: []*Column{
+				Metrics: []*Metric{
 					{
 						Name:  "go_heap_sys",
 						Value: memStats.HeapSys,
@@ -558,7 +558,7 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 	}
 	ConnPoolInUse.Range(func(k, v interface{}) bool {
 		connTable.MetricGroups = append(connTable.MetricGroups, &MetricGroup{
-			Tags: []*TagCol{
+			Tags: []*Tag{
 				{
 					Name:  "endpoint",
 					Value: identity,
@@ -568,7 +568,7 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 					Value: k.(string),
 				},
 			},
-			Metrics: []*Column{
+			Metrics: []*Metric{
 				{
 					Name:  "conn_pool_total",
 					Value: config.Conf.Pool.MaxConnect,
