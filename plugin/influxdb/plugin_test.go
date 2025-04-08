@@ -94,9 +94,14 @@ func TestInfluxdb(t *testing.T) {
 	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb_ttl&ttl=1000&app=test_influxdb", reader)
 	req.RemoteAddr = "127.0.0.1:33333"
 	router.ServeHTTP(w, req)
-	time.Sleep(time.Second)
-	values, err = query(conn, "select `ttl` from information_schema.ins_tables "+
-		" where db_name='test_plugin_influxdb_ttl' and stable_name='measurement_ttl'")
+	for i := 0; i < 10; i++ {
+		values, err = query(conn, "select `ttl` from information_schema.ins_tables "+
+			" where db_name='test_plugin_influxdb_ttl' and stable_name='measurement_ttl'")
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 	assert.NoError(t, err)
 	if values[0][0].(int32) != 1000 {
 		t.Fatal("ttl miss")

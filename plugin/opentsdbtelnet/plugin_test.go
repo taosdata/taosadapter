@@ -76,8 +76,14 @@ func TestPlugin(t *testing.T) {
 	if int32(values[0][0].(float64)) != number {
 		t.Errorf("got %f expect %d", values[0], number)
 	}
-	values, err = query(conn, "select `ttl` from information_schema.ins_tables "+
-		" where db_name='opentsdb_telnet' and stable_name='sys_if_bytes_out'")
+	for i := 0; i < 10; i++ {
+		values, err = query(conn, "select `ttl` from information_schema.ins_tables "+
+			" where db_name='opentsdb_telnet' and stable_name='sys_if_bytes_out'")
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 	assert.NoError(t, err)
 	if values[0][0].(int32) != 1000 {
 		t.Fatal("ttl miss")
