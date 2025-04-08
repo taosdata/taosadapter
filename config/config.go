@@ -104,17 +104,17 @@ func Init() {
 	if !viper.IsSet("logLevel") {
 		viper.Set("logLevel", "")
 	}
-	if Conf.MaxAsyncMethodLimit == 0 {
-		Conf.MaxAsyncMethodLimit = runtime.GOMAXPROCS(0)
+	maxAsyncMethodLimit := Conf.MaxAsyncMethodLimit
+	if maxAsyncMethodLimit == 0 {
+		maxAsyncMethodLimit = runtime.NumCPU()
 	}
-	thread.AsyncLocker = thread.NewLocker(Conf.MaxAsyncMethodLimit)
-	if Conf.MaxSyncMethodLimit == 0 {
-		Conf.MaxSyncMethodLimit = runtime.GOMAXPROCS(0)
+	thread.AsyncSemaphore = thread.NewSemaphore(maxAsyncMethodLimit)
+
+	maxSyncMethodLimit := Conf.MaxSyncMethodLimit
+	if maxSyncMethodLimit == 0 {
+		maxSyncMethodLimit = runtime.NumCPU()
 	}
-	thread.SyncLocker = thread.NewLocker(Conf.MaxSyncMethodLimit)
-	if Conf.Pool.MaxConnect == 0 {
-		Conf.Pool.MaxConnect = runtime.GOMAXPROCS(0) * 2
-	}
+	thread.SyncSemaphore = thread.NewSemaphore(maxSyncMethodLimit)
 }
 
 // arg > file > env

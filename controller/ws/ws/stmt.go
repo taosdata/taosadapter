@@ -36,8 +36,8 @@ type stmtInitResponse struct {
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) stmtInit(ctx context.Context, session *melody.Session, action string, req stmtInitRequest, logger *logrus.Entry, isDebug bool) {
-	stmtInit := syncinterface.TaosStmtInitWithReqID(h.conn, int64(req.ReqID), logger, isDebug)
+func (h *messageHandler) stmtInit(ctx context.Context, session *melody.Session, action string, req stmtInitRequest, innerReqID uint64, logger *logrus.Entry, isDebug bool) {
+	stmtInit := syncinterface.TaosStmtInitWithReqID(h.conn, int64(innerReqID), logger, isDebug)
 	if stmtInit == nil {
 		errStr := wrapper.TaosStmtErrStr(stmtInit)
 		logger.Errorf("stmt init error, err:%s", errStr)
