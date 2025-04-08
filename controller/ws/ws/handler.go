@@ -19,6 +19,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools"
+	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
 )
@@ -238,11 +239,8 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, Connect, reqID, 0xffff, "unmarshal connect request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
-		h.connect(ctx, session, action, req, logger, log.IsDebug())
+		innerReqID, logger := h.getOrGenerateReqID(req.ReqID, action)
+		h.connect(ctx, session, action, req, innerReqID, logger, log.IsDebug())
 		return
 	case CheckServerStatus:
 		action = CheckServerStatus
@@ -253,10 +251,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal check server status request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.checkServerStatus(ctx, session, action, req, logger, log.IsDebug())
 		return
 	}
@@ -281,11 +276,8 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal query request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
-		h.query(ctx, session, action, req, logger, log.IsDebug())
+		innerReqID, logger := h.getOrGenerateReqID(req.ReqID, action)
+		h.query(ctx, session, action, req, innerReqID, logger, log.IsDebug())
 	case WSFetch:
 		action = WSFetch
 		var req fetchRequest
@@ -295,10 +287,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal fetch request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.fetch(ctx, session, action, req, logger, log.IsDebug())
 	case WSFetchBlock:
 		action = WSFetchBlock
@@ -309,10 +298,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal fetch block request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.fetchBlock(ctx, session, action, req, logger, log.IsDebug())
 	case WSFreeResult:
 		action = WSFreeResult
@@ -323,10 +309,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal free result request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.freeResult(req, logger)
 	case WSNumFields:
 		action = WSNumFields
@@ -337,10 +320,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal num fields request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.numFields(ctx, session, action, req, logger, log.IsDebug())
 	// schemaless
 	case SchemalessWrite:
@@ -352,11 +332,8 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal schemaless insert request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
-		h.schemalessWrite(ctx, session, action, req, logger, log.IsDebug())
+		innerReqID, logger := h.getOrGenerateReqID(req.ReqID, action)
+		h.schemalessWrite(ctx, session, action, req, innerReqID, logger, log.IsDebug())
 	// stmt
 	case STMTInit:
 		action = STMTInit
@@ -367,11 +344,8 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt init request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
-		h.stmtInit(ctx, session, action, req, logger, log.IsDebug())
+		innerReqID, logger := h.getOrGenerateReqID(req.ReqID, action)
+		h.stmtInit(ctx, session, action, req, innerReqID, logger, log.IsDebug())
 	case STMTPrepare:
 		action = STMTPrepare
 		var req stmtPrepareRequest
@@ -381,10 +355,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt prepare request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.stmtPrepare(ctx, session, action, req, logger, log.IsDebug())
 	case STMTSetTableName:
 		action = STMTSetTableName
@@ -395,10 +366,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt set table name request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.stmtSetTableName(ctx, session, action, req, logger, log.IsDebug())
 	case STMTSetTags:
 		action = STMTSetTags
@@ -409,10 +377,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt set tags request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.stmtSetTags(ctx, session, action, req, logger, log.IsDebug())
 	case STMTBind:
 		action = STMTBind
@@ -423,10 +388,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt bind request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.stmtBind(ctx, session, action, req, logger, log.IsDebug())
 	case STMTAddBatch:
 		action = STMTAddBatch
@@ -437,10 +399,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt add batch request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.stmtAddBatch(ctx, session, action, req, logger, log.IsDebug())
 	case STMTExec:
 		action = STMTExec
@@ -451,10 +410,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt exec request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.stmtExec(ctx, session, action, req, logger, log.IsDebug())
 	case STMTClose:
 		action = STMTClose
@@ -465,10 +421,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt close request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.stmtClose(ctx, session, action, req, logger)
 	case STMTGetTagFields:
 		action = STMTGetTagFields
@@ -479,10 +432,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt get tag fields request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.stmtGetTagFields(ctx, session, action, req, logger, log.IsDebug())
 	case STMTGetColFields:
 		action = STMTGetColFields
@@ -493,10 +443,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt get col fields request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.stmtGetColFields(ctx, session, action, req, logger, log.IsDebug())
 	case STMTUseResult:
 		action = STMTUseResult
@@ -507,10 +454,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt use result request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.stmtUseResult(ctx, session, action, req, logger, log.IsDebug())
 	case STMTNumParams:
 		action = STMTNumParams
@@ -521,10 +465,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt num params request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.stmtNumParams(ctx, session, action, req, logger, log.IsDebug())
 	case STMTGetParam:
 		action = STMTGetParam
@@ -535,10 +476,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt get param request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.stmtGetParam(ctx, session, action, req, logger, log.IsDebug())
 	// stmt2
 	case STMT2Init:
@@ -550,11 +488,8 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt2 init request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
-		h.stmt2Init(ctx, session, action, req, logger, log.IsDebug())
+		innerReqID, logger := h.getOrGenerateReqID(req.ReqID, action)
+		h.stmt2Init(ctx, session, action, req, innerReqID, logger, log.IsDebug())
 	case STMT2Prepare:
 		action = STMT2Prepare
 		var req stmt2PrepareRequest
@@ -564,10 +499,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt2 prepare request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.stmt2Prepare(ctx, session, action, req, logger, log.IsDebug())
 	case STMT2Exec:
 		action = STMT2Exec
@@ -578,10 +510,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt2 exec request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.stmt2Exec(ctx, session, action, req, logger, log.IsDebug())
 	case STMT2Result:
 		action = STMT2Result
@@ -592,10 +521,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt2 result request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.stmt2UseResult(ctx, session, action, req, logger, log.IsDebug())
 	case STMT2Close:
 		action = STMT2Close
@@ -606,10 +532,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal stmt2 close request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.stmt2Close(ctx, session, action, req, logger)
 	// misc
 	case WSGetCurrentDB:
@@ -621,10 +544,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal get current db request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.getCurrentDB(ctx, session, action, req, logger, log.IsDebug())
 	case WSGetServerInfo:
 		action = WSGetServerInfo
@@ -635,10 +555,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal get server info request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.getServerInfo(ctx, session, action, req, logger, log.IsDebug())
 	case OptionsConnection:
 		action = OptionsConnection
@@ -649,10 +566,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal options connection request error")
 			return
 		}
-		logger := h.logger.WithFields(logrus.Fields{
-			actionKey:       action,
-			config.ReqIDKey: req.ReqID,
-		})
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.optionsConnection(ctx, session, action, req, logger, log.IsDebug())
 	default:
 		h.logger.Errorf("unknown action %s", action)
@@ -670,11 +584,11 @@ func (h *messageHandler) handleMessageBinary(session *melody.Session, message []
 	reqID := *(*uint64)(p0)
 	resourceID := *(*uint64)(tools.AddPointer(p0, uintptr(8)))
 	action := *(*uint64)(tools.AddPointer(p0, uintptr(16)))
-	h.logger.Debugf("get ws message binary QID:0x%x, resourceID:%d, action:%d", reqID, resourceID, action)
+	h.logger.Tracef("get ws message binary QID:0x%x, resourceID:%d, action:%d", reqID, resourceID, action)
 
 	ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
 	actionStr := getActionString(action)
-	logger := h.logger.WithField(actionKey, actionStr).WithField(config.ReqIDKey, reqID)
+	innerReqID, logger := h.getOrGenerateReqID(reqID, actionStr)
 
 	// check error connection
 	if h.conn == nil {
@@ -690,11 +604,11 @@ func (h *messageHandler) handleMessageBinary(session *melody.Session, message []
 	case TMQRawMessage:
 		h.binaryTMQRawMessage(ctx, session, actionStr, reqID, message, logger, log.IsDebug())
 	case RawBlockMessage:
-		h.binaryRawBlockMessage(ctx, session, actionStr, reqID, message, logger, log.IsDebug())
+		h.binaryRawBlockMessage(ctx, session, actionStr, reqID, message, innerReqID, logger, log.IsDebug())
 	case RawBlockMessageWithFields:
-		h.binaryRawBlockMessageWithFields(ctx, session, actionStr, reqID, message, logger, log.IsDebug())
+		h.binaryRawBlockMessageWithFields(ctx, session, actionStr, reqID, message, innerReqID, logger, log.IsDebug())
 	case BinaryQueryMessage:
-		h.binaryQuery(ctx, session, actionStr, reqID, message, logger, log.IsDebug())
+		h.binaryQuery(ctx, session, actionStr, reqID, message, innerReqID, logger, log.IsDebug())
 	case FetchRawBlockMessage:
 		h.fetchRawBlock(ctx, session, reqID, resourceID, message, logger, log.IsDebug())
 	case Stmt2BindMessage:
@@ -705,6 +619,19 @@ func (h *messageHandler) handleMessageBinary(session *melody.Session, message []
 		h.logger.Errorf("unknown binary action %d", action)
 		commonErrorResponse(ctx, session, h.logger, actionStr, reqID, 0xffff, fmt.Sprintf("unknown binary action %d", action))
 	}
+}
+
+func (h *messageHandler) getOrGenerateReqID(reqID uint64, action string) (uint64, *logrus.Entry) {
+	innerReqID := reqID
+	if reqID == 0 {
+		innerReqID = uint64(generator.GetReqID())
+		h.logger.Debugf("reqID is 0, generate a new one:0x%x", innerReqID)
+	}
+	logger := h.logger.WithFields(logrus.Fields{
+		actionKey:       action,
+		config.ReqIDKey: innerReqID,
+	})
+	return innerReqID, logger
 }
 
 var jsonIter = jsoniter.ConfigCompatibleWithStandardLibrary

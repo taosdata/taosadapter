@@ -177,7 +177,7 @@ func (h *messageHandler) fetchRawBlock(ctx context.Context, session *melody.Sess
 	s := log.GetLogNow(isDebug)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
-	logger.Debugf("get handler cost:%s", log.GetLogDuration(isDebug, s))
+	logger.Tracef("get handler cost:%s", log.GetLogDuration(isDebug, s))
 	result := async.GlobalAsync.TaosFetchRawBlockA(item.TaosResult, logger, isDebug, handler)
 	if result.N == 0 {
 		item.Unlock()

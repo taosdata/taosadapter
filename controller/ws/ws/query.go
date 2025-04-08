@@ -33,7 +33,7 @@ type connRequest struct {
 	IP       string `json:"ip"`
 }
 
-func (h *messageHandler) connect(ctx context.Context, session *melody.Session, action string, req connRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) connect(ctx context.Context, session *melody.Session, action string, req connRequest, innerReqID uint64, logger *logrus.Entry, isDebug bool) {
 	h.lock(logger, isDebug)
 	defer h.Unlock()
 	if h.isClosed() {
@@ -177,14 +177,18 @@ type queryResponse struct {
 	FieldsScales     []int64            `json:"fields_scales"`
 }
 
-func (h *messageHandler) query(ctx context.Context, session *melody.Session, action string, req queryRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) query(ctx context.Context, session *melody.Session, action string, req queryRequest, innerReqID uint64, logger *logrus.Entry, isDebug bool) {
 	sqlType := monitor.WSRecordRequest(req.Sql)
 	logger.Debugf("get query request, sql:%s", req.Sql)
 	s := log.GetLogNow(isDebug)
+	logger.Trace("get handler from pool")
 	handler := async.GlobalAsync.HandlerPool.Get()
-	defer async.GlobalAsync.HandlerPool.Put(handler)
-	logger.Debugf("get handler cost:%s", log.GetLogDuration(isDebug, s))
-	result := async.GlobalAsync.TaosQuery(h.conn, logger, isDebug, req.Sql, handler, int64(req.ReqID))
+	logger.Tracef("get handler cost:%s", log.GetLogDuration(isDebug, s))
+	defer func() {
+		async.GlobalAsync.HandlerPool.Put(handler)
+		logger.Trace("put handler back to pool")
+	}()
+	result := async.GlobalAsync.TaosQuery(h.conn, logger, isDebug, req.Sql, handler, int64(innerReqID))
 	code := wrapper.TaosError(result.Res)
 	if code != 0 {
 		monitor.WSRecordResult(sqlType, false)
@@ -199,11 +203,11 @@ func (h *messageHandler) query(ctx context.Context, session *melody.Session, act
 	logger.Trace("check is_update_query")
 	s = log.GetLogNow(isDebug)
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
-	logger.Debugf("get is_update_query %t, cost:%s", isUpdate, log.GetLogDuration(isDebug, s))
+	logger.Tracef("get is_update_query %t, cost:%s", isUpdate, log.GetLogDuration(isDebug, s))
 	if isUpdate {
 		s = log.GetLogNow(isDebug)
 		affectRows := wrapper.TaosAffectedRows(result.Res)
-		logger.Debugf("affected_rows %d cost:%s", affectRows, log.GetLogDuration(isDebug, s))
+		logger.Debugf("affected_rows %d, cost:%s", affectRows, log.GetLogDuration(isDebug, s))
 		syncinterface.FreeResult(result.Res, logger, isDebug)
 		resp := &queryResponse{
 			Action:       action,
@@ -217,16 +221,16 @@ func (h *messageHandler) query(ctx context.Context, session *melody.Session, act
 	}
 	s = log.GetLogNow(isDebug)
 	fieldsCount := wrapper.TaosNumFields(result.Res)
-	logger.Debugf("get num_fields:%d, cost:%s", fieldsCount, log.GetLogDuration(isDebug, s))
+	logger.Tracef("get num_fields:%d, cost:%s", fieldsCount, log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	rowsHeader, _ := wrapper.ReadColumn(result.Res, fieldsCount)
-	logger.Debugf("read column cost:%s", log.GetLogDuration(isDebug, s))
+	logger.Tracef("read column cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	precision := wrapper.TaosResultPrecision(result.Res)
-	logger.Debugf("get result_precision:%d, cost:%s", precision, log.GetLogDuration(isDebug, s))
+	logger.Tracef("get result_precision:%d, cost:%s", precision, log.GetLogDuration(isDebug, s))
 	queryResult := QueryResult{TaosResult: result.Res, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision}
 	idx := h.queryResults.Add(&queryResult)
-	logger.Trace("add result to list finished")
+	logger.Debug("query success")
 	resp := &queryResponse{
 		Action:           action,
 		ReqID:            req.ReqID,
@@ -243,7 +247,7 @@ func (h *messageHandler) query(ctx context.Context, session *melody.Session, act
 	wstool.WSWriteJson(session, logger, resp)
 }
 
-func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Session, action string, reqID uint64, message []byte, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Session, action string, reqID uint64, message []byte, innerReqID uint64, logger *logrus.Entry, isDebug bool) {
 	if len(message) < 31 {
 		commonErrorResponse(ctx, session, logger, action, reqID, 0xffff, "message length is too short")
 		return
@@ -266,12 +270,16 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 	logger.Debugf("binary query, sql:%s", log.GetLogSql(bytesutil.ToUnsafeString(sql)))
 	sqlType := monitor.WSRecordRequest(bytesutil.ToUnsafeString(sql))
 	s := log.GetLogNow(isDebug)
+	logger.Trace("get handler from pool")
 	handler := async.GlobalAsync.HandlerPool.Get()
-	defer async.GlobalAsync.HandlerPool.Put(handler)
-	logger.Debugf("get handler cost:%s", log.GetLogDuration(isDebug, s))
+	logger.Tracef("get handler cost:%s", log.GetLogDuration(isDebug, s))
+	defer func() {
+		async.GlobalAsync.HandlerPool.Put(handler)
+		logger.Trace("put handler back to pool")
+	}()
 	s = log.GetLogNow(isDebug)
-	result := async.GlobalAsync.TaosQuery(h.conn, logger, isDebug, bytesutil.ToUnsafeString(sql), handler, int64(reqID))
-	logger.Debugf("query cost:%s", log.GetLogDuration(isDebug, s))
+	result := async.GlobalAsync.TaosQuery(h.conn, logger, isDebug, bytesutil.ToUnsafeString(sql), handler, int64(innerReqID))
+	logger.Tracef("query cost:%s", log.GetLogDuration(isDebug, s))
 	code := wrapper.TaosError(result.Res)
 	if code != 0 {
 		monitor.WSRecordResult(sqlType, false)
@@ -284,7 +292,7 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 	monitor.WSRecordResult(sqlType, true)
 	s = log.GetLogNow(isDebug)
 	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
-	logger.Debugf("get is_update_query %t, cost:%s", isUpdate, log.GetLogDuration(isDebug, s))
+	logger.Tracef("get is_update_query %t, cost:%s", isUpdate, log.GetLogDuration(isDebug, s))
 	if isUpdate {
 		affectRows := wrapper.TaosAffectedRows(result.Res)
 		logger.Debugf("affected_rows %d cost:%s", affectRows, log.GetLogDuration(isDebug, s))
@@ -301,16 +309,16 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 	}
 	s = log.GetLogNow(isDebug)
 	fieldsCount := wrapper.TaosNumFields(result.Res)
-	logger.Debugf("num_fields cost:%s", log.GetLogDuration(isDebug, s))
+	logger.Tracef("num_fields cost:%s", log.GetLogDuration(isDebug, s))
 	rowsHeader, _ := wrapper.ReadColumn(result.Res, fieldsCount)
 	s = log.GetLogNow(isDebug)
-	logger.Debugf("read column cost:%s", log.GetLogDuration(isDebug, s))
+	logger.Tracef("read column cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	precision := wrapper.TaosResultPrecision(result.Res)
-	logger.Debugf("result_precision cost:%s", log.GetLogDuration(isDebug, s))
+	logger.Tracef("result_precision cost:%s", log.GetLogDuration(isDebug, s))
 	queryResult := QueryResult{TaosResult: result.Res, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision}
 	idx := h.queryResults.Add(&queryResult)
-	logger.Trace("query success")
+	logger.Debug("query success")
 	resp := &queryResponse{
 		Action:           action,
 		ReqID:            reqID,

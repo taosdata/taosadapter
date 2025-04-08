@@ -1,20 +1,20 @@
 package thread
 
-type Locker struct {
+type Semaphore struct {
 	c chan struct{}
 }
 
-var SyncLocker *Locker
-var AsyncLocker *Locker
+var SyncSemaphore *Semaphore
+var AsyncSemaphore *Semaphore
 
-func NewLocker(count int) *Locker {
-	return &Locker{c: make(chan struct{}, count)}
+func NewSemaphore(count int) *Semaphore {
+	return &Semaphore{c: make(chan struct{}, count)}
 }
 
-func (l *Locker) Lock() {
+func (l *Semaphore) Acquire() {
 	l.c <- struct{}{}
 }
 
-func (l *Locker) Unlock() {
+func (l *Semaphore) Release() {
 	<-l.c
 }
