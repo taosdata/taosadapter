@@ -1165,8 +1165,7 @@ func TestTMQModify(t *testing.T) {
 		assert.Equal(t, "super", meta.TableType)
 		assert.NoError(t, err)
 		length, metaType, data := ParseRawMeta(rawMeta)
-		r2 := BuildRawMeta(length, metaType, data)
-		errCode = TMQWriteRaw(targetConn, r2)
+		errCode = TMQWriteRaw(targetConn, length, metaType, data)
 		if errCode != 0 {
 			errStr := TMQErr2Str(errCode)
 			t.Error(errors.NewError(int(errCode), errStr))

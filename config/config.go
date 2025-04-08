@@ -108,13 +108,13 @@ func Init() {
 	if maxAsyncMethodLimit == 0 {
 		maxAsyncMethodLimit = runtime.NumCPU()
 	}
-	thread.AsyncLocker = thread.NewLocker(maxAsyncMethodLimit)
+	thread.AsyncSemaphore = thread.NewSemaphore(maxAsyncMethodLimit)
 
 	maxSyncMethodLimit := Conf.MaxSyncMethodLimit
 	if maxSyncMethodLimit == 0 {
 		maxSyncMethodLimit = runtime.NumCPU()
 	}
-	thread.SyncLocker = thread.NewLocker(maxSyncMethodLimit)
+	thread.SyncSemaphore = thread.NewSemaphore(maxSyncMethodLimit)
 }
 
 // arg > file > env
