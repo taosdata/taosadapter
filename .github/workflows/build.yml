@@ -172,7 +172,7 @@ jobs:
         with:
           path: 'taosadapter'
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
           cache-dependency-path: taosadapter/go.sum
@@ -233,7 +233,7 @@ jobs:
           sudo mkdir -p /etc/taos
           sudo cp ./.github/workflows/taos.cfg /etc/taos/taos.cfg
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
           cache-dependency-path: go.sum
@@ -370,7 +370,7 @@ jobs:
           sudo mkdir -p /etc/taos
           sudo cp ./.github/workflows/taos.cfg /etc/taos/taos.cfg
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
           cache-dependency-path: go.sum
