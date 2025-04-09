@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -305,11 +306,11 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(metrics))
 	metric := metrics[0]
-	assert.Equal(t, ts.UnixMilli(), metric.Ts)
+	assert.Equal(t, strconv.FormatInt(ts.UnixMilli(), 10), metric.Ts)
 	assert.Equal(t, 2, metric.Protocol)
 	assert.Equal(t, 2, len(metric.Tables))
 	statusTable := metric.Tables[0]
-	assert.Equal(t, "taosadapter_status", statusTable.Name)
+	assert.Equal(t, "adapter_status", statusTable.Name)
 	assert.Equal(t, 1, len(statusTable.MetricGroups))
 	statusMetricGroup := statusTable.MetricGroups[0]
 	assert.Equal(t, 1, len(statusMetricGroup.Tags))
@@ -346,7 +347,7 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	assert.Equal(t, "sync_c_inflight", statusMetric[13].Name)
 	assert.Equal(t, float64(1), statusMetric[13].Value)
 	connPoolTable := metric.Tables[1]
-	assert.Equal(t, "taosadapter_conn_pool", connPoolTable.Name)
+	assert.Equal(t, "adapter_conn_pool", connPoolTable.Name)
 	assert.Equal(t, 1, len(connPoolTable.MetricGroups))
 	assert.Equal(t, 2, len(connPoolTable.MetricGroups[0].Tags))
 	assert.Equal(t, "endpoint", connPoolTable.MetricGroups[0].Tags[0].Name)
@@ -374,11 +375,11 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(metrics))
 	metric = metrics[0]
-	assert.Equal(t, ts.UnixMilli(), metric.Ts)
+	assert.Equal(t, strconv.FormatInt(ts.UnixMilli(), 10), metric.Ts)
 	assert.Equal(t, 2, metric.Protocol)
 	assert.Equal(t, 2, len(metric.Tables))
 	statusTable = metric.Tables[0]
-	assert.Equal(t, "taosadapter_status", statusTable.Name)
+	assert.Equal(t, "adapter_status", statusTable.Name)
 	assert.Equal(t, 1, len(statusTable.MetricGroups))
 	statusMetricGroup = statusTable.MetricGroups[0]
 	assert.Equal(t, 1, len(statusMetricGroup.Tags))
@@ -415,7 +416,7 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	assert.Equal(t, "sync_c_inflight", statusMetric[13].Name)
 	assert.Equal(t, float64(0), statusMetric[13].Value)
 	connPoolTable = metric.Tables[1]
-	assert.Equal(t, "taosadapter_conn_pool", connPoolTable.Name)
+	assert.Equal(t, "adapter_conn_pool", connPoolTable.Name)
 	assert.Equal(t, 1, len(connPoolTable.MetricGroups))
 	assert.Equal(t, 2, len(connPoolTable.MetricGroups[0].Tags))
 	assert.Equal(t, "endpoint", connPoolTable.MetricGroups[0].Tags[0].Name)

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
@@ -410,7 +411,7 @@ type UploadData struct {
 }
 
 type ExtraMetric struct {
-	Ts       int64    `json:"ts"`
+	Ts       string   `json:"ts"`
 	Protocol int      `json:"protocol"`
 	Tables   []*Table `json:"tables"`
 }
@@ -483,7 +484,7 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 	memStats := new(runtime.MemStats)
 	runtime.ReadMemStats(memStats)
 	statusTable := &Table{
-		Name: "taosadapter_status",
+		Name: "adapter_status",
 		MetricGroups: []*MetricGroup{
 			{
 				Tags: []*Tag{
@@ -554,7 +555,7 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 		},
 	}
 	connTable := &Table{
-		Name: "taosadapter_conn_pool",
+		Name: "adapter_conn_pool",
 	}
 	ConnPoolInUse.Range(func(k, v interface{}) bool {
 		connTable.MetricGroups = append(connTable.MetricGroups, &MetricGroup{
@@ -582,7 +583,7 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 		return true
 	})
 	metric := &ExtraMetric{
-		Ts:       ts.UnixMilli(),
+		Ts:       strconv.FormatInt(ts.UnixMilli(), 10),
 		Protocol: 2,
 		Tables: []*Table{
 			statusTable,
