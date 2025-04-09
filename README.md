@@ -53,7 +53,7 @@ communicate with TDengine through the WebSocket interface, hence the taosAdapter
 
 ## 3. Prerequisites
 
-- Go 1.17 or above is installed and CGO is enabled `export CGO_ENABLED=1`.
+- Go 1.23 or above is installed and CGO is enabled `export CGO_ENABLED=1`.
 - TDengine has been deployed locally. For specific steps, please refer
   to [Deploy TDengine](https://docs.tdengine.com/get-started/deploy-from-package/). Please make sure taosd has been
   started.

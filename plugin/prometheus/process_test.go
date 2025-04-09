@@ -3,8 +3,8 @@ package prometheus
 import (
 	"testing"
 
-	"github.com/prometheus/prometheus/prompb"
 	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/plugin/prometheus/prompb"
 	prompbWrite "github.com/taosdata/taosadapter/v3/plugin/prometheus/proto/write"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
 )
