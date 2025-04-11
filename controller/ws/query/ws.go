@@ -44,6 +44,7 @@ func NewQueryController() *QueryController {
 	queryM.Config.MaxMessageSize = 0
 
 	queryM.HandleConnect(func(session *melody.Session) {
+		monitor.RecordWSQueryConn()
 		logger := wstool.GetLogger(session)
 		ipAddr := iptool.GetRealIP(session.Request)
 		logger.WithField("ip", ipAddr.String()).Debug("ws connect")
@@ -191,6 +192,7 @@ func NewQueryController() *QueryController {
 	})
 
 	queryM.HandleDisconnect(func(session *melody.Session) {
+		monitor.RecordWSQueryDisconnect()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws disconnect")
 		t, exist := session.Get(TaosSessionKey)
