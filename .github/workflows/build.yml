@@ -97,7 +97,7 @@ jobs:
           mkdir debug
           cd debug
           cmake .. -DBUILD_TEST=off -DBUILD_DEPENDENCY_TESTS=0 -DVERNUMBER=3.9.9.9
-          make -j 4
+          make -j 8
 
       - name: package
         if: >
@@ -127,7 +127,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        go: [ '1.17', 'stable' ]
+        go: [ '1.23.0', 'stable' ]
         os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
     name: Build taosAdapter ${{ matrix.os }}-${{ matrix.go }}
     steps:
@@ -172,7 +172,7 @@ jobs:
         with:
           path: 'taosadapter'
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
           cache-dependency-path: taosadapter/go.sum
@@ -185,7 +185,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        go: [ '1.17', 'stable' ]
+        go: [ '1.23.0', 'stable' ]
         os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
     name: test taosAdapter ${{ matrix.os }}-${{ matrix.go }}
     steps:
@@ -233,7 +233,7 @@ jobs:
           sudo mkdir -p /etc/taos
           sudo cp ./.github/workflows/taos.cfg /etc/taos/taos.cfg
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
           cache-dependency-path: go.sum
@@ -370,7 +370,7 @@ jobs:
           sudo mkdir -p /etc/taos
           sudo cp ./.github/workflows/taos.cfg /etc/taos/taos.cfg
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
           cache-dependency-path: go.sum
@@ -387,3 +387,58 @@ jobs:
       - name: test
         id: test
         run: sudo go test -v --count=1 -asan ./...
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
+    needs: build
+    steps:
+      - name: get cache server by pr
+        if: github.event_name == 'pull_request'
+        id: get-cache-server-pr
+        uses: actions/cache@v4
+        with:
+          path: server.tar.gz
+          key: ${{ matrix.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
+          restore-keys: |
+            ${{ matrix.os }}-build-${{ github.base_ref }}-
+
+      - name: get cache server by push
+        if: github.event_name == 'push'
+        id: get-cache-server-push
+        uses: actions/cache@v4
+        with:
+          path: server.tar.gz
+          key: ${{ matrix.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
+          restore-keys: |
+            ${{ matrix.os }}-build-${{ github.ref_name }}-
+
+      - name: get cache server manually
+        if: github.event_name == 'workflow_dispatch'
+        id: get-cache-server-manually
+        uses: actions/cache@v4
+        with:
+          path: server.tar.gz
+          key: ${{ matrix.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
+          restore-keys: |
+            ${{ matrix.os }}-build-${{ inputs.tbBranch }}-
+
+
+      - name: install
+        run: |
+          tar -zxvf server.tar.gz
+          cd release && sudo sh install.sh
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run vulnerability scan
+        run: govulncheck ./...

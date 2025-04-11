@@ -7,7 +7,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/influxdata/telegraf"
-	"github.com/influxdata/telegraf/agent"
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/config"
@@ -71,7 +70,7 @@ func (p *Plugin) Start() error {
 		DeleteTimings:          p.conf.DeleteTimings,
 		Log:                    logger,
 	}
-	p.ac = agent.NewAccumulator(&MetricMaker{logger: logger}, p.metricChan)
+	p.ac = NewAccumulator(&MetricMakerImpl{logger: logger}, p.metricChan)
 	err := p.input.Start(p.ac)
 	if err != nil {
 		return err
@@ -148,19 +147,19 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metric telegraf.Me
 	}
 }
 
-type MetricMaker struct {
+type MetricMakerImpl struct {
 	logger logrus.FieldLogger
 }
 
-func (m *MetricMaker) LogName() string {
+func (m *MetricMakerImpl) LogName() string {
 	return "metric"
 }
 
-func (m *MetricMaker) MakeMetric(metric telegraf.Metric) telegraf.Metric {
+func (m *MetricMakerImpl) MakeMetric(metric telegraf.Metric) telegraf.Metric {
 	return metric
 }
 
-func (m *MetricMaker) Log() telegraf.Logger {
+func (m *MetricMakerImpl) Log() telegraf.Logger {
 	return m.logger
 }
 

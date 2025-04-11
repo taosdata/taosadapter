@@ -51,7 +51,7 @@ TDengine。 TDengine 的各语言连接器通过 WebSocket 接口与 TDengine �
 
 ## 3. 前置条件
 
-- 已安装 Go 1.17 及以上版本，并允许 CGO `export CGO_ENABLED=1`。
+- 已安装 Go 1.23 及以上版本，并允许 CGO `export CGO_ENABLED=1`。
 - 本地已经部署 TDengine，具体步骤请参考 [部署服务端](https://docs.taosdata.com/get-started/package/)，且已经启动 taosd。
 
 ## 4. 构建

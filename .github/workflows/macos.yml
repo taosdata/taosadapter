@@ -97,7 +97,7 @@ jobs:
           mkdir debug
           cd debug
           cmake .. -DBUILD_TEST=off -DVERNUMBER=3.9.9.9
-          make -j 4
+          make -j 8
 
       - name: package
         if: >
@@ -128,7 +128,7 @@ jobs:
     strategy:
       matrix:
         os: [ 'macos-latest' ]
-        go: [ '1.18', 'stable' ]
+        go: [ '1.23.0', 'stable' ]
     name: Build taosAdapter ${{ matrix.go }}
     steps:
       - name: get cache server by pr
@@ -176,7 +176,7 @@ jobs:
         with:
           path: 'taosadapter'
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
           cache-dependency-path: taosadapter/go.sum
@@ -190,7 +190,7 @@ jobs:
 #    strategy:
 #      matrix:
 #        os: [ 'macos-latest','macos-13' ]
-#        go: [ '1.17', 'stable' ]
+#        go: [ '1.23.0', 'stable' ]
 #    name: test taosAdapter ${{ matrix.os }} ${{ matrix.go }}
 #    steps:
 #      - name: get cache server by pr
@@ -243,7 +243,7 @@ jobs:
 #          sudo mkdir -p /etc/taos
 #          sudo cp ./taosadapter/.github/workflows/taos.cfg /etc/taos/taos.cfg
 #
-#      - uses: actions/setup-go@v4
+#      - uses: actions/setup-go@v5
 #        with:
 #          go-version: ${{ matrix.go }}
 #          cache-dependency-path: taosadapter/go.sum
