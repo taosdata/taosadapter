@@ -3,8 +3,9 @@ package thread
 import "github.com/taosdata/taosadapter/v3/monitor/metrics"
 
 type Semaphore struct {
-	c chan struct{}
+	c     chan struct{}
 	gauge *metrics.Gauge
+}
 
 var SyncSemaphore *Semaphore
 var AsyncSemaphore *Semaphore
@@ -19,7 +20,7 @@ func (l *Semaphore) SetGauge(gauge *metrics.Gauge) {
 func (l *Semaphore) Acquire() {
 	l.c <- struct{}{}
 	if l.gauge != nil {
-	l.gauge.Inc()
+		l.gauge.Inc()
 	}
 }
 

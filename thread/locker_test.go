@@ -37,11 +37,11 @@ func TestNewLocker(t *testing.T) {
 }
 
 func TestSetGauge(t *testing.T) {
-	locker := NewLocker(1)
+	locker := NewSemaphore(1)
 	g := metrics.NewGauge("test")
 	locker.SetGauge(g)
-	locker.Lock()
+	locker.Acquire()
 	assert.Equal(t, float64(1), g.Value())
-	locker.Unlock()
+	locker.Release()
 	assert.Equal(t, float64(0), g.Value())
 }

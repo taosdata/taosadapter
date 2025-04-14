@@ -171,8 +171,8 @@ func InitKeeper() {
 		AsyncCInflight = metrics.NewGauge("async_c_inflight")
 		SyncCInflight = metrics.NewGauge("sync_c_inflight")
 
-		thread.AsyncLocker.SetGauge(AsyncCInflight)
-		thread.SyncLocker.SetGauge(SyncCInflight)
+		thread.AsyncSemaphore.SetGauge(AsyncCInflight)
+		thread.SyncSemaphore.SetGauge(SyncCInflight)
 	}
 }
 
