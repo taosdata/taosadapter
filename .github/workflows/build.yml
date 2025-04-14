@@ -86,6 +86,14 @@ jobs:
           path: server.tar.gz
           key: ${{ matrix.os }}-build-${{ inputs.tbBranch }}-${{ steps.get_commit_id.outputs.commit_id }}
 
+      - name: Get CMake
+        if: >
+          (github.event_name == 'workflow_dispatch' && steps.cache-server-manually.outputs.cache-hit != 'true') ||
+          (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true') ||
+          (github.event_name == 'push' && steps.cache-server-push.outputs.cache-hit != 'true')
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: 3.31.6
 
       - name: install TDengine
         if: >

@@ -27,7 +27,7 @@ instanceId = 32
 allowAllOrigins = true
 
 [pool]
-# The maximum number of connections to the server. If set to 0, use cpu count.
+# The maximum number of connections to the server. If set to 0, use cpu count * 2.
 # maxConnect = 0
 
 # The maximum number of idle connections to the server. Should match maxConnect.

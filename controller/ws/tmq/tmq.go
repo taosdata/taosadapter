@@ -29,6 +29,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
@@ -47,6 +48,7 @@ func NewTMQController() *TMQController {
 	tmqM.Config.MaxMessageSize = 0
 
 	tmqM.HandleConnect(func(session *melody.Session) {
+		monitor.RecordWSTMQConn()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws connect")
 		session.Set(TaosTMQKey, NewTaosTMQ(session))
@@ -226,6 +228,7 @@ func NewTMQController() *TMQController {
 	})
 
 	tmqM.HandleDisconnect(func(session *melody.Session) {
+		monitor.RecordWSTMQDisconnect()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws disconnect")
 		t, exist := session.Get(TaosTMQKey)
