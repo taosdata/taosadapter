@@ -687,3 +687,54 @@ func TestTaosCheckServerStatus(t *testing.T) {
 	assert.Equal(t, int32(2), status)
 	assert.Equal(t, "", detail)
 }
+
+func TestTMQSubscription(t *testing.T) {
+	reqID := generator.GetReqID()
+	var logger = logger.WithField("test", "TestTaosCheckServerStatus").WithField(config.ReqIDKey, reqID)
+	conn, err := TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer TaosClose(conn, logger, isDebug)
+	err = exec(conn, "create database if not exists `syncinterface_test_subscription`")
+	assert.NoError(t, err)
+	defer func() {
+		err = exec(conn, "drop database if exists `syncinterface_test_subscription`")
+		assert.NoError(t, err)
+	}()
+	err = exec(conn, "create topic topic_syncinterface_subscription as database syncinterface_test_subscription")
+	assert.NoError(t, err)
+	defer func() {
+		err = exec(conn, "drop topic if exists `topic_syncinterface_subscription`")
+		assert.NoError(t, err)
+	}()
+	cfg := wrapper.TMQConfNew()
+	defer wrapper.TMQConfDestroy(cfg)
+	wrapper.TMQConfSet(cfg, "client.id", "test")
+	wrapper.TMQConfSet(cfg, "group.id", "test")
+	consumer, err := wrapper.TMQConsumerNew(cfg)
+	assert.NoError(t, err)
+	assert.NotNil(t, consumer)
+	topicList := wrapper.TMQListNew()
+	defer wrapper.TMQListDestroy(topicList)
+	code := wrapper.TMQListAppend(topicList, "topic_syncinterface_subscription")
+	if code != 0 {
+		errStr := wrapper.TMQErr2Str(code)
+		t.Error(t, taoserrors.NewError(int(code), errStr))
+		return
+	}
+	code = wrapper.TMQSubscribe(consumer, topicList)
+	if code != 0 {
+		errStr := wrapper.TMQErr2Str(code)
+		t.Error(t, taoserrors.NewError(int(code), errStr))
+		return
+	}
+	defer wrapper.TMQConsumerClose(consumer)
+	code, topicsPointer := TMQSubscription(consumer, logger, isDebug)
+	assert.Equal(t, int32(0), code)
+	assert.NotNil(t, topicsPointer)
+	defer wrapper.TMQListDestroy(topicsPointer)
+	topics := wrapper.TMQListToCArray(topicsPointer, int(wrapper.TMQListGetSize(topicsPointer)))
+	assert.Equal(t, 1, len(topics))
+	assert.Equal(t, "topic_syncinterface_subscription", topics[0])
+}

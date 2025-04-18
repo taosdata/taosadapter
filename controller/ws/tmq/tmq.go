@@ -30,7 +30,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
-	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
@@ -1651,23 +1650,13 @@ func (t *TMQ) listTopics(ctx context.Context, session *melody.Session, req *TMQL
 		return
 	}
 	isDebug := log.IsDebug()
-	logger.Trace("sync semaphore acquire for subscription")
-	thread.SyncSemaphore.Acquire()
-	if t.isClosed() {
-		thread.SyncSemaphore.Release()
-		logger.Trace("server closed, sync semaphore release")
-		return
-	}
-	logger.Debugf("call tmq_subscription, consumer:%p", t.consumer)
-	s := log.GetLogNow(isDebug)
-	code, topicsPointer := wrapper.TMQSubscription(t.consumer)
-	logger.Debugf("tmq_subscription finish, list:%p, cost:%s", topicsPointer, log.GetLogDuration(isDebug, s))
-	thread.SyncSemaphore.Release()
-	logger.Trace("sync semaphore release")
+	code, topicsPointer := syncinterface.TMQSubscription(t.consumer, logger, isDebug)
 	defer func() {
-		logger.Debugf("call tmq_list_destroy, list:%p", topicsPointer)
-		wrapper.TMQListDestroy(topicsPointer)
-		logger.Debugf("tmq_list_destroy finish")
+		if topicsPointer != nil {
+			logger.Tracef("call tmq_list_destroy, list:%p", topicsPointer)
+			wrapper.TMQListDestroy(topicsPointer)
+			logger.Trace("tmq_list_destroy finish")
+		}
 	}()
 	if code != 0 {
 		errStr := wrapper.TMQErr2Str(code)

@@ -4,13 +4,13 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
-	"time"
 	"unsafe"
 
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/config"
 	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
+	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/thread"
@@ -32,7 +32,6 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, logger *logrus.Entry, isDeb
 	handler := a.HandlerPool.Get()
 	defer a.HandlerPool.Put(handler)
 	result := a.TaosQuery(taosConnect, logger, isDebug, sql, handler, reqID)
-	var s time.Time
 	defer func() {
 		if result != nil && result.Res != nil {
 			FreeResultAsync(result.Res, logger, isDebug)
@@ -75,15 +74,7 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, logger *logrus.Entry, isDeb
 		}
 		res = result.Res
 		for i := 0; i < result.N; i++ {
-			var row unsafe.Pointer
-			logger.Tracef("get thread lock for fetch row, row:%d", i)
-			s = log.GetLogNow(isDebug)
-			thread.AsyncSemaphore.Acquire()
-			logger.Tracef("get thread lock for fetch row cost:%s", log.GetLogDuration(isDebug, s))
-			s = log.GetLogNow(isDebug)
-			row = wrapper.TaosFetchRow(res)
-			logger.Debugf("taos_fetch_row finish, row:%p, cost:%s", row, log.GetLogDuration(isDebug, s))
-			thread.AsyncSemaphore.Release()
+			row := taosFetchRow(res, logger, isDebug)
 			lengths := wrapper.FetchLengths(res, len(rowsHeader.ColNames))
 			logger.Tracef("fetch lengths:%d", lengths)
 			values := make([]driver.Value, len(rowsHeader.ColNames))
@@ -104,59 +95,90 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, logger *logrus.Entry, isDeb
 	}
 }
 
+func taosFetchRow(result unsafe.Pointer, logger *logrus.Entry, isDebug bool) unsafe.Pointer {
+	logger.Tracef("async semaphore acquire for taos_fetch_row")
+	thread.AsyncSemaphore.Acquire()
+	defer func() {
+		thread.AsyncSemaphore.Release()
+		logger.Trace("async semaphore release for taos_fetch_row")
+	}()
+	logger.Debugf("call taos_fetch_row, result:%p", result)
+	s := log.GetLogNow(isDebug)
+	row := wrapper.TaosFetchRow(result)
+	logger.Debugf("taos_fetch_row finish, row:%p, cost:%s", row, log.GetLogDuration(isDebug, s))
+	return row
+}
+
 func (a *Async) TaosQuery(taosConnect unsafe.Pointer, logger *logrus.Entry, isDebug bool, sql string, handler *Handler, reqID int64) *Result {
 	if reqID == 0 {
 		reqID = generator.GetReqID()
 		logger.Debugf("reqID is 0, generate a new one:0x%x", reqID)
 		logger = logger.WithField(config.ReqIDKey, reqID)
 	}
-	logger.Trace("async semaphore acquire for taos_query_a")
-	thread.AsyncSemaphore.Acquire()
-	logger.Debugf("call taos_query_a, conn:%p, QID:0x%x, sql:%s", taosConnect, reqID, log.GetLogSql(sql))
-	s := log.GetLogNow(isDebug)
-	wrapper.TaosQueryAWithReqID(taosConnect, sql, handler.Handler, reqID)
-	logger.Debugf("taos_query_a finish, cost:%s", log.GetLogDuration(isDebug, s))
-	thread.AsyncSemaphore.Release()
-	logger.Trace("async semaphore release for taos_query_a")
+	taosQueryAWithReqID(taosConnect, sql, handler.Handler, reqID, logger, isDebug)
 	logger.Debugf("wait for query result")
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	r := <-handler.Caller.QueryResult
 	logger.Debugf("get query result, res:%p, n:%d, cost:%s", r.Res, r.N, log.GetLogDuration(isDebug, s))
 	return r
 }
 
-func (a *Async) TaosFetchRowsA(res unsafe.Pointer, logger *logrus.Entry, isDebug bool, handler *Handler) *Result {
-	logger.Tracef("call taos_fetch_rows_a, res:%p", res)
-	s := log.GetLogNow(isDebug)
+func taosQueryAWithReqID(taosConn unsafe.Pointer, sql string, handler cgo.Handle, reqID int64, logger *logrus.Entry, isDebug bool) {
+	logger.Trace("async semaphore acquire for taos_query_a")
 	thread.AsyncSemaphore.Acquire()
-	logger.Tracef("get thread lock for fetch_rows_a cost:%s", log.GetLogDuration(isDebug, s))
-	logger.Debug("call taos_fetch_rows_a")
-	s = log.GetLogNow(isDebug)
-	wrapper.TaosFetchRowsA(res, handler.Handler)
-	logger.Debugf("taos_fetch_rows_a finish, cost:%s", log.GetLogDuration(isDebug, s))
-	thread.AsyncSemaphore.Release()
-	logger.Trace("async semaphore release for taos_fetch_rows_a")
+	defer func() {
+		thread.AsyncSemaphore.Release()
+		logger.Trace("async semaphore release for taos_query_a")
+	}()
+	logger.Debugf("call taos_query_a, conn:%p, QID:0x%x, sql:%s", taosConn, reqID, log.GetLogSql(sql))
+	s := log.GetLogNow(isDebug)
+	wrapper.TaosQueryAWithReqID(taosConn, sql, handler, reqID)
+	logger.Debugf("taos_query_a finish, cost:%s", log.GetLogDuration(isDebug, s))
+}
+
+func (a *Async) TaosFetchRowsA(res unsafe.Pointer, logger *logrus.Entry, isDebug bool, handler *Handler) *Result {
+	taosFetchRowsA(res, handler.Handler, logger, isDebug)
 	logger.Debug("wait for fetch rows result")
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	r := <-handler.Caller.FetchResult
 	logger.Debugf("get fetch rows result finish, res:%p, n:%d, cost:%s", r.Res, r.N, log.GetLogDuration(isDebug, s))
 	return r
 }
 
-func (a *Async) TaosFetchRawBlockA(res unsafe.Pointer, logger *logrus.Entry, isDebug bool, handler *Handler) *Result {
-	logger.Trace("async semaphore acquire for taos_fetch_raw_block_a")
+func taosFetchRowsA(res unsafe.Pointer, handler cgo.Handle, logger *logrus.Entry, isDebug bool) {
+	logger.Trace("async semaphore acquire for taos_fetch_rows_a")
 	thread.AsyncSemaphore.Acquire()
-	logger.Debugf("call taos_fetch_raw_block_a, res:%p", res)
+	defer func() {
+		thread.AsyncSemaphore.Release()
+		logger.Trace("async semaphore release for taos_fetch_rows_a")
+	}()
+	logger.Debugf("call taos_fetch_rows_a, res:%p", res)
 	s := log.GetLogNow(isDebug)
-	wrapper.TaosFetchRawBlockA(res, handler.Handler)
-	logger.Debugf("taos_fetch_raw_block_a finish, cost:%s", log.GetLogDuration(isDebug, s))
-	thread.AsyncSemaphore.Release()
-	logger.Trace("async semaphore release for taos_fetch_raw_block_a")
+	wrapper.TaosFetchRowsA(res, handler)
+	logger.Debugf("taos_fetch_rows_a finish, cost:%s", log.GetLogDuration(isDebug, s))
+
+}
+
+func (a *Async) TaosFetchRawBlockA(res unsafe.Pointer, logger *logrus.Entry, isDebug bool, handler *Handler) *Result {
+	taosFetchRawBlockA(res, handler.Handler, logger, isDebug)
 	logger.Debug("wait for fetch raw block result")
-	s = log.GetLogNow(isDebug)
+	s := log.GetLogNow(isDebug)
 	r := <-handler.Caller.FetchResult
 	logger.Debugf("get fetch raw block result, res:%p, n:%d, cost:%s", r.Res, r.N, log.GetLogDuration(isDebug, s))
 	return r
+}
+
+func taosFetchRawBlockA(res unsafe.Pointer, handler cgo.Handle, logger *logrus.Entry, isDebug bool) {
+	logger.Trace("async semaphore acquire for taos_fetch_raw_block_a")
+	thread.AsyncSemaphore.Acquire()
+	defer func() {
+		thread.AsyncSemaphore.Release()
+		logger.Trace("async semaphore release for taos_fetch_raw_block_a")
+	}()
+	logger.Debugf("call taos_fetch_raw_block_a, res:%p", res)
+	s := log.GetLogNow(isDebug)
+	wrapper.TaosFetchRawBlockA(res, handler)
+	logger.Debugf("taos_fetch_raw_block_a finish, cost:%s", log.GetLogDuration(isDebug, s))
 }
 
 type ExecResult struct {
@@ -196,9 +218,12 @@ func FreeResultAsync(res unsafe.Pointer, logger *logrus.Entry, isDebug bool) {
 	}
 	logger.Trace("async semaphore acquire for taos_free_result")
 	thread.AsyncSemaphore.Acquire()
+	defer func() {
+		thread.AsyncSemaphore.Release()
+		logger.Trace("async semaphore release for taos_free_result")
+	}()
 	logger.Debugf("call taos_free_result async, res:%p", res)
 	s := log.GetLogNow(isDebug)
 	wrapper.TaosFreeResult(res)
 	logger.Debugf("taos_free_result finish, cost:%s", log.GetLogDuration(isDebug, s))
-	thread.AsyncSemaphore.Release()
 }

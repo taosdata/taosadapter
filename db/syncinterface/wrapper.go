@@ -22,7 +22,7 @@ func FreeResult(res unsafe.Pointer, logger *logrus.Entry, isDebug bool) {
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_free_result")
+		logger.Trace("sync semaphore release for taos_free_result")
 	}()
 	logger.Debugf("call taos_free_result, res:%p", res)
 	s := log.GetLogNow(isDebug)
@@ -39,7 +39,7 @@ func TaosClose(conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) {
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_close")
+		logger.Trace("sync semaphore release for taos_close")
 	}()
 	logger.Debugf("call taos_close, conn:%p", conn)
 	s := log.GetLogNow(isDebug)
@@ -52,7 +52,7 @@ func TaosSelectDB(conn unsafe.Pointer, db string, logger *logrus.Entry, isDebug 
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_select_db")
+		logger.Trace("sync semaphore release for taos_select_db")
 	}()
 	logger.Debugf("call taos_select_db, conn:%p, db:%s", conn, db)
 	s := log.GetLogNow(isDebug)
@@ -66,7 +66,7 @@ func TaosConnect(host, user, pass, db string, port int, logger *logrus.Entry, is
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_connect")
+		logger.Trace("sync semaphore release for taos_connect")
 	}()
 	logger.Debugf("call taos_connect, host:%s, user:%s, pass:%s, db:%s, port:%d", host, user, pass, db, port)
 	s := log.GetLogNow(isDebug)
@@ -80,7 +80,7 @@ func TaosGetTablesVgID(conn unsafe.Pointer, db string, tables []string, logger *
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_get_tables_vgId")
+		logger.Trace("sync semaphore release for taos_get_tables_vgId")
 	}()
 	logger.Debugf("call taos_get_tables_vgId, conn:%p, db:%s, tables:%s", conn, db, strings.Join(tables, ", "))
 	s := log.GetLogNow(isDebug)
@@ -94,7 +94,7 @@ func TaosStmtInitWithReqID(conn unsafe.Pointer, reqID int64, logger *logrus.Entr
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt_init_with_reqid")
+		logger.Trace("sync semaphore release for taos_stmt_init_with_reqid")
 	}()
 	logger.Debugf("call taos_stmt_init_with_reqid, conn:%p, QID:0x%x", conn, reqID)
 	s := log.GetLogNow(isDebug)
@@ -108,7 +108,7 @@ func TaosStmtPrepare(stmt unsafe.Pointer, sql string, logger *logrus.Entry, isDe
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt_prepare")
+		logger.Trace("sync semaphore release for taos_stmt_prepare")
 	}()
 	logger.Debugf("call taos_stmt_prepare, stmt:%p,  sql:%s", stmt, log.GetLogSql(sql))
 	s := log.GetLogNow(isDebug)
@@ -122,7 +122,7 @@ func TaosStmtIsInsert(stmt unsafe.Pointer, logger *logrus.Entry, isDebug bool) (
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt_is_insert")
+		logger.Trace("sync semaphore release for taos_stmt_is_insert")
 	}()
 	logger.Debugf("call taos_stmt_is_insert, stmt:%p", stmt)
 	s := log.GetLogNow(isDebug)
@@ -136,7 +136,7 @@ func TaosStmtSetTBName(stmt unsafe.Pointer, tbname string, logger *logrus.Entry,
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt_set_tbname")
+		logger.Trace("sync semaphore release for taos_stmt_set_tbname")
 	}()
 	logger.Debugf("call taos_stmt_set_tbname, stmt:%p, tbname:%s", stmt, tbname)
 	s := log.GetLogNow(isDebug)
@@ -150,7 +150,7 @@ func TaosStmtGetTagFields(stmt unsafe.Pointer, logger *logrus.Entry, isDebug boo
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt_get_tag_fields")
+		logger.Trace("sync semaphore release for taos_stmt_get_tag_fields")
 	}()
 	logger.Debugf("call taos_stmt_get_tag_fields, stmt:%p", stmt)
 	s := log.GetLogNow(isDebug)
@@ -164,7 +164,7 @@ func TaosStmtSetTags(stmt unsafe.Pointer, tags []driver.Value, logger *logrus.En
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt_set_tags")
+		logger.Trace("sync semaphore release for taos_stmt_set_tags")
 	}()
 	logger.Debugf("call taos_stmt_set_tags, stmt:%p, tags:%v", stmt, tags)
 	s := log.GetLogNow(isDebug)
@@ -178,7 +178,7 @@ func TaosStmtGetColFields(stmt unsafe.Pointer, logger *logrus.Entry, isDebug boo
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt_get_col_fields")
+		logger.Trace("sync semaphore release for taos_stmt_get_col_fields")
 	}()
 	logger.Debugf("call taos_stmt_get_col_fields, stmt:%p", stmt)
 	s := log.GetLogNow(isDebug)
@@ -192,7 +192,7 @@ func TaosStmtBindParamBatch(stmt unsafe.Pointer, multiBind [][]driver.Value, bin
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt_bind_param_batch")
+		logger.Trace("sync semaphore release for taos_stmt_bind_param_batch")
 	}()
 	logger.Debugf("call taos_stmt_bind_param_batch, stmt:%p, multiBind:%v, bindType:%v", stmt, multiBind, bindType)
 	s := log.GetLogNow(isDebug)
@@ -206,7 +206,7 @@ func TaosStmtAddBatch(stmt unsafe.Pointer, logger *logrus.Entry, isDebug bool) i
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt_add_batch")
+		logger.Trace("sync semaphore release for taos_stmt_add_batch")
 	}()
 	logger.Debugf("call taos_stmt_add_batch, stmt:%p", stmt)
 	s := log.GetLogNow(isDebug)
@@ -220,7 +220,7 @@ func TaosStmtExecute(stmt unsafe.Pointer, logger *logrus.Entry, isDebug bool) in
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt_execute")
+		logger.Trace("sync semaphore release for taos_stmt_execute")
 	}()
 	logger.Debugf("call taos_stmt_execute, stmt:%p", stmt)
 	s := log.GetLogNow(isDebug)
@@ -234,7 +234,7 @@ func TaosStmtClose(stmt unsafe.Pointer, logger *logrus.Entry, isDebug bool) int 
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt_close")
+		logger.Trace("sync semaphore release for taos_stmt_close")
 	}()
 	logger.Debugf("call taos_stmt_close, stmt:%p", stmt)
 	s := log.GetLogNow(isDebug)
@@ -248,7 +248,7 @@ func TMQWriteRaw(conn unsafe.Pointer, length uint32, metaType uint16, data unsaf
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for tmq_write_raw")
+		logger.Trace("sync semaphore release for tmq_write_raw")
 	}()
 	logger.Debugf("call tmq_write_raw, conn:%p, length:%d, metaType:%d, data:%p", conn, length, metaType, data)
 	s := log.GetLogNow(isDebug)
@@ -262,7 +262,7 @@ func TaosWriteRawBlockWithReqID(conn unsafe.Pointer, numOfRows int, pData unsafe
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_write_raw_block_with_reqid")
+		logger.Trace("sync semaphore release for taos_write_raw_block_with_reqid")
 	}()
 	logger.Debugf("call taos_write_raw_block_with_reqid, conn:%p, numOfRows:%d, pData:%p, tableName:%s, reqID:%d", conn, numOfRows, pData, tableName, reqID)
 	s := log.GetLogNow(isDebug)
@@ -286,7 +286,7 @@ func TaosWriteRawBlockWithFieldsWithReqID(
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_write_raw_block_with_fields_with_reqid")
+		logger.Trace("sync semaphore release for taos_write_raw_block_with_fields_with_reqid")
 	}()
 	logger.Debugf(
 		"call taos_write_raw_block_with_fields_with_reqid, conn:%p, numOfRows:%d, pData:%p, tableName:%s, fields:%p, numFields:%d, reqID:%d",
@@ -309,7 +309,7 @@ func TaosGetCurrentDB(conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) (
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_get_current_db")
+		logger.Trace("sync semaphore release for taos_get_current_db")
 	}()
 	logger.Debugf("call taos_get_current_db, conn:%p", conn)
 	s := log.GetLogNow(isDebug)
@@ -323,7 +323,7 @@ func TaosGetServerInfo(conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) 
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_get_server_info")
+		logger.Trace("sync semaphore release for taos_get_server_info")
 	}()
 	logger.Debugf("call taos_get_server_info, conn:%p", conn)
 	s := log.GetLogNow(isDebug)
@@ -337,7 +337,7 @@ func TaosStmtNumParams(stmt unsafe.Pointer, logger *logrus.Entry, isDebug bool) 
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt_num_params")
+		logger.Trace("sync semaphore release for taos_stmt_num_params")
 	}()
 	logger.Debugf("call taos_stmt_num_params, stmt:%p", stmt)
 	s := log.GetLogNow(isDebug)
@@ -351,7 +351,7 @@ func TaosStmtGetParam(stmt unsafe.Pointer, index int, logger *logrus.Entry, isDe
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt_get_param")
+		logger.Trace("sync semaphore release for taos_stmt_get_param")
 	}()
 	logger.Debugf("call taos_stmt_get_param, stmt:%p, index:%d", stmt, index)
 	s := log.GetLogNow(isDebug)
@@ -365,7 +365,7 @@ func TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn unsafe.Pointer, lines str
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_schemaless_insert_raw_ttl_with_reqid_tbname_key")
+		logger.Trace("sync semaphore release for taos_schemaless_insert_raw_ttl_with_reqid_tbname_key")
 	}()
 	logger.Debugf("call taos_schemaless_insert_raw_ttl_with_reqid_tbname_key, conn:%p, lines:%s, protocol:%d, precision:%s, ttl:%d, reqID:%d, tbnameKey:%s", conn, lines, protocol, precision, ttl, reqID, tbNameKey)
 	s := log.GetLogNow(isDebug)
@@ -379,7 +379,7 @@ func TaosStmt2Init(taosConnect unsafe.Pointer, reqID int64, singleStbInsert bool
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt2_init")
+		logger.Trace("sync semaphore release for taos_stmt2_init")
 	}()
 	logger.Debugf("call taos_stmt2_init, taosConnect:%p, reqID:%d, singleStbInsert:%t, singleTableBindOnce:%t, handle:%p", taosConnect, reqID, singleStbInsert, singleTableBindOnce, handle.Pointer())
 	s := log.GetLogNow(isDebug)
@@ -393,7 +393,7 @@ func TaosStmt2Prepare(stmt2 unsafe.Pointer, sql string, logger *logrus.Entry, is
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt2_prepare")
+		logger.Trace("sync semaphore release for taos_stmt2_prepare")
 	}()
 	logger.Debugf("call taos_stmt2_prepare, stmt2:%p, sql:%s", stmt2, log.GetLogSql(sql))
 	s := log.GetLogNow(isDebug)
@@ -407,7 +407,7 @@ func TaosStmt2IsInsert(stmt2 unsafe.Pointer, logger *logrus.Entry, isDebug bool)
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt2_is_insert")
+		logger.Trace("sync semaphore release for taos_stmt2_is_insert")
 	}()
 	logger.Debugf("call taos_stmt2_is_insert, stmt2:%p", stmt2)
 	s := log.GetLogNow(isDebug)
@@ -421,7 +421,7 @@ func TaosStmt2GetFields(stmt2 unsafe.Pointer, logger *logrus.Entry, isDebug bool
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt2_get_fields")
+		logger.Trace("sync semaphore release for taos_stmt2_get_fields")
 	}()
 	logger.Debugf("call taos_stmt2_get_fields, stmt2:%p", stmt2)
 	s := log.GetLogNow(isDebug)
@@ -435,7 +435,7 @@ func TaosStmt2Exec(stmt2 unsafe.Pointer, logger *logrus.Entry, isDebug bool) int
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt2_exec")
+		logger.Trace("sync semaphore release for taos_stmt2_exec")
 	}()
 	logger.Debugf("call taos_stmt2_exec, stmt2:%p", stmt2)
 	s := log.GetLogNow(isDebug)
@@ -449,7 +449,7 @@ func TaosStmt2Close(stmt2 unsafe.Pointer, logger *logrus.Entry, isDebug bool) in
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt2_close")
+		logger.Trace("sync semaphore release for taos_stmt2_close")
 	}()
 	logger.Debugf("call taos_stmt2_close, stmt2:%p", stmt2)
 	s := log.GetLogNow(isDebug)
@@ -463,7 +463,7 @@ func TaosStmt2BindBinary(stmt2 unsafe.Pointer, data []byte, colIdx int32, logger
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_stmt2_bind_binary")
+		logger.Trace("sync semaphore release for taos_stmt2_bind_binary")
 	}()
 	logger.Debugf("call taos_stmt2_bind_binary, stmt2:%p, colIdx:%d, data:%v", stmt2, colIdx, data)
 	s := log.GetLogNow(isDebug)
@@ -477,7 +477,7 @@ func TaosOptionsConnection(conn unsafe.Pointer, option int, value *string, logge
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_options_connection")
+		logger.Trace("sync semaphore release for taos_options_connection")
 	}()
 	if value == nil {
 		logger.Debugf("call taos_options_connection, conn:%p, option:%d, value:<nil>", conn, option)
@@ -495,7 +495,7 @@ func TaosValidateSql(taosConnect unsafe.Pointer, sql string, logger *logrus.Entr
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_validate_sql")
+		logger.Trace("sync semaphore release for taos_validate_sql")
 	}()
 	logger.Debugf("call taos_validate_sql, taosConnect:%p, sql:%s", taosConnect, sql)
 	s := log.GetLogNow(isDebug)
@@ -509,7 +509,7 @@ func TaosCheckServerStatus(fqdn *string, port int32, logger *logrus.Entry, isDeb
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
-		logger.Trace("sync semaphore delete for taos_check_server_status")
+		logger.Trace("sync semaphore release for taos_check_server_status")
 	}()
 	if fqdn == nil {
 		logger.Debugf("call taos_check_server_status, fqdn: nil, port:%d", port)
@@ -520,4 +520,18 @@ func TaosCheckServerStatus(fqdn *string, port int32, logger *logrus.Entry, isDeb
 	status, details := wrapper.TaosCheckServerStatus(fqdn, port)
 	logger.Debugf("taos_check_server_status finish, status:%d, detail:%s, cost:%s", status, details, log.GetLogDuration(isDebug, s))
 	return status, details
+}
+
+func TMQSubscription(consumer unsafe.Pointer, logger *logrus.Entry, isDebug bool) (int32, unsafe.Pointer) {
+	logger.Trace("sync semaphore acquire for tmq_subscription")
+	thread.SyncSemaphore.Acquire()
+	defer func() {
+		thread.SyncSemaphore.Release()
+		logger.Trace("sync semaphore release for tmq_subscription")
+	}()
+	logger.Debugf("call tmq_subscription, consumer:%p", consumer)
+	s := log.GetLogNow(isDebug)
+	code, result := wrapper.TMQSubscription(consumer)
+	logger.Debugf("tmq_subscription finish, code:%d, result:%p, cost:%s", code, result, log.GetLogDuration(isDebug, s))
+	return code, result
 }
