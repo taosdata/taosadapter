@@ -107,19 +107,19 @@ func Init() {
 	if Conf.MaxAsyncMethodLimit == 0 {
 		Conf.MaxAsyncMethodLimit = runtime.GOMAXPROCS(0)
 	}
-	thread.AsyncLocker = thread.NewLocker(Conf.MaxAsyncMethodLimit)
+	thread.AsyncSemaphore = thread.NewSemaphore(Conf.MaxAsyncMethodLimit)
+
 	if Conf.MaxSyncMethodLimit == 0 {
 		Conf.MaxSyncMethodLimit = runtime.GOMAXPROCS(0)
 	}
-	thread.SyncLocker = thread.NewLocker(Conf.MaxSyncMethodLimit)
+	thread.SyncSemaphore = thread.NewSemaphore(Conf.MaxSyncMethodLimit)
+
 	if Conf.Pool.MaxConnect == 0 {
 		Conf.Pool.MaxConnect = runtime.GOMAXPROCS(0) * 2
 	}
 }
 
-// arg > file > env
 func init() {
-	// get the number of CPU cores, and set GOMAXPROCS to match the number of CPU cores
 	_, _ = maxprocs.Set()
 	viper.SetDefault("debug", true)
 	_ = viper.BindEnv("debug", "TAOS_ADAPTER_DEBUG")

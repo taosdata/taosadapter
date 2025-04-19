@@ -32,9 +32,9 @@ type stmt2InitResponse struct {
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) stmt2Init(ctx context.Context, session *melody.Session, action string, req stmt2InitRequest, logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) stmt2Init(ctx context.Context, session *melody.Session, action string, req stmt2InitRequest, innerReqID uint64, logger *logrus.Entry, isDebug bool) {
 	handle, caller := async.GlobalStmt2CallBackCallerPool.Get()
-	stmtInit := syncinterface.TaosStmt2Init(h.conn, int64(req.ReqID), req.SingleStbInsert, req.SingleTableBindOnce, handle, logger, isDebug)
+	stmtInit := syncinterface.TaosStmt2Init(h.conn, int64(innerReqID), req.SingleStbInsert, req.SingleTableBindOnce, handle, logger, isDebug)
 	if stmtInit == nil {
 		async.GlobalStmt2CallBackCallerPool.Put(handle)
 		errStr := wrapper.TaosStmt2Error(stmtInit)

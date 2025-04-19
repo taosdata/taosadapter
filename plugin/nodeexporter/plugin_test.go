@@ -75,8 +75,14 @@ func TestNodeExporter_Gather(t *testing.T) {
 	assert.Equal(t, float64(1), values[0][0])
 	err = n.Stop()
 	assert.NoError(t, err)
-	values, err = query(conn, "select `ttl` from information_schema.ins_tables "+
-		" where db_name='node_exporter' and stable_name='test_metric'")
+	for i := 0; i < 10; i++ {
+		values, err = query(conn, "select `ttl` from information_schema.ins_tables "+
+			" where db_name='node_exporter' and stable_name='test_metric'")
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 	assert.NoError(t, err)
 	if values[0][0].(int32) != 1000 {
 		t.Fatal("ttl miss")
