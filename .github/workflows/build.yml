@@ -38,7 +38,7 @@ jobs:
         with:
           repository: 'taosdata/TDengine'
           path: 'TDengine'
-          ref: ${{ github.base_ref }}
+          ref: ver-3.3.6.0
 
       - name: checkout TDengine by push
         if: github.event_name == 'push'
@@ -46,7 +46,7 @@ jobs:
         with:
           repository: 'taosdata/TDengine'
           path: 'TDengine'
-          ref: ${{ github.ref_name }}
+          ref: ver-3.3.6.0
 
       - name: checkout TDengine manually
         if: github.event_name == 'workflow_dispatch'
@@ -54,7 +54,7 @@ jobs:
         with:
           repository: 'taosdata/TDengine'
           path: 'TDengine'
-          ref: ${{ inputs.tbBranch }}
+          ref: ver-3.3.6.0
 
       - name: get_commit_id
         id: get_commit_id
