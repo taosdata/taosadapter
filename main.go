@@ -8,9 +8,9 @@ package main
 // @query.collection.format multi
 
 import (
+	"fmt"
 	"net"
 	"net/http"
-	"fmt"
 
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/system"
