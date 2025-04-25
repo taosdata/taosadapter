@@ -28,7 +28,7 @@ jobs:
     name: Build-${{ matrix.os }}
     strategy:
       matrix:
-        os: [ 'ubuntu-22.04' ]
+        os: [ 'ubuntu-latest' ]
     outputs:
       commit_id: ${{ steps.get_commit_id.outputs.commit_id }}
     steps:
