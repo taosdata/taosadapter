@@ -60,6 +60,7 @@ const (
 	FetchRawBlockMessage      = 7
 	Stmt2BindMessage          = 9
 	ValidateSQL               = 10
+	BinaryQueryWithResult     = 11
 )
 
 func getActionString(binaryAction uint64) string {
@@ -82,6 +83,8 @@ func getActionString(binaryAction uint64) string {
 		return "stmt2_bind"
 	case ValidateSQL:
 		return "validate_sql"
+	case BinaryQueryWithResult:
+		return "binary_query_with_result"
 	default:
 		return "unknown"
 	}

@@ -615,6 +615,8 @@ func (h *messageHandler) handleMessageBinary(session *melody.Session, message []
 		h.stmt2BinaryBind(ctx, session, actionStr, reqID, resourceID, message, logger, log.IsDebug())
 	case ValidateSQL:
 		h.validateSQL(ctx, session, actionStr, reqID, message, logger, log.IsDebug())
+	case BinaryQueryWithResult:
+		h.binaryQueryWithResult(ctx, session, actionStr, reqID, message, logger, log.IsDebug())
 	default:
 		h.logger.Errorf("unknown binary action %d", action)
 		commonErrorResponse(ctx, session, h.logger, actionStr, reqID, 0xffff, fmt.Sprintf("unknown binary action %d", action))

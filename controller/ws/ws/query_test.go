@@ -1338,3 +1338,77 @@ func checkBlockResult(t *testing.T, blockResult [][]driver.Value) {
 	assert.Equal(t, nil, blockResult[2][15])
 	assert.Equal(t, nil, blockResult[2][16])
 }
+
+func TestWsBinaryQueryWithResult(t *testing.T) {
+	dbName := "test_ws_binary_query_res"
+	s := httptest.NewServer(router)
+	defer s.Close()
+	code, message := doRestful(fmt.Sprintf("drop database if exists %s", dbName), "")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(fmt.Sprintf("create database if not exists %s", dbName), "")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(
+		"create table if not exists stb1 (ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100),v16 decimal(20,4)) tags (info json)",
+		dbName)
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(
+		`insert into t1 using stb1 tags ('{\"table\":\"t1\"}') values (now-2s,true,2,3,4,5,6,7,8,9,10,11,'中文\"binary','中文nchar','\xaabbcc','point(100 100)',4467440737095516.123)(now-1s,false,12,13,14,15,16,17,18,19,110,111,'中文\"binary','中文nchar','\xaabbcc','point(100 100)',-5467440737095516.123)(now,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)`,
+		dbName)
+	assert.Equal(t, 0, code, message)
+
+	code, message = doRestful("create table t2 using stb1 tags('{\"table\":\"t2\"}')", dbName)
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful("create table t3 using stb1 tags('{\"table\":\"t3\"}')", dbName)
+	assert.Equal(t, 0, code, message)
+
+	defer doRestful(fmt.Sprintf("drop database if exists %s", dbName), "")
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	// connect
+	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", DB: dbName}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp commonResp
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+
+	// query
+	sql := "select last(*) from stb1"
+	var buffer bytes.Buffer
+	wstool.WriteUint64(&buffer, 2) // req id
+	wstool.WriteUint64(&buffer, 0) // message id
+	wstool.WriteUint64(&buffer, uint64(BinaryQueryWithResult))
+	wstool.WriteUint16(&buffer, 1)                // version
+	wstool.WriteUint32(&buffer, uint32(len(sql))) // sql length
+	buffer.WriteString(sql)
+	err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
+	assert.NoError(t, err)
+	rt, resp, err := ws.ReadMessage()
+	assert.NoError(t, err)
+	assert.Equal(t, websocket.BinaryMessage, rt, string(resp))
+	queryRespLen := binary.LittleEndian.Uint32(resp)
+	queryRespBinary := resp[4 : 4+queryRespLen]
+	var queryResp queryResponse
+	err = json.Unmarshal(queryRespBinary, &queryResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(2), queryResp.ReqID)
+	assert.Equal(t, 0, queryResp.Code, queryResp.Message)
+	completed := resp[4+queryRespLen] == 1
+	assert.True(t, completed)
+	fetchRespLen := binary.LittleEndian.Uint32(resp[5+queryRespLen:])
+	fetchResp := resp[9+queryRespLen : 9+queryRespLen+fetchRespLen]
+	fetchRawBlockResp := parseFetchRawBlock(fetchResp)
+	blockResult, err := ReadBlockSimple(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]), queryResp.Precision)
+	assert.NoError(t, err)
+	t.Log(blockResult)
+}

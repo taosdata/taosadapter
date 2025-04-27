@@ -3,6 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"unsafe"
@@ -13,6 +14,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/driver/common"
+	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	taoserrors "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
@@ -333,4 +335,173 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 		FieldsScales:     rowsHeader.Scales,
 	}
 	wstool.WSWriteJson(session, logger, resp)
+}
+
+func (h *messageHandler) binaryQueryWithResult(ctx context.Context, session *melody.Session, action string, reqID uint64, message []byte, logger *logrus.Entry, isDebug bool) {
+	if len(message) < 31 {
+		commonErrorResponse(ctx, session, logger, action, reqID, 0xffff, "message length is too short")
+		return
+	}
+	v := binary.LittleEndian.Uint16(message[24:])
+	var sql []byte
+	if v == BinaryProtocolVersion1 {
+		sqlLen := binary.LittleEndian.Uint32(message[26:])
+		remainMessageLength := len(message) - 30
+		if remainMessageLength < int(sqlLen) {
+			commonErrorResponse(ctx, session, logger, action, reqID, 0xffff, fmt.Sprintf("uncompleted message, sql length:%d, remainMessageLength:%d", sqlLen, remainMessageLength))
+			return
+		}
+		sql = message[30 : 30+sqlLen]
+	} else {
+		logger.Errorf("unknown binary query version:%d", v)
+		commonErrorResponse(ctx, session, logger, action, reqID, 0xffff, fmt.Sprintf("unknown binary query version:%d", v))
+		return
+	}
+	logger.Debugf("binary query, sql:%s", log.GetLogSql(bytesutil.ToUnsafeString(sql)))
+	sqlType := monitor.WSRecordRequest(bytesutil.ToUnsafeString(sql))
+	s := log.GetLogNow(isDebug)
+	handler := async.GlobalAsync.HandlerPool.Get()
+	defer async.GlobalAsync.HandlerPool.Put(handler)
+	logger.Debugf("get handler cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	result := async.GlobalAsync.TaosQuery(h.conn, logger, isDebug, bytesutil.ToUnsafeString(sql), handler, int64(reqID))
+	logger.Debugf("query cost:%s", log.GetLogDuration(isDebug, s))
+	res := result.Res
+	code := wrapper.TaosError(res)
+	if code != 0 {
+		monitor.WSRecordResult(sqlType, false)
+		errStr := wrapper.TaosErrorStr(res)
+		logger.Errorf("taos query error, code:%d, msg:%s, sql:%s", code, errStr, log.GetLogSql(bytesutil.ToUnsafeString(sql)))
+		syncinterface.FreeResult(res, logger, isDebug)
+		commonErrorResponse(ctx, session, logger, action, reqID, code, errStr)
+		return
+	}
+	monitor.WSRecordResult(sqlType, true)
+	s = log.GetLogNow(isDebug)
+	isUpdate := wrapper.TaosIsUpdateQuery(res)
+	logger.Debugf("get is_update_query %t, cost:%s", isUpdate, log.GetLogDuration(isDebug, s))
+	if isUpdate {
+		affectRows := wrapper.TaosAffectedRows(res)
+		logger.Debugf("affected_rows %d cost:%s", affectRows, log.GetLogDuration(isDebug, s))
+		syncinterface.FreeResult(res, logger, isDebug)
+		resp := &queryResponse{
+			Action:       action,
+			ReqID:        reqID,
+			Timing:       wstool.GetDuration(ctx),
+			IsUpdate:     true,
+			AffectedRows: affectRows,
+		}
+		wstool.WSWriteJson(session, logger, resp)
+		return
+	}
+	s = log.GetLogNow(isDebug)
+	fieldsCount := wrapper.TaosNumFields(res)
+	logger.Debugf("num_fields cost:%s", log.GetLogDuration(isDebug, s))
+	rowsHeader, _ := wrapper.ReadColumn(res, fieldsCount)
+	s = log.GetLogNow(isDebug)
+	logger.Debugf("read column cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	precision := wrapper.TaosResultPrecision(res)
+	logger.Debugf("result_precision cost:%s", log.GetLogDuration(isDebug, s))
+	//queryResult := QueryResult{TaosResult: res, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision}
+	//idx := h.queryResults.Add(&queryResult)
+	logger.Trace("query success")
+
+	result = async.GlobalAsync.TaosFetchRawBlockA(res, logger, isDebug, handler)
+	if result.N == 0 {
+		syncinterface.FreeResult(res, logger, isDebug)
+		panic("unexpected fetch result finish")
+	}
+	if result.N < 0 {
+		logger.Errorf("fetch raw block error, code:%d, message:%s", result.N, wrapper.TaosErrorStr(res))
+		panic("unexpected fetch result error")
+	}
+	logger.Trace("call taos_get_raw_block")
+	s = log.GetLogNow(isDebug)
+	blockP := wrapper.TaosGetRawBlock(res)
+	logger.Debugf("get_raw_block cost:%s", log.GetLogDuration(isDebug, s))
+	s = log.GetLogNow(isDebug)
+	blockLength := int(parser.RawBlockGetLength(blockP))
+	if blockLength <= 0 {
+		logger.Errorf("block length illegal:%d", blockLength)
+		syncinterface.FreeResult(res, logger, isDebug)
+		panic("unexpected block length")
+	}
+	buf1 := fetchRawBlockMessage(nil, reqID, 0, uint64(wstool.GetDuration(ctx)), int32(blockLength), blockP)
+	completed := false
+	result = async.GlobalAsync.TaosFetchRawBlockA(res, logger, isDebug, handler)
+	if result.N == 0 {
+		completed = true
+		syncinterface.FreeResult(res, logger, isDebug)
+		resp := &queryResponse{
+			Action:           action,
+			ReqID:            reqID,
+			Timing:           wstool.GetDuration(ctx),
+			ID:               0,
+			FieldsCount:      fieldsCount,
+			FieldsNames:      rowsHeader.ColNames,
+			FieldsLengths:    rowsHeader.ColLength,
+			FieldsTypes:      rowsHeader.ColTypes,
+			Precision:        precision,
+			FieldsPrecisions: rowsHeader.Precisions,
+			FieldsScales:     rowsHeader.Scales,
+		}
+		queryByte, err := json.Marshal(resp)
+		if err != nil {
+			panic(err)
+		}
+		totalLength := len(buf1) + len(queryByte) + 9
+		buf := make([]byte, totalLength)
+		binary.LittleEndian.PutUint32(buf[0:4], uint32(len(queryByte)))
+		bytesutil.Copy(unsafe.Pointer(&queryByte[0]), buf, 4, len(queryByte))
+		if completed {
+			buf[4+len(queryByte)] = 1
+		} else {
+			buf[4+len(queryByte)] = 0
+		}
+		binary.LittleEndian.PutUint32(buf[5+len(queryByte):], uint32(len(buf1)))
+		bytesutil.Copy(unsafe.Pointer(&buf1[0]), buf, 9+len(queryByte), len(buf1))
+		wstool.WSWriteBinary(session, buf, logger)
+		return
+	} else {
+		panic("expect fetch result finish")
+	}
+	//if result.N < 0 {
+	//	logger.Errorf("fetch raw block error, code:%d, message:%s", result.N, wrapper.TaosErrorStr(res))
+	//	panic("unexpected fetch result error")
+	//}
+	//logger.Trace("call taos_get_raw_block")
+	//s = log.GetLogNow(isDebug)
+	//blockP = wrapper.TaosGetRawBlock(res)
+	//logger.Debugf("get_raw_block cost:%s", log.GetLogDuration(isDebug, s))
+	//s = log.GetLogNow(isDebug)
+	//blockLength := int(parser.RawBlockGetLength(blockP))
+	//if blockLength <= 0 {
+	//	logger.Errorf("block length illegal:%d", blockLength)
+	//	syncinterface.FreeResult(res, logger, isDebug)
+	//	panic("unexpected block length")
+	//}
+	//buf2 := fetchRawBlockMessage(nil, reqID, 0, uint64(wstool.GetDuration(ctx)), int32(blockLength), blockP)
+	//
+	//
+	//queryResult := QueryResult{TaosResult: res, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision}
+	//idx := h.queryResults.Add(&queryResult)
+	//resp := &queryResponse{
+	//	Action:           action,
+	//	ReqID:            reqID,
+	//	Timing:           wstool.GetDuration(ctx),
+	//	ID:               idx,
+	//	FieldsCount:      fieldsCount,
+	//	FieldsNames:      rowsHeader.ColNames,
+	//	FieldsLengths:    rowsHeader.ColLength,
+	//	FieldsTypes:      rowsHeader.ColTypes,
+	//	Precision:        precision,
+	//	FieldsPrecisions: rowsHeader.Precisions,
+	//	FieldsScales:     rowsHeader.Scales,
+	//}
+	//queryByte, err := json.Marshal(resp)
+	//if err != nil {
+	//	panic(err)
+	//}
+	//wstool.WSWriteJson(session, logger, resp)
 }
