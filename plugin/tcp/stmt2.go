@@ -145,7 +145,7 @@ func marshalStmt2PrepareResponse(ctx context.Context, reqID uint64, stmtID uint6
 	}
 	buf := make([]byte, totalLen)
 	marshalCommonResponse(buf, ctx, reqID, 0, "", CmdStmt2Prepare)
-	payload := buf[ResponseHeaderLen+1:]
+	payload := buf[ResponseHeaderLen:]
 	payload[0] = 1
 	binary.LittleEndian.PutUint64(payload[1:], stmtID)
 	if isInsert {
@@ -264,7 +264,7 @@ func marshalStmt2ExecResponse(ctx context.Context, reqID uint64, stmtID uint64, 
 	totalLen := ResponseHeaderLen + 1 + 8 + 4
 	buf := make([]byte, totalLen)
 	marshalCommonResponse(buf, ctx, reqID, 0, "", CmdStmt2Execute)
-	payload := buf[ResponseHeaderLen+1:]
+	payload := buf[ResponseHeaderLen:]
 	payload[0] = 1
 	binary.LittleEndian.PutUint64(payload[1:], stmtID)
 	binary.LittleEndian.PutUint32(payload[9:], uint32(affected))
@@ -344,7 +344,7 @@ func marshalStmt2CloseResponse(ctx context.Context, reqID uint64, stmtID uint64)
 	totalLen := ResponseHeaderLen + 1 + 8
 	buf := make([]byte, totalLen)
 	marshalCommonResponse(buf, ctx, reqID, 0, "", CmdStmt2Close)
-	payload := buf[ResponseHeaderLen+1:]
+	payload := buf[ResponseHeaderLen:]
 	payload[0] = 1
 	binary.LittleEndian.PutUint64(payload[1:], stmtID)
 	return buf, nil
@@ -378,43 +378,46 @@ type stmt2BindResponse struct {
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func unmarshalStmt2BindReq(bytes []byte) (stmtID uint64, message []byte, err error) {
+func unmarshalStmt2BindReq(bytes []byte) (stmtID uint64, colIndex int32, message []byte, err error) {
 	// version 1
 	// StmtID uint64
+	// colIndex int32
+	// MessageLen uint64
+	// Message []byte
 	version := bytes[0]
 	if version != 1 {
-		return 0, message, fmt.Errorf("unexpected version:%d", version)
+		return 0, 0, nil, fmt.Errorf("unexpected version:%d", version)
 	}
 	stmtID = binary.LittleEndian.Uint64(bytes[1:9])
-	message = bytes[9:]
-	return stmtID, message, nil
+	colIndex = int32(binary.LittleEndian.Uint32(bytes[9:13]))
+	MessageLen := binary.LittleEndian.Uint64(bytes[13:21])
+	message = bytes[21 : 21+MessageLen]
+	return stmtID, colIndex, message, nil
 }
 
 func marshalStmt2BindResponse(ctx context.Context, reqID uint64, stmtID uint64) ([]byte, error) {
 	totalLen := ResponseHeaderLen + 1 + 8
 	buf := make([]byte, totalLen)
 	marshalCommonResponse(buf, ctx, reqID, 0, "", CmdStmt2Bind)
-	payload := buf[ResponseHeaderLen+1:]
+	payload := buf[ResponseHeaderLen:]
 	payload[0] = 1
 	binary.LittleEndian.PutUint64(payload[1:], stmtID)
 	return buf, nil
 }
 
 func (c *Connection) stmt2BinaryBind(ctx context.Context, reqID uint64, payload []byte, logger *logrus.Entry, isDebug bool) {
-	stmtID, message, err := unmarshalStmt2BindReq(payload)
+	stmtID, colIndex, message, err := unmarshalStmt2BindReq(payload)
 	if err != nil {
 		logger.Errorf("unmarshal stmt2 bind request error, err:%s", err.Error())
 		c.sendErrorResponse(ctx, reqID, 0xffff, err.Error(), CmdStmt2Bind)
 		return
 	}
-	colIndex := int32(binary.LittleEndian.Uint32(message))
 	stmtItem, locked := c.stmt2ValidateAndLock(ctx, CmdStmt2Bind, reqID, stmtID, logger, isDebug)
 	if !locked {
 		return
 	}
 	defer stmtItem.Unlock()
-	bindData := message[4:]
-	err = syncinterface.TaosStmt2BindBinary(stmtItem.stmt, bindData, colIndex, logger, isDebug)
+	err = syncinterface.TaosStmt2BindBinary(stmtItem.stmt, message, colIndex, logger, isDebug)
 	if err != nil {
 		logger.Errorf("stmt2 bind error, err:%s", err.Error())
 		var tError *errors2.TaosError

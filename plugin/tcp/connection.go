@@ -113,21 +113,40 @@ func (c *Connection) run() {
 			c.logger.Errorf("read packet version error, close connection, version: %d", version)
 			return
 		}
-		ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
-		cmd := data[9]
-		reqID := binary.LittleEndian.Uint64(data)
-		payload := data[24:]
+		go func() {
+			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
+			cmd := data[9]
+			reqID := binary.LittleEndian.Uint64(data)
+			payload := data[24:]
+			switch cmd {
+			case CmdVersion:
+				_, logger := c.getOrGenerateReqID(reqID, cmd)
+				c.handleVersion(ctx, reqID, logger)
 
-		switch cmd {
-		case CmdVersion:
-			_, logger := c.getOrGenerateReqID(reqID, cmd)
-			c.handleVersion(ctx, reqID, logger)
-		case CmdConn:
-			_, logger := c.getOrGenerateReqID(reqID, cmd)
-			c.handleConn(ctx, reqID, payload, logger, log.IsDebug())
-		default:
-			panic("")
-		}
+			case CmdConn:
+				_, logger := c.getOrGenerateReqID(reqID, cmd)
+				go func() {
+					c.handleConn(ctx, reqID, payload, logger, log.IsDebug())
+				}()
+			case CmdStmt2Init:
+				innerReqID, logger := c.getOrGenerateReqID(reqID, cmd)
+				c.stmt2Init(ctx, reqID, innerReqID, payload, logger, log.IsDebug())
+			case CmdStmt2Prepare:
+				_, logger := c.getOrGenerateReqID(reqID, cmd)
+				c.stmt2Prepare(ctx, reqID, payload, logger, log.IsDebug())
+			case CmdStmt2Execute:
+				_, logger := c.getOrGenerateReqID(reqID, cmd)
+				c.stmt2Exec(ctx, reqID, payload, logger, log.IsDebug())
+			case CmdStmt2Bind:
+				_, logger := c.getOrGenerateReqID(reqID, cmd)
+				c.stmt2BinaryBind(ctx, reqID, payload, logger, log.IsDebug())
+			case CmdStmt2Close:
+				_, logger := c.getOrGenerateReqID(reqID, cmd)
+				c.stmt2Close(ctx, reqID, payload, logger, log.IsDebug())
+			default:
+				panic("")
+			}
+		}()
 	}
 }
 
@@ -154,7 +173,7 @@ func (c *Connection) writePacket(data []byte) {
 	case <-c.closeChan:
 		return
 	case c.messageQueue <- data:
-		c.logger.Info("write packet to message queue")
+		c.logger.Trace("write packet to message queue")
 	}
 }
 

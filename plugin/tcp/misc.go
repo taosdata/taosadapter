@@ -70,7 +70,7 @@ func (c *Connection) sendStmtCommonResponse(ctx context.Context, reqID uint64, s
 	if len(message) > math.MaxUint8 {
 		message = message[:math.MaxUint8]
 	}
-	totalLen := ResponseHeaderLen + len(message) + 1 + 8 + 1
+	totalLen := ResponseHeaderLen + len(message) + 1 + 8
 	buf := make([]byte, totalLen)
 	marshalCommonResponse(buf, ctx, reqID, code, message, cmd)
 	buf[totalLen-9] = uint8(1)
