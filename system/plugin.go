@@ -8,4 +8,5 @@ import (
 	_ "github.com/taosdata/taosadapter/v3/plugin/opentsdbtelnet" // import opentsdbtelnet plugin
 	_ "github.com/taosdata/taosadapter/v3/plugin/prometheus"     // import prometheus plugin
 	_ "github.com/taosdata/taosadapter/v3/plugin/statsd"         // import statsd plugin
+	_ "github.com/taosdata/taosadapter/v3/plugin/tcp"            // import tcp plugin
 )
