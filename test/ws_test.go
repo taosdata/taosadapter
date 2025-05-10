@@ -188,10 +188,7 @@ type stmt2CloseResponse struct {
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func TestWs(t *testing.T) {
-	tableCount := 10
-	rows := 100
-	loopTimes := 100000
+func TestWsSingle(t *testing.T) {
 	ws, _, err := websocket.DefaultDialer.Dial("ws://172.16.1.43:6041/ws", nil)
 	if err != nil {
 		t.Error(err)
@@ -324,7 +321,7 @@ func TestWsConcurrent(t *testing.T) {
 	for i := 0; i < 8; i++ {
 		go func() {
 			defer wg.Done()
-			TestWs(t)
+			TestWsSingle(t)
 		}()
 	}
 	wg.Wait()

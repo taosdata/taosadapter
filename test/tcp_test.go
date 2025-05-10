@@ -18,6 +18,12 @@ import (
 )
 
 const (
+	tableCount = 10
+	rows       = 10000
+	loopTimes  = 5000
+)
+
+const (
 	CmdVersion byte = iota + 1
 	CmdConn
 	CmdStmt2Init
@@ -39,10 +45,7 @@ func GetReqID() int64 {
 	reqId := int64(32)<<56 | id
 	return reqId
 }
-func TestTcp(t *testing.T) {
-	tableCount := 10
-	rows := 100
-	loopTimes := 100000
+func TestTcpSingle(t *testing.T) {
 
 	// connect to the server
 	tcpConn, err := net.Dial("tcp", "172.16.1.43:6042")
@@ -194,7 +197,7 @@ func TestTcpConcurrent(t *testing.T) {
 	for i := 0; i < 8; i++ {
 		go func() {
 			defer wg.Done()
-			TestTcp(t)
+			TestTcpSingle(t)
 		}()
 	}
 	wg.Wait()

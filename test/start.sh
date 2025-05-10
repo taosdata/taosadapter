@@ -10,10 +10,10 @@ echo "------------------------" >> "$LOG_FILE"
 
 # 定义要执行的命令列表
 COMMANDS=(
-    "./taosadapter_bench -test.v -test.run TestTcp$"
-    "./taosadapter_bench -test.v -test.run TestTcpConcurrent$"
-    "./taosadapter_bench -test.v -test.run TestWs$"
-    "./taosadapter_bench -test.v -test.run TestWsConcurrent$"
+    "./taosadapter_bench -test.v -test.run TestTcpSingle"
+    "./taosadapter_bench -test.v -test.run TestTcpConcurrent"
+    "./taosadapter_bench -test.v -test.run TestWsSingle"
+    "./taosadapter_bench -test.v -test.run TestWsConcurrent"
 )
 
 # 循环5次执行每个命令

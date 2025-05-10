@@ -22,7 +22,7 @@ def start_taosadapter():
             stderr=subprocess.PIPE,
             preexec_fn=os.setsid  # 防止子进程被终端信号影响
         )
-        time.sleep(1)  # 等待进程启动
+        time.sleep(5)  # 等待进程启动
         if taosadapter_process.poll() is not None:
             error = taosadapter_process.stderr.read().decode('utf-8')
             return jsonify({"status": "error", "message": f"Failed to start: {error}"}), 500
@@ -40,6 +40,7 @@ def stop_taosadapter():
     try:
         # 发送 SIGTERM 信号（优雅关闭）
         os.killpg(os.getpgid(taosadapter_process.pid), signal.SIGTERM)
+        time.sleep(5)
         taosadapter_process = None
         return jsonify({"status": "success"}), 200
     except Exception as e:
