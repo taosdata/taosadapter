@@ -3,4 +3,5 @@ ignore:
   - "benchmark"
   - "examples"
   - "plugin/prometheus/proto/write"
+  - "plugin/prometheus/prompb"
   - "main.go"

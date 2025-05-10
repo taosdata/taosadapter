@@ -5,10 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"runtime"
+	"strconv"
+	"sync"
 	"time"
 
+	"github.com/shirou/gopsutil/v3/process"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/monitor/metrics"
+	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/sqltype"
 )
@@ -56,6 +62,18 @@ var (
 	WSQueryInProcess *metrics.Gauge
 	WSWriteInProcess *metrics.Gauge
 	WSOtherInProcess *metrics.Gauge
+)
+
+var (
+	ConnPoolInUse sync.Map
+	WSQueryConn   *metrics.Gauge
+	WSSMLConn     *metrics.Gauge
+	WSStmtConn    *metrics.Gauge
+	WSWSConn      *metrics.Gauge
+	WSTMQConn     *metrics.Gauge
+
+	AsyncCInflight *metrics.Gauge
+	SyncCInflight  *metrics.Gauge
 )
 
 func InitKeeper() {
@@ -144,6 +162,17 @@ func InitKeeper() {
 			WSWriteInProcess,
 			WSOtherInProcess,
 		)
+
+		WSQueryConn = metrics.NewGauge("ws_query_conn")
+		WSSMLConn = metrics.NewGauge("ws_sml_conn")
+		WSStmtConn = metrics.NewGauge("ws_stmt_conn")
+		WSWSConn = metrics.NewGauge("ws_ws_conn")
+		WSTMQConn = metrics.NewGauge("ws_tmq_conn")
+		AsyncCInflight = metrics.NewGauge("async_c_inflight")
+		SyncCInflight = metrics.NewGauge("sync_c_inflight")
+
+		thread.AsyncSemaphore.SetGauge(AsyncCInflight)
+		thread.SyncSemaphore.SetGauge(SyncCInflight)
 	}
 }
 
@@ -260,10 +289,83 @@ func WSRecordResult(sqlType sqltype.SqlType, success bool) {
 	}
 }
 
+func RecordNewConnectionPool(userName string) *metrics.Gauge {
+	if config.Conf.UploadKeeper.Enable {
+		gauge := metrics.NewGauge(fmt.Sprintf("conn_pool_in_use_%s", userName))
+		ConnPoolInUse.Store(userName, gauge)
+		return gauge
+	}
+	return nil
+}
+
+func RecordWSQueryConn() {
+	if config.Conf.UploadKeeper.Enable {
+		WSQueryConn.Inc()
+	}
+}
+
+func RecordWSQueryDisconnect() {
+	if config.Conf.UploadKeeper.Enable {
+		WSQueryConn.Dec()
+	}
+}
+
+func RecordWSSMLConn() {
+	if config.Conf.UploadKeeper.Enable {
+		WSSMLConn.Inc()
+	}
+}
+
+func RecordWSSMLDisconnect() {
+	if config.Conf.UploadKeeper.Enable {
+		WSSMLConn.Dec()
+	}
+}
+
+func RecordWSStmtConn() {
+	if config.Conf.UploadKeeper.Enable {
+		WSStmtConn.Inc()
+	}
+}
+
+func RecordWSStmtDisconnect() {
+	if config.Conf.UploadKeeper.Enable {
+		WSStmtConn.Dec()
+	}
+}
+
+func RecordWSWSConn() {
+	if config.Conf.UploadKeeper.Enable {
+		WSWSConn.Inc()
+	}
+}
+
+func RecordWSWSDisconnect() {
+	if config.Conf.UploadKeeper.Enable {
+		WSWSConn.Dec()
+	}
+}
+
+func RecordWSTMQConn() {
+	if config.Conf.UploadKeeper.Enable {
+		WSTMQConn.Inc()
+	}
+}
+
+func RecordWSTMQDisconnect() {
+	if config.Conf.UploadKeeper.Enable {
+		WSTMQConn.Dec()
+	}
+}
+
 func StartUpload() {
 	if config.Conf.UploadKeeper.Enable {
 		client := &http.Client{
 			Timeout: config.Conf.UploadKeeper.Timeout,
+		}
+		p, err := process.NewProcess(int32(os.Getpid()))
+		if err != nil {
+			logger.Panicf("get process error, err:%s", err)
 		}
 		go func() {
 			nextUploadTime := getNextUploadTime()
@@ -273,7 +375,7 @@ func StartUpload() {
 			startTimer.Stop()
 			go func() {
 				reqID := generator.GetUploadKeeperReqID()
-				err := upload(client, reqID)
+				err := upload(p, client, reqID)
 				if err != nil {
 					logger.Errorf("upload_id:0x%x, upload to keeper error, err:%s", reqID, err)
 				}
@@ -282,7 +384,7 @@ func StartUpload() {
 			for range ticker.C {
 				go func() {
 					reqID := generator.GetUploadKeeperReqID()
-					err := upload(client, reqID)
+					err := upload(p, client, reqID)
 					if err != nil {
 						logger.Errorf("upload_id:0x%x, upload to keeper error, err:%s", reqID, err)
 					}
@@ -302,17 +404,50 @@ func getNextUploadTime() time.Time {
 }
 
 type UploadData struct {
-	Ts       int64          `json:"ts"`
-	Metrics  map[string]int `json:"metrics"`
-	Endpoint string         `json:"endpoint"`
+	Ts           int64          `json:"ts"`
+	Metrics      map[string]int `json:"metrics"`
+	Endpoint     string         `json:"endpoint"`
+	ExtraMetrics []*ExtraMetric `json:"extra_metrics"`
 }
 
-func upload(client *http.Client, reqID int64) error {
+type ExtraMetric struct {
+	Ts       string   `json:"ts"`
+	Protocol int      `json:"protocol"`
+	Tables   []*Table `json:"tables"`
+}
+
+type Table struct {
+	Name         string         `json:"name"`
+	MetricGroups []*MetricGroup `json:"metric_groups"`
+}
+
+type MetricGroup struct {
+	Tags    []*Tag    `json:"tags"`
+	Metrics []*Metric `json:"metrics"`
+}
+
+type Tag struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+type Metric struct {
+	Name  string      `json:"name"`
+	Value interface{} `json:"value"`
+}
+
+func upload(p *process.Process, client *http.Client, reqID int64) error {
 	ts := time.Now().Round(config.Conf.UploadKeeper.Interval)
+	extraMetric, err := generateExtraMetrics(ts, p)
+	if err != nil {
+		logger.Errorf("generate extra metrics error, err:%s", err)
+		return err
+	}
 	data := UploadData{
-		Ts:       ts.Unix(),
-		Metrics:  make(map[string]int, len(recordMetrics)+len(inflightMetrics)),
-		Endpoint: identity,
+		Ts:           ts.Unix(),
+		Metrics:      make(map[string]int, len(recordMetrics)+len(inflightMetrics)),
+		Endpoint:     identity,
+		ExtraMetrics: extraMetric,
 	}
 	for _, metric := range recordMetrics {
 		value := metric.Value()
@@ -341,6 +476,124 @@ func upload(client *http.Client, reqID int64) error {
 	return err
 }
 
+func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, error) {
+	memState, err := p.MemoryInfo()
+	if err != nil {
+		return nil, fmt.Errorf("get memory info error, err:%s", err.Error())
+	}
+	memStats := new(runtime.MemStats)
+	runtime.ReadMemStats(memStats)
+	statusTable := &Table{
+		Name: "adapter_status",
+		MetricGroups: []*MetricGroup{
+			{
+				Tags: []*Tag{
+					{
+						Name:  "endpoint",
+						Value: identity,
+					},
+				},
+				Metrics: []*Metric{
+					{
+						Name:  "go_heap_sys",
+						Value: memStats.HeapSys,
+					},
+					{
+						Name:  "go_heap_inuse",
+						Value: memStats.HeapInuse,
+					},
+					{
+						Name:  "go_stack_sys",
+						Value: memStats.StackSys,
+					},
+					{
+						Name:  "go_stack_inuse",
+						Value: memStats.StackInuse,
+					},
+					{
+						Name:  "rss",
+						Value: memState.RSS,
+					},
+					{
+						Name:  "ws_query_conn",
+						Value: WSQueryConn.Value(),
+					},
+					{
+						Name:  "ws_stmt_conn",
+						Value: WSStmtConn.Value(),
+					},
+					{
+						Name:  "ws_sml_conn",
+						Value: WSSMLConn.Value(),
+					},
+					{
+						Name:  "ws_ws_conn",
+						Value: WSWSConn.Value(),
+					},
+					{
+						Name:  "ws_tmq_conn",
+						Value: WSTMQConn.Value(),
+					},
+					{
+						Name:  "async_c_limit",
+						Value: config.Conf.MaxAsyncMethodLimit,
+					},
+					{
+						Name:  "async_c_inflight",
+						Value: AsyncCInflight.Value(),
+					},
+					{
+						Name:  "sync_c_limit",
+						Value: config.Conf.MaxSyncMethodLimit,
+					},
+					{
+						Name:  "sync_c_inflight",
+						Value: SyncCInflight.Value(),
+					},
+				},
+			},
+		},
+	}
+	connTable := &Table{
+		Name: "adapter_conn_pool",
+	}
+	ConnPoolInUse.Range(func(k, v interface{}) bool {
+		connTable.MetricGroups = append(connTable.MetricGroups, &MetricGroup{
+			Tags: []*Tag{
+				{
+					Name:  "endpoint",
+					Value: identity,
+				},
+				{
+					Name:  "user",
+					Value: k.(string),
+				},
+			},
+			Metrics: []*Metric{
+				{
+					Name:  "conn_pool_total",
+					Value: config.Conf.Pool.MaxConnect,
+				},
+				{
+					Name:  "conn_pool_in_use",
+					Value: v.(*metrics.Gauge).Value(),
+				},
+			},
+		})
+		return true
+	})
+	metric := &ExtraMetric{
+		Ts:       strconv.FormatInt(ts.UnixMilli(), 10),
+		Protocol: 2,
+		Tables: []*Table{
+			statusTable,
+		},
+	}
+	if len(connTable.MetricGroups) > 0 {
+		metric.Tables = append(metric.Tables, connTable)
+	}
+	return []*ExtraMetric{metric}, nil
+}
 func doRequest(client *http.Client, data []byte, reqID int64) error {
 	req, err := http.NewRequest(http.MethodPost, config.Conf.UploadKeeper.Url, bytes.NewBuffer(data))
 	if err != nil {

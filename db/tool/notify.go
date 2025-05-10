@@ -45,15 +45,21 @@ func putWhiteListHandle(handle cgo.Handle) {
 func GetWhitelist(conn unsafe.Pointer) ([]*net.IPNet, error) {
 	c, handler := getWhiteListHandle()
 	defer putWhiteListHandle(handler)
-	thread.SyncLocker.Lock()
-	wrapper.TaosFetchWhitelistA(conn, handler)
-	thread.SyncLocker.Unlock()
+	taosFetchWhiteListA(conn, handler)
 	data := <-c
 	if data.ErrCode != 0 {
 		err := errors.NewError(int(data.ErrCode), wrapper.TaosErrorStr(nil))
 		return nil, err
 	}
 	return data.IPNets, nil
+}
+
+func taosFetchWhiteListA(conn unsafe.Pointer, handle cgo.Handle) {
+	thread.AsyncSemaphore.Acquire()
+	defer func() {
+		thread.AsyncSemaphore.Release()
+	}()
+	wrapper.TaosFetchWhitelistA(conn, handle)
 }
 
 func CheckWhitelist(whitelist []*net.IPNet, ip net.IP) bool {

@@ -19,6 +19,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
@@ -34,6 +35,7 @@ func NewSchemalessController() *SchemalessController {
 	schemaless.Config.MaxMessageSize = 0
 
 	schemaless.HandleConnect(func(session *melody.Session) {
+		monitor.RecordWSSMLConn()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws connect")
 		session.Set(taosSchemalessKey, NewTaosSchemaless(session))
@@ -106,6 +108,7 @@ func NewSchemalessController() *SchemalessController {
 	})
 
 	schemaless.HandleDisconnect(func(session *melody.Session) {
+		monitor.RecordWSSMLDisconnect()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws disconnect")
 		t, exist := session.Get(taosSchemalessKey)
@@ -358,7 +361,7 @@ type schemalessResp struct {
 }
 
 func (t *TaosSchemaless) insert(ctx context.Context, session *melody.Session, req schemalessWriteReq) {
-	action := SchemalessConn
+	action := SchemalessWrite
 	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
 	logger.Tracef("schemaless insert request:%+v", req)
 	isDebug := log.IsDebug()
