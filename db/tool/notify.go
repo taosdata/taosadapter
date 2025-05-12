@@ -47,9 +47,8 @@ func GetWhitelist(conn unsafe.Pointer) ([]*net.IPNet, error) {
 	defer putWhiteListHandle(handler)
 	taosFetchWhiteListA(conn, handler)
 	data := <-c
-	if data.ErrCode != 0 {
-		err := errors.NewError(int(data.ErrCode), wrapper.TaosErrorStr(nil))
-		return nil, err
+	if data.Err != nil {
+		return nil, data.Err
 	}
 	return data.IPNets, nil
 }
@@ -59,7 +58,7 @@ func taosFetchWhiteListA(conn unsafe.Pointer, handle cgo.Handle) {
 	defer func() {
 		thread.AsyncSemaphore.Release()
 	}()
-	wrapper.TaosFetchWhitelistA(conn, handle)
+	wrapper.TaosFetchWhitelistDualStackA(conn, handle)
 }
 
 func CheckWhitelist(whitelist []*net.IPNet, ip net.IP) bool {
