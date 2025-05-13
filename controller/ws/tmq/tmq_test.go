@@ -33,6 +33,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/layout"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 var router *gin.Engine
@@ -61,7 +62,7 @@ func TestTMQ(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("create database if not exists test_ws_tmq WAL_RETENTION_PERIOD 86400")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -69,7 +70,7 @@ func TestTMQ(t *testing.T) {
 		w = httptest.NewRecorder()
 		body = strings.NewReader("drop database if exists test_ws_tmq")
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-		req.RemoteAddr = "127.0.0.1:33333"
+		req.RemoteAddr = testtools.GetRandomRemoteAddr()
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
@@ -78,7 +79,7 @@ func TestTMQ(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists ct0 (ts timestamp, c1 int)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -86,7 +87,7 @@ func TestTMQ(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists ct1 (ts timestamp, c1 int, c2 float)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -94,7 +95,7 @@ func TestTMQ(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists ct2 (ts timestamp, c1 int, c2 float, c3 binary(10))")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -102,7 +103,7 @@ func TestTMQ(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create topic if not exists test_tmq_ws_topic as DATABASE test_ws_tmq")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -110,7 +111,7 @@ func TestTMQ(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`insert into ct0 values('%s',1)`, ts1.Format(time.RFC3339Nano)))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -118,7 +119,7 @@ func TestTMQ(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`insert into ct1 values('%s',1,2)`, ts2.Format(time.RFC3339Nano)))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -126,7 +127,7 @@ func TestTMQ(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`insert into ct2 values('%s',1,2,'3')`, ts3.Format(time.RFC3339Nano)))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -448,14 +449,14 @@ func TestTMQ(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop topic if exists test_tmq_ws_topic")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop database if exists test_ws_tmq")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -470,7 +471,7 @@ func TestMeta(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("create database if not exists test_ws_tmq_meta WAL_RETENTION_PERIOD 86400")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -478,7 +479,7 @@ func TestMeta(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create topic if not exists test_tmq_meta_ws_topic with meta as DATABASE test_ws_tmq_meta")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_meta", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -560,7 +561,7 @@ func TestMeta(t *testing.T) {
 				"tc15 geometry(100)" +
 				")")
 			req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_meta", body)
-			req.RemoteAddr = "127.0.0.1:33333"
+			req.RemoteAddr = testtools.GetRandomRemoteAddr()
 			req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 			router.ServeHTTP(w, req)
 			assert.Equal(t, 200, w.Code)
@@ -694,7 +695,7 @@ func TestMeta(t *testing.T) {
 			w = httptest.NewRecorder()
 			body = strings.NewReader("describe stb")
 			req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_meta_target", body)
-			req.RemoteAddr = "127.0.0.1:33333"
+			req.RemoteAddr = testtools.GetRandomRemoteAddr()
 			req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 			router.ServeHTTP(w, req)
 			assert.Equal(t, 200, w.Code)
@@ -891,7 +892,7 @@ func TestMeta(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("describe stb")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_meta_target", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -942,21 +943,21 @@ func TestMeta(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop topic if exists test_tmq_meta_ws_topic")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop database if exists test_ws_tmq_meta_target")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop database if exists test_ws_tmq_meta")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -966,7 +967,7 @@ func writeRaw(t *testing.T, rawData []byte) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("create database if not exists test_ws_tmq_meta_target WAL_RETENTION_PERIOD 86400")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1083,7 +1084,7 @@ func TestTMQAutoCommit(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("create database if not exists test_ws_tmq_auto_commit WAL_RETENTION_PERIOD 86400")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1091,7 +1092,7 @@ func TestTMQAutoCommit(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists ct0 (ts timestamp, c1 int)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_auto_commit", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1099,7 +1100,7 @@ func TestTMQAutoCommit(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists ct1 (ts timestamp, c1 int, c2 float)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_auto_commit", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1107,7 +1108,7 @@ func TestTMQAutoCommit(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists ct2 (ts timestamp, c1 int, c2 float, c3 binary(10))")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_auto_commit", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1115,7 +1116,7 @@ func TestTMQAutoCommit(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create topic if not exists test_tmq_ws_auto_commit_topic as DATABASE test_ws_tmq_auto_commit")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_auto_commit", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1123,7 +1124,7 @@ func TestTMQAutoCommit(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`insert into ct0 values('%s',1)`, ts1.Format(time.RFC3339Nano)))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_auto_commit", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1131,7 +1132,7 @@ func TestTMQAutoCommit(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`insert into ct1 values('%s',1,2)`, ts2.Format(time.RFC3339Nano)))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_auto_commit", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1139,7 +1140,7 @@ func TestTMQAutoCommit(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`insert into ct2 values('%s',1,2,'3')`, ts3.Format(time.RFC3339Nano)))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_auto_commit", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1451,14 +1452,14 @@ func TestTMQAutoCommit(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop topic if exists test_tmq_ws_auto_commit_topic")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop database if exists test_ws_tmq_auto_commit")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1471,7 +1472,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("create database if not exists test_ws_tmq_unsubscribe WAL_RETENTION_PERIOD 86400")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1480,7 +1481,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 		w = httptest.NewRecorder()
 		body = strings.NewReader("drop database if exists test_ws_tmq_unsubscribe")
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-		req.RemoteAddr = "127.0.0.1:33333"
+		req.RemoteAddr = testtools.GetRandomRemoteAddr()
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
@@ -1489,7 +1490,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists ct0 (ts timestamp, c1 int)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1497,7 +1498,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists ct1 (ts timestamp, c1 int, c2 float)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1505,7 +1506,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists ct2 (ts timestamp, c1 int, c2 float, c3 binary(10))")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1513,7 +1514,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create topic if not exists test_tmq_ws_unsubscribe_topic as DATABASE test_ws_tmq_unsubscribe")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1521,7 +1522,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`insert into ct0 values('%s',1)`, ts1.Format(time.RFC3339Nano)))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1529,7 +1530,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create topic if not exists test_tmq_ws_unsubscribe2_topic as select * from ct0")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1537,7 +1538,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`insert into ct1 values('%s',1,2)`, ts2.Format(time.RFC3339Nano)))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -1545,7 +1546,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`insert into ct2 values('%s',1,2,'3')`, ts3.Format(time.RFC3339Nano)))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_tmq_unsubscribe", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -2044,21 +2045,21 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop topic if exists test_tmq_ws_unsubscribe_topic")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop topic if exists test_tmq_ws_unsubscribe2_topic")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop database if exists test_ws_tmq_unsubscribe")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -2081,7 +2082,7 @@ func TestTMQSeek(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("create database if not exists " + dbName + " vgroups " + strconv.Itoa(vgroups) + " WAL_RETENTION_PERIOD 86400")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -2089,7 +2090,7 @@ func TestTMQSeek(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists ct0 (ts timestamp, c1 int)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/"+dbName, body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -2097,7 +2098,7 @@ func TestTMQSeek(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists ct1 (ts timestamp, c1 int, c2 float)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/"+dbName, body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -2105,7 +2106,7 @@ func TestTMQSeek(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists ct2 (ts timestamp, c1 int, c2 float, c3 binary(10))")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/"+dbName, body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -2114,7 +2115,7 @@ func TestTMQSeek(t *testing.T) {
 		w = httptest.NewRecorder()
 		body = strings.NewReader(insertSql[i])
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql/"+dbName, body)
-		req.RemoteAddr = "127.0.0.1:33333"
+		req.RemoteAddr = testtools.GetRandomRemoteAddr()
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
@@ -2123,7 +2124,7 @@ func TestTMQSeek(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create topic if not exists " + topic + " as database " + dbName)
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/"+dbName, body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -2555,14 +2556,14 @@ func TestTMQSeek(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop topic if exists " + topic)
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("drop database if exists " + dbName)
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -2572,7 +2573,7 @@ func doHttpSql(sql string) (code int, message string) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader(sql)
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	b, _ := io.ReadAll(w.Body)
@@ -3454,7 +3455,7 @@ func TestTMQ_SetMsgConsumeExcluded(t *testing.T) {
 //		url = fmt.Sprintf("/rest/sql/%s", db)
 //	}
 //	req, _ := http.NewRequest(http.MethodPost, url, body)
-//	req.RemoteAddr = "127.0.0.1:33333"
+//	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 //	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 //	router.ServeHTTP(w, req)
 //	if w.Code != http.StatusOK {
@@ -3814,7 +3815,7 @@ func TestConsumeRawdata(t *testing.T) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("describe stb")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql/test_ws_rawdata_target", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -3865,7 +3866,7 @@ func TestConsumeRawdata(t *testing.T) {
 	w = httptest.NewRecorder()
 	body = strings.NewReader("select * from stb limit 1")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_rawdata_target", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -3935,7 +3936,7 @@ func writeConsumeRawdata(t *testing.T, rawData []byte) {
 	w := httptest.NewRecorder()
 	body := strings.NewReader("create database if not exists test_ws_rawdata_target WAL_RETENTION_PERIOD 86400")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)

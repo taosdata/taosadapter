@@ -15,7 +15,8 @@ func TestGetWhiteList(t *testing.T) {
 	handler := cgo.NewHandle(c)
 	TaosFetchWhitelistDualStackA(conn, handler)
 	data := <-c
-	assert.Equal(t, int32(0), data.Err)
-	assert.Equal(t, 1, len(data.IPNets))
+	assert.Nil(t, data.Err)
+	assert.Equal(t, 2, len(data.IPNets))
 	assert.Equal(t, "0.0.0.0/0", data.IPNets[0].String())
+	assert.Equal(t, "::/0", data.IPNets[1].String())
 }

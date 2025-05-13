@@ -238,6 +238,29 @@ func TestCheckWhitelist(t *testing.T) {
 	assert.True(t, contains)
 	contains = CheckWhitelist(ipNets, net.ParseIP("192.168.1.1"))
 	assert.False(t, contains)
+	_, ipNet, _ = net.ParseCIDR("0.0.0.0/0")
+	ipNets = []*net.IPNet{ipNet}
+	contains = CheckWhitelist(ipNets, net.ParseIP("192.168.1.1"))
+	assert.True(t, contains)
+	// invalid ip
+	contains = CheckWhitelist(ipNets, net.ParseIP(""))
+	assert.False(t, contains)
+	// ipv6
+	_, ipNet, _ = net.ParseCIDR("::1/128")
+	ipNets = []*net.IPNet{ipNet}
+	contains = CheckWhitelist(ipNets, net.ParseIP("::1"))
+	assert.True(t, contains)
+	contains = CheckWhitelist(ipNets, net.ParseIP("::2"))
+	assert.False(t, contains)
+	_, ipNet, _ = net.ParseCIDR("::/0")
+	ipNets = []*net.IPNet{ipNet}
+	contains = CheckWhitelist(ipNets, net.ParseIP("::1"))
+	assert.True(t, contains)
+	contains = CheckWhitelist(ipNets, net.ParseIP("::2"))
+	assert.True(t, contains)
+	// invalid ip
+	contains = CheckWhitelist(ipNets, net.ParseIP(""))
+	assert.False(t, contains)
 }
 
 func TestRegisterChangeWhitelist(t *testing.T) {
