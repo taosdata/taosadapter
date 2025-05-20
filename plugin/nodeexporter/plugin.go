@@ -229,11 +229,12 @@ func (p *NodeExporter) requestSingle(conn unsafe.Pointer, req *Req) error {
 	if err != nil {
 		return fmt.Errorf("error reading body: %s", err)
 	}
-	metrics, err := Parse(body, resp.Header, false)
+	metrics, err := Parse(body, resp.Header, p.conf.IgnoreTimestamp)
 	if err != nil {
 		return fmt.Errorf("error pase body: %s", err)
 	}
-	serializer := influx.NewSerializer()
+	serializer := &influx.Serializer{}
+	_ = serializer.Init()
 	for _, metric := range metrics {
 		metric.AddTag("url", req.url)
 		tags := metric.Tags()

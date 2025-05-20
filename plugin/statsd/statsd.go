@@ -141,11 +141,11 @@ type Statsd struct {
 	// Max duration for each metric to stay cached without being updated.
 	MaxTTL time.Duration `toml:"max_ttl"`
 
-	graphiteParser *graphite.GraphiteParser
+	graphiteParser *graphite.Parser
 
 	acc telegraf.Accumulator
 
-	Log telegraf.Logger `toml:"-"`
+	Log *logrus.Entry
 
 	// A pool of byte slices to handle parsing
 	bufPool sync.Pool
@@ -410,7 +410,7 @@ func (s *Statsd) tcpListen(listener *net.TCPListener) error {
 				continue
 			}
 			if !valid {
-				s.Log.(*logrus.Entry).WithField("user", s.User).WithField("clientIP", conn.RemoteAddr().(*net.TCPAddr).IP.String()).Error("forbidden clientIP")
+				s.Log.WithField("user", s.User).WithField("clientIP", conn.RemoteAddr().(*net.TCPAddr).IP.String()).Error("forbidden clientIP")
 				_ = conn.Close()
 				continue
 			}
@@ -491,7 +491,7 @@ func (s *Statsd) udpListen(conn *net.UDPConn) error {
 				continue
 			}
 			if !valid {
-				s.Log.(*logrus.Entry).WithField("user", s.User).WithField("clientIP", addr.IP.String()).Error("forbidden clientIP")
+				s.Log.WithField("user", s.User).WithField("clientIP", addr.IP.String()).Error("forbidden clientIP")
 				_ = conn.Close()
 				continue
 			}
@@ -735,7 +735,8 @@ func (s *Statsd) parseName(bucket string) (name string, field string, tags map[s
 	var err error
 
 	if p == nil || s.graphiteParser.Separator != s.MetricSeparator {
-		p, err = graphite.NewGraphiteParser(s.MetricSeparator, s.Templates, nil)
+		p = &graphite.Parser{Separator: s.MetricSeparator, Templates: s.Templates}
+		err = p.Init()
 		s.graphiteParser = p
 	}
 
