@@ -1,8 +1,10 @@
 package openmetrics
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/driver/common"
 )
@@ -218,4 +220,54 @@ func TestCheckConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExampleConfig(t *testing.T) {
+	defaultConfig := `# OpenMetrics Configuration
+[open_metrics]
+enable = false  # Enable OpenMetrics data collection
+
+## TDengine connection credentials
+user = "root"  # TDengine username for OpenMetrics connection
+password = "taosdata"  # TDengine password for OpenMetrics connection
+
+## Database configuration
+dbs = ["open_metrics"]  # Target database names for OpenMetrics data
+
+## Endpoint configuration
+urls = ["http://localhost:9100"]  # OpenMetrics endpoints to scrape
+
+## Timeout settings
+responseTimeoutSeconds = [5]  # HTTP response timeout in seconds for OpenMetrics scraping
+
+## Authentication methods
+httpUsernames = []  # Basic auth usernames for protected OpenMetrics endpoints
+httpPasswords = []  # Basic auth passwords for protected OpenMetrics endpoints
+httpBearerTokenStrings = []  # Bearer tokens for OpenMetrics endpoint authentication
+
+## TLS configuration
+caCertFiles = []  # Paths to CA certificate files for TLS verification
+certFiles = []  # Paths to client certificate files for mTLS
+keyFiles = []  # Paths to private key files for mTLS
+insecureSkipVerify = true  # Skip TLS certificate verification (insecure)
+
+## Collection parameters
+gatherDurationSeconds = [5]  # Interval in seconds between OpenMetrics scrapes
+
+## Data retention
+ttl = []  # Time-to-live for OpenMetrics data (0=no expiration)
+
+## Timestamp handling
+ignoreTimestamp = false  # Use server timestamp instead of metrics timestamps`
+	v := viper.New()
+	v.SetConfigType("toml")
+	defaultCfg := &Config{}
+	defaultCfg.setValue(viper.GetViper())
+	t.Log(defaultCfg)
+	err := v.ReadConfig(strings.NewReader(defaultConfig))
+	assert.NoError(t, err)
+	cfg := &Config{}
+	cfg.setValue(v)
+	t.Log(cfg)
+	assert.Equal(t, defaultCfg, cfg)
 }
