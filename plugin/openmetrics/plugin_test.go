@@ -1,9 +1,18 @@
 package openmetrics
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"database/sql/driver"
+	"encoding/pem"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path"
 	"testing"
 	"time"
 	"unsafe"
@@ -57,44 +66,40 @@ test_metric{label="value"} 1.0 1490802350
 # EOF
 `
 
-func TestOpenMetrics(t *testing.T) {
-	config.Init()
-	log.ConfigLog()
-	db.PrepareConnection()
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/metrics" {
-			w.Header().Set("Content-Type", "application/openmetrics-text")
-			_, err := w.Write([]byte(openMetricsV1))
-			if err != nil {
-				return
-			}
-		} else if r.URL.Path == "/prometheus" {
-			w.Header().Set("Content-Type", "application/openmetrics-text")
-			_, err := w.Write([]byte(prometheus004))
-			if err != nil {
-				return
-			}
-		} else if r.URL.Path == "/wrongtype" {
-			_, err := w.Write([]byte(prometheus004))
-			if err != nil {
-				return
-			}
-		} else if r.URL.Path == "/protobuf" {
-			var metricSet openmetrics.MetricSet
-			metricSet.MetricFamilies = []*openmetrics.MetricFamily{
-				{
-					Name: "test_gauge",
-					Type: openmetrics.MetricType_GAUGE,
-					Help: "test gauge",
-					Metrics: []*openmetrics.Metric{
-						{
-							MetricPoints: []*openmetrics.MetricPoint{
-								{
-									Value: &openmetrics.MetricPoint_GaugeValue{
-										GaugeValue: &openmetrics.GaugeValue{
-											Value: &openmetrics.GaugeValue_DoubleValue{
-												DoubleValue: 1234567,
-											},
+var testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case r.URL.Path == "/metrics":
+		w.Header().Set("Content-Type", "application/openmetrics-text")
+		_, err := w.Write([]byte(openMetricsV1))
+		if err != nil {
+			return
+		}
+	case r.URL.Path == "/prometheus":
+		w.Header().Set("Content-Type", "application/openmetrics-text")
+		_, err := w.Write([]byte(prometheus004))
+		if err != nil {
+			return
+		}
+	case r.URL.Path == "/wrongtype":
+		_, err := w.Write([]byte(prometheus004))
+		if err != nil {
+			return
+		}
+	case r.URL.Path == "/protobuf":
+		var metricSet openmetrics.MetricSet
+		metricSet.MetricFamilies = []*openmetrics.MetricFamily{
+			{
+				Name: "test_gauge",
+				Type: openmetrics.MetricType_GAUGE,
+				Help: "test gauge",
+				Metrics: []*openmetrics.Metric{
+					{
+						MetricPoints: []*openmetrics.MetricPoint{
+							{
+								Value: &openmetrics.MetricPoint_GaugeValue{
+									GaugeValue: &openmetrics.GaugeValue{
+										Value: &openmetrics.GaugeValue_DoubleValue{
+											DoubleValue: 1234567,
 										},
 									},
 								},
@@ -102,28 +107,68 @@ func TestOpenMetrics(t *testing.T) {
 						},
 					},
 				},
-			}
-			bs, err := proto.Marshal(&metricSet)
-			if err != nil {
-				t.Fatal(err)
-			}
-			w.Header().Set("Content-Type", "application/openmetrics-protobuf; version=1.0.0")
-			_, err = w.Write([]byte(bs))
+			},
+		}
+		bs, err := proto.Marshal(&metricSet)
+		if err != nil {
+			panic(err)
+		}
+		w.Header().Set("Content-Type", "application/openmetrics-protobuf; version=1.0.0")
+		_, err = w.Write([]byte(bs))
+		if err != nil {
+			return
+		}
+	case r.URL.Path == "/basicauth":
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+		if username == "test_user" && password == "test_pass" {
+			w.Header().Set("Content-Type", "application/openmetrics-text")
+			_, err := w.Write([]byte(openMetricsV1))
 			if err != nil {
 				return
 			}
 		} else {
-			w.WriteHeader(http.StatusNotFound)
+			panic("wrong username or password")
 		}
-	}))
+	case r.URL.Path == "bearertoken":
+		bearerToken := r.Header.Get("Authorization")
+		if bearerToken == "Bearer test_token" {
+			w.Header().Set("Content-Type", "application/openmetrics-text")
+			_, err := w.Write([]byte(openMetricsV1))
+			if err != nil {
+				return
+			}
+		} else {
+			panic("wrong bearer token")
+		}
+	default:
+		w.WriteHeader(http.StatusNotFound)
+	}
+})
+
+func TestMain(m *testing.M) {
+	config.Init()
+	log.ConfigLog()
+	db.PrepareConnection()
+	m.Run()
+}
+func TestOpenMetrics(t *testing.T) {
+	ts := httptest.NewServer(testHandler)
 	defer ts.Close()
-	api := ts.URL
+	tlsServer := httptest.NewTLSServer(testHandler)
+	defer tlsServer.Close()
+
+	tsUrl := ts.URL
+	tlsUrl := tlsServer.URL
 	viper.Set("open_metrics.enable", true)
-	viper.Set("open_metrics.urls", []string{api, api + "/prometheus", api + "/wrongtype", api + "/protobuf"})
-	viper.Set("open_metrics.gatherDurationSeconds", []int{1, 1, 1, 1})
-	viper.Set("open_metrics.ttl", []int{1000, 1000, 1000, 1000})
-	viper.Set("open_metrics.dbs", []string{"open_metrics", "open_metrics", "open_metrics", "open_metrics_proto"})
-	viper.Set("open_metrics.responseTimeoutSeconds", []int{5, 5, 5, 5})
+	viper.Set("open_metrics.urls", []string{tsUrl, tsUrl + "/prometheus", tsUrl + "/wrongtype", tsUrl + "/protobuf", tlsUrl, tlsUrl + "/prometheus", tlsUrl + "/wrongtype", tlsUrl + "/protobuf"})
+	viper.Set("open_metrics.gatherDurationSeconds", []int{1, 1, 1, 1, 1, 1, 1, 1})
+	viper.Set("open_metrics.ttl", []int{1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000})
+	viper.Set("open_metrics.dbs", []string{"open_metrics", "open_metrics", "open_metrics", "open_metrics_proto", "open_metrics_tls", "open_metrics_tls", "open_metrics_tls", "open_metrics_tls_proto"})
+	viper.Set("open_metrics.responseTimeoutSeconds", []int{5, 5, 5, 5, 5, 5, 5, 5})
+	viper.Set("open_metrics.insecureSkipVerify", true) // skip verify for test
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	assert.NoError(t, err)
 	defer func() {
@@ -132,6 +177,10 @@ func TestOpenMetrics(t *testing.T) {
 	err = exec(conn, "create database if not exists open_metrics precision 'ns'")
 	assert.NoError(t, err)
 	err = exec(conn, "create database if not exists open_metrics_proto precision 'ns'")
+	assert.NoError(t, err)
+	err = exec(conn, "create database if not exists open_metrics_tls precision 'ns'")
+	assert.NoError(t, err)
+	err = exec(conn, "create database if not exists open_metrics_tls_proto precision 'ns'")
 	assert.NoError(t, err)
 	openMetrics := &OpenMetrics{}
 	assert.Equal(t, "openmetrics", openMetrics.String())
@@ -145,6 +194,12 @@ func TestOpenMetrics(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, float64(1), values[0][0])
 	values, err = query(conn, "select last(`gauge`) as `gauge` from open_metrics_proto.test_gauge;")
+	assert.NoError(t, err)
+	assert.Equal(t, float64(1234567), values[0][0])
+	values, err = query(conn, "select last(`gauge`) as `gauge` from open_metrics_tls.test_metric;")
+	assert.NoError(t, err)
+	assert.Equal(t, float64(1), values[0][0])
+	values, err = query(conn, "select last(`gauge`) as `gauge` from open_metrics_tls_proto.test_gauge;")
 	assert.NoError(t, err)
 	assert.Equal(t, float64(1234567), values[0][0])
 	err = openMetrics.Stop()
@@ -164,6 +219,124 @@ func TestOpenMetrics(t *testing.T) {
 	err = exec(conn, "drop database if exists open_metrics")
 	assert.NoError(t, err)
 	err = exec(conn, "drop database if exists open_metrics_proto")
+	assert.NoError(t, err)
+	err = exec(conn, "drop database if exists open_metrics")
+	assert.NoError(t, err)
+	err = exec(conn, "drop database if exists open_metrics_proto")
+	assert.NoError(t, err)
+}
+
+func TestOpenMetricsMTls(t *testing.T) {
+	tmpDir := t.TempDir()
+	caCert, caKey := generateCertificate(true, nil, nil, "MyCA", []string{"MyCA Organization"})
+	caCertFile := path.Join(tmpDir, "ca-cert.pem")
+	caKeyFile := path.Join(tmpDir, "ca-key.pem")
+	err := saveCertAndKey(caCertFile, caKeyFile, caCert, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverCert, serverKey := generateCertificate(false, caCert, caKey, "localhost", []string{"MyServer Organization"})
+	serverCertFile := path.Join(tmpDir, "server-cert.pem")
+	serverKeyFile := path.Join(tmpDir, "server-key.pem")
+	err = saveCertAndKey(serverCertFile, serverKeyFile, serverCert, serverKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientCert, clientKey := generateCertificate(false, caCert, caKey, "Client", []string{"MyClient Organization"})
+	clientCertFile := path.Join(tmpDir, "client-cert.pem")
+	clientKeyFile := path.Join(tmpDir, "client-key.pem")
+	err = saveCertAndKey(clientCertFile, clientKeyFile, clientCert, clientKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AddCert(caCert)
+	server := httptest.NewUnstartedServer(testHandler)
+	serverTLSCert := tls.Certificate{
+		Certificate: [][]byte{serverCert.Raw},
+		PrivateKey:  serverKey,
+		Leaf:        serverCert,
+	}
+	server.TLS = &tls.Config{
+		Certificates: []tls.Certificate{serverTLSCert},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    caCertPool,
+	}
+	server.StartTLS()
+	defer server.Close()
+	//tlsUrl := server.URL
+}
+func generateCertificate(isCA bool, parentCert *x509.Certificate, parentKey *rsa.PrivateKey,
+	commonName string, organization []string) (*x509.Certificate, *rsa.PrivateKey) {
+
+	privKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+
+	serialNumber, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName:   commonName,
+			Organization: organization,
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().AddDate(1, 0, 0),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+	}
+
+	if isCA {
+		template.IsCA = true
+		template.KeyUsage |= x509.KeyUsageCertSign
+	}
+
+	var certBytes []byte
+	var err error
+	if isCA {
+		certBytes, err = x509.CreateCertificate(rand.Reader, &template, &template, &privKey.PublicKey, privKey)
+	} else {
+		certBytes, err = x509.CreateCertificate(rand.Reader, &template, parentCert, &privKey.PublicKey, parentKey)
+	}
+	if err != nil {
+		panic(err)
+	}
+
+	cert, _ := x509.ParseCertificate(certBytes)
+	return cert, privKey
+}
+func saveCertAndKey(certFile, keyFile string, cert *x509.Certificate, key *rsa.PrivateKey) error {
+	certOut, _ := os.Create(certFile)
+	err := pem.Encode(certOut, &pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: cert.Raw,
+	})
+	if err != nil {
+		return err
+	}
+	err = certOut.Close()
+	if err != nil {
+		return err
+	}
+
+	keyOut, _ := os.Create(keyFile)
+	err = pem.Encode(keyOut, &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(key),
+	})
+	if err != nil {
+		return err
+	}
+	return keyOut.Close()
+}
+func TestOpenMetricsDisabled(t *testing.T) {
+	viper.Set("open_metrics.enable", false)
+	openMetrics := &OpenMetrics{}
+	err := openMetrics.Init(nil)
+	assert.NoError(t, err)
+	err = openMetrics.Start()
+	assert.NoError(t, err)
+	err = openMetrics.Stop()
 	assert.NoError(t, err)
 }
 
