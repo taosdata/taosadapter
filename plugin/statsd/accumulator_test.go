@@ -3,15 +3,13 @@ package statsd
 // copied from github.com/influxdata/telegraf@v1.23.4/accumulator_test.go
 import (
 	"bytes"
-	"fmt"
-	"log"
+	"errors"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/influxdata/telegraf"
 	telegrafLogger "github.com/influxdata/telegraf/logger"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -49,27 +47,25 @@ func TestAddFields(t *testing.T) {
 
 func TestAccAddError(t *testing.T) {
 	errBuf := bytes.NewBuffer(nil)
-	log.SetOutput(errBuf)
-	defer log.SetOutput(os.Stderr)
+	telegrafLogger.RedirectLogging(errBuf)
+	defer telegrafLogger.RedirectLogging(os.Stderr)
 
 	metrics := make(chan telegraf.Metric, 10)
 	defer close(metrics)
 	a := NewAccumulator(&TestMetricMaker{}, metrics)
-	// test that we can add a nil error
-	a.AddError(nil)
 
-	a.AddError(fmt.Errorf("foo"))
-	a.AddError(fmt.Errorf("bar"))
-	a.AddError(fmt.Errorf("baz"))
+	a.AddError(errors.New("foo"))
+	a.AddError(errors.New("bar"))
+	a.AddError(errors.New("baz"))
 
 	errs := bytes.Split(errBuf.Bytes(), []byte{'\n'})
 	require.Len(t, errs, 4) // 4 because of trailing newline
-	assert.Contains(t, string(errs[0]), "TestPlugin")
-	assert.Contains(t, string(errs[0]), "foo")
-	assert.Contains(t, string(errs[1]), "TestPlugin")
-	assert.Contains(t, string(errs[1]), "bar")
-	assert.Contains(t, string(errs[2]), "TestPlugin")
-	assert.Contains(t, string(errs[2]), "baz")
+	require.Contains(t, string(errs[0]), "TestPlugin")
+	require.Contains(t, string(errs[0]), "foo")
+	require.Contains(t, string(errs[1]), "TestPlugin")
+	require.Contains(t, string(errs[1]), "bar")
+	require.Contains(t, string(errs[2]), "TestPlugin")
+	require.Contains(t, string(errs[2]), "baz")
 }
 
 func TestSetPrecision(t *testing.T) {
