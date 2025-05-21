@@ -19,6 +19,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/parsers/openmetrics"
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	"github.com/taosdata/taosadapter/v3/log"
@@ -43,12 +44,13 @@ type Mission struct {
 	url            string
 	db             string
 	ttl            int
+	reqID          uint64
 	logger         *logrus.Entry
 	telegrafLogger telegraf.Logger
 }
 
 func (p *OpenMetrics) Init(_ gin.IRouter) error {
-	p.conf.setValue()
+	p.conf.setValue(viper.GetViper())
 	if !p.conf.Enable {
 		logger.Info("node_exporter disabled")
 		return nil
@@ -107,6 +109,7 @@ func (p *OpenMetrics) prepareUrls() error {
 		if len(p.conf.CaCertFiles) != 0 && len(p.conf.CaCertFiles[i]) != 0 {
 			caCert, err := os.ReadFile(p.conf.CaCertFiles[i])
 			if err != nil {
+				logger.Errorf("failed to read ca cert file: %s", err)
 				return err
 			}
 			certPool.AppendCertsFromPEM(caCert)
@@ -115,6 +118,7 @@ func (p *OpenMetrics) prepareUrls() error {
 		if len(p.conf.CertFiles) != 0 && len(p.conf.CertFiles[i]) != 0 {
 			cert, err := tls.LoadX509KeyPair(p.conf.CertFiles[i], p.conf.KeyFiles[i])
 			if err != nil {
+				logger.Errorf("failed to load cert and key files: %s", err)
 				return err
 			}
 			certificates = append(certificates, cert)
@@ -150,16 +154,23 @@ func (p *OpenMetrics) prepareUrls() error {
 		if len(authToken) != 0 {
 			req.Header.Set("Authorization", authToken)
 		}
-		missionLogger := logger.WithField("url", u)
-		p.missions = append(p.missions, &Mission{
+		reqID := generator.GetReqID()
+		missionLogger := logger.WithFields(logrus.Fields{
+			"url":           u,
+			common.ReqIDKey: reqID,
+		})
+		mission := &Mission{
 			req:            req,
 			client:         c,
 			url:            u,
 			db:             p.conf.DBs[i],
-			ttl:            p.conf.TTL[i],
 			logger:         missionLogger,
 			telegrafLogger: telegraflog.NewWrapperLogger(missionLogger),
-		})
+		}
+		if len(p.conf.TTL) != 0 {
+			mission.ttl = p.conf.TTL[i]
+		}
+		p.missions = append(p.missions, mission)
 	}
 	return nil
 }
@@ -167,6 +178,7 @@ func (p *OpenMetrics) prepareUrls() error {
 var localhost = net.IPv4(127, 0, 0, 1)
 
 func (p *OpenMetrics) requestSingle(mission *Mission) error {
+	mission.logger.Debug("start request")
 	resp, err := mission.client.Do(mission.req)
 	if err != nil {
 		return err
@@ -174,7 +186,7 @@ func (p *OpenMetrics) requestSingle(mission *Mission) error {
 	defer func() {
 		_ = resp.Body.Close()
 	}()
-
+	logger.Debugf("response status code: %d", resp.StatusCode)
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%s returned HTTP status %s", mission.req.URL, resp.Status)
 	}
@@ -183,6 +195,8 @@ func (p *OpenMetrics) requestSingle(mission *Mission) error {
 	if err != nil {
 		return fmt.Errorf("error reading body: %s", err)
 	}
+	logger.Debugf("response body: %s", body)
+	mission.logger.Debug("finished request")
 	parser := openmetrics.Parser{
 		Header:          resp.Header,
 		MetricVersion:   1,
@@ -210,22 +224,22 @@ func (p *OpenMetrics) requestSingle(mission *Mission) error {
 		}
 		buffer.Write(data)
 	}
+	mission.logger.Trace("start get connection from pool")
 	conn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, localhost)
+	mission.logger.Trace("finish get connection from pool")
 	if err != nil {
-		mission.logger.WithError(err).Errorln("commonpool.GetConnection error")
+		mission.logger.Errorf("commonpool.GetConnection error, err:%s", err)
 		return err
 	}
 	defer func() {
 		err = conn.Put()
 		if err != nil {
-			mission.logger.WithError(err).Errorln("conn.Put error")
+			mission.logger.Errorf("conn.Put error, err:%s", err)
 		}
 	}()
-	reqID := generator.GetReqID()
-	execLogger := mission.logger.WithField(common.ReqIDKey, reqID)
-	err = inserter.InsertInfluxdb(conn.TaosConnection, buffer.Bytes(), mission.db, "ns", mission.ttl, uint64(reqID), "", execLogger)
+	err = inserter.InsertInfluxdb(conn.TaosConnection, buffer.Bytes(), mission.db, "ns", mission.ttl, mission.reqID, "", mission.logger)
 	if err != nil {
-		mission.logger.WithError(err).Error("insert influxdb error", buffer.String())
+		mission.logger.Errorf("insert influxdb error, err:%s, data: %s", err, buffer.String())
 		return err
 	}
 	return nil
