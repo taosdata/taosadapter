@@ -20,8 +20,8 @@ import (
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
-	"github.com/taosdata/taosadapter/v3/driver/common"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/plugin"
@@ -157,7 +157,7 @@ func (p *OpenMetrics) prepareUrls() error {
 		reqID := generator.GetReqID()
 		missionLogger := logger.WithFields(logrus.Fields{
 			"url":           u,
-			common.ReqIDKey: reqID,
+			config.ReqIDKey: reqID,
 		})
 		mission := &Mission{
 			req:            req,
