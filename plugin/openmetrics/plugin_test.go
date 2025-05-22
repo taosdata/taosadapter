@@ -287,6 +287,7 @@ func TestOpenMetricsMTls(t *testing.T) {
 	err = exec(conn, "create database if not exists open_metrics_mtls_basicauth precision 'ns'")
 	assert.NoError(t, err)
 	err = exec(conn, "create database if not exists open_metrics_mtls_bearertoken precision 'ns'")
+	assert.NoError(t, err)
 	openMetrics := &OpenMetrics{}
 	assert.Equal(t, "openmetrics", openMetrics.String())
 	assert.Equal(t, "v1", openMetrics.Version())
