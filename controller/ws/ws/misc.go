@@ -9,7 +9,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	errors2 "github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
@@ -110,7 +109,7 @@ func (h *messageHandler) optionsConnection(ctx context.Context, session *melody.
 	for i := 0; i < len(req.Options); i++ {
 		code := syncinterface.TaosOptionsConnection(h.conn, req.Options[i].Option, req.Options[i].Value, logger, isDebug)
 		if code != 0 {
-			errStr := wrapper.TaosErrorStr(nil)
+			errStr := syncinterface.TaosErrorStr(nil, logger, isDebug)
 			val := "<nil>"
 			if req.Options[i].Value != nil {
 				val = *req.Options[i].Value

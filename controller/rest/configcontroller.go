@@ -9,9 +9,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/controller"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	taoserrors "github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 )
@@ -50,16 +50,16 @@ func (ctl *ConfigController) changeConfig(c *gin.Context) {
 	defer unlock()
 	user := c.MustGet(UserKey).(string)
 	password := c.MustGet(PasswordKey).(string)
-	conn, err := wrapper.TaosConnect("", user, password, "", 0)
+	conn, err := syncinterface.TaosConnect("", user, password, "", 0, logger, log.IsDebug())
 	if err != nil {
 		taosErr := err.(*taoserrors.TaosError)
 		ErrorResponse(c, logger, http.StatusUnauthorized, int(taosErr.Code), taosErr.ErrStr)
 		return
 	}
 	defer func() {
-		wrapper.TaosClose(conn)
+		syncinterface.TaosClose(conn, logger, log.IsDebug())
 	}()
-	whitelist, err := tool.GetWhitelist(conn)
+	whitelist, err := tool.GetWhitelist(conn, logger, log.IsDebug())
 	if err != nil {
 		logger.Errorf("get whitelist failed, err: %s", err)
 		taosErr := err.(*taoserrors.TaosError)

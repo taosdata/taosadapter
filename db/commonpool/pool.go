@@ -89,7 +89,7 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	v, _ := p.Get()
 	// notify modify
 	cp.ctx, cp.cancel = context.WithCancel(context.Background())
-	err = tool.RegisterChangePass(v, cp.changePassHandle)
+	err = tool.RegisterChangePass(v, cp.changePassHandle, cp.logger, log.IsDebug())
 	if err != nil {
 		_ = p.Put(v)
 		p.Release()
@@ -97,7 +97,7 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 		return nil, err
 	}
 	// notify drop
-	err = tool.RegisterDropUser(v, cp.dropUserHandle)
+	err = tool.RegisterDropUser(v, cp.dropUserHandle, cp.logger, log.IsDebug())
 	if err != nil {
 		_ = p.Put(v)
 		p.Release()
@@ -105,7 +105,7 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 		return nil, err
 	}
 	// whitelist
-	ipNets, err := tool.GetWhitelist(v)
+	ipNets, err := tool.GetWhitelist(v, cp.logger, log.IsDebug())
 	if err != nil {
 		_ = p.Put(v)
 		p.Release()
@@ -114,7 +114,7 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	}
 	cp.ipNets = ipNets
 	// register whitelist modify callback
-	err = tool.RegisterChangeWhitelist(v, cp.whitelistChangeHandle)
+	err = tool.RegisterChangeWhitelist(v, cp.whitelistChangeHandle, cp.logger, log.IsDebug())
 	if err != nil {
 		_ = p.Put(v)
 		p.Release()
@@ -146,7 +146,7 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 			case <-cp.whitelistChan:
 				// whitelist changed
 				cp.logger.Info("whitelist change")
-				ipNets, err = tool.GetWhitelist(v)
+				ipNets, err = tool.GetWhitelist(v, cp.logger, log.IsDebug())
 				if err != nil {
 					// fetch whitelist error
 					cp.logger.WithError(err).Error("fetch whitelist error! release connection!")

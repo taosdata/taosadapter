@@ -366,7 +366,7 @@ func (t *TMQ) waitSignal(logger *logrus.Entry) {
 			}
 			logger.Trace("get whitelist")
 			s := log.GetLogNow(isDebug)
-			whitelist, err := tool.GetWhitelist(t.conn)
+			whitelist, err := tool.GetWhitelist(t.conn, logger, isDebug)
 			logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 			if err != nil {
 				logger.Errorf("get whitelist error, close connection, err:%s", err)
@@ -475,14 +475,14 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	if t.consumer != nil {
 		if t.unsubscribed {
 			logger.Debug("tmq resubscribe")
-			topicList := wrapper.TMQListNew()
+			topicList := syncinterface.TMQListNew(logger, isDebug)
 			defer func() {
-				wrapper.TMQListDestroy(topicList)
+				syncinterface.TMQListDestroy(topicList, logger, isDebug)
 			}()
 			for _, topic := range req.Topics {
-				errCode := wrapper.TMQListAppend(topicList, topic)
+				errCode := syncinterface.TMQListAppend(topicList, topic, logger, isDebug)
 				if errCode != 0 {
-					errStr := wrapper.TMQErr2Str(errCode)
+					errStr := syncinterface.TMQErr2Str(errCode, logger, isDebug)
 					logger.Errorf("tmq list append error, code:%d, msg:%s", errCode, errStr)
 					wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
 					return
@@ -490,7 +490,7 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 			}
 			errCode := t.wrapperSubscribe(logger, isDebug, t.consumer, topicList)
 			if errCode != 0 {
-				errStr := wrapper.TMQErr2Str(errCode)
+				errStr := syncinterface.TMQErr2Str(errCode, logger, isDebug)
 				wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
 				return
 			}
@@ -507,9 +507,9 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		return
 
 	}
-	tmqConfig := wrapper.TMQConfNew()
+	tmqConfig := syncinterface.TMQConfNew(logger, isDebug)
 	defer func() {
-		wrapper.TMQConfDestroy(tmqConfig)
+		syncinterface.TMQConfDestroy(tmqConfig, logger, isDebug)
 	}()
 	// reset autocommit and autocommit interval
 	t.isAutoCommit = false
@@ -599,9 +599,9 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	var errCode int32
 	logger.Debug("call tmq_conf_set")
 	for k, v := range tmqOptions {
-		errCode = wrapper.TMQConfSet(tmqConfig, k, v)
+		errCode = syncinterface.TMQConfSet(tmqConfig, k, v, logger, isDebug)
 		if errCode != httperror.SUCCESS {
-			errStr := wrapper.TMQErr2Str(errCode)
+			errStr := syncinterface.TMQErr2Str(errCode, logger, isDebug)
 			logger.Errorf("tmq conf set error, k:%s, v:%s, code:%d, msg:%s", k, v, errCode, errStr)
 			wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
 			return
@@ -614,27 +614,27 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		wsTMQErrorMsg(ctx, session, logger, 0xffff, err.Error(), action, req.ReqID, nil)
 		return
 	}
-	topicList := wrapper.TMQListNew()
+	topicList := syncinterface.TMQListNew(logger, isDebug)
 	defer func() {
-		wrapper.TMQListDestroy(topicList)
+		syncinterface.TMQListDestroy(topicList, logger, isDebug)
 	}()
 	for _, topic := range req.Topics {
 		logger.Tracef("tmq append topic:%s", topic)
-		errCode = wrapper.TMQListAppend(topicList, topic)
+		errCode = syncinterface.TMQListAppend(topicList, topic, logger, isDebug)
 		if errCode != 0 {
-			t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(int(errCode), wrapper.TMQErr2Str(errCode)), fmt.Sprintf("tmq list append error, tpic:%s", topic))
+			t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(int(errCode), syncinterface.TMQErr2Str(errCode, logger, isDebug)), fmt.Sprintf("tmq list append error, tpic:%s", topic))
 			return
 		}
 	}
 
 	errCode = t.wrapperSubscribe(logger, isDebug, cPointer, topicList)
 	if errCode != 0 {
-		t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(int(errCode), wrapper.TMQErr2Str(errCode)), "tmq subscribe error")
+		t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(int(errCode), syncinterface.TMQErr2Str(errCode, logger, isDebug)), "tmq subscribe error")
 		return
 	}
-	conn := wrapper.TMQGetConnect(cPointer)
+	conn := syncinterface.TMQGetConnect(cPointer, logger, isDebug)
 	logger.Debugf("call taos_fetch_whitelist_a, conn:%p", conn)
-	whitelist, err := tool.GetWhitelist(conn)
+	whitelist, err := tool.GetWhitelist(conn, logger, isDebug)
 	logger.Debug("taos_fetch_whitelist_a finish")
 	if err != nil {
 		t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, err, "get whitelist error")
@@ -649,13 +649,13 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		return
 	}
 	logger.Debug("register change whitelist")
-	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle)
+	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle, logger, isDebug)
 	if err != nil {
 		t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, err, "register change whitelist error")
 		return
 	}
 	logger.Debug("register drop user")
-	err = tool.RegisterDropUser(conn, t.dropUserHandle)
+	err = tool.RegisterDropUser(conn, t.dropUserHandle, logger, isDebug)
 	if err != nil {
 		t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, err, "register drop user error")
 		return
@@ -670,7 +670,7 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	code := syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_IP, &clientIP, logger, isDebug)
 	logger.Debug("set connection ip done")
 	if code != 0 {
-		t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, wrapper.TaosErrorStr(nil)), "set connection ip error")
+		t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set connection ip error")
 		return
 	}
 	// set timezone
@@ -679,7 +679,7 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		code = syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_TIMEZONE, &req.TZ, logger, isDebug)
 		logger.Debug("set timezone done")
 		if code != 0 {
-			t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, wrapper.TaosErrorStr(nil)), "set timezone error")
+			t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set timezone error")
 			return
 		}
 	}
@@ -689,7 +689,7 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		code = syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_APP, &req.App, logger, isDebug)
 		logger.Debug("set app done")
 		if code != 0 {
-			t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, wrapper.TaosErrorStr(nil)), "set app error")
+			t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set app error")
 			return
 		}
 	}
@@ -720,7 +720,7 @@ func (t *TMQ) closeConsumerWithErrLog(
 	logger.Errorf("%s, err: %s", errorExt, err)
 	errCode := t.wrapperCloseConsumer(logger, isDebug, consumer)
 	if errCode != 0 {
-		errMsg := wrapper.TMQErr2Str(errCode)
+		errMsg := syncinterface.TMQErr2Str(errCode, logger, isDebug)
 		logger.Errorf("tmq close consumer error, consumer:%p, code:%d, msg:%s", t.consumer, errCode, errMsg)
 	}
 	wstool.WSError(ctx, session, logger, err, action, reqID)
@@ -756,7 +756,7 @@ func (t *TMQ) commit(ctx context.Context, session *melody.Session, req *TMQCommi
 		return
 	}
 	if errCode != 0 {
-		errStr := wrapper.TMQErr2Str(errCode)
+		errStr := syncinterface.TMQErr2Str(errCode, logger, isDebug)
 		logger.Errorf("tmq commit error, code: %d, message: %s", errCode, errStr)
 		wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
 		return
@@ -823,7 +823,7 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 			return
 		}
 		if errCode != 0 {
-			errStr := wrapper.TMQErr2Str(errCode)
+			errStr := syncinterface.TMQErr2Str(errCode, logger, isDebug)
 			logger.Errorf("tmq autocommit error:%s", taoserrors.NewError(int(errCode), errStr))
 		}
 		t.nextTime = now.Add(t.autocommitInterval)
@@ -838,7 +838,7 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 	}
 	message := pollResult.Res
 	if message != nil {
-		messageType := wrapper.TMQGetResType(message)
+		messageType := syncinterface.TMQGetResType(message, logger, isDebug)
 		logger.Tracef("poll message type:%d", messageType)
 		if messageTypeIsValid(messageType) {
 			t.tmpMessage.Lock()
@@ -847,17 +847,17 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 				closed = t.wrapperFreeResult(logger, isDebug)
 				if closed {
 					logger.Debugf("server closed, free result directly, message:%p", message)
-					syncinterface.FreeResult(message, logger, isDebug)
+					syncinterface.TaosFreeResult(message, logger, isDebug)
 					return
 				}
 			}
 			index := atomic.AddUint64(&t.tmpMessage.Index, 1)
 
 			t.tmpMessage.Index = index
-			t.tmpMessage.Topic = wrapper.TMQGetTopicName(message)
-			t.tmpMessage.VGroupID = wrapper.TMQGetVgroupID(message)
-			t.tmpMessage.Offset = wrapper.TMQGetVgroupOffset(message)
-			t.tmpMessage.Database = wrapper.TMQGetDBName(message)
+			t.tmpMessage.Topic = syncinterface.TMQGetTopicName(message, logger, isDebug)
+			t.tmpMessage.VGroupID = syncinterface.TMQGetVgroupID(message, logger, isDebug)
+			t.tmpMessage.Offset = syncinterface.TMQGetVgroupOffset(message, logger, isDebug)
+			t.tmpMessage.Database = syncinterface.TMQGetDBName(message, logger, isDebug)
 			t.tmpMessage.Type = messageType
 			t.tmpMessage.CPointer = message
 
@@ -871,7 +871,7 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 			logger.Tracef("get message %d, topic:%s, vgroup:%d, offset:%d, db:%s", uintptr(message), t.tmpMessage.Topic, t.tmpMessage.VGroupID, t.tmpMessage.Offset, resp.Database)
 		} else {
 			logger.Errorf("unavailable tmq type:%d", messageType)
-			syncinterface.FreeResult(message, logger, isDebug)
+			syncinterface.TaosFreeResult(message, logger, isDebug)
 			logger.Trace("free result directly finish")
 			wsTMQErrorMsg(ctx, session, logger, 0xffff, "unavailable tmq type:"+strconv.Itoa(int(messageType)), action, req.ReqID, nil)
 			return
@@ -990,7 +990,7 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 	blockSize := rawBlock.BlockSize
 	block := rawBlock.Block
 	if errCode != 0 {
-		errStr := wrapper.TMQErr2Str(int32(errCode))
+		errStr := syncinterface.TMQErr2Str(int32(errCode), logger, isDebug)
 		logger.Errorf("tmq fetch raw block error, code:%d, msg:%s", errCode, errStr)
 		wsTMQErrorMsg(ctx, session, logger, errCode, errStr, action, req.ReqID, &req.MessageID)
 		return
@@ -1007,20 +1007,20 @@ func (t *TMQ) fetch(ctx context.Context, session *melody.Session, req *TMQFetchR
 	}
 	s = log.GetLogNow(isDebug)
 	logger.Trace("call tmq_get_table_name")
-	resp.TableName = wrapper.TMQGetTableName(message.CPointer)
+	resp.TableName = syncinterface.TMQGetTableName(message.CPointer, logger, isDebug)
 	logger.Tracef("tmq_get_table_name finish, cost:%s", log.GetLogDuration(isDebug, s))
 	resp.Rows = blockSize
 	logger.Trace("call taos_num_fields")
-	resp.FieldsCount = wrapper.TaosNumFields(message.CPointer)
+	resp.FieldsCount = syncinterface.TaosNumFields(message.CPointer, logger, isDebug)
 	logger.Trace("taos_num_fields finish")
 	s = log.GetLogNow(isDebug)
-	rowsHeader, _ := wrapper.ReadColumn(message.CPointer, resp.FieldsCount)
+	rowsHeader, _ := syncinterface.ReadColumn(message.CPointer, resp.FieldsCount, logger, isDebug)
 	logger.Tracef("read column finish, cost:%s", log.GetLogDuration(isDebug, s))
 	resp.FieldsNames = rowsHeader.ColNames
 	resp.FieldsTypes = rowsHeader.ColTypes
 	resp.FieldsLengths = rowsHeader.ColLength
 	s = log.GetLogNow(isDebug)
-	resp.Precision = wrapper.TaosResultPrecision(message.CPointer)
+	resp.Precision = syncinterface.TaosResultPrecision(message.CPointer, logger, isDebug)
 	logger.Tracef("result_precision finish, cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	blockLength := int(parser.RawBlockGetLength(block))
@@ -1124,7 +1124,7 @@ func (t *TMQ) fetchRawBlock(ctx context.Context, session *melody.Session, req *T
 		return
 	}
 	if errCode != 0 {
-		errStr := wrapper.TMQErr2Str(errCode)
+		errStr := syncinterface.TMQErr2Str(errCode, logger, isDebug)
 		logger.Errorf("tmq get raw error, code:%d, msg:%s", errCode, errStr)
 		wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, &req.MessageID)
 		return
@@ -1143,7 +1143,7 @@ func (t *TMQ) fetchRawBlock(ctx context.Context, session *melody.Session, req *T
 	binary.LittleEndian.PutUint16(message.buffer[36:], metaType)
 	bytesutil.Copy(data, message.buffer, 38, blockLength)
 	logger.Debugf("call struct_tmq_raw_data, raw:%p", rawData)
-	wrapper.TMQFreeRaw(rawData)
+	syncinterface.TMQFreeRaw(rawData, logger, isDebug)
 	logger.Debug("struct_tmq_raw_data finish")
 	wstool.WSWriteBinary(session, message.buffer, logger)
 }
@@ -1183,7 +1183,7 @@ func (t *TMQ) fetchRawBlockNew(ctx context.Context, session *melody.Session, req
 		return
 	}
 	if errCode != 0 {
-		errStr := wrapper.TMQErr2Str(errCode)
+		errStr := syncinterface.TMQErr2Str(errCode, logger, isDebug)
 		logger.Errorf("tmq get raw error, code:%d, msg:%s", errCode, errStr)
 		tmqFetchRawBlockErrorMsg(ctx, session, logger, int(errCode), errStr, req.ReqID, req.MessageID)
 		return
@@ -1191,7 +1191,7 @@ func (t *TMQ) fetchRawBlockNew(ctx context.Context, session *melody.Session, req
 	length, metaType, data := wrapper.ParseRawMeta(rawData)
 	message.buffer = wsFetchRawBlockMessage(ctx, message.buffer, req.ReqID, req.MessageID, metaType, length, data)
 	logger.Debugf("call tmq_free_raw, raw:%p", rawData)
-	wrapper.TMQFreeRaw(rawData)
+	syncinterface.TMQFreeRaw(rawData, logger, isDebug)
 	logger.Debug("tmq_free_raw finish")
 	wstool.WSWriteBinary(session, message.buffer, logger)
 }
@@ -1270,7 +1270,7 @@ func (t *TMQ) fetchJsonMeta(ctx context.Context, session *melody.Session, req *T
 		resp.Data = binaryVal
 	}
 	logger.Debugf("call tmq_free_json_meta, jsonMeta:%p", jsonMeta)
-	wrapper.TMQFreeJsonMeta(jsonMeta)
+	syncinterface.TMQFreeJsonMeta(jsonMeta, logger, isDebug)
 	logger.Debug("tmq_free_json_meta finish")
 	resp.Timing = wstool.GetDuration(ctx)
 	wstool.WSWriteJson(session, logger, resp)
@@ -1309,7 +1309,7 @@ func (t *TMQ) unsubscribe(ctx context.Context, session *melody.Session, req *TMQ
 		return
 	}
 	if errCode != 0 {
-		errStr := wrapper.TMQErr2Str(errCode)
+		errStr := syncinterface.TMQErr2Str(errCode, logger, isDebug)
 		logger.Errorf("tmq unsubscribe error,consumer:%p, code:%d, msg:%s", t.consumer, errCode, errStr)
 		wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
 		return
@@ -1353,7 +1353,7 @@ func (t *TMQ) assignment(ctx context.Context, session *melody.Session, req *TMQG
 		return
 	}
 	if result.Code != 0 {
-		errStr := wrapper.TMQErr2Str(result.Code)
+		errStr := syncinterface.TMQErr2Str(result.Code, logger, log.IsDebug())
 		logger.Errorf("tmq assignment error,consumer:%p, code:%d, msg:%s", t.consumer, result.Code, errStr)
 		wsTMQErrorMsg(ctx, session, logger, int(result.Code), errStr, action, req.ReqID, nil)
 		return
@@ -1396,7 +1396,7 @@ func (t *TMQ) offsetSeek(ctx context.Context, session *melody.Session, req *TMQO
 		return
 	}
 	if errCode != 0 {
-		errStr := wrapper.TMQErr2Str(errCode)
+		errStr := syncinterface.TMQErr2Str(errCode, logger, isDebug)
 		logger.Errorf("tmq offset seek error, consumer:%p, code:%d, msg:%s", t.consumer, errCode, errStr)
 		wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
 		return
@@ -1453,13 +1453,13 @@ func (t *TMQ) Close(logger *logrus.Entry) {
 			if !t.unsubscribed {
 				errCode, _ := t.wrapperUnsubscribe(logger, isDebug, false)
 				if errCode != 0 {
-					errMsg := wrapper.TMQErr2Str(errCode)
+					errMsg := syncinterface.TMQErr2Str(errCode, logger, isDebug)
 					logger.Errorf("tmq unsubscribe consumer error, consumer:%p, code:%d, msg:%s", t.consumer, errCode, errMsg)
 				}
 			}
 			errCode := t.wrapperCloseConsumer(logger, log.IsDebug(), t.consumer)
 			if errCode != 0 {
-				errMsg := wrapper.TMQErr2Str(errCode)
+				errMsg := syncinterface.TMQErr2Str(errCode, logger, isDebug)
 				logger.Errorf("tmq close consumer error, consumer:%p, code:%d, msg:%s", t.consumer, errCode, errMsg)
 			}
 		}
@@ -1556,7 +1556,7 @@ func (t *TMQ) committed(ctx context.Context, session *melody.Session, req *TMQCo
 			return
 		}
 		if res < 0 && res != OffsetInvalid {
-			errStr := wrapper.TMQErr2Str(int32(res))
+			errStr := syncinterface.TMQErr2Str(int32(res), logger, isDebug)
 			logger.Errorf("tmq get committed error, code:%d, msg:%s", res, errStr)
 			wsTMQErrorMsg(ctx, session, logger, int(res), errStr, action, req.ReqID, nil)
 			return
@@ -1607,7 +1607,7 @@ func (t *TMQ) position(ctx context.Context, session *melody.Session, req *TMQPos
 			return
 		}
 		if res < 0 && res != OffsetInvalid {
-			errStr := wrapper.TMQErr2Str(int32(res))
+			errStr := syncinterface.TMQErr2Str(int32(res), logger, isDebug)
 			logger.Errorf("get position error, code:%d, msg:%s", res, errStr)
 			wsTMQErrorMsg(ctx, session, logger, int(res), errStr, action, req.ReqID, nil)
 			return
@@ -1654,18 +1654,18 @@ func (t *TMQ) listTopics(ctx context.Context, session *melody.Session, req *TMQL
 	defer func() {
 		if topicsPointer != nil {
 			logger.Tracef("call tmq_list_destroy, list:%p", topicsPointer)
-			wrapper.TMQListDestroy(topicsPointer)
+			syncinterface.TMQListDestroy(topicsPointer, logger, isDebug)
 			logger.Trace("tmq_list_destroy finish")
 		}
 	}()
 	if code != 0 {
-		errStr := wrapper.TMQErr2Str(code)
+		errStr := syncinterface.TMQErr2Str(code, logger, isDebug)
 		logger.Errorf("tmq list topic error, code:%d, msg:%s", code, errStr)
 		wsTMQErrorMsg(ctx, session, logger, int(code), errStr, action, req.ReqID, nil)
 		return
 	}
 	logger.Debugf("call tmq_list_to_c_array, list:%p", topicsPointer)
-	topics := wrapper.TMQListToCArray(topicsPointer, int(wrapper.TMQListGetSize(topicsPointer)))
+	topics := wrapper.TMQListToCArray(topicsPointer, int(syncinterface.TMQListGetSize(topicsPointer, logger, isDebug)))
 	logger.Debug("tmq_list_to_c_array finish")
 	wstool.WSWriteJson(session, logger, TMQListTopicsResp{
 		Action: action,
@@ -1708,7 +1708,7 @@ func (t *TMQ) commitOffset(ctx context.Context, session *melody.Session, req *TM
 		return
 	}
 	if code != 0 {
-		errStr := wrapper.TMQErr2Str(code)
+		errStr := syncinterface.TMQErr2Str(code, logger, log.IsDebug())
 		logger.Errorf("tmq commit offset error, code:%d, msg:%s", code, errStr)
 		wsTMQErrorMsg(ctx, session, logger, int(code), errStr, action, req.ReqID, nil)
 		return

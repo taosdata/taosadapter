@@ -7,8 +7,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/async"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
@@ -86,18 +86,18 @@ func (h *messageHandler) fetch(ctx context.Context, session *melody.Session, act
 	}
 	if result.N < 0 {
 		item.Unlock()
-		errStr := wrapper.TaosErrorStr(result.Res)
+		errStr := syncinterface.TaosErrorStr(result.Res, logger, isDebug)
 		logger.Errorf("fetch raw block error, code:%d, message:%s", result.N, errStr)
 		h.queryResults.FreeResultByID(req.ID, logger)
 		commonErrorResponse(ctx, session, logger, action, req.ReqID, result.N, errStr)
 		return
 	}
 	s = log.GetLogNow(isDebug)
-	length := wrapper.FetchLengths(item.TaosResult, item.FieldsCount)
+	length := syncinterface.TaosFetchLengths(item.TaosResult, item.FieldsCount, logger, isDebug)
 	logger.Debugf("fetch_lengths result:%d, cost:%s", length, log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	logger.Trace("get raw block")
-	item.Block = wrapper.TaosGetRawBlock(item.TaosResult)
+	item.Block = syncinterface.TaosGetRawBlock(item.TaosResult, logger, isDebug)
 	logger.Debugf("get_raw_block result:%p, cost:%s", item.Block, log.GetLogDuration(isDebug, s))
 	item.Size = result.N
 	item.Unlock()
@@ -188,7 +188,7 @@ func (h *messageHandler) fetchRawBlock(ctx context.Context, session *melody.Sess
 	}
 	if result.N < 0 {
 		item.Unlock()
-		errStr := wrapper.TaosErrorStr(result.Res)
+		errStr := syncinterface.TaosErrorStr(result.Res, logger, isDebug)
 		logger.Errorf("fetch raw block error:%d %s", result.N, errStr)
 		h.queryResults.FreeResultByID(resultID, logger)
 		fetchRawBlockErrorResponse(session, logger, result.N, errStr, reqID, resultID, uint64(wstool.GetDuration(ctx)))
@@ -196,7 +196,7 @@ func (h *messageHandler) fetchRawBlock(ctx context.Context, session *melody.Sess
 	}
 	logger.Trace("call taos_get_raw_block")
 	s = log.GetLogNow(isDebug)
-	item.Block = wrapper.TaosGetRawBlock(item.TaosResult)
+	item.Block = syncinterface.TaosGetRawBlock(item.TaosResult, logger, isDebug)
 	logger.Debugf("get_raw_block cost:%s", log.GetLogDuration(isDebug, s))
 	item.Size = result.N
 	s = log.GetLogNow(isDebug)
@@ -234,7 +234,7 @@ func (h *messageHandler) numFields(ctx context.Context, session *melody.Session,
 		return
 	}
 	defer item.Unlock()
-	num := wrapper.TaosNumFields(item.TaosResult)
+	num := syncinterface.TaosNumFields(item.TaosResult, logger, isDebug)
 	resp := &numFieldsResponse{
 		Action:    action,
 		ReqID:     req.ReqID,

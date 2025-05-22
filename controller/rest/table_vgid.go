@@ -9,7 +9,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/connectpool"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
@@ -64,7 +63,7 @@ func (ctl *Restful) tableVgID(c *gin.Context) {
 	}()
 	vgIDs, code := syncinterface.TaosGetTablesVgID(taosConn.TaosConnection, db, tables, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(nil)
+		errStr := syncinterface.TaosErrorStr(nil, logger, isDebug)
 		logger.Errorf("get table vgID error, code:%d, msg:%s", code, errStr)
 		TaosErrorResponse(c, logger, code, errStr)
 		return

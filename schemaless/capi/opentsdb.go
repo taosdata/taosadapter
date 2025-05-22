@@ -17,24 +17,26 @@ func InsertOpentsdbJson(conn unsafe.Pointer, data []byte, db string, ttl int, re
 	if len(data) == 0 {
 		return nil
 	}
-	if err := tool.SchemalessSelectDB(conn, logger, log.IsDebug(), db, reqID); err != nil {
+	isDebug := log.IsDebug()
+	if err := tool.SchemalessSelectDB(conn, logger, isDebug, db, reqID); err != nil {
 		return err
 	}
 
 	var result unsafe.Pointer
 	_, result = syncinterface.TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn, string(data), wrapper.OpenTSDBJsonFormatProtocol,
-		"", ttl, getReqID(reqID), tableNameKey, logger, log.IsDebug())
+		"", ttl, getReqID(reqID), tableNameKey, logger, isDebug)
 
 	defer func() {
-		syncinterface.FreeResult(result, logger, log.IsDebug())
+		syncinterface.TaosFreeResult(result, logger, isDebug)
 	}()
-	if code := wrapper.TaosError(result); code != 0 {
-		return tErrors.NewError(code, wrapper.TaosErrorStr(result))
+	if code := syncinterface.TaosError(result, logger, isDebug); code != 0 {
+		return tErrors.NewError(code, syncinterface.TaosErrorStr(result, logger, isDebug))
 	}
 	return nil
 }
 
 func InsertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string, ttl int, reqID int64, tableNameKey string, logger *logrus.Entry) error {
+	isDebug := log.IsDebug()
 	trimData := make([]string, 0, len(data))
 	for i := 0; i < len(data); i++ {
 		if len(data[i]) == 0 {
@@ -45,20 +47,20 @@ func InsertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string, ttl int
 	if len(trimData) == 0 {
 		return nil
 	}
-	if err := tool.SchemalessSelectDB(conn, logger, log.IsDebug(), db, reqID); err != nil {
+	if err := tool.SchemalessSelectDB(conn, logger, isDebug, db, reqID); err != nil {
 		return err
 	}
 
 	var result unsafe.Pointer
 	_, result = syncinterface.TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn, strings.Join(trimData, "\n"),
-		wrapper.OpenTSDBTelnetLineProtocol, "", ttl, getReqID(reqID), tableNameKey, logger, log.IsDebug())
+		wrapper.OpenTSDBTelnetLineProtocol, "", ttl, getReqID(reqID), tableNameKey, logger, isDebug)
 	defer func() {
-		syncinterface.FreeResult(result, logger, log.IsDebug())
+		syncinterface.TaosFreeResult(result, logger, isDebug)
 	}()
 
-	code := wrapper.TaosError(result)
+	code := syncinterface.TaosError(result, logger, isDebug)
 	if code != 0 {
-		return tErrors.NewError(code, wrapper.TaosErrorStr(result))
+		return tErrors.NewError(code, syncinterface.TaosErrorStr(result, logger, isDebug))
 	}
 	return nil
 }

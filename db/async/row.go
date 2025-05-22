@@ -8,6 +8,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
@@ -38,32 +39,32 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, logger *logrus.Entry, isDeb
 		}
 	}()
 	res := result.Res
-	code := wrapper.TaosError(res)
+	code := syncinterface.TaosError(res, logger, isDebug)
 	if code != httperror.SUCCESS {
-		errStr := wrapper.TaosErrorStr(res)
+		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
 		logger.Tracef("taos query error, code:%d, msg:%s", code, errStr)
 		return nil, tErrors.NewError(code, errStr)
 	}
 	logger.Tracef("get query result, res:%p", res)
-	isUpdate := wrapper.TaosIsUpdateQuery(res)
+	isUpdate := syncinterface.TaosIsUpdateQuery(res, logger, isDebug)
 	logger.Tracef("get isUpdate:%t", isUpdate)
 	execResult := &ExecResult{}
 	if isUpdate {
-		affectRows := wrapper.TaosAffectedRows(res)
+		affectRows := syncinterface.TaosAffectedRows(res, logger, isDebug)
 		logger.Tracef("get affectRows:%d", affectRows)
 		execResult.AffectedRows = affectRows
 		return execResult, nil
 	}
-	fieldsCount := wrapper.TaosNumFields(res)
+	fieldsCount := syncinterface.TaosNumFields(res, logger, isDebug)
 	logger.Tracef("get fieldsCount:%d", fieldsCount)
 	execResult.FieldCount = fieldsCount
-	rowsHeader, err := wrapper.ReadColumn(res, fieldsCount)
+	rowsHeader, err := syncinterface.ReadColumn(res, fieldsCount, logger, isDebug)
 	if err != nil {
 		logger.Errorf("read column error, error:%s", err)
 		return nil, err
 	}
 	execResult.Header = rowsHeader
-	precision := wrapper.TaosResultPrecision(res)
+	precision := syncinterface.TaosResultPrecision(res, logger, isDebug)
 	logger.Tracef("get precision:%d", precision)
 	for {
 		result = a.TaosFetchRowsA(res, logger, isDebug, handler)
@@ -75,7 +76,7 @@ func (a *Async) TaosExec(taosConnect unsafe.Pointer, logger *logrus.Entry, isDeb
 		res = result.Res
 		for i := 0; i < result.N; i++ {
 			row := taosFetchRow(res, logger, isDebug)
-			lengths := wrapper.FetchLengths(res, len(rowsHeader.ColNames))
+			lengths := syncinterface.TaosFetchLengths(res, len(rowsHeader.ColNames), logger, isDebug)
 			logger.Tracef("fetch lengths:%d", lengths)
 			values := make([]driver.Value, len(rowsHeader.ColNames))
 			for j := range rowsHeader.ColTypes {
@@ -202,9 +203,9 @@ func (a *Async) TaosExecWithoutResult(taosConnect unsafe.Pointer, logger *logrus
 		}
 	}()
 	res := result.Res
-	code := wrapper.TaosError(res)
+	code := syncinterface.TaosError(res, logger, isDebug)
 	if code != httperror.SUCCESS {
-		errStr := wrapper.TaosErrorStr(res)
+		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
 		logger.Errorf("taos query error, code:%d, msg:%s", code, errStr)
 		return tErrors.NewError(code, errStr)
 	}

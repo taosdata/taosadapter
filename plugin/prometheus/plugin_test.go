@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/plugin/prometheus/prompb"
 )
@@ -27,15 +27,17 @@ func TestMain(m *testing.M) {
 	viper.Set("prometheus.enable", true)
 	log.ConfigLog()
 	db.PrepareConnection()
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	logger := log.GetLogger("test")
+	isDebug := log.IsDebug()
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	if err != nil {
 		panic(err)
 	}
-	r := wrapper.TaosQuery(conn, "create database if not exists test_plugin_prometheus")
-	wrapper.TaosFreeResult(r)
+	r := syncinterface.TaosQuery(conn, "create database if not exists test_plugin_prometheus", logger, isDebug)
+	syncinterface.TaosFreeResult(r, logger, isDebug)
 	m.Run()
-	r = wrapper.TaosQuery(conn, "drop database if exists test_plugin_prometheus")
-	wrapper.TaosFreeResult(r)
+	r = syncinterface.TaosQuery(conn, "drop database if exists test_plugin_prometheus", logger, isDebug)
+	syncinterface.TaosFreeResult(r, logger, isDebug)
 }
 
 // @author: xftan
