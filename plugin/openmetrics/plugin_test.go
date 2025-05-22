@@ -9,6 +9,7 @@ import (
 	"database/sql/driver"
 	"encoding/pem"
 	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -67,25 +68,25 @@ test_metric{label="value"} 1.0 1490802350
 `
 
 var testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	switch {
-	case r.URL.Path == "/metrics":
+	switch r.URL.Path {
+	case "/metrics":
 		w.Header().Set("Content-Type", "application/openmetrics-text")
 		_, err := w.Write([]byte(openMetricsV1))
 		if err != nil {
 			return
 		}
-	case r.URL.Path == "/prometheus":
+	case "/prometheus":
 		w.Header().Set("Content-Type", "application/openmetrics-text")
 		_, err := w.Write([]byte(prometheus004))
 		if err != nil {
 			return
 		}
-	case r.URL.Path == "/wrongtype":
+	case "/wrongtype":
 		_, err := w.Write([]byte(prometheus004))
 		if err != nil {
 			return
 		}
-	case r.URL.Path == "/protobuf":
+	case "/protobuf":
 		var metricSet openmetrics.MetricSet
 		metricSet.MetricFamilies = []*openmetrics.MetricFamily{
 			{
@@ -118,7 +119,7 @@ var testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			return
 		}
-	case r.URL.Path == "/basicauth":
+	case "/basicauth":
 		username, password, ok := r.BasicAuth()
 		if !ok {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -132,7 +133,7 @@ var testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 		} else {
 			panic("wrong username or password")
 		}
-	case r.URL.Path == "bearertoken":
+	case "/bearertoken":
 		bearerToken := r.Header.Get("Authorization")
 		if bearerToken == "Bearer test_token" {
 			w.Header().Set("Content-Type", "application/openmetrics-text")
@@ -264,7 +265,60 @@ func TestOpenMetricsMTls(t *testing.T) {
 	}
 	server.StartTLS()
 	defer server.Close()
-	//tlsUrl := server.URL
+	tlsUrl := server.URL
+	viper.Set("open_metrics.enable", true)
+	viper.Set("open_metrics.urls", []string{tlsUrl + "/basicauth", tlsUrl + "/bearertoken"})
+	viper.Set("open_metrics.gatherDurationSeconds", []int{1, 1})
+	viper.Set("open_metrics.ttl", []int{1000, 1000})
+	viper.Set("open_metrics.dbs", []string{"open_metrics_mtls_basicauth", "open_metrics_mtls_bearertoken"})
+	viper.Set("open_metrics.responseTimeoutSeconds", []int{5, 5})
+	viper.Set("open_metrics.httpUsernames", []string{"test_user", ""})
+	viper.Set("open_metrics.httpPasswords", []string{"test_pass", ""})
+	viper.Set("open_metrics.httpBearerTokenStrings", []string{"", "test_token"})
+	viper.Set("open_metrics.caCertFiles", []string{caCertFile, caCertFile})
+	viper.Set("open_metrics.certFiles", []string{clientCertFile, clientCertFile})
+	viper.Set("open_metrics.keyFiles", []string{clientKeyFile, clientKeyFile})
+	viper.Set("open_metrics.insecureSkipVerify", false)
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	assert.NoError(t, err)
+	defer func() {
+		wrapper.TaosClose(conn)
+	}()
+	err = exec(conn, "create database if not exists open_metrics_mtls_basicauth precision 'ns'")
+	assert.NoError(t, err)
+	err = exec(conn, "create database if not exists open_metrics_mtls_bearertoken precision 'ns'")
+	openMetrics := &OpenMetrics{}
+	assert.Equal(t, "openmetrics", openMetrics.String())
+	assert.Equal(t, "v1", openMetrics.Version())
+	err = openMetrics.Init(nil)
+	assert.NoError(t, err)
+	err = openMetrics.Start()
+	assert.NoError(t, err)
+	time.Sleep(time.Second * 3)
+	values, err := query(conn, "select last(`gauge`) as `gauge` from open_metrics_mtls_basicauth.test_metric;")
+	assert.NoError(t, err)
+	assert.Equal(t, float64(1), values[0][0])
+	values, err = query(conn, "select last(`gauge`) as `gauge` from open_metrics_mtls_bearertoken.test_metric;")
+	assert.NoError(t, err)
+	assert.Equal(t, float64(1), values[0][0])
+	err = openMetrics.Stop()
+	assert.NoError(t, err)
+	for i := 0; i < 10; i++ {
+		values, err = query(conn, "select `ttl` from information_schema.ins_tables "+
+			" where db_name='open_metrics_mtls_basicauth' and stable_name='test_metric'")
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	assert.NoError(t, err)
+	if values[0][0].(int32) != 1000 {
+		t.Fatal("ttl miss")
+	}
+	err = exec(conn, "drop database if exists open_metrics_mtls_basicauth")
+	assert.NoError(t, err)
+	err = exec(conn, "drop database if exists open_metrics_mtls_bearertoken")
+	assert.NoError(t, err)
 }
 func generateCertificate(isCA bool, parentCert *x509.Certificate, parentKey *rsa.PrivateKey,
 	commonName string, organization []string) (*x509.Certificate, *rsa.PrivateKey) {
@@ -284,6 +338,7 @@ func generateCertificate(isCA bool, parentCert *x509.Certificate, parentKey *rsa
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
 	}
 
 	if isCA {

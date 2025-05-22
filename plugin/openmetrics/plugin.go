@@ -226,7 +226,6 @@ func (p *OpenMetrics) requestSingle(mission *Mission) error {
 	}
 	mission.logger.Trace("start get connection from pool")
 	conn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, localhost)
-	mission.logger.Trace("finish get connection from pool")
 	if err != nil {
 		mission.logger.Errorf("commonpool.GetConnection error, err:%s", err)
 		return err
@@ -237,11 +236,13 @@ func (p *OpenMetrics) requestSingle(mission *Mission) error {
 			mission.logger.Errorf("conn.Put error, err:%s", err)
 		}
 	}()
+	mission.logger.Trace("finish get connection from pool")
 	err = inserter.InsertInfluxdb(conn.TaosConnection, buffer.Bytes(), mission.db, "ns", mission.ttl, mission.reqID, "", mission.logger)
 	if err != nil {
-		mission.logger.Errorf("insert influxdb error, err:%s, data: %s", err, buffer.String())
+		mission.logger.Errorf("insert OpenMetrics error, err:%s, data: %s", err, buffer.String())
 		return err
 	}
+	mission.logger.Trace("finish insert OpenMetrics")
 	return nil
 }
 
