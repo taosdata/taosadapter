@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
-	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/log"
@@ -16,6 +15,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/plugin"
 	"github.com/taosdata/taosadapter/v3/schemaless/inserter"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
+	"github.com/taosdata/taosadapter/v3/tools/telegraflog"
 )
 
 var logger = log.GetLogger("PLG").WithField("mod", "statsd")
@@ -45,7 +45,8 @@ func (p *Plugin) Start() error {
 	p.metricChan = make(chan telegraf.Metric, 2*p.conf.Worker)
 	for i := 0; i < p.conf.Worker; i++ {
 		go func() {
-			serializer := influx.NewSerializer()
+			serializer := &influx.Serializer{}
+			_ = serializer.Init()
 			for {
 				select {
 				case metric := <-p.metricChan:
@@ -70,7 +71,7 @@ func (p *Plugin) Start() error {
 		DeleteTimings:          p.conf.DeleteTimings,
 		Log:                    logger,
 	}
-	p.ac = NewAccumulator(&MetricMakerImpl{logger: logger}, p.metricChan)
+	p.ac = NewAccumulator(&MetricMakerImpl{logger: telegraflog.NewWrapperLogger(logger)}, p.metricChan)
 	err := p.input.Start(p.ac)
 	if err != nil {
 		return err
@@ -148,7 +149,7 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metric telegraf.Me
 }
 
 type MetricMakerImpl struct {
-	logger logrus.FieldLogger
+	logger *telegraflog.WrapperLogger
 }
 
 func (m *MetricMakerImpl) LogName() string {

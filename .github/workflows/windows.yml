@@ -98,6 +98,18 @@ jobs:
         with:
           cmakeVersion: 3.31.6
 
+
+      - name: Cache externals built
+        if: >
+          (github.event_name == 'workflow_dispatch' && steps.cache-server-manually.outputs.cache-hit != 'true') ||
+          (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true') ||
+          (github.event_name == 'push' && steps.cache-server-push.outputs.cache-hit != 'true')
+        uses: actions/cache@v4
+        id: cache-ext
+        with:
+          path: .externals
+          key: ${{ runner.os }}-${{ hashFiles('cmake/external.cmake', 'cmake/in/**') }}-build-ext-v3
+
       - name: install TDengine
         if: >
           (github.event_name == 'workflow_dispatch' && steps.cache-server-manually.outputs.cache-hit != 'true') ||
@@ -109,7 +121,7 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           mkdir debug
           cd debug
-          cmake .. -G "NMake Makefiles JOM" -DBUILD_HTTP=true -DBUILD_TOOLS=false -DBUILD_TEST=off
+          cmake .. -G "NMake Makefiles JOM" -DBUILD_HTTP=true -DBUILD_TOOLS=false -DBUILD_TEST=off -DBUILD_DEPENDENCY_TESTS=0
           jom.exe 
           jom.exe install
 
