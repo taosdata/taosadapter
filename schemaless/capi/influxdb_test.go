@@ -29,7 +29,7 @@ func TestInsertInfluxdb(t *testing.T) {
 			errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 			t.Error(errors.NewError(code, errStr))
 		}
-		syncinterface.TaosFreeResult(r, logger, isDebug)
+		syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	}()
 	r := syncinterface.TaosQuery(conn, "create database if not exists test_capi_influxdb", logger, isDebug)
 	code := syncinterface.TaosError(r, logger, isDebug)
@@ -37,7 +37,7 @@ func TestInsertInfluxdb(t *testing.T) {
 		errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 		t.Error(errors.NewError(code, errStr))
 	}
-	syncinterface.TaosFreeResult(r, logger, isDebug)
+	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        []byte

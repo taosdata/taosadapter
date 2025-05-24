@@ -36,7 +36,7 @@ func (h *messageHandler) schemalessWrite(ctx context.Context, session *melody.Se
 	}
 	var affectedRows int
 	totalRows, result := syncinterface.TaosSchemalessInsertRawTTLWithReqIDTBNameKey(h.conn, req.Data, req.Protocol, req.Precision, req.TTL, int64(innReqID), req.TableNameKey, logger, isDebug)
-	defer syncinterface.TaosFreeResult(result, logger, isDebug)
+	defer syncinterface.TaosSchemalessFree(result, logger, isDebug)
 	if code := syncinterface.TaosError(result, logger, isDebug); code != 0 {
 		errStr := syncinterface.TaosErrorStr(result, logger, isDebug)
 		logger.Errorf("schemaless write error, code:%d, err:%s", code, errStr)

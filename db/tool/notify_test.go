@@ -346,9 +346,9 @@ func exec(conn unsafe.Pointer, sql string) error {
 	code := syncinterface.TaosError(result, logger, isDebug)
 	if code != 0 {
 		errStr := syncinterface.TaosErrorStr(result, logger, isDebug)
-		syncinterface.TaosFreeResult(result, logger, isDebug)
+		syncinterface.TaosSyncQueryFree(result, logger, isDebug)
 		return tErrors.NewError(code, errStr)
 	}
-	syncinterface.TaosFreeResult(result, logger, isDebug)
+	syncinterface.TaosSyncQueryFree(result, logger, isDebug)
 	return nil
 }

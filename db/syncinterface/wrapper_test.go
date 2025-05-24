@@ -77,7 +77,7 @@ func TestTaosSchemalessInsertRawTTLWithReqIDTBNameKey(t *testing.T) {
 	errCode, result := TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn, "measurement,host=host1 field1=2i,field2=2.0 1577836800000000000", wrapper.InfluxDBLineProtocol, "", 0, reqID, "", logger, isDebug)
 	assert.Equal(t, int32(1), errCode)
 	assert.NotNil(t, result)
-	TaosFreeResult(result, logger, isDebug)
+	TaosSchemalessFree(result, logger, isDebug)
 }
 
 func TestTaosGetTablesVgID(t *testing.T) {
@@ -598,7 +598,7 @@ func TestTaosStmt2(t *testing.T) {
 
 func exec(conn unsafe.Pointer, sql string) error {
 	result := TaosQuery(conn, sql, logger, isDebug)
-	defer TaosFreeResult(result, logger, isDebug)
+	defer TaosSyncQueryFree(result, logger, isDebug)
 	code := TaosError(result, logger, isDebug)
 	if code != 0 {
 		return taoserrors.NewError(code, TaosErrorStr(result, logger, isDebug))
@@ -608,7 +608,7 @@ func exec(conn unsafe.Pointer, sql string) error {
 
 func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
 	res := TaosQuery(conn, sql, logger, isDebug)
-	defer TaosFreeResult(res, logger, isDebug)
+	defer TaosSyncQueryFree(res, logger, isDebug)
 	code := TaosError(res, logger, isDebug)
 	if code != 0 {
 		errStr := TaosErrorStr(res, logger, isDebug)

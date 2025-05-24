@@ -16,7 +16,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
@@ -203,8 +202,8 @@ func (cp *ConnectorPool) Get() (unsafe.Pointer, error) {
 }
 
 func (cp *ConnectorPool) Put(c unsafe.Pointer) error {
-	wrapper.TaosResetCurrentDB(c)
-	wrapper.TaosOptionsConnection(c, common.TSDB_OPTION_CONNECTION_CLEAR, nil)
+	syncinterface.TaosResetCurrentDB(c, cp.logger, log.IsDebug())
+	syncinterface.TaosOptionsConnection(c, common.TSDB_OPTION_CONNECTION_CLEAR, nil, cp.logger, log.IsDebug())
 	if err := cp.pool.Put(c); err != nil {
 		return err
 	}
@@ -325,7 +324,7 @@ func getConnectDirect(connectionPool *ConnectorPool, clientIP net.IP) (*Conn, er
 	}
 	ipStr := clientIP.String()
 	// ignore error, because we have checked the ip
-	wrapper.TaosOptionsConnection(c, common.TSDB_OPTION_CONNECTION_USER_IP, &ipStr)
+	syncinterface.TaosOptionsConnection(c, common.TSDB_OPTION_CONNECTION_USER_IP, &ipStr, connectionPool.logger, log.IsDebug())
 	return &Conn{
 		TaosConnection: c,
 		pool:           connectionPool,

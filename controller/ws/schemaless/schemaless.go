@@ -377,7 +377,7 @@ func (t *TaosSchemaless) insert(ctx context.Context, session *melody.Session, re
 	var result unsafe.Pointer
 	defer func() {
 		if result != nil {
-			syncinterface.TaosFreeResult(result, logger, isDebug)
+			syncinterface.TaosSchemalessFree(result, logger, isDebug)
 		}
 	}()
 	var err error

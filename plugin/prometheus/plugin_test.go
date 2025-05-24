@@ -34,10 +34,10 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	r := syncinterface.TaosQuery(conn, "create database if not exists test_plugin_prometheus", logger, isDebug)
-	syncinterface.TaosFreeResult(r, logger, isDebug)
+	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	m.Run()
 	r = syncinterface.TaosQuery(conn, "drop database if exists test_plugin_prometheus", logger, isDebug)
-	syncinterface.TaosFreeResult(r, logger, isDebug)
+	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 }
 
 // @author: xftan

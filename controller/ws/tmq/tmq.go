@@ -476,6 +476,11 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		if t.unsubscribed {
 			logger.Debug("tmq resubscribe")
 			topicList := syncinterface.TMQListNew(logger, isDebug)
+			if topicList == nil {
+				logger.Errorf("tmq list new error")
+				wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq list new return nil", action, req.ReqID, nil)
+				return
+			}
 			defer func() {
 				syncinterface.TMQListDestroy(topicList, logger, isDebug)
 			}()
@@ -508,6 +513,11 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 
 	}
 	tmqConfig := syncinterface.TMQConfNew(logger, isDebug)
+	if tmqConfig == nil {
+		logger.Errorf("tmq conf new error")
+		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq conf new return nil", action, req.ReqID, nil)
+		return
+	}
 	defer func() {
 		syncinterface.TMQConfDestroy(tmqConfig, logger, isDebug)
 	}()
@@ -847,7 +857,9 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 				closed = t.wrapperFreeResult(logger, isDebug)
 				if closed {
 					logger.Debugf("server closed, free result directly, message:%p", message)
-					syncinterface.TaosFreeResult(message, logger, isDebug)
+					monitor.TMQFreeResultCounter.Inc()
+					wrapper.TaosFreeResult(message)
+					monitor.TMQFreeResultSuccessCounter.Inc()
 					return
 				}
 			}
@@ -871,7 +883,9 @@ func (t *TMQ) poll(ctx context.Context, session *melody.Session, req *TMQPollReq
 			logger.Tracef("get message %d, topic:%s, vgroup:%d, offset:%d, db:%s", uintptr(message), t.tmpMessage.Topic, t.tmpMessage.VGroupID, t.tmpMessage.Offset, resp.Database)
 		} else {
 			logger.Errorf("unavailable tmq type:%d", messageType)
-			syncinterface.TaosFreeResult(message, logger, isDebug)
+			monitor.TMQFreeResultCounter.Inc()
+			wrapper.TaosFreeResult(message)
+			monitor.TMQFreeResultSuccessCounter.Inc()
 			logger.Trace("free result directly finish")
 			wsTMQErrorMsg(ctx, session, logger, 0xffff, "unavailable tmq type:"+strconv.Itoa(int(messageType)), action, req.ReqID, nil)
 			return
@@ -1481,8 +1495,10 @@ func (t *TMQ) freeMessage(closing bool) {
 		if !closing && t.isClosed() {
 			return
 		}
+		monitor.TMQFreeResultCounter.Inc()
 		asynctmq.TaosaTMQFreeResultA(t.thread, t.tmpMessage.CPointer, t.handler.Handler)
 		<-t.handler.Caller.FreeResult
+		monitor.TMQFreeResultSuccessCounter.Inc()
 		t.tmpMessage.CPointer = nil
 	}
 	t.tmpMessage.buffer = nil
@@ -1733,10 +1749,16 @@ func (t *TMQ) wrapperCloseConsumer(logger *logrus.Entry, isDebug bool, consumer 
 		t.asyncLocker.Unlock()
 		logger.Trace("tmq_consumer_close async locker unlocked")
 	}()
+	monitor.TMQConsumerCloseCounter.Inc()
 	s = log.GetLogNow(isDebug)
 	asynctmq.TaosaTMQConsumerCloseA(t.thread, consumer, t.handler.Handler)
 	code := <-t.handler.Caller.ConsumerCloseResult
 	logger.Debugf("tmq_consumer_close finish, code:%d, cost:%s", code, log.GetLogDuration(isDebug, s))
+	if code != 0 {
+		monitor.TMQConsumerCloseFailCounter.Inc()
+	} else {
+		monitor.TMQConsumerCloseSuccessCounter.Inc()
+	}
 	return code
 }
 
@@ -1749,10 +1771,16 @@ func (t *TMQ) wrapperSubscribe(logger *logrus.Entry, isDebug bool, consumer, top
 		t.asyncLocker.Unlock()
 		logger.Trace("tmq_subscribe async locker unlocked")
 	}()
+	monitor.TMQSubscribeCounter.Inc()
 	s = log.GetLogNow(isDebug)
 	asynctmq.TaosaTMQSubscribeA(t.thread, consumer, topicList, t.handler.Handler)
 	errCode := <-t.handler.Caller.SubscribeResult
 	logger.Debugf("tmq_subscribe finish, code:%d, cost:%s", errCode, log.GetLogDuration(isDebug, s))
+	if errCode != 0 {
+		monitor.TMQSubscribeFailCounter.Inc()
+	} else {
+		monitor.TMQSubscribeSuccessCounter.Inc()
+	}
 	return errCode
 }
 
@@ -1765,6 +1793,7 @@ func (t *TMQ) wrapperConsumerNew(logger *logrus.Entry, isDebug bool, tmqConfig u
 		t.asyncLocker.Unlock()
 		logger.Trace("tmq_consumer_new async locker unlocked")
 	}()
+	monitor.TMQConsumerNewCounter.Inc()
 	s = log.GetLogNow(isDebug)
 	asynctmq.TaosaTMQNewConsumerA(t.thread, tmqConfig, t.handler.Handler)
 	result := <-t.handler.Caller.NewConsumerResult
@@ -1775,6 +1804,11 @@ func (t *TMQ) wrapperConsumerNew(logger *logrus.Entry, isDebug bool, tmqConfig u
 		err = taoserrors.NewError(-1, "new consumer return nil")
 	}
 	logger.Debugf("tmq_consumer_new finish, consumer:%p, err:%v, cost:%s", result.Consumer, err, log.GetLogDuration(isDebug, s))
+	if err != nil {
+		monitor.TMQConsumerNewFailCounter.Inc()
+	} else {
+		monitor.TMQConsumerNewSuccessCounter.Inc()
+	}
 	return result.Consumer, err
 }
 
@@ -1791,10 +1825,16 @@ func (t *TMQ) wrapperCommit(logger *logrus.Entry, isDebug bool) (int32, bool) {
 		logger.Debug("tmq_commit_sync finish, server closed")
 		return 0, true
 	}
+	monitor.TMQCommitSyncCounter.Inc()
 	s = log.GetLogNow(isDebug)
 	asynctmq.TaosaTMQCommitA(t.thread, t.consumer, nil, t.handler.Handler)
 	errCode := <-t.handler.Caller.CommitResult
 	logger.Debugf("tmq_commit_sync finish, code:%d, cost:%s", errCode, log.GetLogDuration(isDebug, s))
+	if errCode != 0 {
+		monitor.TMQCommitSyncFailCounter.Inc()
+	} else {
+		monitor.TMQCommitSyncSuccessCounter.Inc()
+	}
 	return errCode, false
 }
 
@@ -1811,10 +1851,19 @@ func (t *TMQ) wrapperPoll(logger *logrus.Entry, isDebug bool, blockingTime int64
 		logger.Debug("tmq_poll finish, server closed")
 		return nil, true
 	}
+	monitor.TMQPollCounter.Inc()
 	s = log.GetLogNow(isDebug)
 	asynctmq.TaosaTMQPollA(t.thread, t.consumer, blockingTime, t.handler.Handler)
 	result := <-t.handler.Caller.PollResult
 	logger.Debugf("tmq_poll finish, res:%p, code:%d, errmsg:%s, cost:%s", result.Res, result.Code, result.ErrStr, log.GetLogDuration(isDebug, s))
+	if result.Code != 0 {
+		monitor.TMQPollFailCounter.Inc()
+	} else {
+		monitor.TMQPollSuccessCounter.Inc()
+		if result.Res != nil {
+			monitor.TMQPollResultCounter.Inc()
+		}
+	}
 	return result, false
 }
 
@@ -1835,10 +1884,12 @@ func (t *TMQ) wrapperFreeResult(logger *logrus.Entry, isDebug bool) bool {
 		logger.Debug("free result finish, message has been freed")
 		return false
 	}
+	monitor.TMQFreeResultCounter.Inc()
 	s = log.GetLogNow(isDebug)
 	asynctmq.TaosaTMQFreeResultA(t.thread, t.tmpMessage.CPointer, t.handler.Handler)
 	<-t.handler.Caller.FreeResult
 	logger.Debugf("free result finish, cost:%s", log.GetLogDuration(isDebug, s))
+	monitor.TMQFreeResultSuccessCounter.Inc()
 	return false
 }
 
@@ -1855,10 +1906,16 @@ func (t *TMQ) wrapperFetchRawBlock(logger *logrus.Entry, isDebug bool, res unsaf
 		logger.Debug("fetch_raw_block finish, server closed")
 		return nil, true
 	}
+	monitor.TMQFetchRawBlockCounter.Inc()
 	s = log.GetLogNow(isDebug)
 	asynctmq.TaosaTMQFetchRawBlockA(t.thread, res, t.handler.Handler)
 	rawBlock := <-t.handler.Caller.FetchRawBlockResult
 	logger.Debugf("fetch_raw_block finish, code:%d, block_size:%d, block:%p, cost:%s", rawBlock.Code, rawBlock.BlockSize, rawBlock.Block, log.GetLogDuration(isDebug, s))
+	if rawBlock.Code != 0 {
+		monitor.TMQFetchRawBlockFailCounter.Inc()
+	} else {
+		monitor.TMQFetchRawBlockSuccessCounter.Inc()
+	}
 	return rawBlock, false
 }
 
@@ -1875,10 +1932,16 @@ func (t *TMQ) wrapperGetRaw(logger *logrus.Entry, isDebug bool, res unsafe.Point
 		logger.Debug("tmq_get_raw finish, server closed")
 		return 0, true
 	}
+	monitor.TMQGetRawCounter.Inc()
 	s = log.GetLogNow(isDebug)
 	asynctmq.TaosaTMQGetRawA(t.thread, res, rawData, t.handler.Handler)
 	errCode := <-t.handler.Caller.GetRawResult
 	logger.Debugf("tmq_get_raw finish, code:%d, cost:%s", errCode, log.GetLogDuration(isDebug, s))
+	if errCode != 0 {
+		monitor.TMQGetRawFailCounter.Inc()
+	} else {
+		monitor.TMQGetRawSuccessCounter.Inc()
+	}
 	return errCode, false
 }
 
@@ -1895,10 +1958,12 @@ func (t *TMQ) wrapperGetJsonMeta(logger *logrus.Entry, isDebug bool, res unsafe.
 		logger.Debug("tmq_get_json_meta finish, server closed")
 		return nil, true
 	}
+	monitor.TMQGetJsonMetaCounter.Inc()
 	s = log.GetLogNow(isDebug)
 	asynctmq.TaosaTMQGetJsonMetaA(t.thread, res, t.handler.Handler)
 	jsonMeta := <-t.handler.Caller.GetJsonMetaResult
 	logger.Debugf("tmq_get_json_meta finish, result:%p, cost:%s", jsonMeta, log.GetLogDuration(isDebug, s))
+	monitor.TMQGetJsonMetaSuccessCounter.Inc()
 	return jsonMeta, false
 }
 
@@ -1915,30 +1980,42 @@ func (t *TMQ) wrapperUnsubscribe(logger *logrus.Entry, isDebug bool, checkClose 
 		logger.Debug("tmq_unsubscribe finish, server closed")
 		return 0, true
 	}
+	monitor.TMQUnsubscribeCounter.Inc()
 	s = log.GetLogNow(isDebug)
 	asynctmq.TaosaTMQUnsubscribeA(t.thread, t.consumer, t.handler.Handler)
 	errCode := <-t.handler.Caller.UnsubscribeResult
 	logger.Debugf("tmq_unsubscribe finish, code:%d, cost:%s", errCode, log.GetLogDuration(isDebug, s))
+	if errCode != 0 {
+		monitor.TMQUnsubscribeFailCounter.Inc()
+	} else {
+		monitor.TMQUnsubscribeSuccessCounter.Inc()
+	}
 	return errCode, false
 }
 
 func (t *TMQ) wrapperGetTopicAssignment(logger *logrus.Entry, isDebug bool, topic string) (*tmqhandle.GetTopicAssignmentResult, bool) {
-	logger.Debugf("call get_topic_assignment, consumer:%p, topic:%s", t.consumer, topic)
+	logger.Debugf("call tmq_get_topic_assignment, consumer:%p, topic:%s", t.consumer, topic)
 	s := log.GetLogNow(isDebug)
 	t.asyncLocker.Lock()
-	logger.Tracef("get_topic_assignment async locker locked, cost:%s", log.GetLogDuration(isDebug, s))
+	logger.Tracef("tmq_get_topic_assignment async locker locked, cost:%s", log.GetLogDuration(isDebug, s))
 	defer func() {
 		t.asyncLocker.Unlock()
-		logger.Trace("get_topic_assignment async locker unlocked")
+		logger.Trace("tmq_get_topic_assignment async locker unlocked")
 	}()
 	if t.isClosed() {
 		logger.Debug("tmq_get_topic_assignment finish, server closed")
 		return nil, true
 	}
+	monitor.TMQGetTopicAssignmentCounter.Inc()
 	s = log.GetLogNow(isDebug)
 	asynctmq.TaosaTMQGetTopicAssignmentA(t.thread, t.consumer, topic, t.handler.Handler)
 	result := <-t.handler.Caller.GetTopicAssignmentResult
-	logger.Debugf("get_topic_assignment finish, result:%+v, cost:%s", result, log.GetLogDuration(isDebug, s))
+	logger.Debugf("tmq_get_topic_assignment finish, result:%+v, cost:%s", result, log.GetLogDuration(isDebug, s))
+	if result.Code != 0 {
+		monitor.TMQGetTopicAssignmentFailCounter.Inc()
+	} else {
+		monitor.TMQGetTopicAssignmentSuccessCounter.Inc()
+	}
 	return result, false
 }
 
@@ -1955,10 +2032,16 @@ func (t *TMQ) wrapperOffsetSeek(logger *logrus.Entry, isDebug bool, topic string
 		logger.Debug("tmq_offset_seek finish, server closed")
 		return 0, true
 	}
+	monitor.TMQOffsetSeekCounter.Inc()
 	s = log.GetLogNow(isDebug)
 	asynctmq.TaosaTMQOffsetSeekA(t.thread, t.consumer, topic, vgroupID, offset, t.handler.Handler)
 	errCode := <-t.handler.Caller.OffsetSeekResult
 	logger.Debugf("offset_seek finish, code:%d, cost:%s", errCode, log.GetLogDuration(isDebug, s))
+	if errCode != 0 {
+		monitor.TMQOffsetSeekFailCounter.Inc()
+	} else {
+		monitor.TMQOffsetSeekSuccessCounter.Inc()
+	}
 	return errCode, false
 }
 
@@ -1975,10 +2058,12 @@ func (t *TMQ) wrapperCommitted(logger *logrus.Entry, isDebug bool, topic string,
 		logger.Debug("tmq_committed finish, server closed")
 		return 0, true
 	}
+	monitor.TMQCommittedCounter.Inc()
 	s = log.GetLogNow(isDebug)
 	asynctmq.TaosaTMQCommitted(t.thread, t.consumer, topic, vgroupID, t.handler.Handler)
 	offset := <-t.handler.Caller.CommittedResult
 	logger.Debugf("tmq_committed finish, offset:%d, cost:%s", offset, log.GetLogDuration(isDebug, s))
+	monitor.TMQCommittedSuccessCounter.Inc()
 	return offset, false
 }
 
@@ -1995,10 +2080,12 @@ func (t *TMQ) wrapperPosition(logger *logrus.Entry, isDebug bool, topic string, 
 		logger.Debug("tmq_position finish, server closed")
 		return 0, true
 	}
+	monitor.TMQPositionCounter.Inc()
 	s = log.GetLogNow(isDebug)
 	asynctmq.TaosaTMQPosition(t.thread, t.consumer, topic, vgroupID, t.handler.Handler)
 	res := <-t.handler.Caller.PositionResult
 	logger.Debugf("tmq_position finish, position:%d, cost:%s", res, log.GetLogDuration(isDebug, s))
+	monitor.TMQPositionSuccessCounter.Inc()
 	return res, false
 }
 
@@ -2015,10 +2102,16 @@ func (t *TMQ) wrapperCommitOffset(logger *logrus.Entry, isDebug bool, topic stri
 		logger.Debug("tmq_commit_offset finish, server closed")
 		return 0, true
 	}
+	monitor.TMQCommitOffsetCounter.Inc()
 	s = log.GetLogNow(isDebug)
 	asynctmq.TaosaTMQCommitOffset(t.thread, t.consumer, topic, vgroupID, offset, t.handler.Handler)
 	code := <-t.handler.Caller.CommitResult
 	logger.Debugf("commit_offset finish, code:%d, cost:%s", code, log.GetLogDuration(isDebug, s))
+	if code != 0 {
+		monitor.TMQCommitOffsetFailCounter.Inc()
+	} else {
+		monitor.TMQCommitOffsetSuccessCounter.Inc()
+	}
 	return code, false
 }
 

@@ -14,7 +14,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	taoserrors "github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
@@ -88,7 +87,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 		case common.TAOS_CONN_MODE_BI:
 			// BI mode
 			logger.Trace("set connection mode to BI")
-			code := wrapper.TaosSetConnMode(conn, common.TAOS_CONN_MODE_BI, 1)
+			code := syncinterface.TaosSetConnMode(conn, common.TAOS_CONN_MODE_BI, 1, logger, isDebug)
 			logger.Trace("set connection mode to BI done")
 			if code != 0 {
 				handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set connection mode to BI error")
@@ -194,7 +193,7 @@ func (h *messageHandler) query(ctx context.Context, session *melody.Session, act
 		monitor.WSRecordResult(sqlType, false)
 		errStr := syncinterface.TaosErrorStr(result.Res, logger, isDebug)
 		logger.Errorf("query error, code:%d, message:%s", code, errStr)
-		syncinterface.TaosFreeResult(result.Res, logger, isDebug)
+		async.FreeResultAsync(result.Res, logger, isDebug)
 		commonErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr)
 		return
 	}
@@ -208,7 +207,7 @@ func (h *messageHandler) query(ctx context.Context, session *melody.Session, act
 		s = log.GetLogNow(isDebug)
 		affectRows := syncinterface.TaosAffectedRows(result.Res, logger, isDebug)
 		logger.Debugf("affected_rows %d, cost:%s", affectRows, log.GetLogDuration(isDebug, s))
-		syncinterface.TaosFreeResult(result.Res, logger, isDebug)
+		async.FreeResultAsync(result.Res, logger, isDebug)
 		resp := &queryResponse{
 			Action:       action,
 			ReqID:        req.ReqID,
@@ -285,7 +284,7 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 		monitor.WSRecordResult(sqlType, false)
 		errStr := syncinterface.TaosErrorStr(result.Res, logger, isDebug)
 		logger.Errorf("taos query error, code:%d, msg:%s, sql:%s", code, errStr, log.GetLogSql(bytesutil.ToUnsafeString(sql)))
-		syncinterface.TaosFreeResult(result.Res, logger, isDebug)
+		async.FreeResultAsync(result.Res, logger, isDebug)
 		commonErrorResponse(ctx, session, logger, action, reqID, code, errStr)
 		return
 	}
@@ -296,7 +295,7 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 	if isUpdate {
 		affectRows := syncinterface.TaosAffectedRows(result.Res, logger, isDebug)
 		logger.Debugf("affected_rows %d cost:%s", affectRows, log.GetLogDuration(isDebug, s))
-		syncinterface.TaosFreeResult(result.Res, logger, isDebug)
+		async.FreeResultAsync(result.Res, logger, isDebug)
 		resp := &queryResponse{
 			Action:       action,
 			ReqID:        reqID,

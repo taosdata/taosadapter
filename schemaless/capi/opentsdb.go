@@ -27,7 +27,7 @@ func InsertOpentsdbJson(conn unsafe.Pointer, data []byte, db string, ttl int, re
 		"", ttl, getReqID(reqID), tableNameKey, logger, isDebug)
 
 	defer func() {
-		syncinterface.TaosFreeResult(result, logger, isDebug)
+		syncinterface.TaosSchemalessFree(result, logger, isDebug)
 	}()
 	if code := syncinterface.TaosError(result, logger, isDebug); code != 0 {
 		return tErrors.NewError(code, syncinterface.TaosErrorStr(result, logger, isDebug))
@@ -55,7 +55,7 @@ func InsertOpentsdbTelnet(conn unsafe.Pointer, data []string, db string, ttl int
 	_, result = syncinterface.TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn, strings.Join(trimData, "\n"),
 		wrapper.OpenTSDBTelnetLineProtocol, "", ttl, getReqID(reqID), tableNameKey, logger, isDebug)
 	defer func() {
-		syncinterface.TaosFreeResult(result, logger, isDebug)
+		syncinterface.TaosSchemalessFree(result, logger, isDebug)
 	}()
 
 	code := syncinterface.TaosError(result, logger, isDebug)

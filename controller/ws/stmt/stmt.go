@@ -364,18 +364,19 @@ type StmtItem struct {
 
 func (s *StmtItem) clean(logger *logrus.Entry) {
 	s.Lock()
+	defer s.Unlock()
 	if s.stmt != nil {
 		syncinterface.TaosStmtClose(s.stmt, logger, log.IsDebug())
 	}
-	s.Unlock()
 }
 
 func (t *TaosStmt) addStmtItem(stmt *StmtItem) {
 	index := atomic.AddUint64(&t.stmtIndex, 1)
 	stmt.index = index
 	t.stmtIndexLocker.Lock()
+	defer t.stmtIndexLocker.Unlock()
 	t.StmtList.PushBack(stmt)
-	t.stmtIndexLocker.Unlock()
+	monitor.WSStmtStmtCount.Inc()
 }
 
 func (t *TaosStmt) getStmtItem(index uint64) *list.Element {
@@ -405,6 +406,7 @@ func (t *TaosStmt) removeStmtItem(item *list.Element) {
 	t.stmtIndexLocker.Lock()
 	t.StmtList.Remove(item)
 	t.stmtIndexLocker.Unlock()
+	monitor.WSStmtStmtCount.Dec()
 }
 
 type StmtConnectReq struct {
@@ -1196,6 +1198,9 @@ func (t *TaosStmt) Close(logger *logrus.Entry) {
 func (t *TaosStmt) cleanUp(logger *logrus.Entry) {
 	t.stmtIndexLocker.Lock()
 	defer t.stmtIndexLocker.Unlock()
+	defer func() {
+		t.StmtList = t.StmtList.Init()
+	}()
 	root := t.StmtList.Front()
 	if root == nil {
 		return
@@ -1207,6 +1212,7 @@ func (t *TaosStmt) cleanUp(logger *logrus.Entry) {
 			return
 		}
 		item.Value.(*StmtItem).clean(logger)
+		monitor.WSStmtStmtCount.Dec()
 		item = item.Next()
 	}
 }

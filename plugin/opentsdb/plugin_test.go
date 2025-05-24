@@ -128,7 +128,7 @@ func exec(conn unsafe.Pointer, sql string) error {
 	logger := log.GetLogger("test")
 	isDebug := log.IsDebug()
 	res := syncinterface.TaosQuery(conn, sql, logger, isDebug)
-	defer syncinterface.TaosFreeResult(res, logger, isDebug)
+	defer syncinterface.TaosSyncQueryFree(res, logger, isDebug)
 	code := syncinterface.TaosError(res, logger, isDebug)
 	if code != 0 {
 		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
@@ -141,7 +141,7 @@ func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
 	logger := log.GetLogger("test")
 	isDebug := log.IsDebug()
 	res := syncinterface.TaosQuery(conn, sql, logger, isDebug)
-	defer syncinterface.TaosFreeResult(res, logger, isDebug)
+	defer syncinterface.TaosSyncQueryFree(res, logger, isDebug)
 	code := syncinterface.TaosError(res, logger, isDebug)
 	if code != 0 {
 		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)

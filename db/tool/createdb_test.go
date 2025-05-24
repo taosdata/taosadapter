@@ -68,7 +68,7 @@ func TestCreateDBWithConnection(t *testing.T) {
 				errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 				t.Error(tErrors.NewError(code, errStr))
 			}
-			syncinterface.TaosFreeResult(r, logger, isDebug)
+			syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 		})
 	}
 }
@@ -111,11 +111,11 @@ func TestSchemalessSelectDB(t *testing.T) {
 			code := syncinterface.TaosError(result, logger, isDebug)
 			if code != 0 {
 				errStr := syncinterface.TaosErrorStr(result, logger, isDebug)
-				syncinterface.TaosFreeResult(result, logger, isDebug)
+				syncinterface.TaosSyncQueryFree(result, logger, isDebug)
 				t.Error(tErrors.NewError(code, errStr))
 				return
 			}
-			syncinterface.TaosFreeResult(result, logger, isDebug)
+			syncinterface.TaosSyncQueryFree(result, logger, isDebug)
 			if err := SchemalessSelectDB(tt.args.taosConnect, log.GetLogger("test").WithField("test", "TestSchemalessSelectDB"), false, tt.args.db, 0); (err != nil) != tt.wantErr {
 				t.Errorf("selectDB() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -125,7 +125,7 @@ func TestSchemalessSelectDB(t *testing.T) {
 				errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 				t.Error(tErrors.NewError(code, errStr))
 			}
-			syncinterface.TaosFreeResult(r, logger, isDebug)
+			syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 		})
 	}
 }

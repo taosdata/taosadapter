@@ -283,11 +283,10 @@ func TaosGetCurrentDB(conn unsafe.Pointer) (db string, err error) {
 
 	code := C.taos_get_current_db(conn, cDb, C.int(195), (*C.int)(unsafe.Pointer(&required)))
 	if code != 0 {
-		err = errors.NewError(int(code), TaosErrorStr(nil))
+		return "", errors.NewError(int(code), TaosErrorStr(nil))
 	}
 	db = C.GoString(cDb)
-
-	return
+	return db, nil
 }
 
 // TaosGetServerInfo DLL_EXPORT const char *taos_get_server_info(TAOS *taos)

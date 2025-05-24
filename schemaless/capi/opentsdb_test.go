@@ -43,7 +43,7 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 			errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 			t.Error(errors.NewError(code, errStr))
 		}
-		syncinterface.TaosFreeResult(r, logger, isDebug)
+		syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	}()
 	r := syncinterface.TaosQuery(conn, "create database if not exists test_capi_opentsdb", logger, isDebug)
 	code := syncinterface.TaosError(r, logger, isDebug)
@@ -51,7 +51,7 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 		errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 		t.Error(errors.NewError(code, errStr))
 	}
-	syncinterface.TaosFreeResult(r, logger, isDebug)
+	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        string
@@ -125,7 +125,7 @@ func BenchmarkTelnet(b *testing.B) {
 			errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 			b.Error(errors.NewError(code, errStr))
 		}
-		syncinterface.TaosFreeResult(r, logger, isDebug)
+		syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	}()
 	for i := 0; i < b.N; i++ {
 		//`sys.if.bytes.out`,`host`=web01,`interface`=eth0
@@ -158,7 +158,7 @@ func TestInsertOpentsdbJson(t *testing.T) {
 			errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 			t.Error(errors.NewError(code, errStr))
 		}
-		syncinterface.TaosFreeResult(r, logger, isDebug)
+		syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	}()
 	r := syncinterface.TaosQuery(conn, "create database if not exists test_capi_opentsdb_json", logger, isDebug)
 	code := syncinterface.TaosError(r, logger, isDebug)
@@ -166,7 +166,7 @@ func TestInsertOpentsdbJson(t *testing.T) {
 		errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 		t.Error(errors.NewError(code, errStr))
 	}
-	syncinterface.TaosFreeResult(r, logger, isDebug)
+	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        []byte
@@ -267,7 +267,7 @@ func TestInsertOpentsdbTelnetBatch(t *testing.T) {
 			errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 			t.Error(errors.NewError(code, errStr))
 		}
-		syncinterface.TaosFreeResult(r, logger, isDebug)
+		syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	}()
 	r := syncinterface.TaosQuery(conn, "create database if not exists test_capi_opentsdb_batch", logger, isDebug)
 	code := syncinterface.TaosError(r, logger, isDebug)
@@ -275,7 +275,7 @@ func TestInsertOpentsdbTelnetBatch(t *testing.T) {
 		errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 		t.Error(errors.NewError(code, errStr))
 	}
-	syncinterface.TaosFreeResult(r, logger, isDebug)
+	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        []string

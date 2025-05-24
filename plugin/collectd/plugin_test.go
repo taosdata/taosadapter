@@ -98,7 +98,7 @@ func TestCollectd(t *testing.T) {
 			errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 			t.Error(errors.NewError(code, errStr))
 		}
-		syncinterface.TaosFreeResult(r, logger, isDebug)
+		syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	}()
 	values, err := query(conn, "select last(`value`) from collectd.`cpu_value`")
 	assert.NoError(t, err)
@@ -123,7 +123,7 @@ func exec(conn unsafe.Pointer, sql string) error {
 	logger := log.GetLogger("test")
 	isDebug := log.IsDebug()
 	res := syncinterface.TaosQuery(conn, sql, logger, isDebug)
-	defer syncinterface.TaosFreeResult(res, logger, isDebug)
+	defer syncinterface.TaosSyncQueryFree(res, logger, isDebug)
 	code := syncinterface.TaosError(res, logger, isDebug)
 	if code != 0 {
 		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
@@ -136,7 +136,7 @@ func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
 	logger := log.GetLogger("test")
 	isDebug := log.IsDebug()
 	res := syncinterface.TaosQuery(conn, sql, logger, isDebug)
-	defer syncinterface.TaosFreeResult(res, logger, isDebug)
+	defer syncinterface.TaosSyncQueryFree(res, logger, isDebug)
 	code := syncinterface.TaosError(res, logger, isDebug)
 	if code != 0 {
 		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)

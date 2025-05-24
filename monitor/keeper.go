@@ -65,234 +65,417 @@ var (
 )
 
 var (
-	ConnPoolInUse sync.Map
-	WSQueryConn   *metrics.Gauge
-	WSSMLConn     *metrics.Gauge
-	WSStmtConn    *metrics.Gauge
-	WSWSConn      *metrics.Gauge
-	WSTMQConn     *metrics.Gauge
+	ConnPoolInUse        sync.Map
+	WSQueryConn          *metrics.Gauge
+	WSQueryConnIncrement *metrics.Gauge
+	WSQueryConnDecrement *metrics.Gauge
+
+	WSSMLConn           *metrics.Gauge
+	WSSMLConnIncrement  *metrics.Gauge
+	WSSMLConnDecrement  *metrics.Gauge
+	WSStmtConn          *metrics.Gauge
+	WSStmtConnIncrement *metrics.Gauge
+	WSStmtConnDecrement *metrics.Gauge
+	WSWSConn            *metrics.Gauge
+	WSWSConnIncrement   *metrics.Gauge
+	WSWSConnDecrement   *metrics.Gauge
+	WSTMQConn           *metrics.Gauge
+	WSTMQConnIncrement  *metrics.Gauge
+	WSTMQConnDecrement  *metrics.Gauge
 
 	AsyncCInflight *metrics.Gauge
 	SyncCInflight  *metrics.Gauge
 )
 
 var (
-	TaosFreeResultCounter                               *metrics.Gauge
-	TaosCloseCounter                                    *metrics.Gauge
-	TaosSelectDBCounter                                 *metrics.Gauge
-	TaosConnectCounter                                  *metrics.Gauge
-	TaosGetTablesVgIDCounter                            *metrics.Gauge
-	TaosStmtInitWithReqIDCounter                        *metrics.Gauge
-	TaosStmtPrepareCounter                              *metrics.Gauge
-	TaosStmtIsInsertCounter                             *metrics.Gauge
-	TaosStmtSetTBNameCounter                            *metrics.Gauge
-	TaosStmtGetTagFieldsCounter                         *metrics.Gauge
-	TaosStmtReclaimFieldsCounter                        *metrics.Gauge
-	TaosStmtSetTagsCounter                              *metrics.Gauge
-	TaosStmtGetColFieldsCounter                         *metrics.Gauge
-	TaosStmtBindParamBatchCounter                       *metrics.Gauge
-	TaosStmtAddBatchCounter                             *metrics.Gauge
-	TaosStmtExecuteCounter                              *metrics.Gauge
-	TaosStmtCloseCounter                                *metrics.Gauge
-	TMQWriteRawCounter                                  *metrics.Gauge
-	TaosWriteRawBlockWithReqIDCounter                   *metrics.Gauge
-	TaosWriteRawBlockWithFieldsWithReqIDCounter         *metrics.Gauge
-	TaosGetCurrentDBCounter                             *metrics.Gauge
-	TaosGetServerInfoCounter                            *metrics.Gauge
-	TaosStmtNumParamsCounter                            *metrics.Gauge
-	TaosStmtGetParamCounter                             *metrics.Gauge
-	TaosSchemalessInsertRawTTLWithReqIDTBNameKeyCounter *metrics.Gauge
-	TaosStmt2InitCounter                                *metrics.Gauge
-	TaosStmt2PrepareCounter                             *metrics.Gauge
-	TaosStmt2IsInsertCounter                            *metrics.Gauge
-	TaosStmt2GetFieldsCounter                           *metrics.Gauge
-	TaosStmt2ExecCounter                                *metrics.Gauge
-	TaosStmt2CloseCounter                               *metrics.Gauge
-	TaosStmt2BindBinaryCounter                          *metrics.Gauge
-	TaosOptionsConnectionCounter                        *metrics.Gauge
-	TaosValidateSqlCounter                              *metrics.Gauge
-	TaosCheckServerStatusCounter                        *metrics.Gauge
-	TMQSubscriptionCounter                              *metrics.Gauge
-	TaosErrorStrCounter                                 *metrics.Gauge
-	TaosIsUpdateQueryCounter                            *metrics.Gauge
-	TaosErrorCounter                                    *metrics.Gauge
-	TaosAffectedRowsCounter                             *metrics.Gauge
-	TaosNumFieldsCounter                                *metrics.Gauge
-	TaosFetchFieldsE                                    *metrics.Gauge
-	TaosResultPrecisionCounter                          *metrics.Gauge
-	TaosGetRawBlockCounter                              *metrics.Gauge
-	TaosFetchRawBlockCounter                            *metrics.Gauge
-	TaosQueryCounter                                    *metrics.Gauge
-	TMQErr2StrCounter                                   *metrics.Gauge
-	TMQConfSetCounter                                   *metrics.Gauge
-	TaosFetchLengthsCounter                             *metrics.Gauge
-	TaosStmtErrStrCounter                               *metrics.Gauge
-	TaosStmtAffectedRowsOnceCounter                     *metrics.Gauge
-	TaosStmt2FreeFieldsCounter                          *metrics.Gauge
-	TaosStmt2ErrorCounter                               *metrics.Gauge
-	TaosSetNotifyCBCounter                              *metrics.Gauge
-	TMQListNewCounter                                   *metrics.Gauge
-	TMQListDestroyCounter                               *metrics.Gauge
-	TMQListAppendCounter                                *metrics.Gauge
-	TMQGetResTypeCounter                                *metrics.Gauge
-	TMQGetTopicNameCounter                              *metrics.Gauge
-	TMQGetVgroupIDCounter                               *metrics.Gauge
-	TMQGetVgroupOffsetCounter                           *metrics.Gauge
-	TMQGetDBNameCounter                                 *metrics.Gauge
-	TMQGetTableNameCounter                              *metrics.Gauge
-	TMQListGetSizeCounter                               *metrics.Gauge
-	TMQConfNewCounter                                   *metrics.Gauge
-	TMQConfDestroyCounter                               *metrics.Gauge
-	TMQGetConnectCounter                                *metrics.Gauge
-	TMQFreeRawCounter                                   *metrics.Gauge
-	TMQFreeJsonMetaCounter                              *metrics.Gauge
-	TaosStmtUseResultCounter                            *metrics.Gauge
+	WSQuerySqlResultCount = metrics.NewGauge("ws_query_sql_result_count")
+
+	WSStmtStmtCount = metrics.NewGauge("ws_stmt_stmt_count")
+
+	WSWSSqlResultCount = metrics.NewGauge("ws_ws_sql_result_count")
+	WSWSStmtCount      = metrics.NewGauge("ws_ws_stmt_count")
+	WSWSStmt2Count     = metrics.NewGauge("ws_ws_stmt2_count")
 )
 
 var (
-	TaosFreeResultSuccessCounter                               *metrics.Gauge
-	TaosCloseSuccessCounter                                    *metrics.Gauge
-	TaosSelectDBSuccessCounter                                 *metrics.Gauge
-	TaosConnectSuccessCounter                                  *metrics.Gauge
-	TaosGetTablesVgIDSuccessCounter                            *metrics.Gauge
-	TaosStmtInitWithReqIDSuccessCounter                        *metrics.Gauge
-	TaosStmtPrepareSuccessCounter                              *metrics.Gauge
-	TaosStmtIsInsertSuccessCounter                             *metrics.Gauge
-	TaosStmtSetTBNameSuccessCounter                            *metrics.Gauge
-	TaosStmtGetTagFieldsSuccessCounter                         *metrics.Gauge
-	TaosStmtReclaimFieldsSuccessCounter                        *metrics.Gauge
-	TaosStmtSetTagsSuccessCounter                              *metrics.Gauge
-	TaosStmtGetColFieldsSuccessCounter                         *metrics.Gauge
-	TaosStmtBindParamBatchSuccessCounter                       *metrics.Gauge
-	TaosStmtAddBatchSuccessCounter                             *metrics.Gauge
-	TaosStmtExecuteSuccessCounter                              *metrics.Gauge
-	TaosStmtCloseSuccessCounter                                *metrics.Gauge
-	TMQWriteRawSuccessCounter                                  *metrics.Gauge
-	TaosWriteRawBlockWithReqIDSuccessCounter                   *metrics.Gauge
-	TaosWriteRawBlockWithFieldsWithReqIDSuccessCounter         *metrics.Gauge
-	TaosGetCurrentDBSuccessCounter                             *metrics.Gauge
-	TaosGetServerInfoSuccessCounter                            *metrics.Gauge
-	TaosStmtNumParamsSuccessCounter                            *metrics.Gauge
-	TaosStmtGetParamSuccessCounter                             *metrics.Gauge
-	TaosSchemalessInsertRawTTLWithReqIDTBNameKeySuccessCounter *metrics.Gauge
-	TaosStmt2InitSuccessCounter                                *metrics.Gauge
-	TaosStmt2PrepareSuccessCounter                             *metrics.Gauge
-	TaosStmt2IsInsertSuccessCounter                            *metrics.Gauge
-	TaosStmt2GetFieldsSuccessCounter                           *metrics.Gauge
-	TaosStmt2ExecSuccessCounter                                *metrics.Gauge
-	TaosStmt2CloseSuccessCounter                               *metrics.Gauge
-	TaosStmt2BindBinarySuccessCounter                          *metrics.Gauge
-	TaosOptionsConnectionSuccessCounter                        *metrics.Gauge
-	TaosValidateSqlSuccessCounter                              *metrics.Gauge
-	TaosCheckServerStatusSuccessCounter                        *metrics.Gauge
-	TMQSubscriptionSuccessCounter                              *metrics.Gauge
-	TaosErrorStrSuccessCounter                                 *metrics.Gauge
-	TaosIsUpdateQuerySuccessCounter                            *metrics.Gauge
-	TaosErrorSuccessCounter                                    *metrics.Gauge
-	TaosAffectedRowsSuccessCounter                             *metrics.Gauge
-	TaosNumFieldsSuccessCounter                                *metrics.Gauge
-	TaosFetchFieldsESuccessCounter                             *metrics.Gauge
-	TaosResultPrecisionSuccessCounter                          *metrics.Gauge
-	TaosGetRawBlockSuccessCounter                              *metrics.Gauge
-	TaosFetchRawBlockSuccessCounter                            *metrics.Gauge
-	TaosQuerySuccessCounter                                    *metrics.Gauge
-	TMQErr2StrSuccessCounter                                   *metrics.Gauge
-	TMQConfSetSuccessCounter                                   *metrics.Gauge
-	TaosFetchLengthsSuccessCounter                             *metrics.Gauge
-	TaosStmtErrStrSuccessCounter                               *metrics.Gauge
-	TaosStmtAffectedRowsOnceSuccessCounter                     *metrics.Gauge
-	TaosStmt2FreeFieldsSuccessCounter                          *metrics.Gauge
-	TaosStmt2ErrorSuccessCounter                               *metrics.Gauge
-	TaosSetNotifyCBSuccessCounter                              *metrics.Gauge
-	TMQListNewSuccessCounter                                   *metrics.Gauge
-	TMQListDestroySuccessCounter                               *metrics.Gauge
-	TMQListAppendSuccessCounter                                *metrics.Gauge
-	TMQGetResTypeSuccessCounter                                *metrics.Gauge
-	TMQGetTopicNameSuccessCounter                              *metrics.Gauge
-	TMQGetVgroupIDSuccessCounter                               *metrics.Gauge
-	TMQGetVgroupOffsetSuccessCounter                           *metrics.Gauge
-	TMQGetDBNameSuccessCounter                                 *metrics.Gauge
-	TMQGetTableNameSuccessCounter                              *metrics.Gauge
-	TMQListGetSizeSuccessCounter                               *metrics.Gauge
-	TMQConfNewSuccessCounter                                   *metrics.Gauge
-	TMQConfDestroySuccessCounter                               *metrics.Gauge
-	TMQGetConnectSuccessCounter                                *metrics.Gauge
-	TMQFreeRawSuccessCounter                                   *metrics.Gauge
-	TMQFreeJsonMetaSuccessCounter                              *metrics.Gauge
-	TaosStmtUseResultSuccessCounter                            *metrics.Gauge
-)
+	// taos_connect and taos_close
+	TaosConnectCounter        = metrics.NewGauge("taos_connect_total")
+	TaosConnectSuccessCounter = metrics.NewGauge("taos_connect_success")
+	TaosConnectFailCounter    = metrics.NewGauge("taos_connect_fail")
 
-var (
-	TaosFreeResultFailCounter                               *metrics.Gauge
-	TaosCloseFailCounter                                    *metrics.Gauge
-	TaosSelectDBFailCounter                                 *metrics.Gauge
-	TaosConnectFailCounter                                  *metrics.Gauge
-	TaosGetTablesVgIDFailCounter                            *metrics.Gauge
-	TaosStmtInitWithReqIDFailCounter                        *metrics.Gauge
-	TaosStmtPrepareFailCounter                              *metrics.Gauge
-	TaosStmtIsInsertFailCounter                             *metrics.Gauge
-	TaosStmtSetTBNameFailCounter                            *metrics.Gauge
-	TaosStmtGetTagFieldsFailCounter                         *metrics.Gauge
-	TaosStmtReclaimFieldsFailCounter                        *metrics.Gauge
-	TaosStmtSetTagsFailCounter                              *metrics.Gauge
-	TaosStmtGetColFieldsFailCounter                         *metrics.Gauge
-	TaosStmtBindParamBatchFailCounter                       *metrics.Gauge
-	TaosStmtAddBatchFailCounter                             *metrics.Gauge
-	TaosStmtExecuteFailCounter                              *metrics.Gauge
-	TaosStmtCloseFailCounter                                *metrics.Gauge
-	TMQWriteRawFailCounter                                  *metrics.Gauge
-	TaosWriteRawBlockWithReqIDFailCounter                   *metrics.Gauge
-	TaosWriteRawBlockWithFieldsWithReqIDFailCounter         *metrics.Gauge
-	TaosGetCurrentDBFailCounter                             *metrics.Gauge
-	TaosGetServerInfoFailCounter                            *metrics.Gauge
-	TaosStmtNumParamsFailCounter                            *metrics.Gauge
-	TaosStmtGetParamFailCounter                             *metrics.Gauge
-	TaosSchemalessInsertRawTTLWithReqIDTBNameKeyFailCounter *metrics.Gauge
-	TaosStmt2InitFailCounter                                *metrics.Gauge
-	TaosStmt2PrepareFailCounter                             *metrics.Gauge
-	TaosStmt2IsInsertFailCounter                            *metrics.Gauge
-	TaosStmt2GetFieldsFailCounter                           *metrics.Gauge
-	TaosStmt2ExecFailCounter                                *metrics.Gauge
-	TaosStmt2CloseFailCounter                               *metrics.Gauge
-	TaosStmt2BindBinaryFailCounter                          *metrics.Gauge
-	TaosOptionsConnectionFailCounter                        *metrics.Gauge
-	TaosValidateSqlFailCounter                              *metrics.Gauge
-	TaosCheckServerStatusFailCounter                        *metrics.Gauge
-	TMQSubscriptionFailCounter                              *metrics.Gauge
-	TaosErrorStrFailCounter                                 *metrics.Gauge
-	TaosIsUpdateQueryFailCounter                            *metrics.Gauge
-	TaosErrorFailCounter                                    *metrics.Gauge
-	TaosAffectedRowsFailCounter                             *metrics.Gauge
-	TaosFetchFieldsEFailCounter                             *metrics.Gauge
-	TaosNumFieldsFailCounter                                *metrics.Gauge
-	TaosResultPrecisionFailCounter                          *metrics.Gauge
-	TaosGetRawBlockFailCounter                              *metrics.Gauge
-	TaosFetchRawBlockFailCounter                            *metrics.Gauge
-	TaosQueryFailCounter                                    *metrics.Gauge
-	TMQErr2StrFailCounter                                   *metrics.Gauge
-	TMQConfSetFailCounter                                   *metrics.Gauge
-	TaosFetchLengthsFailCounter                             *metrics.Gauge
-	TaosStmtErrStrFailCounter                               *metrics.Gauge
-	TaosStmtAffectedRowsOnceFailCounter                     *metrics.Gauge
-	TaosStmt2FreeFieldsFailCounter                          *metrics.Gauge
-	TaosStmt2ErrorFailCounter                               *metrics.Gauge
-	TaosSetNotifyCBFailCounter                              *metrics.Gauge
-	TMQListNewFailCounter                                   *metrics.Gauge
-	TMQListDestroyFailCounter                               *metrics.Gauge
-	TMQListAppendFailCounter                                *metrics.Gauge
-	TMQGetResTypeFailCounter                                *metrics.Gauge
-	TMQGetTopicNameFailCounter                              *metrics.Gauge
-	TMQGetVgroupIDFailCounter                               *metrics.Gauge
-	TMQGetVgroupOffsetFailCounter                           *metrics.Gauge
-	TMQGetDBNameFailCounter                                 *metrics.Gauge
-	TMQGetTableNameFailCounter                              *metrics.Gauge
-	TMQListGetSizeFailCounter                               *metrics.Gauge
-	TMQConfNewFailCounter                                   *metrics.Gauge
-	TMQConfDestroyFailCounter                               *metrics.Gauge
-	TMQGetConnectFailCounter                                *metrics.Gauge
-	TMQFreeRawFailCounter                                   *metrics.Gauge
-	TMQFreeJsonMetaFailCounter                              *metrics.Gauge
-	TaosStmtUseResultFailCounter                            *metrics.Gauge
+	TaosCloseCounter        = metrics.NewGauge("taos_close_total")
+	TaosCloseSuccessCounter = metrics.NewGauge("taos_close_success")
+
+	// sml
+	TaosSchemalessInsertCounter            = metrics.NewGauge("taos_schemaless_insert_total")
+	TaosSchemalessInsertSuccessCounter     = metrics.NewGauge("taos_schemaless_insert_success")
+	TaosSchemalessInsertFailCounter        = metrics.NewGauge("taos_schemaless_insert_fail")
+	TaosSchemalessFreeResultCounter        = metrics.NewGauge("taos_schemaless_free_result_total")
+	TaosSchemalessFreeResultSuccessCounter = metrics.NewGauge("taos_schemaless_free_result_success")
+
+	// sync query
+	TaosQueryCounter                      = metrics.NewGauge("taos_query_total")
+	TaosQuerySuccessCounter               = metrics.NewGauge("taos_query_success")
+	TaosQueryFailCounter                  = metrics.NewGauge("taos_query_fail")
+	TaosSyncQueryFreeResultCounter        = metrics.NewGauge("taos_query_free_result_total")
+	TaosSyncQueryFreeResultSuccessCounter = metrics.NewGauge("taos_query_free_result_success")
+
+	// async query
+	TaosQueryAWithReqIDCounter        = metrics.NewGauge("taos_query_a_with_reqid_total")
+	TaosQueryAWithReqIDSuccessCounter = metrics.NewGauge("taos_query_a_with_reqid_success")
+
+	TaosQueryAWithReqIDCallBackCounter        = metrics.NewGauge("taos_query_a_with_reqid_callback_total")
+	TaosQueryAWithReqIDCallBackSuccessCounter = metrics.NewGauge("taos_query_a_with_reqid_callback_success")
+	TaosQueryAWithReqIDCallBackFailCounter    = metrics.NewGauge("taos_query_a_with_reqid_callback_fail")
+
+	TaosAsyncQueryFreeResultCounter        = metrics.NewGauge("taos_query_a_free_result_total")
+	TaosAsyncQueryFreeResultSuccessCounter = metrics.NewGauge("taos_query_a_free_result_success")
+
+	// tmq poll result
+	TMQPollResultCounter        = metrics.NewGauge("tmq_consumer_poll_result_total")
+	TMQFreeResultCounter        = metrics.NewGauge("tmq_free_result_total")
+	TMQFreeResultSuccessCounter = metrics.NewGauge("tmq_free_result_success")
+
+	// stmt2 init
+	TaosStmt2InitCounter        = metrics.NewGauge("taos_stmt2_init_total")
+	TaosStmt2InitSuccessCounter = metrics.NewGauge("taos_stmt2_init_success")
+	TaosStmt2InitFailCounter    = metrics.NewGauge("taos_stmt2_init_fail")
+
+	TaosStmt2CloseCounter        = metrics.NewGauge("taos_stmt2_close_total")
+	TaosStmt2CloseSuccessCounter = metrics.NewGauge("taos_stmt2_close_success")
+	TaosStmt2CloseFailCounter    = metrics.NewGauge("taos_stmt2_close_fail")
+
+	// stmt2 get fields
+	TaosStmt2GetFieldsCounter        = metrics.NewGauge("taos_stmt2_get_fields_total")
+	TaosStmt2GetFieldsSuccessCounter = metrics.NewGauge("taos_stmt2_get_fields_success")
+	TaosStmt2GetFieldsFailCounter    = metrics.NewGauge("taos_stmt2_get_fields_fail")
+
+	TaosStmt2FreeFieldsCounter        = metrics.NewGauge("taos_stmt2_free_fields_total")
+	TaosStmt2FreeFieldsSuccessCounter = metrics.NewGauge("taos_stmt2_free_fields_success")
+
+	// stmt init
+	TaosStmtInitWithReqIDCounter        = metrics.NewGauge("taos_stmt_init_with_reqid_total")
+	TaosStmtInitWithReqIDSuccessCounter = metrics.NewGauge("taos_stmt_init_with_reqid_success")
+	TaosStmtInitWithReqIDFailCounter    = metrics.NewGauge("taos_stmt_init_with_reqid_fail")
+
+	TaosStmtCloseCounter        = metrics.NewGauge("taos_stmt_close_total")
+	TaosStmtCloseSuccessCounter = metrics.NewGauge("taos_stmt_close_success")
+	TaosStmtCloseFailCounter    = metrics.NewGauge("taos_stmt_close_fail")
+
+	// stmt get fields
+	TaosStmtGetTagFieldsCounter        = metrics.NewGauge("taos_stmt_get_tag_fields_total")
+	TaosStmtGetTagFieldsSuccessCounter = metrics.NewGauge("taos_stmt_get_tag_fields_success")
+	TaosStmtGetTagFieldsFailCounter    = metrics.NewGauge("taos_stmt_get_tag_fields_fail")
+
+	TaosStmtGetColFieldsCounter        = metrics.NewGauge("taos_stmt_get_col_fields_total")
+	TaosStmtGetColFieldsSuccessCounter = metrics.NewGauge("taos_stmt_get_col_fields_success")
+	TaosStmtGetColFieldsFailCounter    = metrics.NewGauge("taos_stmt_get_col_fields_fail")
+
+	TaosStmtReclaimFieldsCounter        = metrics.NewGauge("taos_stmt_reclaim_fields_total")
+	TaosStmtReclaimFieldsSuccessCounter = metrics.NewGauge("taos_stmt_reclaim_fields_success")
+
+	// tmq get json meta
+	TMQGetJsonMetaCounter        = metrics.NewGauge("tmq_get_json_meta_total")
+	TMQGetJsonMetaSuccessCounter = metrics.NewGauge("tmq_get_json_meta_success")
+
+	TMQFreeJsonMetaCounter        = metrics.NewGauge("tmq_free_json_meta_total")
+	TMQFreeJsonMetaSuccessCounter = metrics.NewGauge("tmq_free_json_meta_success")
+
+	// fetch whitelist
+	TaosFetchWhitelistACounter        = metrics.NewGauge("taos_fetch_whitelist_a_total")
+	TaosFetchWhitelistASuccessCounter = metrics.NewGauge("taos_fetch_whitelist_a_success")
+
+	TaosFetchWhitelistACallBackCounter        = metrics.NewGauge("taos_fetch_whitelist_a_callback_total")
+	TaosFetchWhitelistACallBackSuccessCounter = metrics.NewGauge("taos_fetch_whitelist_a_callback_success")
+	TaosFetchWhitelistACallBackFailCounter    = metrics.NewGauge("taos_fetch_whitelist_a_callback_fail")
+
+	// fetch rows
+	TaosFetchRowsACounter        = metrics.NewGauge("taos_fetch_rows_a_total")
+	TaosFetchRowsASuccessCounter = metrics.NewGauge("taos_fetch_rows_a_success")
+
+	TaosFetchRowsACallBackCounter        = metrics.NewGauge("taos_fetch_rows_a_callback_total")
+	TaosFetchRowsACallBackSuccessCounter = metrics.NewGauge("taos_fetch_rows_a_callback_success")
+	TaosFetchRowsACallBackFailCounter    = metrics.NewGauge("taos_fetch_rows_a_callback_fail")
+
+	// fetch raw block
+	TaosFetchRawBlockACounter        = metrics.NewGauge("taos_fetch_raw_block_a_total")
+	TaosFetchRawBlockASuccessCounter = metrics.NewGauge("taos_fetch_raw_block_a_success")
+
+	TaosFetchRawBlockACallBackCounter        = metrics.NewGauge("taos_fetch_raw_block_a_callback_total")
+	TaosFetchRawBlockACallBackSuccessCounter = metrics.NewGauge("taos_fetch_raw_block_a_callback_success")
+	TaosFetchRawBlockACallBackFailCounter    = metrics.NewGauge("taos_fetch_raw_block_a_callback_fail")
+
+	// tmq get raw
+	TMQGetRawCounter        = metrics.NewGauge("tmq_get_raw_total")
+	TMQGetRawSuccessCounter = metrics.NewGauge("tmq_get_raw_success")
+	TMQGetRawFailCounter    = metrics.NewGauge("tmq_get_raw_fail")
+
+	TMQFreeRawCounter        = metrics.NewGauge("tmq_free_raw_total")
+	TMQFreeRawSuccessCounter = metrics.NewGauge("tmq_free_raw_success")
+
+	// tmq new
+	TMQConsumerNewCounter        = metrics.NewGauge("tmq_consumer_new_total")
+	TMQConsumerNewSuccessCounter = metrics.NewGauge("tmq_consumer_new_success")
+	TMQConsumerNewFailCounter    = metrics.NewGauge("tmq_consumer_new_fail")
+
+	TMQConsumerCloseCounter        = metrics.NewGauge("tmq_consumer_close_total")
+	TMQConsumerCloseSuccessCounter = metrics.NewGauge("tmq_consumer_close_success")
+	TMQConsumerCloseFailCounter    = metrics.NewGauge("tmq_consumer_close_fail")
+
+	// tmq subscribe
+	TMQSubscribeCounter        = metrics.NewGauge("tmq_subscribe_total")
+	TMQSubscribeSuccessCounter = metrics.NewGauge("tmq_subscribe_success")
+	TMQSubscribeFailCounter    = metrics.NewGauge("tmq_subscribe_fail")
+
+	// tmq unsubscribe
+	TMQUnsubscribeCounter        = metrics.NewGauge("tmq_unsubscribe_total")
+	TMQUnsubscribeSuccessCounter = metrics.NewGauge("tmq_unsubscribe_success")
+	TMQUnsubscribeFailCounter    = metrics.NewGauge("tmq_unsubscribe_fail")
+
+	// tmq list
+	TMQListNewCounter        = metrics.NewGauge("tmq_list_new_total")
+	TMQListNewSuccessCounter = metrics.NewGauge("tmq_list_new_success")
+	TMQListNewFailCounter    = metrics.NewGauge("tmq_list_new_fail")
+
+	TMQListDestroyCounter        = metrics.NewGauge("tmq_list_destroy_total")
+	TMQListDestroySuccessCounter = metrics.NewGauge("tmq_list_destroy_success")
+
+	// tmq config new
+	TMQConfNewCounter        = metrics.NewGauge("tmq_conf_new_total")
+	TMQConfNewSuccessCounter = metrics.NewGauge("tmq_conf_new_success")
+	TMQConfNewFailCounter    = metrics.NewGauge("tmq_conf_new_fail")
+
+	TMQConfDestroyCounter        = metrics.NewGauge("tmq_conf_destroy_total")
+	TMQConfDestroySuccessCounter = metrics.NewGauge("tmq_conf_destroy_success")
+
+	// stmt2 others
+	TaosStmt2PrepareCounter        = metrics.NewGauge("taos_stmt2_prepare_total")
+	TaosStmt2PrepareSuccessCounter = metrics.NewGauge("taos_stmt2_prepare_success")
+	TaosStmt2PrepareFailCounter    = metrics.NewGauge("taos_stmt2_prepare_fail")
+
+	TaosStmt2IsInsertCounter        = metrics.NewGauge("taos_stmt2_is_insert_total")
+	TaosStmt2IsInsertSuccessCounter = metrics.NewGauge("taos_stmt2_is_insert_success")
+	TaosStmt2IsInsertFailCounter    = metrics.NewGauge("taos_stmt2_is_insert_fail")
+
+	TaosStmt2BindBinaryCounter        = metrics.NewGauge("taos_stmt2_bind_param_total")
+	TaosStmt2BindBinarySuccessCounter = metrics.NewGauge("taos_stmt2_bind_param_success")
+	TaosStmt2BindBinaryFailCounter    = metrics.NewGauge("taos_stmt2_bind_param_fail")
+
+	TaosStmt2ExecCounter        = metrics.NewGauge("taos_stmt2_exec_total")
+	TaosStmt2ExecSuccessCounter = metrics.NewGauge("taos_stmt2_exec_success")
+	TaosStmt2ExecFailCounter    = metrics.NewGauge("taos_stmt2_exec_fail")
+
+	TaosStmt2ErrorCounter        = metrics.NewGauge("taos_stmt2_error_total")
+	TaosStmt2ErrorSuccessCounter = metrics.NewGauge("taos_stmt2_error_success")
+
+	// query others
+	TaosFetchRowCounter        = metrics.NewGauge("taos_fetch_row_total")
+	TaosFetchRowSuccessCounter = metrics.NewGauge("taos_fetch_row_success")
+
+	TaosIsUpdateQueryCounter        = metrics.NewGauge("taos_is_update_query_total")
+	TaosIsUpdateQuerySuccessCounter = metrics.NewGauge("taos_is_update_query_success")
+
+	TaosAffectedRowsCounter        = metrics.NewGauge("taos_affected_rows_total")
+	TaosAffectedRowsSuccessCounter = metrics.NewGauge("taos_affected_rows_success")
+
+	TaosNumFieldsCounter        = metrics.NewGauge("taos_num_fields_total")
+	TaosNumFieldsSuccessCounter = metrics.NewGauge("taos_num_fields_success")
+
+	TaosFetchFieldsECounter        = metrics.NewGauge("taos_fetch_fields_e_total")
+	TaosFetchFieldsESuccessCounter = metrics.NewGauge("taos_fetch_fields_e_success")
+	TaosFetchFieldsEFailCounter    = metrics.NewGauge("taos_fetch_fields_e_fail")
+
+	TaosResultPrecisionCounter        = metrics.NewGauge("taos_result_precision_total")
+	TaosResultPrecisionSuccessCounter = metrics.NewGauge("taos_result_precision_success")
+
+	TaosGetRawBlockCounter        = metrics.NewGauge("taos_get_raw_block_total")
+	TaosGetRawBlockSuccessCounter = metrics.NewGauge("taos_get_raw_block_success")
+
+	TaosFetchRawBlockCounter        = metrics.NewGauge("taos_fetch_raw_block_total")
+	TaosFetchRawBlockSuccessCounter = metrics.NewGauge("taos_fetch_raw_block_success")
+	TaosFetchRawBlockFailCounter    = metrics.NewGauge("taos_fetch_raw_block_fail")
+
+	TaosFetchLengthsCounter        = metrics.NewGauge("taos_fetch_lengths_total")
+	TaosFetchLengthsSuccessCounter = metrics.NewGauge("taos_fetch_lengths_success")
+
+	// inert others
+	TaosWriteRawBlockWithReqIDCounter        = metrics.NewGauge("taos_write_raw_block_with_reqid_total")
+	TaosWriteRawBlockWithReqIDSuccessCounter = metrics.NewGauge("taos_write_raw_block_with_reqid_success")
+	TaosWriteRawBlockWithReqIDFailCounter    = metrics.NewGauge("taos_write_raw_block_with_reqid_fail")
+
+	TaosWriteRawBlockWithFieldsWithReqIDCounter        = metrics.NewGauge("taos_write_raw_block_with_fields_with_reqid_total")
+	TaosWriteRawBlockWithFieldsWithReqIDSuccessCounter = metrics.NewGauge("taos_write_raw_block_with_fields_with_reqid_success")
+	TaosWriteRawBlockWithFieldsWithReqIDFailCounter    = metrics.NewGauge("taos_write_raw_block_with_fields_with_reqid_fail")
+	TMQWriteRawCounter                                 = metrics.NewGauge("tmq_write_raw_total")
+	TMQWriteRawSuccessCounter                          = metrics.NewGauge("tmq_write_raw_success")
+	TMQWriteRawFailCounter                             = metrics.NewGauge("tmq_write_raw_fail")
+
+	// stmt others
+	TaosStmtPrepareCounter        = metrics.NewGauge("taos_stmt_prepare_total")
+	TaosStmtPrepareSuccessCounter = metrics.NewGauge("taos_stmt_prepare_success")
+	TaosStmtPrepareFailCounter    = metrics.NewGauge("taos_stmt_prepare_fail")
+
+	TaosStmtIsInsertCounter        = metrics.NewGauge("taos_stmt_is_insert_total")
+	TaosStmtIsInsertSuccessCounter = metrics.NewGauge("taos_stmt_is_insert_success")
+	TaosStmtIsInsertFailCounter    = metrics.NewGauge("taos_stmt_is_insert_fail")
+
+	TaosStmtSetTBNameCounter        = metrics.NewGauge("taos_stmt_set_tbname_total")
+	TaosStmtSetTBNameSuccessCounter = metrics.NewGauge("taos_stmt_set_tbname_success")
+	TaosStmtSetTBNameFailCounter    = metrics.NewGauge("taos_stmt_set_tbname_fail")
+
+	TaosStmtSetTagsCounter        = metrics.NewGauge("taos_stmt_set_tags_total")
+	TaosStmtSetTagsSuccessCounter = metrics.NewGauge("taos_stmt_set_tags_success")
+	TaosStmtSetTagsFailCounter    = metrics.NewGauge("taos_stmt_set_tags_fail")
+
+	TaosStmtBindParamBatchCounter        = metrics.NewGauge("taos_stmt_bind_param_batch_total")
+	TaosStmtBindParamBatchSuccessCounter = metrics.NewGauge("taos_stmt_bind_param_batch_success")
+	TaosStmtBindParamBatchFailCounter    = metrics.NewGauge("taos_stmt_bind_param_batch_fail")
+
+	TaosStmtAddBatchCounter        = metrics.NewGauge("taos_stmt_add_batch_total")
+	TaosStmtAddBatchSuccessCounter = metrics.NewGauge("taos_stmt_add_batch_success")
+	TaosStmtAddBatchFailCounter    = metrics.NewGauge("taos_stmt_add_batch_fail")
+
+	TaosStmtExecuteCounter        = metrics.NewGauge("taos_stmt_execute_total")
+	TaosStmtExecuteSuccessCounter = metrics.NewGauge("taos_stmt_execute_success")
+	TaosStmtExecuteFailCounter    = metrics.NewGauge("taos_stmt_execute_fail")
+
+	TaosStmtNumParamsCounter        = metrics.NewGauge("taos_stmt_num_params_total")
+	TaosStmtNumParamsSuccessCounter = metrics.NewGauge("taos_stmt_num_params_success")
+	TaosStmtNumParamsFailCounter    = metrics.NewGauge("taos_stmt_num_params_fail")
+
+	TaosStmtGetParamCounter        = metrics.NewGauge("taos_stmt_get_param_total")
+	TaosStmtGetParamSuccessCounter = metrics.NewGauge("taos_stmt_get_param_success")
+	TaosStmtGetParamFailCounter    = metrics.NewGauge("taos_stmt_get_param_fail")
+
+	TaosStmtErrStrCounter        = metrics.NewGauge("taos_stmt_errstr_total")
+	TaosStmtErrStrSuccessCounter = metrics.NewGauge("taos_stmt_errstr_success")
+
+	TaosStmtAffectedRowsOnceCounter        = metrics.NewGauge("taos_stmt_affected_rows_once_total")
+	TaosStmtAffectedRowsOnceSuccessCounter = metrics.NewGauge("taos_stmt_affected_rows_once_success")
+
+	TaosStmtUseResultCounter        = metrics.NewGauge("taos_stmt_use_result_total")
+	TaosStmtUseResultSuccessCounter = metrics.NewGauge("taos_stmt_use_result_success")
+	TaosStmtUseResultFailCounter    = metrics.NewGauge("taos_stmt_use_result_fail")
+
+	// others
+	TaosSelectDBCounter        = metrics.NewGauge("taos_select_db_total")
+	TaosSelectDBSuccessCounter = metrics.NewGauge("taos_select_db_success")
+	TaosSelectDBFailCounter    = metrics.NewGauge("taos_select_db_fail")
+
+	TaosGetTablesVgIDCounter        = metrics.NewGauge("taos_get_tables_vgId_total")
+	TaosGetTablesVgIDSuccessCounter = metrics.NewGauge("taos_get_tables_vgId_success")
+	TaosGetTablesVgIDFailCounter    = metrics.NewGauge("taos_get_tables_vgId_fail")
+
+	TaosOptionsConnectionCounter        = metrics.NewGauge("taos_options_connection_total")
+	TaosOptionsConnectionSuccessCounter = metrics.NewGauge("taos_options_connection_success")
+	TaosOptionsConnectionFailCounter    = metrics.NewGauge("taos_options_connection_fail")
+
+	TaosValidateSqlCounter        = metrics.NewGauge("taos_validate_sql_total")
+	TaosValidateSqlSuccessCounter = metrics.NewGauge("taos_validate_sql_success")
+	TaosValidateSqlFailCounter    = metrics.NewGauge("taos_validate_sql_fail")
+
+	TaosCheckServerStatusCounter        = metrics.NewGauge("taos_check_server_status_total")
+	TaosCheckServerStatusSuccessCounter = metrics.NewGauge("taos_check_server_status_success")
+
+	TaosGetCurrentDBCounter        = metrics.NewGauge("taos_get_current_db_total")
+	TaosGetCurrentDBSuccessCounter = metrics.NewGauge("taos_get_current_db_success")
+	TaosGetCurrentDBFailCounter    = metrics.NewGauge("taos_get_current_db_fail")
+
+	TaosGetServerInfoCounter        = metrics.NewGauge("taos_get_server_info_total")
+	TaosGetServerInfoSuccessCounter = metrics.NewGauge("taos_get_server_info_success")
+
+	TaosOptionsCounter        = metrics.NewGauge("taos_options_total")
+	TaosOptionsSuccessCounter = metrics.NewGauge("taos_options_success")
+	TaosOptionsFailCounter    = metrics.NewGauge("taos_options_fail")
+
+	TaosSetConnModeCounter        = metrics.NewGauge("taos_set_conn_mode_total")
+	TaosSetConnModeSuccessCounter = metrics.NewGauge("taos_set_conn_mode_success")
+	TaosSetConnModeFailCounter    = metrics.NewGauge("taos_set_conn_mode_fail")
+
+	TaosResetCurrentDBCounter        = metrics.NewGauge("taos_reset_current_db_total")
+	TaosResetCurrentDBSuccessCounter = metrics.NewGauge("taos_reset_current_db_success")
+
+	// notify
+	TaosSetNotifyCBCounter        = metrics.NewGauge("taos_set_notify_cb_total")
+	TaosSetNotifyCBSuccessCounter = metrics.NewGauge("taos_set_notify_cb_success")
+	TaosSetNotifyCBFailCounter    = metrics.NewGauge("taos_set_notify_cb_fail")
+
+	// taos error
+	TaosErrorCounter        = metrics.NewGauge("taos_errno_total")
+	TaosErrorSuccessCounter = metrics.NewGauge("taos_errno_success")
+
+	TaosErrorStrCounter        = metrics.NewGauge("taos_errstr_total")
+	TaosErrorStrSuccessCounter = metrics.NewGauge("taos_errstr_success")
+
+	// tmq others
+	TMQPollCounter        = metrics.NewGauge("tmq_consumer_poll_total")
+	TMQPollSuccessCounter = metrics.NewGauge("tmq_consumer_poll_success")
+	TMQPollFailCounter    = metrics.NewGauge("tmq_consumer_poll_fail")
+
+	TMQSubscriptionCounter        = metrics.NewGauge("tmq_subscription_total")
+	TMQSubscriptionSuccessCounter = metrics.NewGauge("tmq_subscription_success")
+	TMQSubscriptionFailCounter    = metrics.NewGauge("tmq_subscription_fail")
+
+	TMQListAppendCounter        = metrics.NewGauge("tmq_list_append_total")
+	TMQListAppendSuccessCounter = metrics.NewGauge("tmq_list_append_success")
+	TMQListAppendFailCounter    = metrics.NewGauge("tmq_list_append_fail")
+
+	TMQListGetSizeCounter        = metrics.NewGauge("tmq_list_get_size_total")
+	TMQListGetSizeSuccessCounter = metrics.NewGauge("tmq_list_get_size_success")
+
+	TMQErr2StrCounter        = metrics.NewGauge("tmq_err2str_total")
+	TMQErr2StrSuccessCounter = metrics.NewGauge("tmq_err2str_success")
+
+	TMQConfSetCounter        = metrics.NewGauge("tmq_conf_set_total")
+	TMQConfSetSuccessCounter = metrics.NewGauge("tmq_conf_set_success")
+	TMQConfSetFailCounter    = metrics.NewGauge("tmq_conf_set_fail")
+
+	TMQGetResTypeCounter        = metrics.NewGauge("tmq_get_res_type_total")
+	TMQGetResTypeSuccessCounter = metrics.NewGauge("tmq_get_res_type_success")
+
+	TMQGetTopicNameCounter        = metrics.NewGauge("tmq_get_topic_name_total")
+	TMQGetTopicNameSuccessCounter = metrics.NewGauge("tmq_get_topic_name_success")
+
+	TMQGetVgroupIDCounter        = metrics.NewGauge("tmq_get_vgroup_id_total")
+	TMQGetVgroupIDSuccessCounter = metrics.NewGauge("tmq_get_vgroup_id_success")
+
+	TMQGetVgroupOffsetCounter        = metrics.NewGauge("tmq_get_vgroup_offset_total")
+	TMQGetVgroupOffsetSuccessCounter = metrics.NewGauge("tmq_get_vgroup_offset_success")
+
+	TMQGetDBNameCounter        = metrics.NewGauge("tmq_get_db_name_total")
+	TMQGetDBNameSuccessCounter = metrics.NewGauge("tmq_get_db_name_success")
+
+	TMQGetTableNameCounter        = metrics.NewGauge("tmq_get_table_name_total")
+	TMQGetTableNameSuccessCounter = metrics.NewGauge("tmq_get_table_name_success")
+
+	TMQGetConnectCounter        = metrics.NewGauge("tmq_get_connect_total")
+	TMQGetConnectSuccessCounter = metrics.NewGauge("tmq_get_connect_success")
+
+	TMQCommitSyncCounter        = metrics.NewGauge("tmq_commit_sync_total")
+	TMQCommitSyncSuccessCounter = metrics.NewGauge("tmq_commit_sync_success")
+	TMQCommitSyncFailCounter    = metrics.NewGauge("tmq_commit_sync_fail")
+
+	TMQFetchRawBlockCounter        = metrics.NewGauge("tmq_fetch_raw_block_total")
+	TMQFetchRawBlockSuccessCounter = metrics.NewGauge("tmq_fetch_raw_block_success")
+	TMQFetchRawBlockFailCounter    = metrics.NewGauge("tmq_fetch_raw_block_fail")
+
+	TMQGetTopicAssignmentCounter        = metrics.NewGauge("tmq_get_topic_assignment_total")
+	TMQGetTopicAssignmentSuccessCounter = metrics.NewGauge("tmq_get_topic_assignment_success")
+	TMQGetTopicAssignmentFailCounter    = metrics.NewGauge("tmq_get_topic_assignment_fail")
+
+	TMQOffsetSeekCounter        = metrics.NewGauge("tmq_offset_seek_total")
+	TMQOffsetSeekSuccessCounter = metrics.NewGauge("tmq_offset_seek_success")
+	TMQOffsetSeekFailCounter    = metrics.NewGauge("tmq_offset_seek_fail")
+
+	TMQCommittedCounter        = metrics.NewGauge("tmq_committed_total")
+	TMQCommittedSuccessCounter = metrics.NewGauge("tmq_committed_success")
+	TMQCommitOffsetFailCounter = metrics.NewGauge("tmq_commit_offset_sync_fail")
+
+	TMQPositionCounter        = metrics.NewGauge("tmq_position_total")
+	TMQPositionSuccessCounter = metrics.NewGauge("tmq_position_success")
+
+	TMQCommitOffsetCounter        = metrics.NewGauge("tmq_commit_offset_sync_total")
+	TMQCommitOffsetSuccessCounter = metrics.NewGauge("tmq_commit_offset_sync_success")
 )
 
 func InitKeeper() {
@@ -383,10 +566,25 @@ func InitKeeper() {
 		)
 
 		WSQueryConn = metrics.NewGauge("ws_query_conn")
+		WSQueryConnIncrement = metrics.NewGauge("ws_query_conn_inc")
+		WSQueryConnDecrement = metrics.NewGauge("ws_query_conn_dec")
+
 		WSSMLConn = metrics.NewGauge("ws_sml_conn")
+		WSSMLConnIncrement = metrics.NewGauge("ws_sml_conn_inc")
+		WSSMLConnDecrement = metrics.NewGauge("ws_sml_conn_dec")
+
 		WSStmtConn = metrics.NewGauge("ws_stmt_conn")
+		WSStmtConnIncrement = metrics.NewGauge("ws_stmt_conn_inc")
+		WSStmtConnDecrement = metrics.NewGauge("ws_stmt_conn_dec")
+
 		WSWSConn = metrics.NewGauge("ws_ws_conn")
+		WSWSConnIncrement = metrics.NewGauge("ws_ws_conn_inc")
+		WSWSConnDecrement = metrics.NewGauge("ws_ws_conn_dec")
+
 		WSTMQConn = metrics.NewGauge("ws_tmq_conn")
+		WSTMQConnIncrement = metrics.NewGauge("ws_tmq_conn_inc")
+		WSTMQConnDecrement = metrics.NewGauge("ws_tmq_conn_dec")
+
 		AsyncCInflight = metrics.NewGauge("async_c_inflight")
 		SyncCInflight = metrics.NewGauge("sync_c_inflight")
 
@@ -397,6 +595,265 @@ func InitKeeper() {
 
 var recordMetrics []*metrics.Gauge
 var inflightMetrics []*metrics.Gauge
+
+var cInterfaceCountMetrics = []*metrics.Gauge{
+	TaosConnectCounter,
+	TaosConnectSuccessCounter,
+	TaosConnectFailCounter,
+	TaosCloseCounter,
+	TaosCloseSuccessCounter,
+	TaosSchemalessInsertCounter,
+	TaosSchemalessInsertSuccessCounter,
+	TaosSchemalessInsertFailCounter,
+	TaosSchemalessFreeResultCounter,
+	TaosSchemalessFreeResultSuccessCounter,
+	TaosQueryCounter,
+	TaosQuerySuccessCounter,
+	TaosQueryFailCounter,
+	TaosSyncQueryFreeResultCounter,
+	TaosSyncQueryFreeResultSuccessCounter,
+	TaosQueryAWithReqIDCounter,
+	TaosQueryAWithReqIDSuccessCounter,
+	TaosQueryAWithReqIDCallBackCounter,
+	TaosQueryAWithReqIDCallBackSuccessCounter,
+	TaosQueryAWithReqIDCallBackFailCounter,
+	TaosAsyncQueryFreeResultCounter,
+	TaosAsyncQueryFreeResultSuccessCounter,
+	TMQPollResultCounter,
+	TMQFreeResultCounter,
+	TMQFreeResultSuccessCounter,
+	TaosStmt2InitCounter,
+	TaosStmt2InitSuccessCounter,
+	TaosStmt2InitFailCounter,
+	TaosStmt2CloseCounter,
+	TaosStmt2CloseSuccessCounter,
+	TaosStmt2CloseFailCounter,
+	TaosStmt2GetFieldsCounter,
+	TaosStmt2GetFieldsSuccessCounter,
+	TaosStmt2GetFieldsFailCounter,
+	TaosStmt2FreeFieldsCounter,
+	TaosStmt2FreeFieldsSuccessCounter,
+	TaosStmtInitWithReqIDCounter,
+	TaosStmtInitWithReqIDSuccessCounter,
+	TaosStmtInitWithReqIDFailCounter,
+	TaosStmtCloseCounter,
+	TaosStmtCloseSuccessCounter,
+	TaosStmtCloseFailCounter,
+	TaosStmtGetTagFieldsCounter,
+	TaosStmtGetTagFieldsSuccessCounter,
+	TaosStmtGetTagFieldsFailCounter,
+	TaosStmtGetColFieldsCounter,
+	TaosStmtGetColFieldsSuccessCounter,
+	TaosStmtGetColFieldsFailCounter,
+	TaosStmtReclaimFieldsCounter,
+	TaosStmtReclaimFieldsSuccessCounter,
+	TMQGetJsonMetaCounter,
+	TMQGetJsonMetaSuccessCounter,
+	TMQFreeJsonMetaCounter,
+	TMQFreeJsonMetaSuccessCounter,
+	TaosFetchWhitelistACounter,
+	TaosFetchWhitelistASuccessCounter,
+	TaosFetchWhitelistACallBackCounter,
+	TaosFetchWhitelistACallBackSuccessCounter,
+	TaosFetchWhitelistACallBackFailCounter,
+	TaosFetchRowsACounter,
+	TaosFetchRowsASuccessCounter,
+	TaosFetchRowsACallBackCounter,
+	TaosFetchRowsACallBackSuccessCounter,
+	TaosFetchRowsACallBackFailCounter,
+	TaosFetchRawBlockACounter,
+	TaosFetchRawBlockASuccessCounter,
+	TaosFetchRawBlockACallBackCounter,
+	TaosFetchRawBlockACallBackSuccessCounter,
+	TaosFetchRawBlockACallBackFailCounter,
+	TMQGetRawCounter,
+	TMQGetRawSuccessCounter,
+	TMQGetRawFailCounter,
+	TMQFreeRawCounter,
+	TMQFreeRawSuccessCounter,
+	TMQConsumerNewCounter,
+	TMQConsumerNewSuccessCounter,
+	TMQConsumerNewFailCounter,
+	TMQConsumerCloseCounter,
+	TMQConsumerCloseSuccessCounter,
+	TMQConsumerCloseFailCounter,
+	TMQSubscribeCounter,
+	TMQSubscribeSuccessCounter,
+	TMQSubscribeFailCounter,
+	TMQUnsubscribeCounter,
+	TMQUnsubscribeSuccessCounter,
+	TMQUnsubscribeFailCounter,
+	TMQListNewCounter,
+	TMQListNewSuccessCounter,
+	TMQListNewFailCounter,
+	TMQListDestroyCounter,
+	TMQListDestroySuccessCounter,
+	TMQConfNewCounter,
+	TMQConfNewSuccessCounter,
+	TMQConfNewFailCounter,
+	TMQConfDestroyCounter,
+	TMQConfDestroySuccessCounter,
+	TaosStmt2PrepareCounter,
+	TaosStmt2PrepareSuccessCounter,
+	TaosStmt2PrepareFailCounter,
+	TaosStmt2IsInsertCounter,
+	TaosStmt2IsInsertSuccessCounter,
+	TaosStmt2IsInsertFailCounter,
+	TaosStmt2BindBinaryCounter,
+	TaosStmt2BindBinarySuccessCounter,
+	TaosStmt2BindBinaryFailCounter,
+	TaosStmt2ExecCounter,
+	TaosStmt2ExecSuccessCounter,
+	TaosStmt2ExecFailCounter,
+	TaosStmt2ErrorCounter,
+	TaosStmt2ErrorSuccessCounter,
+	TaosFetchRowCounter,
+	TaosFetchRowSuccessCounter,
+	TaosIsUpdateQueryCounter,
+	TaosIsUpdateQuerySuccessCounter,
+	TaosAffectedRowsCounter,
+	TaosAffectedRowsSuccessCounter,
+	TaosNumFieldsCounter,
+	TaosNumFieldsSuccessCounter,
+	TaosFetchFieldsECounter,
+	TaosFetchFieldsESuccessCounter,
+	TaosFetchFieldsEFailCounter,
+	TaosResultPrecisionCounter,
+	TaosResultPrecisionSuccessCounter,
+	TaosGetRawBlockCounter,
+	TaosGetRawBlockSuccessCounter,
+	TaosFetchRawBlockCounter,
+	TaosFetchRawBlockSuccessCounter,
+	TaosFetchRawBlockFailCounter,
+	TaosFetchLengthsCounter,
+	TaosFetchLengthsSuccessCounter,
+	TaosWriteRawBlockWithReqIDCounter,
+	TaosWriteRawBlockWithReqIDSuccessCounter,
+	TaosWriteRawBlockWithReqIDFailCounter,
+	TaosWriteRawBlockWithFieldsWithReqIDCounter,
+	TaosWriteRawBlockWithFieldsWithReqIDSuccessCounter,
+	TaosWriteRawBlockWithFieldsWithReqIDFailCounter,
+	TMQWriteRawCounter,
+	TMQWriteRawSuccessCounter,
+	TMQWriteRawFailCounter,
+	TaosStmtPrepareCounter,
+	TaosStmtPrepareSuccessCounter,
+	TaosStmtPrepareFailCounter,
+	TaosStmtIsInsertCounter,
+	TaosStmtIsInsertSuccessCounter,
+	TaosStmtIsInsertFailCounter,
+	TaosStmtSetTBNameCounter,
+	TaosStmtSetTBNameSuccessCounter,
+	TaosStmtSetTBNameFailCounter,
+	TaosStmtSetTagsCounter,
+	TaosStmtSetTagsSuccessCounter,
+	TaosStmtSetTagsFailCounter,
+	TaosStmtBindParamBatchCounter,
+	TaosStmtBindParamBatchSuccessCounter,
+	TaosStmtBindParamBatchFailCounter,
+	TaosStmtAddBatchCounter,
+	TaosStmtAddBatchSuccessCounter,
+	TaosStmtAddBatchFailCounter,
+	TaosStmtExecuteCounter,
+	TaosStmtExecuteSuccessCounter,
+	TaosStmtExecuteFailCounter,
+	TaosStmtNumParamsCounter,
+	TaosStmtNumParamsSuccessCounter,
+	TaosStmtNumParamsFailCounter,
+	TaosStmtGetParamCounter,
+	TaosStmtGetParamSuccessCounter,
+	TaosStmtGetParamFailCounter,
+	TaosStmtErrStrCounter,
+	TaosStmtErrStrSuccessCounter,
+	TaosStmtAffectedRowsOnceCounter,
+	TaosStmtAffectedRowsOnceSuccessCounter,
+	TaosStmtUseResultCounter,
+	TaosStmtUseResultSuccessCounter,
+	TaosStmtUseResultFailCounter,
+	TaosSelectDBCounter,
+	TaosSelectDBSuccessCounter,
+	TaosSelectDBFailCounter,
+	TaosGetTablesVgIDCounter,
+	TaosGetTablesVgIDSuccessCounter,
+	TaosGetTablesVgIDFailCounter,
+	TaosOptionsConnectionCounter,
+	TaosOptionsConnectionSuccessCounter,
+	TaosOptionsConnectionFailCounter,
+	TaosValidateSqlCounter,
+	TaosValidateSqlSuccessCounter,
+	TaosValidateSqlFailCounter,
+	TaosCheckServerStatusCounter,
+	TaosCheckServerStatusSuccessCounter,
+	TaosGetCurrentDBCounter,
+	TaosGetCurrentDBSuccessCounter,
+	TaosGetCurrentDBFailCounter,
+	TaosGetServerInfoCounter,
+	TaosGetServerInfoSuccessCounter,
+	TaosOptionsCounter,
+	TaosOptionsSuccessCounter,
+	TaosOptionsFailCounter,
+	TaosSetConnModeCounter,
+	TaosSetConnModeSuccessCounter,
+	TaosSetConnModeFailCounter,
+	TaosResetCurrentDBCounter,
+	TaosResetCurrentDBSuccessCounter,
+	TaosSetNotifyCBCounter,
+	TaosSetNotifyCBSuccessCounter,
+	TaosSetNotifyCBFailCounter,
+	TaosErrorCounter,
+	TaosErrorSuccessCounter,
+	TaosErrorStrCounter,
+	TaosErrorStrSuccessCounter,
+	TMQPollCounter,
+	TMQPollSuccessCounter,
+	TMQPollFailCounter,
+	TMQSubscriptionCounter,
+	TMQSubscriptionSuccessCounter,
+	TMQSubscriptionFailCounter,
+	TMQListAppendCounter,
+	TMQListAppendSuccessCounter,
+	TMQListAppendFailCounter,
+	TMQListGetSizeCounter,
+	TMQListGetSizeSuccessCounter,
+	TMQErr2StrCounter,
+	TMQErr2StrSuccessCounter,
+	TMQConfSetCounter,
+	TMQConfSetSuccessCounter,
+	TMQConfSetFailCounter,
+	TMQGetResTypeCounter,
+	TMQGetResTypeSuccessCounter,
+	TMQGetTopicNameCounter,
+	TMQGetTopicNameSuccessCounter,
+	TMQGetVgroupIDCounter,
+	TMQGetVgroupIDSuccessCounter,
+	TMQGetVgroupOffsetCounter,
+	TMQGetVgroupOffsetSuccessCounter,
+	TMQGetDBNameCounter,
+	TMQGetDBNameSuccessCounter,
+	TMQGetTableNameCounter,
+	TMQGetTableNameSuccessCounter,
+	TMQGetConnectCounter,
+	TMQGetConnectSuccessCounter,
+	TMQCommitSyncCounter,
+	TMQCommitSyncSuccessCounter,
+	TMQCommitSyncFailCounter,
+	TMQFetchRawBlockCounter,
+	TMQFetchRawBlockSuccessCounter,
+	TMQFetchRawBlockFailCounter,
+	TMQGetTopicAssignmentCounter,
+	TMQGetTopicAssignmentSuccessCounter,
+	TMQGetTopicAssignmentFailCounter,
+	TMQOffsetSeekCounter,
+	TMQOffsetSeekSuccessCounter,
+	TMQOffsetSeekFailCounter,
+	TMQCommittedCounter,
+	TMQCommittedSuccessCounter,
+	TMQCommitOffsetFailCounter,
+	TMQPositionCounter,
+	TMQPositionSuccessCounter,
+	TMQCommitOffsetCounter,
+	TMQCommitOffsetSuccessCounter,
+}
 
 func RestRecordRequest(sql string) sqltype.SqlType {
 	if config.Conf.UploadKeeper.Enable {
@@ -520,60 +977,70 @@ func RecordNewConnectionPool(userName string) *metrics.Gauge {
 func RecordWSQueryConn() {
 	if config.Conf.UploadKeeper.Enable {
 		WSQueryConn.Inc()
+		WSQueryConnIncrement.Inc()
 	}
 }
 
 func RecordWSQueryDisconnect() {
 	if config.Conf.UploadKeeper.Enable {
 		WSQueryConn.Dec()
+		WSQueryConnDecrement.Inc()
 	}
 }
 
 func RecordWSSMLConn() {
 	if config.Conf.UploadKeeper.Enable {
 		WSSMLConn.Inc()
+		WSSMLConnIncrement.Inc()
 	}
 }
 
 func RecordWSSMLDisconnect() {
 	if config.Conf.UploadKeeper.Enable {
 		WSSMLConn.Dec()
+		WSSMLConnDecrement.Inc()
 	}
 }
 
 func RecordWSStmtConn() {
 	if config.Conf.UploadKeeper.Enable {
 		WSStmtConn.Inc()
+		WSStmtConnIncrement.Inc()
 	}
 }
 
 func RecordWSStmtDisconnect() {
 	if config.Conf.UploadKeeper.Enable {
 		WSStmtConn.Dec()
+		WSStmtConnDecrement.Inc()
 	}
 }
 
 func RecordWSWSConn() {
 	if config.Conf.UploadKeeper.Enable {
 		WSWSConn.Inc()
+		WSWSConnIncrement.Inc()
 	}
 }
 
 func RecordWSWSDisconnect() {
 	if config.Conf.UploadKeeper.Enable {
 		WSWSConn.Dec()
+		WSWSConnDecrement.Inc()
 	}
 }
 
 func RecordWSTMQConn() {
 	if config.Conf.UploadKeeper.Enable {
 		WSTMQConn.Inc()
+		WSTMQConnIncrement.Inc()
 	}
 }
 
 func RecordWSTMQDisconnect() {
 	if config.Conf.UploadKeeper.Enable {
 		WSTMQConn.Dec()
+		WSTMQConnDecrement.Inc()
 	}
 }
 
@@ -702,6 +1169,36 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 	}
 	memStats := new(runtime.MemStats)
 	runtime.ReadMemStats(memStats)
+	queryConnInc := WSQueryConnIncrement.Value()
+	WSQueryConnIncrement.Sub(queryConnInc)
+
+	queryConnDec := WSQueryConnDecrement.Value()
+	WSQueryConnDecrement.Sub(queryConnDec)
+
+	stmtConnInc := WSStmtConnIncrement.Value()
+	WSStmtConnIncrement.Sub(stmtConnInc)
+
+	stmtConnDec := WSStmtConnDecrement.Value()
+	WSStmtConnDecrement.Sub(stmtConnDec)
+
+	smlConnInc := WSSMLConnIncrement.Value()
+	WSSMLConnIncrement.Sub(smlConnInc)
+
+	smlConnDec := WSSMLConnDecrement.Value()
+	WSSMLConnDecrement.Sub(smlConnDec)
+
+	wsConnInc := WSWSConnIncrement.Value()
+	WSWSConnIncrement.Sub(wsConnInc)
+
+	wsConnDec := WSWSConnDecrement.Value()
+	WSWSConnDecrement.Sub(wsConnDec)
+
+	tmqConnInc := WSTMQConnIncrement.Value()
+	WSTMQConnIncrement.Sub(tmqConnInc)
+
+	tmqConnDec := WSTMQConnDecrement.Value()
+	WSTMQConnDecrement.Sub(tmqConnDec)
+
 	statusTable := &Table{
 		Name: "adapter_status",
 		MetricGroups: []*MetricGroup{
@@ -769,6 +1266,66 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 						Name:  "sync_c_inflight",
 						Value: SyncCInflight.Value(),
 					},
+					{
+						Name:  "ws_query_conn_inc",
+						Value: queryConnInc,
+					},
+					{
+						Name:  "ws_query_conn_dec",
+						Value: queryConnDec,
+					},
+					{
+						Name:  "ws_stmt_conn_inc",
+						Value: stmtConnInc,
+					},
+					{
+						Name:  "ws_stmt_conn_dec",
+						Value: stmtConnDec,
+					},
+					{
+						Name:  "ws_sml_conn_inc",
+						Value: smlConnInc,
+					},
+					{
+						Name:  "ws_sml_conn_dec",
+						Value: smlConnDec,
+					},
+					{
+						Name:  "ws_ws_conn_inc",
+						Value: wsConnInc,
+					},
+					{
+						Name:  "ws_ws_conn_dec",
+						Value: wsConnDec,
+					},
+					{
+						Name:  "ws_tmq_conn_inc",
+						Value: tmqConnInc,
+					},
+					{
+						Name:  "ws_tmq_conn_dec",
+						Value: tmqConnDec,
+					},
+					{
+						Name:  "ws_query_sql_result_count",
+						Value: WSQuerySqlResultCount.Value(),
+					},
+					{
+						Name:  "ws_stmt_stmt_count",
+						Value: WSStmtStmtCount.Value(),
+					},
+					{
+						Name:  "ws_ws_sql_result_count",
+						Value: WSWSSqlResultCount.Value(),
+					},
+					{
+						Name:  "ws_ws_stmt_count",
+						Value: WSWSStmtCount.Value(),
+					},
+					{
+						Name:  "ws_ws_stmt2_count",
+						Value: WSWSStmt2Count.Value(),
+					},
 				},
 			},
 		},
@@ -801,6 +1358,27 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 		})
 		return true
 	})
+	cInterfaceMetrics := make([]*Metric, len(cInterfaceCountMetrics))
+	for i := 0; i < len(cInterfaceCountMetrics); i++ {
+		cInterfaceMetrics[i] = &Metric{
+			Name:  cInterfaceCountMetrics[i].MetricName(),
+			Value: cInterfaceCountMetrics[i].Value(),
+		}
+	}
+	cInterfaceTable := &Table{
+		Name: "adapter_c_interface",
+		MetricGroups: []*MetricGroup{
+			{
+				Tags: []*Tag{
+					{
+						Name:  "endpoint",
+						Value: identity,
+					},
+				},
+				Metrics: cInterfaceMetrics,
+			},
+		},
+	}
 	metric := &ExtraMetric{
 		Ts:       strconv.FormatInt(ts.UnixMilli(), 10),
 		Protocol: 2,
@@ -811,6 +1389,7 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 	if len(connTable.MetricGroups) > 0 {
 		metric.Tables = append(metric.Tables, connTable)
 	}
+	metric.Tables = append(metric.Tables, cInterfaceTable)
 	return []*ExtraMetric{metric}, nil
 }
 func doRequest(client *http.Client, data []byte, reqID int64) error {

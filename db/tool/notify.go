@@ -11,6 +11,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
+	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/thread"
 )
 
@@ -47,21 +48,25 @@ func putWhiteListHandle(handle cgo.Handle) {
 func GetWhitelist(conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) ([]*net.IPNet, error) {
 	c, handler := getWhiteListHandle()
 	defer putWhiteListHandle(handler)
-	taosFetchWhiteListA(conn, handler)
+	taosFetchWhiteListA(conn, handler, logger, isDebug)
 	data := <-c
+	monitor.TaosFetchWhitelistACallBackCounter.Inc()
 	if data.ErrCode != 0 {
+		monitor.TaosFetchWhitelistACallBackFailCounter.Inc()
 		err := errors.NewError(int(data.ErrCode), syncinterface.TaosErrorStr(nil, logger, isDebug))
 		return nil, err
+	} else {
+		monitor.TaosFetchWhitelistACallBackSuccessCounter.Inc()
 	}
 	return data.IPNets, nil
 }
 
-func taosFetchWhiteListA(conn unsafe.Pointer, handle cgo.Handle) {
+func taosFetchWhiteListA(conn unsafe.Pointer, handle cgo.Handle, logger *logrus.Entry, isDebug bool) {
 	thread.AsyncSemaphore.Acquire()
 	defer func() {
 		thread.AsyncSemaphore.Release()
 	}()
-	wrapper.TaosFetchWhitelistA(conn, handle)
+	syncinterface.TaosFetchWhitelistA(conn, handle, logger, isDebug)
 }
 
 func CheckWhitelist(whitelist []*net.IPNet, ip net.IP) bool {

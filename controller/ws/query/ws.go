@@ -340,7 +340,7 @@ func (r *Result) FreeResult(logger *logrus.Entry) {
 		logger = r.logger
 	}
 	if r.TaosResult != nil {
-		syncinterface.TaosFreeResult(r.TaosResult, logger, log.IsDebug())
+		async.FreeResultAsync(r.TaosResult, logger, log.IsDebug())
 		r.TaosResult = nil
 	}
 }
@@ -357,6 +357,7 @@ func (t *Taos) addResult(result *Result) {
 	t.Results.PushBack(result)
 	t.logger.Trace("add result to list finished")
 	t.resultLocker.Unlock()
+	monitor.WSQuerySqlResultCount.Inc()
 }
 
 func (t *Taos) getResult(index uint64) *list.Element {
@@ -386,6 +387,7 @@ func (t *Taos) removeResult(item *list.Element) {
 	t.resultLocker.Lock()
 	defer t.resultLocker.Unlock()
 	t.Results.Remove(item)
+	monitor.WSQuerySqlResultCount.Dec()
 }
 
 type WSConnectReq struct {
@@ -521,7 +523,7 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 		errStr := syncinterface.TaosErrorStr(result.Res, logger, isDebug)
 		logger.Errorf("query error, code: %d, message: %s", code, errStr)
 		logger.Trace("get thread lock for free result")
-		syncinterface.TaosFreeResult(result.Res, logger, isDebug)
+		async.FreeResultAsync(result.Res, logger, isDebug)
 		wsErrorMsg(ctx, session, logger, code, errStr, WSQuery, req.ReqID)
 		return
 	}
@@ -539,7 +541,7 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 		queryResult.IsUpdate = true
 		queryResult.AffectedRows = affectRows
 		logger.Trace("get thread lock for free result")
-		syncinterface.TaosFreeResult(result.Res, logger, isDebug)
+		async.FreeResultAsync(result.Res, logger, isDebug)
 		queryResult.Timing = wstool.GetDuration(ctx)
 		wstool.WSWriteJson(session, logger, queryResult)
 		return
@@ -857,6 +859,10 @@ func (t *Taos) FreeResult(element *list.Element, logger *logrus.Entry) {
 func (t *Taos) freeAllResult() {
 	t.resultLocker.Lock()
 	defer t.resultLocker.Unlock()
+	defer func() {
+		// clean up the list
+		t.Results = t.Results.Init()
+	}()
 	root := t.Results.Front()
 	if root == nil {
 		return
@@ -868,6 +874,7 @@ func (t *Taos) freeAllResult() {
 			return
 		}
 		item.Value.(*Result).FreeResult(t.logger)
+		monitor.WSQuerySqlResultCount.Dec()
 		item = item.Next()
 	}
 }

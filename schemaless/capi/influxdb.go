@@ -29,7 +29,7 @@ func InsertInfluxdb(conn unsafe.Pointer, data []byte, db, precision string, ttl 
 	_, result = syncinterface.TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn, d, wrapper.InfluxDBLineProtocol, precision, ttl, reqID, tableNameKey, logger, log.IsDebug())
 
 	defer func() {
-		syncinterface.TaosFreeResult(result, logger, log.IsDebug())
+		syncinterface.TaosSchemalessFree(result, logger, log.IsDebug())
 	}()
 
 	if code := syncinterface.TaosError(result, logger, log.IsDebug()); code != 0 {
