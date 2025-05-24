@@ -4,7 +4,6 @@ import (
 	"sync"
 
 	"github.com/taosdata/taosadapter/v3/config"
-	"github.com/taosdata/taosadapter/v3/db/async"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	"github.com/taosdata/taosadapter/v3/driver/errors"
@@ -30,7 +29,5 @@ func PrepareConnection() {
 			err := errors.NewError(code, errStr)
 			logger.WithError(err).Panic("set option TSDB_OPTION_USE_ADAPTER error")
 		}
-
-		async.GlobalAsync = async.NewAsync(async.NewHandlerPool(10000))
 	})
 }

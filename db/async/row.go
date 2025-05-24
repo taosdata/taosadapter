@@ -256,3 +256,7 @@ func FreeResultAsync(res unsafe.Pointer, logger *logrus.Entry, isDebug bool) {
 	logger.Debugf("taos_free_result finish, cost:%s", log.GetLogDuration(isDebug, s))
 	monitor.TaosAsyncQueryFreeResultSuccessCounter.Inc()
 }
+
+func init() {
+	GlobalAsync = NewAsync(NewHandlerPool(10000))
+}

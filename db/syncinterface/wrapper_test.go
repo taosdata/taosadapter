@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
-	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	stmtCommon "github.com/taosdata/taosadapter/v3/driver/common/stmt"
@@ -28,7 +27,6 @@ func TestMain(m *testing.M) {
 	config.Init()
 	log.ConfigLog()
 	_ = log.SetLevel("trace")
-	db.PrepareConnection()
 	m.Run()
 }
 func TestTaosConnect(t *testing.T) {
