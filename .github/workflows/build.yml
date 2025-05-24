@@ -104,7 +104,7 @@ jobs:
           cd TDengine
           mkdir debug
           cd debug
-          cmake .. -DBUILD_TEST=off -DBUILD_DEPENDENCY_TESTS=0 -DVERNUMBER=3.9.9.9
+          cmake .. -DBUILD_TEST=off -DBUILD_DEPENDENCY_TESTS=0
           make -j 8
 
       - name: package
@@ -116,16 +116,14 @@ jobs:
           mkdir -p ./release
           cp ./TDengine/debug/build/bin/taos ./release/
           cp ./TDengine/debug/build/bin/taosd ./release/
-          cp ./TDengine/debug/build/lib/libtaosnative.so.3.9.9.9 ./release/
+          cp ./TDengine/debug/build/lib/libtaosnative.so ./release/
           cp ./TDengine/include/client/taos.h ./release/
           cat >./release/install.sh<<EOF 
           chmod +x ./taos
           chmod +x ./taosd
           cp ./taos /bin/
           cp ./taosd /bin/
-          cp ./libtaosnative.so.3.9.9.9 /usr/lib
-          ln -sf /usr/lib/libtaosnative.so.3.9.9.9 /usr/lib/libtaosnative.so.1
-          ln -sf /usr/lib/libtaosnative.so.1 /usr/lib/libtaosnative.so
+          cp ./libtaosnative.so /usr/lib
           cp ./taos.h /usr/include
           EOF
           tar -zcvf server.tar.gz ./release
