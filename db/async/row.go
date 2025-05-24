@@ -126,9 +126,9 @@ func (a *Async) TaosQuery(taosConnect unsafe.Pointer, logger *logrus.Entry, isDe
 	r := <-handler.Caller.QueryResult
 	logger.Debugf("get query result, res:%p, n:%d, cost:%s", r.Res, r.N, log.GetLogDuration(isDebug, s))
 	if r.N != 0 {
-		monitor.TaosQueryAWithReqIDCallBackSuccessCounter.Inc()
-	} else {
 		monitor.TaosQueryAWithReqIDCallBackFailCounter.Inc()
+	} else {
+		monitor.TaosQueryAWithReqIDCallBackSuccessCounter.Inc()
 	}
 	return r
 }

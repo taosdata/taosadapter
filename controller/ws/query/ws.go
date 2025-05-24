@@ -868,6 +868,7 @@ func (t *Taos) freeAllResult() {
 		return
 	}
 	root.Value.(*Result).FreeResult(t.logger)
+	monitor.WSQuerySqlResultCount.Dec()
 	item := root.Next()
 	for {
 		if item == nil || item == root {

@@ -101,9 +101,6 @@ func (h *QueryResultHolder) FreeResultByID(index uint64, logger *logrus.Entry) {
 		if result := node.Value.(*QueryResult); result.index == index {
 			result.free(logger)
 			h.results.Remove(node)
-			if !result.inStmt {
-				monitor.WSWSSqlResultCount.Dec()
-			}
 			return
 		}
 		node = node.Next()
@@ -129,9 +126,6 @@ func (h *QueryResultHolder) FreeAll(logger *logrus.Entry) {
 		result := node.Value.(*QueryResult)
 		result.free(logger)
 		h.results.Remove(node)
-		if !result.inStmt {
-			monitor.WSWSSqlResultCount.Dec()
-		}
 		node = next
 	}
 }
@@ -243,11 +237,6 @@ func (h *StmtHolder) FreeStmtByID(index uint64, isStmt2 bool, logger *logrus.Ent
 			}
 			result.free(logger)
 			h.results.Remove(node)
-			if result.isStmt2 {
-				monitor.WSWSStmt2Count.Dec()
-			} else {
-				monitor.WSWSStmtCount.Dec()
-			}
 			return nil
 		}
 		node = node.Next()
@@ -273,11 +262,6 @@ func (h *StmtHolder) FreeAll(logger *logrus.Entry) {
 		result := node.Value.(*StmtItem)
 		result.free(logger)
 		h.results.Remove(node)
-		if result.isStmt2 {
-			monitor.WSWSStmt2Count.Dec()
-		} else {
-			monitor.WSWSStmtCount.Dec()
-		}
 		node = next
 	}
 }

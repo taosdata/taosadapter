@@ -94,9 +94,9 @@ func TaosConnect(host, user, pass, db string, port int, logger *logrus.Entry, is
 	conn, err := wrapper.TaosConnect(host, user, pass, db, port)
 	logger.Debugf("taos_connect finish, conn:%p, err:%v, cost:%s", conn, err, log.GetLogDuration(isDebug, s))
 	if err != nil {
-		monitor.TaosConnectSuccessCounter.Inc()
-	} else {
 		monitor.TaosConnectFailCounter.Inc()
+	} else {
+		monitor.TaosConnectSuccessCounter.Inc()
 	}
 	return conn, err
 }
@@ -809,9 +809,9 @@ func ReadColumn(res unsafe.Pointer, fieldsCount int, logger *logrus.Entry, isDeb
 	rh, err := wrapper.ReadColumn(res, fieldsCount)
 	logger.Debugf("read_column finish, rh:%p, err:%v, cost:%s", rh, err, log.GetLogDuration(isDebug, s))
 	if err != nil {
-		monitor.TaosFetchFieldsESuccessCounter.Inc()
-	} else {
 		monitor.TaosFetchFieldsEFailCounter.Inc()
+	} else {
+		monitor.TaosFetchFieldsESuccessCounter.Inc()
 	}
 	return rh, err
 }

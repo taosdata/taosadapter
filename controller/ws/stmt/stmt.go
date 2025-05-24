@@ -1206,6 +1206,7 @@ func (t *TaosStmt) cleanUp(logger *logrus.Entry) {
 		return
 	}
 	root.Value.(*StmtItem).clean(logger)
+	monitor.WSStmtStmtCount.Dec()
 	item := root.Next()
 	for {
 		if item == nil || item == root {
