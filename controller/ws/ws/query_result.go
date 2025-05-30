@@ -13,6 +13,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
 )
 
 type QueryResult struct {
@@ -46,6 +47,7 @@ func (r *QueryResult) free(logger *logrus.Entry) {
 	logger.Tracef("free result:%d", r.index)
 	async.FreeResultAsync(r.TaosResult, logger, log.IsDebug())
 	r.TaosResult = nil
+	monitor.WSWSSqlResultCount.Dec()
 }
 
 type QueryResultHolder struct {
@@ -61,11 +63,11 @@ func NewQueryResultHolder() *QueryResultHolder {
 func (h *QueryResultHolder) Add(result *QueryResult) uint64 {
 	h.Lock()
 	defer h.Unlock()
-
-	atomic.AddUint64(&h.index, 1)
-	result.index = h.index
+	result.index = atomic.AddUint64(&h.index, 1)
 	h.results.PushBack(result)
-
+	if !result.inStmt {
+		monitor.WSWSSqlResultCount.Inc()
+	}
 	return result.index
 }
 
@@ -108,7 +110,9 @@ func (h *QueryResultHolder) FreeResultByID(index uint64, logger *logrus.Entry) {
 func (h *QueryResultHolder) FreeAll(logger *logrus.Entry) {
 	h.Lock()
 	defer h.Unlock()
-
+	defer func() {
+		h.results = h.results.Init()
+	}()
 	if h.results.Len() == 0 {
 		return
 	}
@@ -147,8 +151,10 @@ func (s *StmtItem) free(logger *logrus.Entry) {
 	if s.isStmt2 {
 		syncinterface.TaosStmt2Close(s.stmt, logger, log.IsDebug())
 		async.GlobalStmt2CallBackCallerPool.Put(s.handler)
+		monitor.WSWSStmt2Count.Dec()
 	} else {
 		syncinterface.TaosStmtClose(s.stmt, logger, log.IsDebug())
+		monitor.WSWSStmtCount.Dec()
 	}
 
 	s.stmt = nil
@@ -168,10 +174,13 @@ func (h *StmtHolder) Add(item *StmtItem) uint64 {
 	h.Lock()
 	defer h.Unlock()
 
-	atomic.AddUint64(&h.index, 1)
-	item.index = h.index
+	item.index = atomic.AddUint64(&h.index, 1)
 	h.results.PushBack(item)
-
+	if item.isStmt2 {
+		monitor.WSWSStmt2Count.Inc()
+	} else {
+		monitor.WSWSStmtCount.Inc()
+	}
 	return item.index
 }
 
@@ -237,7 +246,9 @@ func (h *StmtHolder) FreeStmtByID(index uint64, isStmt2 bool, logger *logrus.Ent
 func (h *StmtHolder) FreeAll(logger *logrus.Entry) {
 	h.Lock()
 	defer h.Unlock()
-
+	defer func() {
+		h.results = h.results.Init()
+	}()
 	if h.results.Len() == 0 {
 		return
 	}
