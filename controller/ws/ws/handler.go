@@ -95,7 +95,7 @@ func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 				return
 			}
 			logger.Trace("get whitelist")
-			whitelist, err := tool.GetWhitelist(h.conn)
+			whitelist, err := tool.GetWhitelist(h.conn, logger, isDebug)
 			if err != nil {
 				logger.Errorf("get whitelist error, close connection, err:%s", err)
 				h.signalExit(logger, isDebug)

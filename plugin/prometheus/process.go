@@ -21,7 +21,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/plugin/prometheus/prompb"
@@ -152,7 +151,7 @@ func processRead(taosConn unsafe.Pointer, req *prompb.ReadRequest, db string) (r
 	logger.Tracef("select db %s", db)
 	code := syncinterface.TaosSelectDB(taosConn, db, logger, isDebug)
 	if code != 0 {
-		return nil, tErrors.NewError(code, wrapper.TaosErrorStr(nil))
+		return nil, tErrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug))
 	}
 	resp = &prompb.ReadResponse{}
 	for i, query := range req.Queries {

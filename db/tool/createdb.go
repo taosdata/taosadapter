@@ -8,7 +8,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/async"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
 )
@@ -38,7 +37,7 @@ func SchemalessSelectDB(taosConnect unsafe.Pointer, logger *logrus.Entry, isDebu
 			logger.Tracef("use db %s", db)
 			code := syncinterface.TaosSelectDB(taosConnect, db, logger, isDebug)
 			if code != 0 {
-				return errors.NewError(code, wrapper.TaosErrorStr(nil))
+				return errors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug))
 			}
 		} else {
 			return err

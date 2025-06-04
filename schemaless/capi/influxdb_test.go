@@ -4,8 +4,8 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/schemaless/capi"
 )
@@ -14,28 +14,30 @@ import (
 // @date: 2021/12/14 15:11
 // @description: test insert influxdb
 func TestInsertInfluxdb(t *testing.T) {
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	logger := log.GetLogger("test").WithField("test", "TestInsertInfluxdb")
+	isDebug := log.IsDebug()
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	defer wrapper.TaosClose(conn)
+	defer syncinterface.TaosClose(conn, logger, isDebug)
 	defer func() {
-		r := wrapper.TaosQuery(conn, "drop database if exists test_capi_influxdb")
-		code := wrapper.TaosError(r)
+		r := syncinterface.TaosQuery(conn, "drop database if exists test_capi_influxdb", logger, isDebug)
+		code := syncinterface.TaosError(r, logger, isDebug)
 		if code != 0 {
-			errStr := wrapper.TaosErrorStr(r)
+			errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 			t.Error(errors.NewError(code, errStr))
 		}
-		wrapper.TaosFreeResult(r)
+		syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	}()
-	r := wrapper.TaosQuery(conn, "create database if not exists test_capi_influxdb")
-	code := wrapper.TaosError(r)
+	r := syncinterface.TaosQuery(conn, "create database if not exists test_capi_influxdb", logger, isDebug)
+	code := syncinterface.TaosError(r, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(r)
+		errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 		t.Error(errors.NewError(code, errStr))
 	}
-	wrapper.TaosFreeResult(r)
+	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        []byte

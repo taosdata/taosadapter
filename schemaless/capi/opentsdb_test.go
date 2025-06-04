@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/viper"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/schemaless/capi"
 )
@@ -28,28 +28,30 @@ func TestMain(m *testing.M) {
 // @date: 2021/12/14 15:11
 // @description: test insert opentsdb telnet
 func TestInsertOpentsdbTelnet(t *testing.T) {
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	logger := log.GetLogger("test").WithField("test", "TestInsertOpentsdbTelnet")
+	isDebug := log.IsDebug()
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	defer wrapper.TaosClose(conn)
+	defer syncinterface.TaosClose(conn, logger, isDebug)
 	defer func() {
-		r := wrapper.TaosQuery(conn, "drop database if exists test_capi_opentsdb")
-		code := wrapper.TaosError(r)
+		r := syncinterface.TaosQuery(conn, "drop database if exists test_capi_opentsdb", logger, isDebug)
+		code := syncinterface.TaosError(r, logger, isDebug)
 		if code != 0 {
-			errStr := wrapper.TaosErrorStr(r)
+			errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 			t.Error(errors.NewError(code, errStr))
 		}
-		wrapper.TaosFreeResult(r)
+		syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	}()
-	r := wrapper.TaosQuery(conn, "create database if not exists test_capi_opentsdb")
-	code := wrapper.TaosError(r)
+	r := syncinterface.TaosQuery(conn, "create database if not exists test_capi_opentsdb", logger, isDebug)
+	code := syncinterface.TaosError(r, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(r)
+		errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 		t.Error(errors.NewError(code, errStr))
 	}
-	wrapper.TaosFreeResult(r)
+	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        string
@@ -98,7 +100,6 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 			wantErr: false,
 		},
 	}
-	logger := log.GetLogger("test").WithField("test", "TestInsertOpentsdbTelnet")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := capi.InsertOpentsdbTelnet(tt.args.taosConnect, []string{tt.args.data}, tt.args.db, tt.args.ttl, 0, "", logger.WithField("name", tt.name)); (err != nil) != tt.wantErr {
@@ -109,22 +110,23 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 }
 
 func BenchmarkTelnet(b *testing.B) {
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	logger := log.GetLogger("test").WithField("test", "BenchmarkTelnet")
+	isDebug := log.IsDebug()
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	if err != nil {
 		b.Error(err)
 		return
 	}
-	defer wrapper.TaosClose(conn)
+	defer syncinterface.TaosClose(conn, logger, isDebug)
 	defer func() {
-		r := wrapper.TaosQuery(conn, "drop database if exists test")
-		code := wrapper.TaosError(r)
+		r := syncinterface.TaosQuery(conn, "drop database if exists test", logger, isDebug)
+		code := syncinterface.TaosError(r, logger, isDebug)
 		if code != 0 {
-			errStr := wrapper.TaosErrorStr(r)
+			errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 			b.Error(errors.NewError(code, errStr))
 		}
-		wrapper.TaosFreeResult(r)
+		syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	}()
-	logger := log.GetLogger("test").WithField("test", "BenchmarkTelnet")
 	for i := 0; i < b.N; i++ {
 		//`sys.if.bytes.out`,`host`=web01,`interface`=eth0
 		//t_98df8453856519710bfc2f1b5f8202cf
@@ -140,29 +142,31 @@ func BenchmarkTelnet(b *testing.B) {
 // @date: 2021/12/14 15:12
 // @description: test insert opentsdb json
 func TestInsertOpentsdbJson(t *testing.T) {
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	logger := log.GetLogger("test").WithField("test", "TestInsertOpentsdbJson")
+	isDebug := log.IsDebug()
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	now := time.Now().Unix()
-	defer wrapper.TaosClose(conn)
+	defer syncinterface.TaosClose(conn, logger, isDebug)
 	defer func() {
-		r := wrapper.TaosQuery(conn, "drop database if exists test_capi_opentsdb_json")
-		code := wrapper.TaosError(r)
+		r := syncinterface.TaosQuery(conn, "drop database if exists test_capi_opentsdb_json", logger, isDebug)
+		code := syncinterface.TaosError(r, logger, isDebug)
 		if code != 0 {
-			errStr := wrapper.TaosErrorStr(r)
+			errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 			t.Error(errors.NewError(code, errStr))
 		}
-		wrapper.TaosFreeResult(r)
+		syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	}()
-	r := wrapper.TaosQuery(conn, "create database if not exists test_capi_opentsdb_json")
-	code := wrapper.TaosError(r)
+	r := syncinterface.TaosQuery(conn, "create database if not exists test_capi_opentsdb_json", logger, isDebug)
+	code := syncinterface.TaosError(r, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(r)
+		errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 		t.Error(errors.NewError(code, errStr))
 	}
-	wrapper.TaosFreeResult(r)
+	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        []byte
@@ -238,7 +242,6 @@ func TestInsertOpentsdbJson(t *testing.T) {
 			wantErr: false,
 		},
 	}
-	logger := log.GetLogger("test").WithField("test", "TestInsertOpentsdbJson")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := capi.InsertOpentsdbJson(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.ttl, 0, "", logger); (err != nil) != tt.wantErr {
@@ -249,28 +252,30 @@ func TestInsertOpentsdbJson(t *testing.T) {
 }
 
 func TestInsertOpentsdbTelnetBatch(t *testing.T) {
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	logger := log.GetLogger("test").WithField("test", "TestInsertOpentsdbTelnetBatch")
+	isDebug := log.IsDebug()
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	defer wrapper.TaosClose(conn)
+	defer syncinterface.TaosClose(conn, logger, isDebug)
 	defer func() {
-		r := wrapper.TaosQuery(conn, "drop database if exists test_capi_opentsdb_batch")
-		code := wrapper.TaosError(r)
+		r := syncinterface.TaosQuery(conn, "drop database if exists test_capi_opentsdb_batch", logger, isDebug)
+		code := syncinterface.TaosError(r, logger, isDebug)
 		if code != 0 {
-			errStr := wrapper.TaosErrorStr(r)
+			errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 			t.Error(errors.NewError(code, errStr))
 		}
-		wrapper.TaosFreeResult(r)
+		syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	}()
-	r := wrapper.TaosQuery(conn, "create database if not exists test_capi_opentsdb_batch")
-	code := wrapper.TaosError(r)
+	r := syncinterface.TaosQuery(conn, "create database if not exists test_capi_opentsdb_batch", logger, isDebug)
+	code := syncinterface.TaosError(r, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(r)
+		errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 		t.Error(errors.NewError(code, errStr))
 	}
-	wrapper.TaosFreeResult(r)
+	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        []string
@@ -296,7 +301,6 @@ func TestInsertOpentsdbTelnetBatch(t *testing.T) {
 			wantErr: false,
 		},
 	}
-	logger := log.GetLogger("test").WithField("test", "TestInsertOpentsdbTelnetBatch")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := capi.InsertOpentsdbTelnet(tt.args.taosConnect, tt.args.data, tt.args.db, tt.args.ttl, 0, "", logger); (err != nil) != tt.wantErr {
