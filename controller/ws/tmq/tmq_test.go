@@ -3247,10 +3247,9 @@ func TestTMQ_FetchRawNew(t *testing.T) {
 		assert.Equal(t, 0, pollResp.Code, string(msg))
 		if pollResp.HaveMessage {
 			gotMessage = true
+			assert.True(t, pollResp.Offset >= 0, string(msg))
 			break
 		}
-		assert.True(t, pollResp.HaveMessage, string(msg))
-		assert.True(t, pollResp.Offset >= 0, string(msg))
 	}
 	if !assert.True(t, gotMessage) {
 		return

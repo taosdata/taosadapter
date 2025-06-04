@@ -115,7 +115,7 @@ jobs:
           cd TDengine
           mkdir debug
           cd debug
-          cmake .. -DBUILD_TEST=off -DBUILD_DEPENDENCY_TESTS=0 -DVERNUMBER=3.9.9.9
+          cmake .. -DBUILD_TEST=off -DBUILD_DEPENDENCY_TESTS=0
           make -j 8
 
       - name: package
@@ -127,16 +127,14 @@ jobs:
           mkdir -p ./release
           cp ./TDengine/debug/build/bin/taos ./release/
           cp ./TDengine/debug/build/bin/taosd ./release/
-          cp ./TDengine/debug/build/lib/libtaosnative.so.3.9.9.9 ./release/
+          cp ./TDengine/debug/build/lib/libtaosnative.so ./release/
           cp ./TDengine/include/client/taos.h ./release/
           cat >./release/install.sh<<EOF 
           chmod +x ./taos
           chmod +x ./taosd
           cp ./taos /bin/
           cp ./taosd /bin/
-          cp ./libtaosnative.so.3.9.9.9 /usr/lib
-          ln -sf /usr/lib/libtaosnative.so.3.9.9.9 /usr/lib/libtaosnative.so.1
-          ln -sf /usr/lib/libtaosnative.so.1 /usr/lib/libtaosnative.so
+          cp ./libtaosnative.so /usr/lib
           cp ./taos.h /usr/include
           EOF
           tar -zcvf server.tar.gz ./release
@@ -268,14 +266,25 @@ jobs:
 
       - name: test
         id: test
-        run: sudo go test -v --count=1 -coverprofile=coverage.txt -covermode=atomic ./...
+        run: sudo go test -coverpkg=./... -v --count=1 -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4-beta
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v5
         with:
           files: ./coverage.txt
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_ORG_TOKEN }}
+          OS: linux
+
+      - name: Upload coverage to Codecov with arm
+        if: matrix.os == 'ubuntu-24.04-arm'
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.txt
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_ORG_TOKEN }}
+          OS: linux-arm64
 
       - uses: actions/upload-artifact@v4
         if: always() && (steps.test.outcome == 'failure' || steps.test.outcome == 'cancelled')

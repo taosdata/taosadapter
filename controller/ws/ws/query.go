@@ -14,7 +14,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	taoserrors "github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
@@ -54,7 +53,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	}
 	logger.Trace("get whitelist")
 	s := log.GetLogNow(isDebug)
-	whitelist, err := tool.GetWhitelist(conn)
+	whitelist, err := tool.GetWhitelist(conn, logger, isDebug)
 	logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "get whitelist error")
@@ -69,7 +68,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	}
 	s = log.GetLogNow(isDebug)
 	logger.Trace("register whitelist change")
-	err = tool.RegisterChangeWhitelist(conn, h.whitelistChangeHandle)
+	err = tool.RegisterChangeWhitelist(conn, h.whitelistChangeHandle, logger, isDebug)
 	logger.Debugf("register whitelist change cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "register whitelist change error")
@@ -77,7 +76,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	}
 	s = log.GetLogNow(isDebug)
 	logger.Trace("register drop user")
-	err = tool.RegisterDropUser(conn, h.dropUserHandle)
+	err = tool.RegisterDropUser(conn, h.dropUserHandle, logger, isDebug)
 	logger.Debugf("register drop user cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "register drop user error")
@@ -88,10 +87,10 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 		case common.TAOS_CONN_MODE_BI:
 			// BI mode
 			logger.Trace("set connection mode to BI")
-			code := wrapper.TaosSetConnMode(conn, common.TAOS_CONN_MODE_BI, 1)
+			code := syncinterface.TaosSetConnMode(conn, common.TAOS_CONN_MODE_BI, 1, logger, isDebug)
 			logger.Trace("set connection mode to BI done")
 			if code != 0 {
-				handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, wrapper.TaosErrorStr(nil)), "set connection mode to BI error")
+				handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set connection mode to BI error")
 				return
 			}
 		default:
@@ -109,7 +108,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	code := syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_IP, &clientIP, logger, isDebug)
 	logger.Trace("set connection ip done")
 	if code != 0 {
-		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, wrapper.TaosErrorStr(nil)), "set connection ip error")
+		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set connection ip error")
 		return
 	}
 	// set timezone
@@ -118,7 +117,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 		code = syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_TIMEZONE, &req.TZ, logger, isDebug)
 		logger.Trace("set timezone done")
 		if code != 0 {
-			handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, wrapper.TaosErrorStr(nil)), "set timezone error")
+			handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set timezone error")
 			return
 		}
 	}
@@ -128,7 +127,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 		code = syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_APP, &req.App, logger, isDebug)
 		logger.Trace("set app done")
 		if code != 0 {
-			handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, wrapper.TaosErrorStr(nil)), "set app error")
+			handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set app error")
 			return
 		}
 	}
@@ -189,12 +188,12 @@ func (h *messageHandler) query(ctx context.Context, session *melody.Session, act
 		logger.Trace("put handler back to pool")
 	}()
 	result := async.GlobalAsync.TaosQuery(h.conn, logger, isDebug, req.Sql, handler, int64(innerReqID))
-	code := wrapper.TaosError(result.Res)
+	code := syncinterface.TaosError(result.Res, logger, isDebug)
 	if code != 0 {
 		monitor.WSRecordResult(sqlType, false)
-		errStr := wrapper.TaosErrorStr(result.Res)
+		errStr := syncinterface.TaosErrorStr(result.Res, logger, isDebug)
 		logger.Errorf("query error, code:%d, message:%s", code, errStr)
-		syncinterface.FreeResult(result.Res, logger, isDebug)
+		async.FreeResultAsync(result.Res, logger, isDebug)
 		commonErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr)
 		return
 	}
@@ -202,13 +201,13 @@ func (h *messageHandler) query(ctx context.Context, session *melody.Session, act
 	monitor.WSRecordResult(sqlType, true)
 	logger.Trace("check is_update_query")
 	s = log.GetLogNow(isDebug)
-	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
+	isUpdate := syncinterface.TaosIsUpdateQuery(result.Res, logger, isDebug)
 	logger.Tracef("get is_update_query %t, cost:%s", isUpdate, log.GetLogDuration(isDebug, s))
 	if isUpdate {
 		s = log.GetLogNow(isDebug)
-		affectRows := wrapper.TaosAffectedRows(result.Res)
+		affectRows := syncinterface.TaosAffectedRows(result.Res, logger, isDebug)
 		logger.Debugf("affected_rows %d, cost:%s", affectRows, log.GetLogDuration(isDebug, s))
-		syncinterface.FreeResult(result.Res, logger, isDebug)
+		async.FreeResultAsync(result.Res, logger, isDebug)
 		resp := &queryResponse{
 			Action:       action,
 			ReqID:        req.ReqID,
@@ -220,13 +219,13 @@ func (h *messageHandler) query(ctx context.Context, session *melody.Session, act
 		return
 	}
 	s = log.GetLogNow(isDebug)
-	fieldsCount := wrapper.TaosNumFields(result.Res)
+	fieldsCount := syncinterface.TaosNumFields(result.Res, logger, isDebug)
 	logger.Tracef("get num_fields:%d, cost:%s", fieldsCount, log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
-	rowsHeader, _ := wrapper.ReadColumn(result.Res, fieldsCount)
+	rowsHeader, _ := syncinterface.ReadColumn(result.Res, fieldsCount, logger, isDebug)
 	logger.Tracef("read column cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
-	precision := wrapper.TaosResultPrecision(result.Res)
+	precision := syncinterface.TaosResultPrecision(result.Res, logger, isDebug)
 	logger.Tracef("get result_precision:%d, cost:%s", precision, log.GetLogDuration(isDebug, s))
 	queryResult := QueryResult{TaosResult: result.Res, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision}
 	idx := h.queryResults.Add(&queryResult)
@@ -280,23 +279,23 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 	s = log.GetLogNow(isDebug)
 	result := async.GlobalAsync.TaosQuery(h.conn, logger, isDebug, bytesutil.ToUnsafeString(sql), handler, int64(innerReqID))
 	logger.Tracef("query cost:%s", log.GetLogDuration(isDebug, s))
-	code := wrapper.TaosError(result.Res)
+	code := syncinterface.TaosError(result.Res, logger, isDebug)
 	if code != 0 {
 		monitor.WSRecordResult(sqlType, false)
-		errStr := wrapper.TaosErrorStr(result.Res)
+		errStr := syncinterface.TaosErrorStr(result.Res, logger, isDebug)
 		logger.Errorf("taos query error, code:%d, msg:%s, sql:%s", code, errStr, log.GetLogSql(bytesutil.ToUnsafeString(sql)))
-		syncinterface.FreeResult(result.Res, logger, isDebug)
+		async.FreeResultAsync(result.Res, logger, isDebug)
 		commonErrorResponse(ctx, session, logger, action, reqID, code, errStr)
 		return
 	}
 	monitor.WSRecordResult(sqlType, true)
 	s = log.GetLogNow(isDebug)
-	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
+	isUpdate := syncinterface.TaosIsUpdateQuery(result.Res, logger, isDebug)
 	logger.Tracef("get is_update_query %t, cost:%s", isUpdate, log.GetLogDuration(isDebug, s))
 	if isUpdate {
-		affectRows := wrapper.TaosAffectedRows(result.Res)
+		affectRows := syncinterface.TaosAffectedRows(result.Res, logger, isDebug)
 		logger.Debugf("affected_rows %d cost:%s", affectRows, log.GetLogDuration(isDebug, s))
-		syncinterface.FreeResult(result.Res, logger, isDebug)
+		async.FreeResultAsync(result.Res, logger, isDebug)
 		resp := &queryResponse{
 			Action:       action,
 			ReqID:        reqID,
@@ -308,13 +307,13 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 		return
 	}
 	s = log.GetLogNow(isDebug)
-	fieldsCount := wrapper.TaosNumFields(result.Res)
+	fieldsCount := syncinterface.TaosNumFields(result.Res, logger, isDebug)
 	logger.Tracef("num_fields cost:%s", log.GetLogDuration(isDebug, s))
-	rowsHeader, _ := wrapper.ReadColumn(result.Res, fieldsCount)
+	rowsHeader, _ := syncinterface.ReadColumn(result.Res, fieldsCount, logger, isDebug)
 	s = log.GetLogNow(isDebug)
 	logger.Tracef("read column cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
-	precision := wrapper.TaosResultPrecision(result.Res)
+	precision := syncinterface.TaosResultPrecision(result.Res, logger, isDebug)
 	logger.Tracef("result_precision cost:%s", log.GetLogDuration(isDebug, s))
 	queryResult := QueryResult{TaosResult: result.Res, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision}
 	idx := h.queryResults.Add(&queryResult)

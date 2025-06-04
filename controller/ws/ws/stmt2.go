@@ -37,7 +37,7 @@ func (h *messageHandler) stmt2Init(ctx context.Context, session *melody.Session,
 	stmtInit := syncinterface.TaosStmt2Init(h.conn, int64(innerReqID), req.SingleStbInsert, req.SingleTableBindOnce, handle, logger, isDebug)
 	if stmtInit == nil {
 		async.GlobalStmt2CallBackCallerPool.Put(handle)
-		errStr := wrapper.TaosStmt2Error(stmtInit)
+		errStr := syncinterface.TaosStmt2Error(stmtInit, logger, isDebug)
 		logger.Errorf("stmt2 init error, err:%s", errStr)
 		commonErrorResponse(ctx, session, logger, action, req.ReqID, 0xffff, errStr)
 		return
@@ -103,7 +103,7 @@ func (h *messageHandler) stmt2Prepare(ctx context.Context, session *melody.Sessi
 	stmt2 := stmtItem.stmt
 	code := syncinterface.TaosStmt2Prepare(stmt2, req.SQL, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmt2Error(stmt2)
+		errStr := syncinterface.TaosStmt2Error(stmt2, logger, isDebug)
 		logger.Errorf("stmt2 prepare error, err:%s", errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 		return
@@ -111,7 +111,7 @@ func (h *messageHandler) stmt2Prepare(ctx context.Context, session *melody.Sessi
 	logger.Tracef("stmt2 prepare success, stmt_id:%d", req.StmtID)
 	isInsert, code := syncinterface.TaosStmt2IsInsert(stmt2, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmt2Error(stmt2)
+		errStr := syncinterface.TaosStmt2Error(stmt2, logger, isDebug)
 		logger.Errorf("check stmt2 is insert error, err:%s", errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 		return
@@ -122,12 +122,12 @@ func (h *messageHandler) stmt2Prepare(ctx context.Context, session *melody.Sessi
 	if req.GetFields {
 		code, count, fields := syncinterface.TaosStmt2GetFields(stmt2, logger, isDebug)
 		if code != 0 {
-			errStr := wrapper.TaosStmt2Error(stmt2)
+			errStr := syncinterface.TaosStmt2Error(stmt2, logger, isDebug)
 			logger.Errorf("stmt2 get fields error, code:%d, err:%s", code, errStr)
 			stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 			return
 		}
-		defer wrapper.TaosStmt2FreeFields(stmt2, fields)
+		defer syncinterface.TaosStmt2FreeFields(stmt2, fields, logger, isDebug)
 		stbFields := wrapper.Stmt2ParseAllFields(count, fields)
 		prepareResp.Fields = stbFields
 		prepareResp.FieldsCount = count
@@ -163,7 +163,7 @@ func (h *messageHandler) stmt2Exec(ctx context.Context, session *melody.Session,
 	defer stmtItem.Unlock()
 	code := syncinterface.TaosStmt2Exec(stmtItem.stmt, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmt2Error(stmtItem.stmt)
+		errStr := syncinterface.TaosStmt2Error(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt2 execute error,code:%d, err:%s", code, errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 		return
@@ -173,7 +173,7 @@ func (h *messageHandler) stmt2Exec(ctx context.Context, session *melody.Session,
 	result := <-stmtItem.caller.ExecResult
 	logger.Debugf("stmt2 execute wait callback finish, affected:%d, res:%p, n:%d, cost:%s", result.Affected, result.Res, result.N, log.GetLogDuration(isDebug, s))
 	if result.N < 0 {
-		errStr := wrapper.TaosStmt2Error(stmtItem.stmt)
+		errStr := syncinterface.TaosStmt2Error(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt2 execute callback error, code:%d, err:%s", result.N, errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, result.N, errStr, req.StmtID)
 		return
@@ -219,9 +219,9 @@ func (h *messageHandler) stmt2UseResult(ctx context.Context, session *melody.Ses
 	}
 	defer stmtItem.Unlock()
 	result := stmtItem.result
-	fieldsCount := wrapper.TaosNumFields(result)
-	rowsHeader, _ := wrapper.ReadColumn(result, fieldsCount)
-	precision := wrapper.TaosResultPrecision(result)
+	fieldsCount := syncinterface.TaosNumFields(result, logger, isDebug)
+	rowsHeader, _ := syncinterface.ReadColumn(result, fieldsCount, logger, isDebug)
+	precision := syncinterface.TaosResultPrecision(result, logger, isDebug)
 	logger.Tracef("stmt use result success, stmt_id:%d, fields_count:%d, precision:%d", req.StmtID, fieldsCount, precision)
 	queryResult := QueryResult{TaosResult: result, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision, inStmt: true}
 	idx := h.queryResults.Add(&queryResult)

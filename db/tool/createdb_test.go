@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 )
 
@@ -28,7 +28,9 @@ func TestMain(m *testing.M) {
 // @date: 2021/12/14 15:05
 // @description: test creat database with connection
 func TestCreateDBWithConnection(t *testing.T) {
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	logger := log.GetLogger("test").WithField("test", "TestCreateDBWithConnection")
+	isDebug := log.IsDebug()
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	if err != nil {
 		t.Error(err)
 		return
@@ -53,18 +55,20 @@ func TestCreateDBWithConnection(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			logger := log.GetLogger("test").WithField("test", "TestCreateDBWithConnection")
+			isDebug := log.IsDebug()
 			if err := CreateDBWithConnection(tt.args.connection, log.GetLogger("test").WithField("test", "TestCreateDBWithConnection"), false, tt.args.db, 0); (err != nil) != tt.wantErr {
 				t.Errorf("CreateDBWithConnection() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			code := wrapper.TaosSelectDB(tt.args.connection, tt.args.db)
+			code := syncinterface.TaosSelectDB(tt.args.connection, tt.args.db, logger, isDebug)
 			assert.Equal(t, 0, code)
-			r := wrapper.TaosQuery(conn, "drop database if exists collectd")
-			code = wrapper.TaosError(r)
+			r := syncinterface.TaosQuery(conn, "drop database if exists collectd", logger, isDebug)
+			code = syncinterface.TaosError(r, logger, isDebug)
 			if code != 0 {
-				errStr := wrapper.TaosErrorStr(r)
+				errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 				t.Error(tErrors.NewError(code, errStr))
 			}
-			wrapper.TaosFreeResult(r)
+			syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 		})
 	}
 }
@@ -73,12 +77,14 @@ func TestCreateDBWithConnection(t *testing.T) {
 // @date: 2021/12/14 15:12
 // @description:  test selectDB
 func TestSchemalessSelectDB(t *testing.T) {
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	logger := log.GetLogger("test").WithField("test", "TestSchemalessSelectDB")
+	isDebug := log.IsDebug()
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	defer wrapper.TaosClose(conn)
+	defer syncinterface.TaosClose(conn, logger, isDebug)
 	type args struct {
 		taosConnect unsafe.Pointer
 		db          string
@@ -99,25 +105,27 @@ func TestSchemalessSelectDB(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := wrapper.TaosQuery(tt.args.taosConnect, "drop database if exists "+tt.args.db)
-			code := wrapper.TaosError(result)
+			logger := log.GetLogger("test").WithField("test", "TestSchemalessSelectDB")
+			isDebug := log.IsDebug()
+			result := syncinterface.TaosQuery(tt.args.taosConnect, "drop database if exists "+tt.args.db, logger, isDebug)
+			code := syncinterface.TaosError(result, logger, isDebug)
 			if code != 0 {
-				errStr := wrapper.TaosErrorStr(result)
-				wrapper.TaosFreeResult(result)
+				errStr := syncinterface.TaosErrorStr(result, logger, isDebug)
+				syncinterface.TaosSyncQueryFree(result, logger, isDebug)
 				t.Error(tErrors.NewError(code, errStr))
 				return
 			}
-			wrapper.TaosFreeResult(result)
+			syncinterface.TaosSyncQueryFree(result, logger, isDebug)
 			if err := SchemalessSelectDB(tt.args.taosConnect, log.GetLogger("test").WithField("test", "TestSchemalessSelectDB"), false, tt.args.db, 0); (err != nil) != tt.wantErr {
 				t.Errorf("selectDB() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			r := wrapper.TaosQuery(tt.args.taosConnect, fmt.Sprintf("drop database if exists %s", tt.args.db))
-			code = wrapper.TaosError(r)
+			r := syncinterface.TaosQuery(tt.args.taosConnect, fmt.Sprintf("drop database if exists %s", tt.args.db), logger, isDebug)
+			code = syncinterface.TaosError(r, logger, isDebug)
 			if code != 0 {
-				errStr := wrapper.TaosErrorStr(r)
+				errStr := syncinterface.TaosErrorStr(r, logger, isDebug)
 				t.Error(tErrors.NewError(code, errStr))
 			}
-			wrapper.TaosFreeResult(r)
+			syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 		})
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 )
@@ -21,12 +22,14 @@ func TestMain(m *testing.M) {
 // @date: 2021/12/14 15:02
 // @description: test Async Execute
 func TestAsync_TaosExec(t *testing.T) {
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	logger := log.GetLogger("test").WithField("test", "async_test")
+	isDebug := log.IsDebug()
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	defer wrapper.TaosClose(conn)
+	defer syncinterface.TaosClose(conn, logger, isDebug)
 	type fields struct {
 		handlerPool *HandlerPool
 	}
@@ -98,7 +101,6 @@ func TestAsync_TaosExec(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	var logger = log.GetLogger("test").WithField("test", "async_test")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &Async{
@@ -128,12 +130,14 @@ func TestAsync_TaosExec(t *testing.T) {
 // @date: 2021/12/14 15:03
 // @description: test async exec without result
 func TestAsync_TaosExecWithoutResult(t *testing.T) {
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	var logger = logrus.New().WithField("test", "TaosExecWithoutResult")
+	isDebug := log.IsDebug()
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	defer wrapper.TaosClose(conn)
+	defer syncinterface.TaosClose(conn, logger, isDebug)
 	type fields struct {
 		handlerPool *HandlerPool
 	}
@@ -177,7 +181,7 @@ func TestAsync_TaosExecWithoutResult(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	var logger = logrus.New().WithField("test", "TaosExecWithoutResult")
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &Async{

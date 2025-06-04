@@ -298,6 +298,22 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	RecordWSStmtConn()
 	RecordWSWSConn()
 	RecordWSTMQConn()
+	WSQueryConnIncrement.Inc()
+	WSQueryConnDecrement.Inc()
+	WSStmtConnIncrement.Inc()
+	WSStmtConnDecrement.Inc()
+	WSSMLConnIncrement.Inc()
+	WSSMLConnDecrement.Inc()
+	WSWSConnIncrement.Inc()
+	WSWSConnDecrement.Inc()
+	WSTMQConnIncrement.Inc()
+	WSTMQConnDecrement.Inc()
+
+	WSQuerySqlResultCount.Inc()
+	WSStmtStmtCount.Inc()
+	WSWSSqlResultCount.Inc()
+	WSWSStmtCount.Inc()
+	WSWSStmt2Count.Inc()
 	thread.AsyncSemaphore.Acquire()
 	thread.SyncSemaphore.Acquire()
 	g := RecordNewConnectionPool("test")
@@ -305,10 +321,268 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	metrics, err := generateExtraMetrics(ts, p)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(metrics))
+	expectCMetricNames := []string{
+		"taos_connect_total",
+		"taos_connect_success",
+		"taos_connect_fail",
+		"taos_close_total",
+		"taos_close_success",
+		"taos_schemaless_insert_total",
+		"taos_schemaless_insert_success",
+		"taos_schemaless_insert_fail",
+		"taos_schemaless_free_result_total",
+		"taos_schemaless_free_result_success",
+		"taos_query_total",
+		"taos_query_success",
+		"taos_query_fail",
+		"taos_query_free_result_total",
+		"taos_query_free_result_success",
+		"taos_query_a_with_reqid_total",
+		"taos_query_a_with_reqid_success",
+		"taos_query_a_with_reqid_callback_total",
+		"taos_query_a_with_reqid_callback_success",
+		"taos_query_a_with_reqid_callback_fail",
+		"taos_query_a_free_result_total",
+		"taos_query_a_free_result_success",
+		"tmq_consumer_poll_result_total",
+		"tmq_free_result_total",
+		"tmq_free_result_success",
+		"taos_stmt2_init_total",
+		"taos_stmt2_init_success",
+		"taos_stmt2_init_fail",
+		"taos_stmt2_close_total",
+		"taos_stmt2_close_success",
+		"taos_stmt2_close_fail",
+		"taos_stmt2_get_fields_total",
+		"taos_stmt2_get_fields_success",
+		"taos_stmt2_get_fields_fail",
+		"taos_stmt2_free_fields_total",
+		"taos_stmt2_free_fields_success",
+		"taos_stmt_init_with_reqid_total",
+		"taos_stmt_init_with_reqid_success",
+		"taos_stmt_init_with_reqid_fail",
+		"taos_stmt_close_total",
+		"taos_stmt_close_success",
+		"taos_stmt_close_fail",
+		"taos_stmt_get_tag_fields_total",
+		"taos_stmt_get_tag_fields_success",
+		"taos_stmt_get_tag_fields_fail",
+		"taos_stmt_get_col_fields_total",
+		"taos_stmt_get_col_fields_success",
+		"taos_stmt_get_col_fields_fail",
+		"taos_stmt_reclaim_fields_total",
+		"taos_stmt_reclaim_fields_success",
+		"tmq_get_json_meta_total",
+		"tmq_get_json_meta_success",
+		"tmq_free_json_meta_total",
+		"tmq_free_json_meta_success",
+		"taos_fetch_whitelist_a_total",
+		"taos_fetch_whitelist_a_success",
+		"taos_fetch_whitelist_a_callback_total",
+		"taos_fetch_whitelist_a_callback_success",
+		"taos_fetch_whitelist_a_callback_fail",
+		"taos_fetch_rows_a_total",
+		"taos_fetch_rows_a_success",
+		"taos_fetch_rows_a_callback_total",
+		"taos_fetch_rows_a_callback_success",
+		"taos_fetch_rows_a_callback_fail",
+		"taos_fetch_raw_block_a_total",
+		"taos_fetch_raw_block_a_success",
+		"taos_fetch_raw_block_a_callback_total",
+		"taos_fetch_raw_block_a_callback_success",
+		"taos_fetch_raw_block_a_callback_fail",
+		"tmq_get_raw_total",
+		"tmq_get_raw_success",
+		"tmq_get_raw_fail",
+		"tmq_free_raw_total",
+		"tmq_free_raw_success",
+		"tmq_consumer_new_total",
+		"tmq_consumer_new_success",
+		"tmq_consumer_new_fail",
+		"tmq_consumer_close_total",
+		"tmq_consumer_close_success",
+		"tmq_consumer_close_fail",
+		"tmq_subscribe_total",
+		"tmq_subscribe_success",
+		"tmq_subscribe_fail",
+		"tmq_unsubscribe_total",
+		"tmq_unsubscribe_success",
+		"tmq_unsubscribe_fail",
+		"tmq_list_new_total",
+		"tmq_list_new_success",
+		"tmq_list_new_fail",
+		"tmq_list_destroy_total",
+		"tmq_list_destroy_success",
+		"tmq_conf_new_total",
+		"tmq_conf_new_success",
+		"tmq_conf_new_fail",
+		"tmq_conf_destroy_total",
+		"tmq_conf_destroy_success",
+		"taos_stmt2_prepare_total",
+		"taos_stmt2_prepare_success",
+		"taos_stmt2_prepare_fail",
+		"taos_stmt2_is_insert_total",
+		"taos_stmt2_is_insert_success",
+		"taos_stmt2_is_insert_fail",
+		"taos_stmt2_bind_param_total",
+		"taos_stmt2_bind_param_success",
+		"taos_stmt2_bind_param_fail",
+		"taos_stmt2_exec_total",
+		"taos_stmt2_exec_success",
+		"taos_stmt2_exec_fail",
+		"taos_stmt2_error_total",
+		"taos_stmt2_error_success",
+		"taos_fetch_row_total",
+		"taos_fetch_row_success",
+		"taos_is_update_query_total",
+		"taos_is_update_query_success",
+		"taos_affected_rows_total",
+		"taos_affected_rows_success",
+		"taos_num_fields_total",
+		"taos_num_fields_success",
+		"taos_fetch_fields_e_total",
+		"taos_fetch_fields_e_success",
+		"taos_fetch_fields_e_fail",
+		"taos_result_precision_total",
+		"taos_result_precision_success",
+		"taos_get_raw_block_total",
+		"taos_get_raw_block_success",
+		"taos_fetch_raw_block_total",
+		"taos_fetch_raw_block_success",
+		"taos_fetch_raw_block_fail",
+		"taos_fetch_lengths_total",
+		"taos_fetch_lengths_success",
+		"taos_write_raw_block_with_reqid_total",
+		"taos_write_raw_block_with_reqid_success",
+		"taos_write_raw_block_with_reqid_fail",
+		"taos_write_raw_block_with_fields_with_reqid_total",
+		"taos_write_raw_block_with_fields_with_reqid_success",
+		"taos_write_raw_block_with_fields_with_reqid_fail",
+		"tmq_write_raw_total",
+		"tmq_write_raw_success",
+		"tmq_write_raw_fail",
+		"taos_stmt_prepare_total",
+		"taos_stmt_prepare_success",
+		"taos_stmt_prepare_fail",
+		"taos_stmt_is_insert_total",
+		"taos_stmt_is_insert_success",
+		"taos_stmt_is_insert_fail",
+		"taos_stmt_set_tbname_total",
+		"taos_stmt_set_tbname_success",
+		"taos_stmt_set_tbname_fail",
+		"taos_stmt_set_tags_total",
+		"taos_stmt_set_tags_success",
+		"taos_stmt_set_tags_fail",
+		"taos_stmt_bind_param_batch_total",
+		"taos_stmt_bind_param_batch_success",
+		"taos_stmt_bind_param_batch_fail",
+		"taos_stmt_add_batch_total",
+		"taos_stmt_add_batch_success",
+		"taos_stmt_add_batch_fail",
+		"taos_stmt_execute_total",
+		"taos_stmt_execute_success",
+		"taos_stmt_execute_fail",
+		"taos_stmt_num_params_total",
+		"taos_stmt_num_params_success",
+		"taos_stmt_num_params_fail",
+		"taos_stmt_get_param_total",
+		"taos_stmt_get_param_success",
+		"taos_stmt_get_param_fail",
+		"taos_stmt_errstr_total",
+		"taos_stmt_errstr_success",
+		"taos_stmt_affected_rows_once_total",
+		"taos_stmt_affected_rows_once_success",
+		"taos_stmt_use_result_total",
+		"taos_stmt_use_result_success",
+		"taos_stmt_use_result_fail",
+		"taos_select_db_total",
+		"taos_select_db_success",
+		"taos_select_db_fail",
+		"taos_get_tables_vgId_total",
+		"taos_get_tables_vgId_success",
+		"taos_get_tables_vgId_fail",
+		"taos_options_connection_total",
+		"taos_options_connection_success",
+		"taos_options_connection_fail",
+		"taos_validate_sql_total",
+		"taos_validate_sql_success",
+		"taos_validate_sql_fail",
+		"taos_check_server_status_total",
+		"taos_check_server_status_success",
+		"taos_get_current_db_total",
+		"taos_get_current_db_success",
+		"taos_get_current_db_fail",
+		"taos_get_server_info_total",
+		"taos_get_server_info_success",
+		"taos_options_total",
+		"taos_options_success",
+		"taos_options_fail",
+		"taos_set_conn_mode_total",
+		"taos_set_conn_mode_success",
+		"taos_set_conn_mode_fail",
+		"taos_reset_current_db_total",
+		"taos_reset_current_db_success",
+		"taos_set_notify_cb_total",
+		"taos_set_notify_cb_success",
+		"taos_set_notify_cb_fail",
+		"taos_errno_total",
+		"taos_errno_success",
+		"taos_errstr_total",
+		"taos_errstr_success",
+		"tmq_consumer_poll_total",
+		"tmq_consumer_poll_success",
+		"tmq_consumer_poll_fail",
+		"tmq_subscription_total",
+		"tmq_subscription_success",
+		"tmq_subscription_fail",
+		"tmq_list_append_total",
+		"tmq_list_append_success",
+		"tmq_list_append_fail",
+		"tmq_list_get_size_total",
+		"tmq_list_get_size_success",
+		"tmq_err2str_total",
+		"tmq_err2str_success",
+		"tmq_conf_set_total",
+		"tmq_conf_set_success",
+		"tmq_conf_set_fail",
+		"tmq_get_res_type_total",
+		"tmq_get_res_type_success",
+		"tmq_get_topic_name_total",
+		"tmq_get_topic_name_success",
+		"tmq_get_vgroup_id_total",
+		"tmq_get_vgroup_id_success",
+		"tmq_get_vgroup_offset_total",
+		"tmq_get_vgroup_offset_success",
+		"tmq_get_db_name_total",
+		"tmq_get_db_name_success",
+		"tmq_get_table_name_total",
+		"tmq_get_table_name_success",
+		"tmq_get_connect_total",
+		"tmq_get_connect_success",
+		"tmq_commit_sync_total",
+		"tmq_commit_sync_success",
+		"tmq_commit_sync_fail",
+		"tmq_fetch_raw_block_total",
+		"tmq_fetch_raw_block_success",
+		"tmq_fetch_raw_block_fail",
+		"tmq_get_topic_assignment_total",
+		"tmq_get_topic_assignment_success",
+		"tmq_get_topic_assignment_fail",
+		"tmq_offset_seek_total",
+		"tmq_offset_seek_success",
+		"tmq_offset_seek_fail",
+		"tmq_committed_total",
+		"tmq_committed_success",
+		"tmq_commit_offset_sync_fail",
+		"tmq_position_total",
+		"tmq_position_success",
+		"tmq_commit_offset_sync_total",
+		"tmq_commit_offset_sync_success",
+	}
 	metric := metrics[0]
 	assert.Equal(t, strconv.FormatInt(ts.UnixMilli(), 10), metric.Ts)
 	assert.Equal(t, 2, metric.Protocol)
-	assert.Equal(t, 2, len(metric.Tables))
+	assert.Equal(t, 3, len(metric.Tables))
 	statusTable := metric.Tables[0]
 	assert.Equal(t, "adapter_status", statusTable.Name)
 	assert.Equal(t, 1, len(statusTable.MetricGroups))
@@ -317,7 +591,7 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	assert.Equal(t, "endpoint", statusMetricGroup.Tags[0].Name)
 	assert.Equal(t, identity, statusMetricGroup.Tags[0].Value)
 	statusMetric := statusMetricGroup.Metrics
-	assert.Equal(t, 14, len(statusMetric))
+	assert.Equal(t, 29, len(statusMetric))
 	assert.Equal(t, "go_heap_sys", statusMetric[0].Name)
 	assert.Greater(t, statusMetric[0].Value, uint64(0))
 	assert.Equal(t, "go_heap_inuse", statusMetric[1].Name)
@@ -346,6 +620,37 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	assert.Equal(t, config.Conf.MaxSyncMethodLimit, statusMetric[12].Value)
 	assert.Equal(t, "sync_c_inflight", statusMetric[13].Name)
 	assert.Equal(t, float64(1), statusMetric[13].Value)
+	assert.Equal(t, "ws_query_conn_inc", statusMetric[14].Name)
+	assert.Equal(t, float64(2), statusMetric[14].Value)
+	assert.Equal(t, "ws_query_conn_dec", statusMetric[15].Name)
+	assert.Equal(t, float64(1), statusMetric[15].Value)
+	assert.Equal(t, "ws_stmt_conn_inc", statusMetric[16].Name)
+	assert.Equal(t, float64(2), statusMetric[16].Value)
+	assert.Equal(t, "ws_stmt_conn_dec", statusMetric[17].Name)
+	assert.Equal(t, float64(1), statusMetric[17].Value)
+	assert.Equal(t, "ws_sml_conn_inc", statusMetric[18].Name)
+	assert.Equal(t, float64(2), statusMetric[18].Value)
+	assert.Equal(t, "ws_sml_conn_dec", statusMetric[19].Name)
+	assert.Equal(t, float64(1), statusMetric[19].Value)
+	assert.Equal(t, "ws_ws_conn_inc", statusMetric[20].Name)
+	assert.Equal(t, float64(2), statusMetric[20].Value)
+	assert.Equal(t, "ws_ws_conn_dec", statusMetric[21].Name)
+	assert.Equal(t, float64(1), statusMetric[21].Value)
+	assert.Equal(t, "ws_tmq_conn_inc", statusMetric[22].Name)
+	assert.Equal(t, float64(2), statusMetric[22].Value)
+	assert.Equal(t, "ws_tmq_conn_dec", statusMetric[23].Name)
+	assert.Equal(t, float64(1), statusMetric[23].Value)
+	assert.Equal(t, "ws_query_sql_result_count", statusMetric[24].Name)
+	assert.Equal(t, float64(1), statusMetric[24].Value)
+	assert.Equal(t, "ws_stmt_stmt_count", statusMetric[25].Name)
+	assert.Equal(t, float64(1), statusMetric[25].Value)
+	assert.Equal(t, "ws_ws_sql_result_count", statusMetric[26].Name)
+	assert.Equal(t, float64(1), statusMetric[26].Value)
+	assert.Equal(t, "ws_ws_stmt_count", statusMetric[27].Name)
+	assert.Equal(t, float64(1), statusMetric[27].Value)
+	assert.Equal(t, "ws_ws_stmt2_count", statusMetric[28].Name)
+	assert.Equal(t, float64(1), statusMetric[28].Value)
+
 	connPoolTable := metric.Tables[1]
 	assert.Equal(t, "adapter_conn_pool", connPoolTable.Name)
 	assert.Equal(t, 1, len(connPoolTable.MetricGroups))
@@ -367,17 +672,35 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	RecordWSTMQDisconnect()
 	thread.AsyncSemaphore.Release()
 	thread.SyncSemaphore.Release()
+	WSQueryConnIncrement.Inc()
+	WSQueryConnDecrement.Inc()
+	WSStmtConnIncrement.Inc()
+	WSStmtConnDecrement.Inc()
+	WSSMLConnIncrement.Inc()
+	WSSMLConnDecrement.Inc()
+	WSWSConnIncrement.Inc()
+	WSWSConnDecrement.Inc()
+	WSTMQConnIncrement.Inc()
+	WSTMQConnDecrement.Inc()
+
+	WSQuerySqlResultCount.Inc()
+	WSStmtStmtCount.Inc()
+	WSWSSqlResultCount.Inc()
+	WSWSStmtCount.Inc()
+	WSWSStmt2Count.Inc()
 	g = RecordNewConnectionPool("test")
 	g.Inc()
 	g.Inc()
-
+	for i := 0; i < len(cInterfaceCountMetrics); i++ {
+		cInterfaceCountMetrics[i].Inc()
+	}
 	metrics, err = generateExtraMetrics(ts, p)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(metrics))
 	metric = metrics[0]
 	assert.Equal(t, strconv.FormatInt(ts.UnixMilli(), 10), metric.Ts)
 	assert.Equal(t, 2, metric.Protocol)
-	assert.Equal(t, 2, len(metric.Tables))
+	assert.Equal(t, 3, len(metric.Tables))
 	statusTable = metric.Tables[0]
 	assert.Equal(t, "adapter_status", statusTable.Name)
 	assert.Equal(t, 1, len(statusTable.MetricGroups))
@@ -386,7 +709,7 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	assert.Equal(t, "endpoint", statusMetricGroup.Tags[0].Name)
 	assert.Equal(t, identity, statusMetricGroup.Tags[0].Value)
 	statusMetric = statusMetricGroup.Metrics
-	assert.Equal(t, 14, len(statusMetric))
+	assert.Equal(t, 29, len(statusMetric))
 	assert.Equal(t, "go_heap_sys", statusMetric[0].Name)
 	assert.Greater(t, statusMetric[0].Value, uint64(0))
 	assert.Equal(t, "go_heap_inuse", statusMetric[1].Name)
@@ -415,6 +738,36 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	assert.Equal(t, config.Conf.MaxSyncMethodLimit, statusMetric[12].Value)
 	assert.Equal(t, "sync_c_inflight", statusMetric[13].Name)
 	assert.Equal(t, float64(0), statusMetric[13].Value)
+	assert.Equal(t, "ws_query_conn_inc", statusMetric[14].Name)
+	assert.Equal(t, float64(1), statusMetric[14].Value)
+	assert.Equal(t, "ws_query_conn_dec", statusMetric[15].Name)
+	assert.Equal(t, float64(2), statusMetric[15].Value)
+	assert.Equal(t, "ws_stmt_conn_inc", statusMetric[16].Name)
+	assert.Equal(t, float64(1), statusMetric[16].Value)
+	assert.Equal(t, "ws_stmt_conn_dec", statusMetric[17].Name)
+	assert.Equal(t, float64(2), statusMetric[17].Value)
+	assert.Equal(t, "ws_sml_conn_inc", statusMetric[18].Name)
+	assert.Equal(t, float64(1), statusMetric[18].Value)
+	assert.Equal(t, "ws_sml_conn_dec", statusMetric[19].Name)
+	assert.Equal(t, float64(2), statusMetric[19].Value)
+	assert.Equal(t, "ws_ws_conn_inc", statusMetric[20].Name)
+	assert.Equal(t, float64(1), statusMetric[20].Value)
+	assert.Equal(t, "ws_ws_conn_dec", statusMetric[21].Name)
+	assert.Equal(t, float64(2), statusMetric[21].Value)
+	assert.Equal(t, "ws_tmq_conn_inc", statusMetric[22].Name)
+	assert.Equal(t, float64(1), statusMetric[22].Value)
+	assert.Equal(t, "ws_tmq_conn_dec", statusMetric[23].Name)
+	assert.Equal(t, float64(2), statusMetric[23].Value)
+	assert.Equal(t, "ws_query_sql_result_count", statusMetric[24].Name)
+	assert.Equal(t, float64(2), statusMetric[24].Value)
+	assert.Equal(t, "ws_stmt_stmt_count", statusMetric[25].Name)
+	assert.Equal(t, float64(2), statusMetric[25].Value)
+	assert.Equal(t, "ws_ws_sql_result_count", statusMetric[26].Name)
+	assert.Equal(t, float64(2), statusMetric[26].Value)
+	assert.Equal(t, "ws_ws_stmt_count", statusMetric[27].Name)
+	assert.Equal(t, float64(2), statusMetric[27].Value)
+	assert.Equal(t, "ws_ws_stmt2_count", statusMetric[28].Name)
+	assert.Equal(t, float64(2), statusMetric[28].Value)
 	connPoolTable = metric.Tables[1]
 	assert.Equal(t, "adapter_conn_pool", connPoolTable.Name)
 	assert.Equal(t, 1, len(connPoolTable.MetricGroups))
@@ -428,6 +781,19 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	assert.Equal(t, config.Conf.Pool.MaxConnect, connPoolTable.MetricGroups[0].Metrics[0].Value)
 	assert.Equal(t, "conn_pool_in_use", connPoolTable.MetricGroups[0].Metrics[1].Name)
 	assert.Equal(t, float64(2), connPoolTable.MetricGroups[0].Metrics[1].Value)
-
+	cInterfaceTable := metric.Tables[2]
+	assert.Equal(t, "adapter_c_interface", cInterfaceTable.Name)
+	assert.Equal(t, 1, len(cInterfaceTable.MetricGroups))
+	cInterfaceMetricGroup := cInterfaceTable.MetricGroups[0]
+	assert.Equal(t, len(expectCMetricNames), len(cInterfaceMetricGroup.Metrics))
+	assert.Equal(t, 1, len(cInterfaceMetricGroup.Tags))
+	assert.Equal(t, "endpoint", cInterfaceMetricGroup.Tags[0].Name)
+	assert.Equal(t, identity, cInterfaceMetricGroup.Tags[0].Value)
+	cInterfaceMetric := cInterfaceMetricGroup.Metrics
+	assert.Equal(t, len(expectCMetricNames), len(cInterfaceMetric))
+	for i := 0; i < len(cInterfaceMetric); i++ {
+		assert.Equal(t, expectCMetricNames[i], cInterfaceMetric[i].Name)
+		assert.Greater(t, cInterfaceMetric[i].Value, float64(0))
+	}
 	config.Conf.UploadKeeper.Enable = false
 }
