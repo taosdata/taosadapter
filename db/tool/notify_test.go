@@ -230,7 +230,7 @@ func TestGetWhitelist(t *testing.T) {
 	_, ipNetV4, _ := net.ParseCIDR("0.0.0.0/0")
 	_, ipNetV6, _ := net.ParseCIDR("::/0")
 	assert.Equal(t, []*net.IPNet{ipNetV4, ipNetV6}, ipNets)
-	ipNets, err = GetWhitelist(nil)
+	ipNets, err = GetWhitelist(nil, logger, isDebug)
 	assert.Error(t, err)
 	assert.Nil(t, ipNets)
 }

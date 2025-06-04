@@ -64,7 +64,7 @@ func taosFetchWhiteListA(conn unsafe.Pointer, handle cgo.Handle, logger *logrus.
 	defer func() {
 		thread.AsyncSemaphore.Release()
 	}()
-	wrapper.TaosFetchWhitelistDualStackA(conn, handle)
+	syncinterface.TaosFetchWhitelistA(conn, handle, logger, isDebug)
 }
 
 func CheckWhitelist(whitelist []*net.IPNet, ip net.IP) bool {
