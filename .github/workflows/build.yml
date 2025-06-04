@@ -269,11 +269,22 @@ jobs:
         run: sudo go test -coverpkg=./... -v --count=1 -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4-beta
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v5
         with:
           files: ./coverage.txt
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_ORG_TOKEN }}
+          OS: linux
+
+      - name: Upload coverage to Codecov with arm
+        if: matrix.os == 'ubuntu-24.04-arm'
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.txt
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_ORG_TOKEN }}
+          OS: linux-arm64
 
       - uses: actions/upload-artifact@v4
         if: always() && (steps.test.outcome == 'failure' || steps.test.outcome == 'cancelled')
