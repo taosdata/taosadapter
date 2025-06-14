@@ -20,6 +20,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 // @author: xftan
@@ -64,19 +65,19 @@ func TestInfluxdb(t *testing.T) {
 	w := httptest.NewRecorder()
 	reader := strings.NewReader(fmt.Sprintf("measurement,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
 	req, _ := http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb&app=test_influxdb", reader)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 204, w.Code)
 	w = httptest.NewRecorder()
 	reader = strings.NewReader("measurement,host=host1 field1=a1")
 	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb&app=test_influxdb", reader)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 500, w.Code)
 	w = httptest.NewRecorder()
 	reader = strings.NewReader(fmt.Sprintf("measurement,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
 	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata&app=test_influxdb", reader)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 400, w.Code)
 	time.Sleep(time.Second)
@@ -94,7 +95,7 @@ func TestInfluxdb(t *testing.T) {
 	w = httptest.NewRecorder()
 	reader = strings.NewReader(fmt.Sprintf("measurement_ttl,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
 	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb_ttl&ttl=1000&app=test_influxdb", reader)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	router.ServeHTTP(w, req)
 	for i := 0; i < 10; i++ {
 		values, err = query(conn, "select `ttl` from information_schema.ins_tables "+

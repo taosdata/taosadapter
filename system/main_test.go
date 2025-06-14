@@ -15,7 +15,7 @@ func TestStart(t *testing.T) {
 	config.Conf.Port = 39999
 	go func() {
 		Start(r, func(server *http.Server) {
-			ln, err := net.Listen("tcp4", server.Addr)
+			ln, err := net.Listen("tcp", server.Addr)
 			if err != nil {
 				logger.Fatalf("listen: %s", err)
 			}
