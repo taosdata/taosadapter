@@ -17,8 +17,8 @@ import (
 	"github.com/gin-gonic/gin"
 	tmetric "github.com/influxdata/telegraf/metric"
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
-	"github.com/taosdata/taosadapter/v3/driver/common"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/plugin"
@@ -229,11 +229,12 @@ func (p *NodeExporter) requestSingle(conn unsafe.Pointer, req *Req) error {
 	if err != nil {
 		return fmt.Errorf("error reading body: %s", err)
 	}
-	metrics, err := Parse(body, resp.Header, false)
+	metrics, err := Parse(body, resp.Header, p.conf.IgnoreTimestamp)
 	if err != nil {
 		return fmt.Errorf("error pase body: %s", err)
 	}
-	serializer := influx.NewSerializer()
+	serializer := &influx.Serializer{}
+	_ = serializer.Init()
 	for _, metric := range metrics {
 		metric.AddTag("url", req.url)
 		tags := metric.Tags()
@@ -243,7 +244,7 @@ func (p *NodeExporter) requestSingle(conn unsafe.Pointer, req *Req) error {
 			return err
 		}
 		reqID := generator.GetReqID()
-		execLogger := logger.WithField(common.ReqIDKey, reqID)
+		execLogger := logger.WithField(config.ReqIDKey, reqID)
 		err = inserter.InsertInfluxdb(conn, data, p.conf.DB, "ns", p.conf.TTL, uint64(reqID), "", execLogger)
 		if err != nil {
 			logger.WithError(err).Error("insert influxdb error", string(data))

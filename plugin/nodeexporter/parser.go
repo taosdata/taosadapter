@@ -16,7 +16,6 @@ import (
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/metric"
-	"github.com/influxdata/telegraf/plugins/parsers/prometheus/common"
 )
 
 func Parse(buf []byte, header http.Header, ignoreTimestamp bool) ([]telegraf.Metric, error) {
@@ -55,7 +54,7 @@ func Parse(buf []byte, header http.Header, ignoreTimestamp bool) ([]telegraf.Met
 	for metricName, mf := range metricFamilies {
 		for _, m := range mf.Metric {
 			// reading tags
-			tags := common.MakeLabels(m, nil)
+			tags := MakeLabels(m)
 
 			// reading fields
 			var fields map[string]interface{}
@@ -84,7 +83,7 @@ func Parse(buf []byte, header http.Header, ignoreTimestamp bool) ([]telegraf.Met
 				} else {
 					t = now
 				}
-				m := metric.New(metricName, tags, fields, t, common.ValueType(mf.GetType()))
+				m := metric.New(metricName, tags, fields, t, ValueType(mf.GetType()))
 				metrics = append(metrics, m)
 			}
 		}
@@ -145,4 +144,30 @@ func getNameAndValue(m *dto.Metric) map[string]interface{} {
 		}
 	}
 	return fields
+}
+
+func ValueType(mt dto.MetricType) telegraf.ValueType {
+	switch mt {
+	case dto.MetricType_COUNTER:
+		return telegraf.Counter
+	case dto.MetricType_GAUGE:
+		return telegraf.Gauge
+	case dto.MetricType_SUMMARY:
+		return telegraf.Summary
+	case dto.MetricType_HISTOGRAM:
+		return telegraf.Histogram
+	default:
+		return telegraf.Untyped
+	}
+}
+
+// Get labels from metric
+func MakeLabels(m *dto.Metric) map[string]string {
+	result := map[string]string{}
+
+	for _, lp := range m.Label {
+		result[lp.GetName()] = lp.GetValue()
+	}
+
+	return result
 }

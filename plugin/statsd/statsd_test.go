@@ -1592,7 +1592,7 @@ func TestTCP(t *testing.T) {
 	statsd := Statsd{
 		User:                   "root",
 		Password:               "taosdata",
-		Log:                    logger.Logger,
+		Log:                    logger.WithField("test", "TestTCP"),
 		Protocol:               "tcp",
 		ServiceAddress:         "localhost:0",
 		AllowedPendingMessages: 10000,

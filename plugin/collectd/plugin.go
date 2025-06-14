@@ -29,7 +29,7 @@ type MetricWithClientIP struct {
 type Plugin struct {
 	conf       Config
 	conn       *net.UDPConn
-	parser     *collectd.CollectdParser
+	parser     *collectd.Parser
 	metricChan chan *MetricWithClientIP
 	closeChan  chan struct{}
 }
@@ -40,10 +40,10 @@ func (p *Plugin) Init(_ gin.IRouter) error {
 		logger.Info("collectd disabled")
 		return nil
 	}
-	p.parser = &collectd.CollectdParser{
+	p.parser = &collectd.Parser{
 		ParseMultiValue: "split",
 	}
-	return nil
+	return p.parser.Init()
 }
 
 func (p *Plugin) Start() error {
@@ -64,7 +64,8 @@ func (p *Plugin) Start() error {
 	p.metricChan = make(chan *MetricWithClientIP, 2*p.conf.Worker)
 	for i := 0; i < p.conf.Worker; i++ {
 		go func() {
-			serializer := influx.NewSerializer()
+			serializer := &influx.Serializer{}
+			_ = serializer.Init()
 			for {
 				select {
 				case metric := <-p.metricChan:
