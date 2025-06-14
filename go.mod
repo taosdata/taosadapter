@@ -2,8 +2,6 @@ module github.com/taosdata/taosadapter/v3
 
 go 1.24.0
 
-toolchain go1.24.3
-
 require (
 	collectd.org v0.6.0
 	github.com/gin-contrib/cors v1.7.5
