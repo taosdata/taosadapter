@@ -17,6 +17,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
+	"github.com/taosdata/taosadapter/v3/version"
 )
 
 func TestWSConnect(t *testing.T) {
@@ -36,7 +37,7 @@ func TestWSConnect(t *testing.T) {
 	connReq := connRequest{ReqID: 1, User: "root", Password: "wrong"}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)
@@ -60,6 +61,7 @@ func TestWSConnect(t *testing.T) {
 	assert.Equal(t, uint64(1), connResp.ReqID)
 	assert.Equal(t, 0xffff, connResp.Code)
 	assert.Equal(t, "duplicate connections", connResp.Message)
+	assert.Equal(t, version.TaosClientVersion, connResp.Version)
 }
 
 func TestMode(t *testing.T) {
@@ -79,7 +81,7 @@ func TestMode(t *testing.T) {
 	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", Mode: &wrongMode}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)
@@ -113,7 +115,7 @@ func TestConnectionOptions(t *testing.T) {
 	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", IP: "192.168.44.55", App: "ws_test_conn_protocol", TZ: "Asia/Shanghai"}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)
@@ -168,7 +170,7 @@ func TestWsQuery(t *testing.T) {
 	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", DB: "test_ws_query"}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)
@@ -659,7 +661,7 @@ func TestWsBinaryQuery(t *testing.T) {
 	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", DB: dbName}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)
