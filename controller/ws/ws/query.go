@@ -19,6 +19,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
+	"github.com/taosdata/taosadapter/v3/version"
 )
 
 type connRequest struct {
@@ -30,6 +31,15 @@ type connRequest struct {
 	TZ       string `json:"tz"`
 	App      string `json:"app"`
 	IP       string `json:"ip"`
+}
+
+type connResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Action  string `json:"action"`
+	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
+	Version string `json:"version"`
 }
 
 func (h *messageHandler) connect(ctx context.Context, session *melody.Session, action string, req connRequest, innerReqID uint64, logger *logrus.Entry, isDebug bool) {
@@ -134,7 +144,13 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	h.conn = conn
 	logger.Trace("start wait signal goroutine")
 	go h.waitSignal(h.logger)
-	commonSuccessResponse(ctx, session, logger, action, req.ReqID)
+	resp := &connResponse{
+		Action:  action,
+		ReqID:   req.ReqID,
+		Timing:  wstool.GetDuration(ctx),
+		Version: version.TaosClientVersion,
+	}
+	wstool.WSWriteJson(session, logger, resp)
 }
 
 func handleConnectError(ctx context.Context, conn unsafe.Pointer, session *melody.Session, logger *logrus.Entry, isDebug bool, action string, reqID uint64, err error, errorExt string) {
