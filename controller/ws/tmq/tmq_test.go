@@ -2585,7 +2585,12 @@ func doHttpSql(sql string) (code int, message string) {
 
 func doWebSocket(ws *websocket.Conn, action string, arg []byte) (resp []byte, err error) {
 	a, _ := json.Marshal(&wstool.WSAction{Action: action, Args: arg})
-	err = ws.WriteMessage(websocket.TextMessage, a)
+	message, err := sendWSMessage(ws, websocket.TextMessage, a)
+	return message, err
+}
+
+func sendWSMessage(ws *websocket.Conn, messageType int, data []byte) (resp []byte, err error) {
+	err = ws.WriteMessage(messageType, data)
 	if err != nil {
 		return nil, err
 	}
@@ -4211,5 +4216,13 @@ func TestVersion(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 0, versionResp.Code, string(msg))
 	assert.Equal(t, version.TaosClientVersion, versionResp.Version)
-	assert.Equal(t, versionResp.ReqID, req.ReqID, string(msg))
+	assert.Equal(t, req.ReqID, versionResp.ReqID, string(msg))
+	req2 := []byte(`{"action":"version"}`)
+	msg, err = sendWSMessage(ws, websocket.TextMessage, req2)
+	assert.NoError(t, err)
+	err = json.Unmarshal(msg, &versionResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, versionResp.Code, string(msg))
+	assert.Equal(t, version.TaosClientVersion, versionResp.Version)
+	assert.Equal(t, uint64(0), versionResp.ReqID, string(msg))
 }

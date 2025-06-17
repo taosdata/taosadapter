@@ -87,13 +87,17 @@ func NewTMQController() *TMQController {
 			}
 			switch action.Action {
 			case wstool.ClientVersion:
-				var req versionRequest
-				err = json.Unmarshal(action.Args, &req)
-				if err != nil {
-					logger.Errorf("unmarshal version args, err:%s, args:%s", err.Error(), action.Args)
-					return
+				reqID := uint64(0)
+				if len(action.Args) != 0 {
+					var req versionRequest
+					err = json.Unmarshal(action.Args, &req)
+					if err != nil {
+						logger.Errorf("unmarshal version args, err:%s, args:%s", err.Error(), action.Args)
+						return
+					}
+					reqID = req.ReqID
 				}
-				t.version(ctx, session, action.Action, req.ReqID)
+				t.version(ctx, session, action.Action, reqID)
 			case TMQSubscribe:
 				var req TMQSubscribeReq
 				err = json.Unmarshal(action.Args, &req)
