@@ -35,6 +35,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
+	"github.com/taosdata/taosadapter/v3/version"
 )
 
 type TMQController struct {
@@ -86,7 +87,17 @@ func NewTMQController() *TMQController {
 			}
 			switch action.Action {
 			case wstool.ClientVersion:
-				wstool.WSWriteVersion(session, logger)
+				reqID := uint64(0)
+				if len(action.Args) != 0 {
+					var req versionRequest
+					err = json.Unmarshal(action.Args, &req)
+					if err != nil {
+						logger.Errorf("unmarshal version args, err:%s, args:%s", err.Error(), action.Args)
+						return
+					}
+					reqID = req.ReqID
+				}
+				t.version(ctx, session, action.Action, reqID)
 			case TMQSubscribe:
 				var req TMQSubscribeReq
 				err = json.Unmarshal(action.Args, &req)
@@ -450,6 +461,7 @@ type TMQSubscribeResp struct {
 	Action  string `json:"action"`
 	ReqID   uint64 `json:"req_id"`
 	Timing  int64  `json:"timing"`
+	Version string `json:"version"`
 }
 
 var ignoreSubscribeConfig = map[string]struct{}{
@@ -457,6 +469,29 @@ var ignoreSubscribeConfig = map[string]struct{}{
 	"td.connect.pass": {},
 	"td.connect.ip":   {},
 	"td.connect.port": {},
+}
+
+type versionRequest struct {
+	ReqID uint64 `json:"req_id"`
+}
+type versionResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Action  string `json:"action"`
+	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
+	Version string `json:"version"`
+}
+
+func (t *TMQ) version(ctx context.Context, session *melody.Session, action string, redID uint64) {
+	resp := &versionResponse{
+		Action:  action,
+		ReqID:   redID,
+		Timing:  wstool.GetDuration(ctx),
+		Version: version.TaosClientVersion,
+	}
+	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, redID)
+	wstool.WSWriteJson(session, logger, resp)
 }
 
 func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSubscribeReq) {
@@ -501,9 +536,10 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 			}
 			t.unsubscribed = false
 			wstool.WSWriteJson(session, logger, &TMQSubscribeResp{
-				Action: action,
-				ReqID:  req.ReqID,
-				Timing: wstool.GetDuration(ctx),
+				Action:  action,
+				ReqID:   req.ReqID,
+				Timing:  wstool.GetDuration(ctx),
+				Version: version.TaosClientVersion,
 			})
 			return
 		}
@@ -710,9 +746,10 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	go t.waitSignal(t.logger)
 	go t.waitPoll(t.logger)
 	wstool.WSWriteJson(session, logger, &TMQSubscribeResp{
-		Action: action,
-		ReqID:  req.ReqID,
-		Timing: wstool.GetDuration(ctx),
+		Action:  action,
+		ReqID:   req.ReqID,
+		Timing:  wstool.GetDuration(ctx),
+		Version: version.TaosClientVersion,
 	})
 }
 

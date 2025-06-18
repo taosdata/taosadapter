@@ -48,7 +48,7 @@ func TestWsStmt2(t *testing.T) {
 	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", DB: "test_ws_stmt2_ws"}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)
@@ -269,7 +269,7 @@ func TestStmt2Prepare(t *testing.T) {
 	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", DB: "test_ws_stmt2_prepare_ws"}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)
@@ -413,7 +413,7 @@ func Stmt2Query(t *testing.T, db string, prepareDataSql []string) {
 	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", DB: db}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)
@@ -563,7 +563,7 @@ func TestStmt2BindWithStbFields(t *testing.T) {
 	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", DB: "test_ws_stmt2_getstbfields_ws"}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)
