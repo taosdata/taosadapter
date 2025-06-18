@@ -130,7 +130,7 @@ func TestWsStmt(t *testing.T) {
 	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", DB: "test_ws_stmt_ws"}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)
@@ -647,7 +647,7 @@ func StmtQuery(t *testing.T, db string, prepareDataSql []string) {
 	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", DB: db}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)
@@ -792,7 +792,7 @@ func TestStmtNumParams(t *testing.T) {
 	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", DB: db}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)
@@ -861,7 +861,7 @@ func TestStmtGetParams(t *testing.T) {
 	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", DB: db}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)
@@ -923,7 +923,7 @@ func TestStmtInvalidStmtID(t *testing.T) {
 	connReq := connRequest{ReqID: reqID, User: "root", Password: "taosdata"}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, Connect, connResp.Action)

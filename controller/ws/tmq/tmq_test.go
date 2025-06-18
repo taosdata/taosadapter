@@ -34,6 +34,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/layout"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 	"github.com/taosdata/taosadapter/v3/tools/testtools"
+	"github.com/taosdata/taosadapter/v3/version"
 )
 
 var router *gin.Engine
@@ -524,6 +525,7 @@ func TestMeta(t *testing.T) {
 			if d.Code != 0 {
 				return fmt.Errorf("%s %d,%s", TMQSubscribe, d.Code, d.Message)
 			}
+			assert.Equal(t, version.TaosClientVersion, d.Version)
 			w = httptest.NewRecorder()
 			body = strings.NewReader("create table stb (ts timestamp," +
 				"c1 bool," +
@@ -2584,7 +2586,12 @@ func doHttpSql(sql string) (code int, message string) {
 
 func doWebSocket(ws *websocket.Conn, action string, arg []byte) (resp []byte, err error) {
 	a, _ := json.Marshal(&wstool.WSAction{Action: action, Args: arg})
-	err = ws.WriteMessage(websocket.TextMessage, a)
+	message, err := sendWSMessage(ws, websocket.TextMessage, a)
+	return message, err
+}
+
+func sendWSMessage(ws *websocket.Conn, messageType int, data []byte) (resp []byte, err error) {
+	err = ws.WriteMessage(messageType, data)
 	if err != nil {
 		return nil, err
 	}
@@ -4184,4 +4191,39 @@ func TestTMQPollReq_String(t *testing.T) {
 			assert.Equalf(t, tt.want, req.String(), "String()")
 		})
 	}
+}
+
+func TestVersion(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/tmq", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+	req := &versionRequest{
+		ReqID: 0x123654,
+	}
+	bs, err := json.Marshal(req)
+	assert.NoError(t, err)
+	msg, err := doWebSocket(ws, wstool.ClientVersion, bs)
+	assert.NoError(t, err)
+	var versionResp versionResponse
+	err = json.Unmarshal(msg, &versionResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, versionResp.Code, string(msg))
+	assert.Equal(t, version.TaosClientVersion, versionResp.Version)
+	assert.Equal(t, req.ReqID, versionResp.ReqID, string(msg))
+	req2 := []byte(`{"action":"version"}`)
+	msg, err = sendWSMessage(ws, websocket.TextMessage, req2)
+	assert.NoError(t, err)
+	err = json.Unmarshal(msg, &versionResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, versionResp.Code, string(msg))
+	assert.Equal(t, version.TaosClientVersion, versionResp.Version)
+	assert.Equal(t, uint64(0), versionResp.ReqID, string(msg))
 }
