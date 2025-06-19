@@ -8,6 +8,7 @@ import (
 	"crypto/x509/pkix"
 	"database/sql/driver"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"net"
 	"net/http"
@@ -76,12 +77,12 @@ var testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	case "/prometheus":
-		w.Header().Set("Content-Type", "application/openmetrics-text")
 		_, err := w.Write([]byte(prometheus004))
 		if err != nil {
 			return
 		}
 	case "/wrongtype":
+		w.Header().Set("Content-Type", "application/openmetrics-text")
 		_, err := w.Write([]byte(prometheus004))
 		if err != nil {
 			return
@@ -155,6 +156,7 @@ func TestMain(m *testing.M) {
 	db.PrepareConnection()
 	m.Run()
 }
+
 func TestOpenMetrics(t *testing.T) {
 	ts := httptest.NewServer(testHandler)
 	defer ts.Close()
@@ -163,11 +165,30 @@ func TestOpenMetrics(t *testing.T) {
 
 	tsUrl := ts.URL
 	tlsUrl := tlsServer.URL
+	dbs := []string{
+		"open_metrics",
+		"open_metrics_prometheus",
+		"open_metrics_wrong",
+		"open_metrics_proto",
+		"open_metrics_tls",
+		"open_metrics_tls_prometheus",
+		"open_metrics_tls_wrong",
+		"open_metrics_tls_proto",
+	}
 	viper.Set("open_metrics.enable", true)
-	viper.Set("open_metrics.urls", []string{tsUrl, tsUrl + "/prometheus", tsUrl + "/wrongtype", tsUrl + "/protobuf", tlsUrl, tlsUrl + "/prometheus", tlsUrl + "/wrongtype", tlsUrl + "/protobuf"})
+	viper.Set("open_metrics.urls", []string{
+		tsUrl,
+		tsUrl + "/prometheus",
+		tsUrl + "/wrongtype",
+		tsUrl + "/protobuf",
+		tlsUrl,
+		tlsUrl + "/prometheus",
+		tlsUrl + "/wrongtype",
+		tlsUrl + "/protobuf",
+	})
 	viper.Set("open_metrics.gatherDurationSeconds", []int{1, 1, 1, 1, 1, 1, 1, 1})
 	viper.Set("open_metrics.ttl", []int{1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000})
-	viper.Set("open_metrics.dbs", []string{"open_metrics", "open_metrics", "open_metrics", "open_metrics_proto", "open_metrics_tls", "open_metrics_tls", "open_metrics_tls", "open_metrics_tls_proto"})
+	viper.Set("open_metrics.dbs", dbs)
 	viper.Set("open_metrics.responseTimeoutSeconds", []int{5, 5, 5, 5, 5, 5, 5, 5})
 	viper.Set("open_metrics.insecureSkipVerify", true) // skip verify for test
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
@@ -175,14 +196,16 @@ func TestOpenMetrics(t *testing.T) {
 	defer func() {
 		wrapper.TaosClose(conn)
 	}()
-	err = exec(conn, "create database if not exists open_metrics precision 'ns'")
-	assert.NoError(t, err)
-	err = exec(conn, "create database if not exists open_metrics_proto precision 'ns'")
-	assert.NoError(t, err)
-	err = exec(conn, "create database if not exists open_metrics_tls precision 'ns'")
-	assert.NoError(t, err)
-	err = exec(conn, "create database if not exists open_metrics_tls_proto precision 'ns'")
-	assert.NoError(t, err)
+	for _, s := range dbs {
+		err = exec(conn, fmt.Sprintf("create database if not exists %s precision 'ns'", s))
+		assert.NoError(t, err)
+	}
+	defer func() {
+		for _, s := range dbs {
+			err = exec(conn, fmt.Sprintf("drop database if exists %s", s))
+			assert.NoError(t, err)
+		}
+	}()
 	openMetrics := &OpenMetrics{}
 	assert.Equal(t, "openmetrics", openMetrics.String())
 	assert.Equal(t, "v1", openMetrics.Version())
@@ -191,15 +214,70 @@ func TestOpenMetrics(t *testing.T) {
 	err = openMetrics.Start()
 	assert.NoError(t, err)
 	time.Sleep(time.Second * 3)
-	values, err := query(conn, "select last(`gauge`) as `gauge` from open_metrics.test_metric;")
-	assert.NoError(t, err)
-	assert.Equal(t, float64(1), values[0][0])
-	values, err = query(conn, "select last(`gauge`) as `gauge` from open_metrics_proto.test_gauge;")
+
+	// open_metrics
+	testMetricsDBs := []string{
+		"open_metrics",
+		"open_metrics_tls",
+	}
+	for i := 0; i < len(testMetricsDBs); i++ {
+		dbName := testMetricsDBs[i]
+		sql := fmt.Sprintf("select last(`gauge`) as `gauge` from %s.test_metric", dbName)
+		values, err := query(conn, sql)
+		assert.NoError(t, err)
+		assert.Equal(t, float64(1), values[0][0])
+
+		sql = fmt.Sprintf("select last(`gauge`) as `gauge` from %s.go_goroutines", dbName)
+		values, err = query(conn, sql)
+		assert.NoError(t, err)
+		assert.Equal(t, float64(15), values[0][0])
+
+		sql = fmt.Sprintf("select last(`0`) as `c_0`, last(`0.25`) as `c_0.25`,last(`0.5`) as `c_0.5`,last(`0.75`) as `c_0.75`, last(`1`) as `c_1`,last(`count`) as `count`,last(`sum`) as `sum` from %s.go_gc_duration_seconds", dbName)
+		values, err = query(conn, sql)
+		assert.NoError(t, err)
+		assert.Equal(t, float64(0.00010425500000000001), values[0][0])
+		assert.Equal(t, float64(0.000139108), values[0][1])
+		assert.Equal(t, float64(0.00015749400000000002), values[0][2])
+		assert.Equal(t, float64(0.000331463), values[0][3])
+		assert.Equal(t, float64(0.000667154), values[0][4])
+		assert.Equal(t, float64(7), values[0][5])
+		assert.Equal(t, float64(0.0018183950000000002), values[0][6])
+	}
+
+	// prometheus
+	testPrometheusDBs := []string{
+		"open_metrics_prometheus",
+		"open_metrics_tls_prometheus",
+	}
+	for i := 0; i < len(testPrometheusDBs); i++ {
+		dbName := testPrometheusDBs[i]
+		sql := fmt.Sprintf("select last(`value`) as `value` from %s.test_metric", dbName)
+		values, err := query(conn, sql)
+		assert.NoError(t, err)
+		assert.Equal(t, float64(1), values[0][0])
+
+		sql = fmt.Sprintf("select last(`gauge`) as `gauge` from %s.go_goroutines", dbName)
+		values, err = query(conn, sql)
+		assert.NoError(t, err)
+		assert.Equal(t, float64(15), values[0][0])
+
+		sql = fmt.Sprintf("select last(`0`) as `c_0`, last(`0.25`) as `c_0.25`,last(`0.5`) as `c_0.5`,last(`0.75`) as `c_0.75`, last(`1`) as `c_1`,last(`count`) as `count`,last(`sum`) as `sum` from %s.go_gc_duration_seconds", dbName)
+		values, err = query(conn, sql)
+		assert.NoError(t, err)
+		assert.Equal(t, float64(0.00010425500000000001), values[0][0])
+		assert.Equal(t, float64(0.000139108), values[0][1])
+		assert.Equal(t, float64(0.00015749400000000002), values[0][2])
+		assert.Equal(t, float64(0.000331463), values[0][3])
+		assert.Equal(t, float64(0.000667154), values[0][4])
+		assert.Equal(t, float64(7), values[0][5])
+		assert.Equal(t, float64(0.0018183950000000002), values[0][6])
+	}
+
+	// protobuf
+	values, err := query(conn, "select last(`gauge`) as `gauge` from open_metrics_proto.test_gauge;")
 	assert.NoError(t, err)
 	assert.Equal(t, float64(1234567), values[0][0])
-	values, err = query(conn, "select last(`gauge`) as `gauge` from open_metrics_tls.test_metric;")
-	assert.NoError(t, err)
-	assert.Equal(t, float64(1), values[0][0])
+
 	values, err = query(conn, "select last(`gauge`) as `gauge` from open_metrics_tls_proto.test_gauge;")
 	assert.NoError(t, err)
 	assert.Equal(t, float64(1234567), values[0][0])
@@ -217,14 +295,6 @@ func TestOpenMetrics(t *testing.T) {
 	if values[0][0].(int32) != 1000 {
 		t.Fatal("ttl miss")
 	}
-	err = exec(conn, "drop database if exists open_metrics")
-	assert.NoError(t, err)
-	err = exec(conn, "drop database if exists open_metrics_proto")
-	assert.NoError(t, err)
-	err = exec(conn, "drop database if exists open_metrics")
-	assert.NoError(t, err)
-	err = exec(conn, "drop database if exists open_metrics_proto")
-	assert.NoError(t, err)
 }
 
 func TestOpenMetricsMTls(t *testing.T) {
@@ -321,6 +391,7 @@ func TestOpenMetricsMTls(t *testing.T) {
 	err = exec(conn, "drop database if exists open_metrics_mtls_bearertoken")
 	assert.NoError(t, err)
 }
+
 func generateCertificate(isCA bool, parentCert *x509.Certificate, parentKey *rsa.PrivateKey,
 	commonName string, organization []string) (*x509.Certificate, *rsa.PrivateKey) {
 
@@ -361,6 +432,7 @@ func generateCertificate(isCA bool, parentCert *x509.Certificate, parentKey *rsa
 	cert, _ := x509.ParseCertificate(certBytes)
 	return cert, privKey
 }
+
 func saveCertAndKey(certFile, keyFile string, cert *x509.Certificate, key *rsa.PrivateKey) error {
 	certOut, _ := os.Create(certFile)
 	err := pem.Encode(certOut, &pem.Block{
@@ -385,6 +457,7 @@ func saveCertAndKey(certFile, keyFile string, cert *x509.Certificate, key *rsa.P
 	}
 	return keyOut.Close()
 }
+
 func TestOpenMetricsDisabled(t *testing.T) {
 	viper.Set("open_metrics.enable", false)
 	openMetrics := &OpenMetrics{}

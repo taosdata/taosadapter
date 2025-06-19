@@ -17,6 +17,7 @@ import (
 	"github.com/influxdata/telegraf"
 	tmetric "github.com/influxdata/telegraf/metric"
 	"github.com/influxdata/telegraf/plugins/parsers/openmetrics"
+	"github.com/influxdata/telegraf/plugins/parsers/prometheus"
 	"github.com/influxdata/telegraf/plugins/serializers/influx"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -39,14 +40,18 @@ type OpenMetrics struct {
 }
 
 type Mission struct {
-	req            *http.Request
-	client         *http.Client
-	url            string
-	db             string
-	ttl            int
-	reqID          uint64
-	logger         *logrus.Entry
-	telegrafLogger telegraf.Logger
+	req    *http.Request
+	client *http.Client
+	// open metrics 1.0.0
+	openMetricsParser *openmetrics.Parser
+	// prometheus 0.0.4
+	prometheusParser *prometheus.Parser
+	url              string
+	db               string
+	ttl              int
+	reqID            uint64
+	logger           *logrus.Entry
+	telegrafLogger   telegraf.Logger
 }
 
 func (p *OpenMetrics) Init(_ gin.IRouter) error {
@@ -159,13 +164,26 @@ func (p *OpenMetrics) prepareUrls() error {
 			"url":           u,
 			config.ReqIDKey: reqID,
 		})
+		telegrafLogger := telegraflog.NewWrapperLogger(missionLogger)
+		openMetricsParser := &openmetrics.Parser{
+			MetricVersion:   1,
+			IgnoreTimestamp: p.conf.IgnoreTimestamp,
+			Log:             telegrafLogger,
+		}
+		prometheusParser := &prometheus.Parser{
+			MetricVersion:   1,
+			IgnoreTimestamp: p.conf.IgnoreTimestamp,
+			Log:             telegrafLogger,
+		}
 		mission := &Mission{
-			req:            req,
-			client:         c,
-			url:            u,
-			db:             p.conf.DBs[i],
-			logger:         missionLogger,
-			telegrafLogger: telegraflog.NewWrapperLogger(missionLogger),
+			req:               req,
+			client:            c,
+			url:               u,
+			db:                p.conf.DBs[i],
+			logger:            missionLogger,
+			openMetricsParser: openMetricsParser,
+			prometheusParser:  prometheusParser,
+			telegrafLogger:    telegrafLogger,
 		}
 		if len(p.conf.TTL) != 0 {
 			mission.ttl = p.conf.TTL[i]
@@ -197,19 +215,22 @@ func (p *OpenMetrics) requestSingle(mission *Mission) error {
 	}
 	logger.Debugf("response body: %s", body)
 	mission.logger.Debug("finished request")
-	parser := openmetrics.Parser{
-		Header:          resp.Header,
-		MetricVersion:   1,
-		IgnoreTimestamp: p.conf.IgnoreTimestamp,
-		Log:             mission.telegrafLogger,
+	var metrics []telegraf.Metric
+	parser := "openMetrics"
+	if openmetrics.AcceptsContent(resp.Header) {
+		mission.openMetricsParser.Header = resp.Header
+		metrics, err = mission.openMetricsParser.Parse(body)
+	} else {
+		mission.prometheusParser.Header = resp.Header
+		metrics, err = mission.prometheusParser.Parse(body)
+		parser = "prometheus"
 	}
-	metrics, err := parser.Parse(body)
 	if err != nil {
-		return fmt.Errorf("pase body error: %s, body: %s", err, body)
+		return fmt.Errorf("%s parser parse body error: %s, body: %v", parser, err, body)
 	}
 	if len(metrics) == 0 {
 		contentType := resp.Header.Get("Content-Type")
-		return fmt.Errorf("no metrics found, contentType:%s, body: %s", contentType, string(body))
+		return fmt.Errorf("no metrics found, contentType:%s, body: %v", contentType, body)
 	}
 	serializer := &influx.Serializer{}
 	_ = serializer.Init()
