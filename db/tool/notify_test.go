@@ -227,8 +227,9 @@ func TestGetWhitelist(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, ipNets)
 	t.Log(ipNets)
-	_, ipNet, _ := net.ParseCIDR("0.0.0.0/0")
-	assert.Equal(t, []*net.IPNet{ipNet}, ipNets)
+	_, ipNetV4, _ := net.ParseCIDR("0.0.0.0/0")
+	_, ipNetV6, _ := net.ParseCIDR("::/0")
+	assert.Equal(t, []*net.IPNet{ipNetV4, ipNetV6}, ipNets)
 	ipNets, err = GetWhitelist(nil, logger, isDebug)
 	assert.Error(t, err)
 	assert.Nil(t, ipNets)
@@ -240,6 +241,29 @@ func TestCheckWhitelist(t *testing.T) {
 	contains := CheckWhitelist(ipNets, net.ParseIP("127.0.0.1"))
 	assert.True(t, contains)
 	contains = CheckWhitelist(ipNets, net.ParseIP("192.168.1.1"))
+	assert.False(t, contains)
+	_, ipNet, _ = net.ParseCIDR("0.0.0.0/0")
+	ipNets = []*net.IPNet{ipNet}
+	contains = CheckWhitelist(ipNets, net.ParseIP("192.168.1.1"))
+	assert.True(t, contains)
+	// invalid ip
+	contains = CheckWhitelist(ipNets, net.ParseIP(""))
+	assert.False(t, contains)
+	// ipv6
+	_, ipNet, _ = net.ParseCIDR("::1/128")
+	ipNets = []*net.IPNet{ipNet}
+	contains = CheckWhitelist(ipNets, net.ParseIP("::1"))
+	assert.True(t, contains)
+	contains = CheckWhitelist(ipNets, net.ParseIP("::2"))
+	assert.False(t, contains)
+	_, ipNet, _ = net.ParseCIDR("::/0")
+	ipNets = []*net.IPNet{ipNet}
+	contains = CheckWhitelist(ipNets, net.ParseIP("::1"))
+	assert.True(t, contains)
+	contains = CheckWhitelist(ipNets, net.ParseIP("::2"))
+	assert.True(t, contains)
+	// invalid ip
+	contains = CheckWhitelist(ipNets, net.ParseIP(""))
 	assert.False(t, contains)
 }
 

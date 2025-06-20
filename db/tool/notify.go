@@ -51,10 +51,9 @@ func GetWhitelist(conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) ([]*n
 	taosFetchWhiteListA(conn, handler, logger, isDebug)
 	data := <-c
 	monitor.TaosFetchWhitelistACallBackCounter.Inc()
-	if data.ErrCode != 0 {
+	if data.Err != nil {
 		monitor.TaosFetchWhitelistACallBackFailCounter.Inc()
-		err := errors.NewError(int(data.ErrCode), syncinterface.TaosErrorStr(nil, logger, isDebug))
-		return nil, err
+		return nil, data.Err
 	}
 	monitor.TaosFetchWhitelistACallBackSuccessCounter.Inc()
 	return data.IPNets, nil

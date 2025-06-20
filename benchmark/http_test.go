@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 func BenchmarkRoute(b *testing.B) {
@@ -13,7 +14,7 @@ func BenchmarkRoute(b *testing.B) {
 	w := httptest.NewRecorder()
 	for i := 0; i < b.N; i++ {
 		req, _ := http.NewRequest("POST", "/rest/sql", nil)
-		req.RemoteAddr = "127.0.0.1:33333"
+		req.RemoteAddr = testtools.GetRandomRemoteAddr()
 		router.ServeHTTP(w, req)
 		assert.Equal(b, 200, w.Code)
 	}
@@ -35,7 +36,7 @@ func Test_setupRouter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req, _ := http.NewRequest("POST", "/rest/sql", nil)
-			req.RemoteAddr = "127.0.0.1:33333"
+			req.RemoteAddr = testtools.GetRandomRemoteAddr()
 			router.ServeHTTP(w, req)
 			assert.Equal(t, 200, w.Code)
 		})

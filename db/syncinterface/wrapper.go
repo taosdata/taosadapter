@@ -1159,10 +1159,10 @@ func TaosResetCurrentDB(conn unsafe.Pointer, logger *logrus.Entry, isDebug bool)
 }
 
 func TaosFetchWhitelistA(conn unsafe.Pointer, caller cgo.Handle, logger *logrus.Entry, isDebug bool) {
-	logger.Tracef("call taos_fetch_whitelist_a, conn:%p", conn)
+	logger.Tracef("call taos_fetch_whitelist_dual_stack_a, conn:%p", conn)
 	monitor.TaosFetchWhitelistACounter.Inc()
 	s := log.GetLogNow(false)
-	wrapper.TaosFetchWhitelistA(conn, caller)
-	logger.Debugf("taos_fetch_whitelist_a finish, cost:%s", log.GetLogDuration(false, s))
+	wrapper.TaosFetchWhitelistDualStackA(conn, caller)
+	logger.Debugf("taos_fetch_whitelist_dual_stack_a finish, cost:%s", log.GetLogDuration(false, s))
 	monitor.TaosFetchWhitelistASuccessCounter.Inc()
 }
