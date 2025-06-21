@@ -124,6 +124,7 @@ jobs:
           (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true') ||
           (github.event_name == 'push' && steps.cache-server-push.outputs.cache-hit != 'true')
         run: |
+          tree ./TDengine/debug/build
           mkdir -p ./release
           cp ./TDengine/debug/build/bin/taos ./release/
           cp ./TDengine/debug/build/bin/taosd ./release/

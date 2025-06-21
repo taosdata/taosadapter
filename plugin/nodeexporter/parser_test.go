@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/influxdata/telegraf"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/require"
 )
 
@@ -139,4 +141,43 @@ test_counter{label="test"} 1 %d
 		"label": "test",
 	}, metrics[0].Tags())
 	require.WithinDuration(t, time.Now(), metrics[0].Time().UTC(), 5*time.Second)
+}
+
+func TestValueType_AllCases(t *testing.T) {
+	require.Equal(t, telegraf.Counter, ValueType(dto.MetricType_COUNTER))
+	require.Equal(t, telegraf.Gauge, ValueType(dto.MetricType_GAUGE))
+	require.Equal(t, telegraf.Summary, ValueType(dto.MetricType_SUMMARY))
+	require.Equal(t, telegraf.Histogram, ValueType(dto.MetricType_HISTOGRAM))
+	require.Equal(t, telegraf.Untyped, ValueType(dto.MetricType_UNTYPED))
+	require.Equal(t, telegraf.Untyped, ValueType(dto.MetricType(100)))
+}
+
+func TestMakeLabels(t *testing.T) {
+	m := &dto.Metric{
+		Label: []*dto.LabelPair{
+			{Name: strPtr("foo"), Value: strPtr("bar")},
+			{Name: strPtr("baz"), Value: strPtr("qux")},
+		},
+	}
+	labels := MakeLabels(m)
+	require.Equal(t, map[string]string{
+		"foo": "bar",
+		"baz": "qux",
+	}, labels)
+
+	m = &dto.Metric{
+		Label: []*dto.LabelPair{
+			{Name: strPtr("empty"), Value: strPtr("")},
+		},
+	}
+	labels = MakeLabels(m)
+	require.Equal(t, map[string]string{"empty": ""}, labels)
+
+	m = &dto.Metric{}
+	labels = MakeLabels(m)
+	require.Empty(t, labels)
+}
+
+func strPtr(s string) *string {
+	return &s
 }
