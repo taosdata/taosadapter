@@ -82,6 +82,9 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	p, err := connectpool.NewConnectPool(poolConfig)
 
 	if err != nil {
+		// failed to create connection pool, maybe the user is not exist or password is wrong
+		// put the handles back to pool
+		cp.putHandle()
 		return nil, err
 	}
 	cp.pool = p
