@@ -33,3 +33,21 @@ func TestGetRealIPWithNoIP(t *testing.T) {
 	host, _, _ := net.SplitHostPort(req.RemoteAddr)
 	assert.Equal(t, host, ip.String())
 }
+
+func TestParseIpv6(t *testing.T) {
+	req := httptest.NewRequest("GET", "http://example.com", nil)
+
+	req.RemoteAddr = "[fe80::4720:bdc2:e3a7:b2bc]:6041"
+	ip := GetRealIP(req)
+	assert.Equal(t, "fe80::4720:bdc2:e3a7:b2bc", ip.String())
+
+	// zone with %15 is used to specify the network interface in IPv6
+	req.RemoteAddr = "[fe80::4720:bdc2:e3a7:b2bd%15]:6041"
+	ip = GetRealIP(req)
+	assert.Equal(t, "fe80::4720:bdc2:e3a7:b2bd", ip.String())
+
+	// wrong ipv6 format
+	req.RemoteAddr = "[fe80::4720:bdc2:e3a7:gggg]:6041"
+	ip = GetRealIP(req)
+	assert.Nil(t, ip)
+}
