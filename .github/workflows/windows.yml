@@ -53,7 +53,7 @@ jobs:
       - name: get_commit_id
         id: get_commit_id
         run: |
-          echo "::set-output name=commit_id::$(git rev-parse HEAD)"
+          echo "commit_id=$(git rev-parse HEAD)" >> $Env:GITHUB_OUTPUT
 
       - name: Cache server by pr
         if: github.event_name == 'pull_request'
@@ -88,6 +88,27 @@ jobs:
         run: |
           Start-BitsTransfer -Source http://download.qt.io/official_releases/jom/jom.zip
           7z x jom.zip
+
+      - name: Get CMake
+        if: >
+          (github.event_name == 'workflow_dispatch' && steps.cache-server-manually.outputs.cache-hit != 'true') ||
+          (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true') ||
+          (github.event_name == 'push' && steps.cache-server-push.outputs.cache-hit != 'true')
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: 3.31.6
+
+      - name: Cache externals built
+        if: >
+          (github.event_name == 'workflow_dispatch' && steps.cache-server-manually.outputs.cache-hit != 'true') ||
+          (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true') ||
+          (github.event_name == 'push' && steps.cache-server-push.outputs.cache-hit != 'true')
+        uses: actions/cache@v4
+        id: cache-ext
+        with:
+          path: .externals
+          key: ${{ runner.os }}-${{ hashFiles('cmake/external.cmake', 'cmake/in/**') }}-build-ext-v3
+
       - name: install TDengine
         if: >
           (github.event_name == 'workflow_dispatch' && steps.cache-server-manually.outputs.cache-hit != 'true') ||
@@ -144,7 +165,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
           cache-dependency-path: go.sum
@@ -183,7 +204,7 @@ jobs:
 #      - name: checkout
 #        uses: actions/checkout@v4
 #
-#      - uses: actions/setup-go@v4
+#      - uses: actions/setup-go@v5
 #        with:
 #          go-version: ${{ matrix.go }}
 #          cache-dependency-path: go.sum

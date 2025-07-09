@@ -27,6 +27,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
@@ -43,6 +44,7 @@ func NewSTMTController() *STMTController {
 	stmtM.Config.MaxMessageSize = 0
 
 	stmtM.HandleConnect(func(session *melody.Session) {
+		monitor.RecordWSStmtConn()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws connect")
 		session.Set(TaosStmtKey, NewTaosStmt(session, logger))
@@ -226,6 +228,7 @@ func NewSTMTController() *STMTController {
 	})
 
 	stmtM.HandleDisconnect(func(session *melody.Session) {
+		monitor.RecordWSStmtDisconnect()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws disconnect")
 		t, exist := session.Get(TaosStmtKey)
@@ -313,7 +316,7 @@ func (t *TaosStmt) waitSignal(logger *logrus.Entry) {
 			}
 			logger.Trace("get whitelist")
 			s := log.GetLogNow(isDebug)
-			whitelist, err := tool.GetWhitelist(t.conn)
+			whitelist, err := tool.GetWhitelist(t.conn, logger, isDebug)
 			logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 			if err != nil {
 				logger.Errorf("get whitelist error, close connection, err:%s", err)
@@ -361,18 +364,19 @@ type StmtItem struct {
 
 func (s *StmtItem) clean(logger *logrus.Entry) {
 	s.Lock()
+	defer s.Unlock()
 	if s.stmt != nil {
 		syncinterface.TaosStmtClose(s.stmt, logger, log.IsDebug())
 	}
-	s.Unlock()
 }
 
 func (t *TaosStmt) addStmtItem(stmt *StmtItem) {
 	index := atomic.AddUint64(&t.stmtIndex, 1)
 	stmt.index = index
 	t.stmtIndexLocker.Lock()
+	defer t.stmtIndexLocker.Unlock()
 	t.StmtList.PushBack(stmt)
-	t.stmtIndexLocker.Unlock()
+	monitor.WSStmtStmtCount.Inc()
 }
 
 func (t *TaosStmt) getStmtItem(index uint64) *list.Element {
@@ -402,6 +406,7 @@ func (t *TaosStmt) removeStmtItem(item *list.Element) {
 	t.stmtIndexLocker.Lock()
 	t.StmtList.Remove(item)
 	t.stmtIndexLocker.Unlock()
+	monitor.WSStmtStmtCount.Dec()
 }
 
 type StmtConnectReq struct {
@@ -442,7 +447,7 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 		return
 	}
 	s := log.GetLogNow(isDebug)
-	whitelist, err := tool.GetWhitelist(conn)
+	whitelist, err := tool.GetWhitelist(conn, logger, isDebug)
 	logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.Errorf("get whitelist error, close connection, err:%s", err)
@@ -459,7 +464,7 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 		return
 	}
 	logger.Trace("register change whitelist")
-	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle)
+	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle, logger, isDebug)
 	if err != nil {
 		logger.Errorf("register change whitelist error, err:%s", err)
 		syncinterface.TaosClose(conn, logger, isDebug)
@@ -467,7 +472,7 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 		return
 	}
 	logger.Trace("register drop user")
-	err = tool.RegisterDropUser(conn, t.dropUserHandle)
+	err = tool.RegisterDropUser(conn, t.dropUserHandle, logger, isDebug)
 	if err != nil {
 		logger.Errorf("register drop user error, err:%s", err)
 		syncinterface.TaosClose(conn, logger, isDebug)
@@ -507,7 +512,7 @@ func (t *TaosStmt) init(ctx context.Context, session *melody.Session, req *StmtI
 	isDebug := log.IsDebug()
 	stmt := syncinterface.TaosStmtInitWithReqID(t.conn, int64(req.ReqID), logger, isDebug)
 	if stmt == nil {
-		errStr := wrapper.TaosStmtErrStr(stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmt, logger, isDebug)
 		logger.Errorf("stmt init error, err:%s", errStr)
 		wsStmtErrorMsg(ctx, session, logger, 0xffff, errStr, action, req.ReqID, nil)
 		return
@@ -556,7 +561,7 @@ func (t *TaosStmt) prepare(ctx context.Context, session *melody.Session, req *St
 	isDebug := log.IsDebug()
 	code := syncinterface.TaosStmtPrepare(stmt.stmt, req.SQL, logger, isDebug)
 	if code != httperror.SUCCESS {
-		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmt.stmt, logger, isDebug)
 		logger.Errorf("stmt prepare error, code:%d, msg:%s", code, errStr)
 		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
@@ -604,7 +609,7 @@ func (t *TaosStmt) setTableName(ctx context.Context, session *melody.Session, re
 	isDebug := log.IsDebug()
 	code := syncinterface.TaosStmtSetTBName(stmt.stmt, req.Name, logger, isDebug)
 	if code != httperror.SUCCESS {
-		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmt.stmt, logger, isDebug)
 		logger.Errorf("stmt set table name error, code:%d, msg:%s", code, errStr)
 		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
@@ -653,13 +658,13 @@ func (t *TaosStmt) setTags(ctx context.Context, session *melody.Session, req *St
 	isDebug := log.IsDebug()
 	code, tagNums, tagFields := syncinterface.TaosStmtGetTagFields(stmt.stmt, logger, isDebug)
 	if code != httperror.SUCCESS {
-		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmt.stmt, logger, isDebug)
 		logger.Errorf("stmt get tag fields error, code:%d, msg:%s", code, errStr)
 		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
 	}
 	defer func() {
-		wrapper.TaosStmtReclaimFields(stmt.stmt, tagFields)
+		syncinterface.TaosStmtReclaimFields(stmt.stmt, tagFields, logger, isDebug)
 	}()
 	resp := &StmtSetTagsResp{
 		Action: action,
@@ -688,7 +693,7 @@ func (t *TaosStmt) setTags(ctx context.Context, session *melody.Session, req *St
 	}
 	code = syncinterface.TaosStmtSetTags(stmt.stmt, data, logger, isDebug)
 	if code != httperror.SUCCESS {
-		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmt.stmt, logger, isDebug)
 		logger.Errorf("stmt set tags error, code:%d, msg:%s", code, errStr)
 		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
@@ -732,13 +737,13 @@ func (t *TaosStmt) getTagFields(ctx context.Context, session *melody.Session, re
 	isDebug := log.IsDebug()
 	code, tagNums, tagFields := syncinterface.TaosStmtGetTagFields(stmt.stmt, logger, isDebug)
 	if code != httperror.SUCCESS {
-		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmt.stmt, logger, isDebug)
 		logger.Errorf("stmt get tag fields error, code:%d, msg:%s", code, errStr)
 		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
 	}
 	defer func() {
-		wrapper.TaosStmtReclaimFields(stmt.stmt, tagFields)
+		syncinterface.TaosStmtReclaimFields(stmt.stmt, tagFields, logger, isDebug)
 	}()
 	resp := &StmtGetTagFieldsResp{
 		Action: action,
@@ -791,13 +796,13 @@ func (t *TaosStmt) getColFields(ctx context.Context, session *melody.Session, re
 	isDebug := log.IsDebug()
 	code, colNums, colFields := syncinterface.TaosStmtGetColFields(stmt.stmt, logger, isDebug)
 	if code != httperror.SUCCESS {
-		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmt.stmt, logger, isDebug)
 		logger.Errorf("stmt get col fields error, code:%d, msg:%s", code, errStr)
 		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
 	}
 	defer func() {
-		wrapper.TaosStmtReclaimFields(stmt.stmt, colFields)
+		syncinterface.TaosStmtReclaimFields(stmt.stmt, colFields, logger, isDebug)
 	}()
 	resp := &StmtGetColFieldsResp{
 		Action: action,
@@ -850,13 +855,13 @@ func (t *TaosStmt) bind(ctx context.Context, session *melody.Session, req *StmtB
 	isDebug := log.IsDebug()
 	code, colNums, colFields := syncinterface.TaosStmtGetColFields(stmt.stmt, logger, isDebug)
 	if code != httperror.SUCCESS {
-		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmt.stmt, logger, isDebug)
 		logger.Errorf("stmt get col fields error, code:%d, msg:%s", code, errStr)
 		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
 	}
 	defer func() {
-		wrapper.TaosStmtReclaimFields(stmt.stmt, colFields)
+		syncinterface.TaosStmtReclaimFields(stmt.stmt, colFields, logger, isDebug)
 	}()
 	resp := &StmtBindResp{
 		Action: action,
@@ -892,7 +897,7 @@ func (t *TaosStmt) bind(ctx context.Context, session *melody.Session, req *StmtB
 	}
 	code = syncinterface.TaosStmtBindParamBatch(stmt.stmt, data, fieldTypes, logger, isDebug)
 	if code != httperror.SUCCESS {
-		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmt.stmt, logger, isDebug)
 		logger.Errorf("stmt bind error, code:%d, msg:%s", code, errStr)
 		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
@@ -934,7 +939,7 @@ func (t *TaosStmt) addBatch(ctx context.Context, session *melody.Session, req *S
 	isDebug := log.IsDebug()
 	code := syncinterface.TaosStmtAddBatch(stmt.stmt, logger, isDebug)
 	if code != httperror.SUCCESS {
-		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmt.stmt, logger, isDebug)
 		logger.Errorf("stmt add batch error, code:%d, msg:%s", code, errStr)
 		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
@@ -982,13 +987,13 @@ func (t *TaosStmt) exec(ctx context.Context, session *melody.Session, req *StmtE
 	isDebug := log.IsDebug()
 	code := syncinterface.TaosStmtExecute(stmt.stmt, logger, isDebug)
 	if code != httperror.SUCCESS {
-		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmt.stmt, logger, isDebug)
 		logger.Errorf("stmt exec error, code:%d, msg:%s", code, errStr)
 		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, req.ReqID, &req.StmtID)
 		return
 	}
 	s := log.GetLogNow(isDebug)
-	affected := wrapper.TaosStmtAffectedRowsOnce(stmt.stmt)
+	affected := syncinterface.TaosStmtAffectedRowsOnce(stmt.stmt, logger, isDebug)
 	logger.Debugf("stmt_affected_rows_once cost:%s", log.GetLogDuration(isDebug, s))
 	resp := &StmtExecResp{
 		Action:   action,
@@ -1049,13 +1054,13 @@ func (t *TaosStmt) setTagsBlock(ctx context.Context, session *melody.Session, re
 	isDebug := log.IsDebug()
 	code, tagNums, tagFields := syncinterface.TaosStmtGetTagFields(stmt.stmt, logger, isDebug)
 	if code != httperror.SUCCESS {
-		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmt.stmt, logger, isDebug)
 		logger.Errorf("stmt get tag fields error, code:%d, msg:%s", code, errStr)
 		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, reqID, &stmtID)
 		return
 	}
 	defer func() {
-		wrapper.TaosStmtReclaimFields(stmt.stmt, tagFields)
+		syncinterface.TaosStmtReclaimFields(stmt.stmt, tagFields, logger, isDebug)
 	}()
 	resp := &StmtSetTagsResp{
 		Action: action,
@@ -1083,7 +1088,7 @@ func (t *TaosStmt) setTagsBlock(ctx context.Context, session *melody.Session, re
 	}
 	code = syncinterface.TaosStmtSetTags(stmt.stmt, reTags, logger, isDebug)
 	if code != httperror.SUCCESS {
-		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmt.stmt, logger, isDebug)
 		logger.Errorf("stmt set tags error, code:%d, msg:%s", code, errStr)
 		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, reqID, &stmtID)
 		return
@@ -1111,13 +1116,13 @@ func (t *TaosStmt) bindBlock(ctx context.Context, session *melody.Session, reqID
 	isDebug := log.IsDebug()
 	code, colNums, colFields := syncinterface.TaosStmtGetColFields(stmt.stmt, logger, isDebug)
 	if code != httperror.SUCCESS {
-		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmt.stmt, logger, isDebug)
 		logger.Errorf("stmt get col fields error, code:%d, msg:%s", code, errStr)
 		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, reqID, &stmtID)
 		return
 	}
 	defer func() {
-		wrapper.TaosStmtReclaimFields(stmt.stmt, colFields)
+		syncinterface.TaosStmtReclaimFields(stmt.stmt, colFields, logger, isDebug)
 	}()
 	resp := &StmtBindResp{
 		Action: action,
@@ -1152,7 +1157,7 @@ func (t *TaosStmt) bindBlock(ctx context.Context, session *melody.Session, reqID
 	logger.Debugf("block convert cost:%s", log.GetLogDuration(isDebug, s))
 	code = syncinterface.TaosStmtBindParamBatch(stmt.stmt, data, fieldTypes, logger, isDebug)
 	if code != httperror.SUCCESS {
-		errStr := wrapper.TaosStmtErrStr(stmt.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmt.stmt, logger, isDebug)
 		logger.Errorf("stmt bind error, code:%d, msg:%s", code, errStr)
 		wsStmtErrorMsg(ctx, session, logger, code, errStr, action, reqID, &stmtID)
 		return
@@ -1193,17 +1198,22 @@ func (t *TaosStmt) Close(logger *logrus.Entry) {
 func (t *TaosStmt) cleanUp(logger *logrus.Entry) {
 	t.stmtIndexLocker.Lock()
 	defer t.stmtIndexLocker.Unlock()
+	defer func() {
+		t.StmtList = t.StmtList.Init()
+	}()
 	root := t.StmtList.Front()
 	if root == nil {
 		return
 	}
 	root.Value.(*StmtItem).clean(logger)
+	monitor.WSStmtStmtCount.Dec()
 	item := root.Next()
 	for {
 		if item == nil || item == root {
 			return
 		}
 		item.Value.(*StmtItem).clean(logger)
+		monitor.WSStmtStmtCount.Dec()
 		item = item.Next()
 	}
 }

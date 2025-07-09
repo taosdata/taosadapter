@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/matttproud/golang_protobuf_extensions/pbutil"
+	"github.com/matttproud/golang_protobuf_extensions/v2/pbutil"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
-	"github.com/prometheus/prometheus/prompb"
+	"github.com/taosdata/taosadapter/v3/plugin/prometheus/prompb"
 )
 
 func main() {

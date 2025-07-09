@@ -20,6 +20,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 	"github.com/taosdata/taosadapter/v3/version"
 )
 
@@ -55,7 +56,7 @@ func doRestful(sql string, db string) (code int, message string) {
 		url = fmt.Sprintf("/rest/sql/%s", db)
 	}
 	req, _ := http.NewRequest(http.MethodPost, url, body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -83,7 +84,7 @@ func restQuery(sql string, db string) *httpQueryResp {
 		url = fmt.Sprintf("/rest/sql/%s", db)
 	}
 	req, _ := http.NewRequest(http.MethodPost, url, body)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {

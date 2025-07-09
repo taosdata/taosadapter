@@ -7,6 +7,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
 )
@@ -36,6 +37,7 @@ func initController() *webSocketCtl {
 	m.Upgrader.EnableCompression = true
 
 	m.HandleConnect(func(session *melody.Session) {
+		monitor.RecordWSWSConn()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws connect")
 		session.Set(TaosKey, newHandler(session))
@@ -79,6 +81,7 @@ func initController() *webSocketCtl {
 		CloseWs(session)
 	})
 	m.HandleDisconnect(func(session *melody.Session) {
+		monitor.RecordWSWSDisconnect()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws disconnect")
 		CloseWs(session)

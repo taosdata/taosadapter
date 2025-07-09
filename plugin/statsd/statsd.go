@@ -337,11 +337,11 @@ func (s *Statsd) Start(ac telegraf.Accumulator) error {
 			}
 		}()
 	} else {
-		address, err := net.ResolveTCPAddr("tcp4", s.ServiceAddress)
+		address, err := net.ResolveTCPAddr("tcp", s.ServiceAddress)
 		if err != nil {
 			return err
 		}
-		listener, err := net.ListenTCP("tcp4", address)
+		listener, err := net.ListenTCP("tcp", address)
 		if err != nil {
 			return err
 		}

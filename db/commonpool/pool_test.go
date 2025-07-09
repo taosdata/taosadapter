@@ -9,7 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
+	"github.com/taosdata/taosadapter/v3/log"
 )
 
 func TestMain(m *testing.M) {
@@ -108,36 +109,38 @@ func TestConnectorPool_Close(t *testing.T) {
 }
 
 func TestChangePassword(t *testing.T) {
+	logger := log.GetLogger("test")
+	isDebug := log.IsDebug()
 	c, err := GetConnection("root", "taosdata", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 
-	result := wrapper.TaosQuery(c.TaosConnection, "drop user test_change_pass_pool")
+	result := syncinterface.TaosQuery(c.TaosConnection, "drop user test_change_pass_pool", logger, isDebug)
 	assert.NotNil(t, result)
-	wrapper.TaosFreeResult(result)
+	syncinterface.TaosSyncQueryFree(result, logger, isDebug)
 
-	result = wrapper.TaosQuery(c.TaosConnection, "create user test_change_pass_pool pass 'test_123'")
+	result = syncinterface.TaosQuery(c.TaosConnection, "create user test_change_pass_pool pass 'test_123'", logger, isDebug)
 	assert.NotNil(t, result)
-	errNo := wrapper.TaosError(result)
+	errNo := syncinterface.TaosError(result, logger, isDebug)
 	assert.Equal(t, 0, errNo)
-	wrapper.TaosFreeResult(result)
+	syncinterface.TaosSyncQueryFree(result, logger, isDebug)
 
 	defer func() {
-		r := wrapper.TaosQuery(c.TaosConnection, "drop user test_change_pass_pool")
-		wrapper.TaosFreeResult(r)
+		r := syncinterface.TaosQuery(c.TaosConnection, "drop user test_change_pass_pool", logger, isDebug)
+		syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	}()
 
 	conn, err := GetConnection("test_change_pass_pool", "test_123", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 
-	result = wrapper.TaosQuery(c.TaosConnection, "alter user test_change_pass_pool pass 'test2_123'")
+	result = syncinterface.TaosQuery(c.TaosConnection, "alter user test_change_pass_pool pass 'test2_123'", logger, isDebug)
 	assert.NotNil(t, result)
-	errNo = wrapper.TaosError(result)
-	assert.Equal(t, 0, errNo, wrapper.TaosErrorStr(result))
-	wrapper.TaosFreeResult(result)
+	errNo = syncinterface.TaosError(result, logger, isDebug)
+	assert.Equal(t, 0, errNo, syncinterface.TaosErrorStr(result, logger, isDebug))
+	syncinterface.TaosSyncQueryFree(result, logger, isDebug)
 
-	result = wrapper.TaosQuery(conn.TaosConnection, "show databases")
-	errNo = wrapper.TaosError(result)
-	wrapper.TaosFreeResult(result)
+	result = syncinterface.TaosQuery(conn.TaosConnection, "show databases", logger, isDebug)
+	errNo = syncinterface.TaosError(result, logger, isDebug)
+	syncinterface.TaosSyncQueryFree(result, logger, isDebug)
 	assert.Equal(t, 0, errNo)
 	wc1, err := conn.pool.Get()
 	assert.Equal(t, AuthFailureError, err)
@@ -156,9 +159,9 @@ func TestChangePassword(t *testing.T) {
 	conn3, err := GetConnection("test_change_pass_pool", "test2_123", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 	assert.NotNil(t, conn3)
-	result2 := wrapper.TaosQuery(conn3.TaosConnection, "show databases")
-	errNo = wrapper.TaosError(result2)
-	wrapper.TaosFreeResult(result2)
+	result2 := syncinterface.TaosQuery(conn3.TaosConnection, "show databases", logger, isDebug)
+	errNo = syncinterface.TaosError(result2, logger, isDebug)
+	syncinterface.TaosSyncQueryFree(result2, logger, isDebug)
 	assert.Equal(t, 0, errNo)
 	err = conn3.Put()
 	assert.NoError(t, err)
@@ -166,44 +169,46 @@ func TestChangePassword(t *testing.T) {
 	conn4, err := GetConnection("test_change_pass_pool", "test2_123", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 	assert.NotNil(t, conn4)
-	result3 := wrapper.TaosQuery(conn4.TaosConnection, "show databases")
-	errNo = wrapper.TaosError(result3)
-	wrapper.TaosFreeResult(result3)
+	result3 := syncinterface.TaosQuery(conn4.TaosConnection, "show databases", logger, isDebug)
+	errNo = syncinterface.TaosError(result3, logger, isDebug)
+	syncinterface.TaosSyncQueryFree(result3, logger, isDebug)
 	assert.Equal(t, 0, errNo)
 	err = conn3.Put()
 	assert.NoError(t, err)
 }
 
 func TestChangePasswordConcurrent(t *testing.T) {
+	logger := log.GetLogger("test")
+	isDebug := log.IsDebug()
 	c, err := GetConnection("root", "taosdata", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 
-	result := wrapper.TaosQuery(c.TaosConnection, "drop user test_change_pass_con")
+	result := syncinterface.TaosQuery(c.TaosConnection, "drop user test_change_pass_con", logger, isDebug)
 	assert.NotNil(t, result)
-	wrapper.TaosFreeResult(result)
+	syncinterface.TaosSyncQueryFree(result, logger, isDebug)
 
-	result = wrapper.TaosQuery(c.TaosConnection, "create user test_change_pass_con pass 'test_123'")
+	result = syncinterface.TaosQuery(c.TaosConnection, "create user test_change_pass_con pass 'test_123'", logger, isDebug)
 	assert.NotNil(t, result)
-	errNo := wrapper.TaosError(result)
+	errNo := syncinterface.TaosError(result, logger, isDebug)
 	assert.Equal(t, 0, errNo)
-	wrapper.TaosFreeResult(result)
+	syncinterface.TaosSyncQueryFree(result, logger, isDebug)
 
 	defer func() {
-		r := wrapper.TaosQuery(c.TaosConnection, "drop user test_change_pass_con")
-		wrapper.TaosFreeResult(r)
+		r := syncinterface.TaosQuery(c.TaosConnection, "drop user test_change_pass_con", logger, isDebug)
+		syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	}()
 	conn, err := GetConnection("test_change_pass_con", "test_123", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 
-	result = wrapper.TaosQuery(c.TaosConnection, "alter user test_change_pass_con pass 'test2_123'")
+	result = syncinterface.TaosQuery(c.TaosConnection, "alter user test_change_pass_con pass 'test2_123'", logger, isDebug)
 	assert.NotNil(t, result)
-	errNo = wrapper.TaosError(result)
-	assert.Equal(t, 0, errNo, wrapper.TaosErrorStr(result))
-	wrapper.TaosFreeResult(result)
+	errNo = syncinterface.TaosError(result, logger, isDebug)
+	assert.Equal(t, 0, errNo, syncinterface.TaosErrorStr(result, logger, isDebug))
+	syncinterface.TaosSyncQueryFree(result, logger, isDebug)
 
-	result = wrapper.TaosQuery(conn.TaosConnection, "show databases")
-	errNo = wrapper.TaosError(result)
-	wrapper.TaosFreeResult(result)
+	result = syncinterface.TaosQuery(conn.TaosConnection, "show databases", logger, isDebug)
+	errNo = syncinterface.TaosError(result, logger, isDebug)
+	syncinterface.TaosSyncQueryFree(result, logger, isDebug)
 	assert.Equal(t, 0, errNo)
 	wc1, err := conn.pool.Get()
 	assert.Equal(t, AuthFailureError, err)
@@ -230,9 +235,9 @@ func TestChangePasswordConcurrent(t *testing.T) {
 	conn3, err := GetConnection("test_change_pass_con", "test2_123", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 	assert.NotNil(t, conn3)
-	result2 := wrapper.TaosQuery(conn3.TaosConnection, "show databases")
-	errNo = wrapper.TaosError(result2)
-	wrapper.TaosFreeResult(result2)
+	result2 := syncinterface.TaosQuery(conn3.TaosConnection, "show databases", logger, isDebug)
+	errNo = syncinterface.TaosError(result2, logger, isDebug)
+	syncinterface.TaosSyncQueryFree(result2, logger, isDebug)
 	assert.Equal(t, 0, errNo)
 	err = conn3.Put()
 	assert.NoError(t, err)
@@ -240,9 +245,9 @@ func TestChangePasswordConcurrent(t *testing.T) {
 	conn4, err := GetConnection("test_change_pass_con", "test2_123", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 	assert.NotNil(t, conn4)
-	result3 := wrapper.TaosQuery(conn4.TaosConnection, "show databases")
-	errNo = wrapper.TaosError(result3)
-	wrapper.TaosFreeResult(result3)
+	result3 := syncinterface.TaosQuery(conn4.TaosConnection, "show databases", logger, isDebug)
+	errNo = syncinterface.TaosError(result3, logger, isDebug)
+	syncinterface.TaosSyncQueryFree(result3, logger, isDebug)
 	assert.Equal(t, 0, errNo)
 	err = conn3.Put()
 	assert.NoError(t, err)

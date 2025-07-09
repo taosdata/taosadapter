@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	"github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 )
 
@@ -29,16 +29,19 @@ func TestStatsd(t *testing.T) {
 	config.Init()
 	log.ConfigLog()
 	db.PrepareConnection()
+	logger := log.GetLogger("test")
+	isDebug := log.IsDebug()
+
 	viper.Set("statsd.gatherInterval", time.Millisecond)
 	viper.Set("statsd.enable", true)
 	viper.Set("statsd.ttl", 1000)
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	defer func() {
-		wrapper.TaosClose(conn)
+		syncinterface.TaosClose(conn, logger, isDebug)
 	}()
 	err = exec(conn, "create database if not exists statsd")
 	assert.NoError(t, err)
@@ -66,8 +69,14 @@ func TestStatsd(t *testing.T) {
 	if int32(values[0][0].(int64)) != number {
 		t.Errorf("got %f expect %d", values[0], number)
 	}
-	values, err = query(conn, "select `ttl` from information_schema.ins_tables "+
-		" where db_name='statsd' and stable_name='foo'")
+	for i := 0; i < 10; i++ {
+		values, err = query(conn, "select `ttl` from information_schema.ins_tables "+
+			" where db_name='statsd' and stable_name='foo'")
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 	assert.NoError(t, err)
 	if values[0][0].(int32) != 1000 {
 		t.Fatal("ttl miss")
@@ -75,35 +84,39 @@ func TestStatsd(t *testing.T) {
 }
 
 func exec(conn unsafe.Pointer, sql string) error {
-	res := wrapper.TaosQuery(conn, sql)
-	defer wrapper.TaosFreeResult(res)
-	code := wrapper.TaosError(res)
+	logger := log.GetLogger("test")
+	isDebug := log.IsDebug()
+	res := syncinterface.TaosQuery(conn, sql, logger, isDebug)
+	defer syncinterface.TaosSyncQueryFree(res, logger, isDebug)
+	code := syncinterface.TaosError(res, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(res)
+		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
 		return errors.NewError(code, errStr)
 	}
 	return nil
 }
 
 func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
-	res := wrapper.TaosQuery(conn, sql)
-	defer wrapper.TaosFreeResult(res)
-	code := wrapper.TaosError(res)
+	logger := log.GetLogger("test")
+	isDebug := log.IsDebug()
+	res := syncinterface.TaosQuery(conn, sql, logger, isDebug)
+	defer syncinterface.TaosSyncQueryFree(res, logger, isDebug)
+	code := syncinterface.TaosError(res, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(res)
+		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
 		return nil, errors.NewError(code, errStr)
 	}
-	fileCount := wrapper.TaosNumFields(res)
-	rh, err := wrapper.ReadColumn(res, fileCount)
+	fileCount := syncinterface.TaosNumFields(res, logger, isDebug)
+	rh, err := syncinterface.ReadColumn(res, fileCount, logger, isDebug)
 	if err != nil {
 		return nil, err
 	}
-	precision := wrapper.TaosResultPrecision(res)
+	precision := syncinterface.TaosResultPrecision(res, logger, isDebug)
 	var result [][]driver.Value
 	for {
-		columns, errCode, block := wrapper.TaosFetchRawBlock(res)
+		columns, errCode, block := syncinterface.TaosFetchRawBlock(res, logger, isDebug)
 		if errCode != 0 {
-			errStr := wrapper.TaosErrorStr(res)
+			errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
 			return nil, errors.NewError(errCode, errStr)
 		}
 		if columns == 0 {

@@ -192,15 +192,19 @@ func TMQGetResType(message unsafe.Pointer) int32 {
 
 // TMQGetRaw DLL_EXPORT int32_t       tmq_get_raw(TAOS_RES *res, tmq_raw_data *raw);
 func TMQGetRaw(message unsafe.Pointer) (int32, unsafe.Pointer) {
-	var cRawMeta C.TAOS_FIELD_E
+	var cRawMeta C.struct_tmq_raw_data
 	m := unsafe.Pointer(&cRawMeta)
 	code := int32(C.tmq_get_raw(message, (*C.tmq_raw_data)(m)))
 	return code, m
 }
 
 // TMQWriteRaw DLL_EXPORT int32_t       tmq_write_raw(TAOS *taos, tmq_raw_data raw);
-func TMQWriteRaw(conn unsafe.Pointer, raw unsafe.Pointer) int32 {
-	return int32(C.tmq_write_raw(conn, (C.struct_tmq_raw_data)(*(*C.struct_tmq_raw_data)(raw))))
+func TMQWriteRaw(conn unsafe.Pointer, length uint32, metaType uint16, data unsafe.Pointer) int32 {
+	meta := C.struct_tmq_raw_data{}
+	meta.raw = data
+	meta.raw_len = (C.uint32_t)(length)
+	meta.raw_type = (C.uint16_t)(metaType)
+	return int32(C.tmq_write_raw(conn, meta))
 }
 
 // TMQFreeRaw DLL_EXPORT void          tmq_free_raw(tmq_raw_data raw);
@@ -243,14 +247,6 @@ func ParseJsonMeta(jsonMeta unsafe.Pointer) []byte {
 		}
 	}
 	return binaryVal
-}
-
-func BuildRawMeta(length uint32, metaType uint16, data unsafe.Pointer) unsafe.Pointer {
-	meta := C.struct_tmq_raw_data{}
-	meta.raw = data
-	meta.raw_len = (C.uint32_t)(length)
-	meta.raw_type = (C.uint16_t)(metaType)
-	return unsafe.Pointer(&meta)
 }
 
 // TMQGetTopicAssignment DLL_EXPORT int32_t   tmq_get_topic_assignment(tmq_t *tmq, const char* pTopicName, tmq_topic_assignment **assignment, int32_t *numOfAssignment)

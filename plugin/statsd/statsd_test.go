@@ -7,10 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/influxdata/telegraf"
-	"github.com/influxdata/telegraf/testutil"
+	telegrafMetric "github.com/influxdata/telegraf/metric"
 )
 
 const (
@@ -22,7 +23,7 @@ func NewTestStatsd() *Statsd {
 	s := Statsd{
 		User:     "root",
 		Password: "taosdata",
-		Log:      testutil.Logger{},
+		Log:      logrus.New().WithField("test", "TestStatsd"),
 	}
 
 	// Make data structures
@@ -44,14 +45,14 @@ func TestConcurrentConns(t *testing.T) {
 	listener := Statsd{
 		User:                   "root",
 		Password:               "taosdata",
-		Log:                    testutil.Logger{},
+		Log:                    logrus.New().WithField("test", "TestConcurrentConns"),
 		Protocol:               "tcp",
 		ServiceAddress:         "localhost:8125",
 		AllowedPendingMessages: 10000,
 		MaxTCPConnections:      2,
 	}
 
-	acc := &testutil.Accumulator{}
+	acc := &Accumulator{}
 	require.NoError(t, listener.Start(acc))
 	defer listener.Stop()
 
@@ -77,14 +78,14 @@ func TestConcurrentConns1(t *testing.T) {
 	listener := Statsd{
 		User:                   "root",
 		Password:               "taosdata",
-		Log:                    testutil.Logger{},
+		Log:                    logrus.New().WithField("test", "TestConcurrentConns1"),
 		Protocol:               "tcp",
 		ServiceAddress:         "localhost:8125",
 		AllowedPendingMessages: 10000,
 		MaxTCPConnections:      1,
 	}
 
-	acc := &testutil.Accumulator{}
+	acc := &Accumulator{}
 	require.NoError(t, listener.Start(acc))
 	defer listener.Stop()
 
@@ -108,14 +109,14 @@ func TestCloseConcurrentConns(t *testing.T) {
 	listener := Statsd{
 		User:                   "root",
 		Password:               "taosdata",
-		Log:                    testutil.Logger{},
+		Log:                    logrus.New().WithField("test", "TestCloseConcurrentConns"),
 		Protocol:               "tcp",
 		ServiceAddress:         "localhost:8125",
 		AllowedPendingMessages: 10000,
 		MaxTCPConnections:      2,
 	}
 
-	acc := &testutil.Accumulator{}
+	acc := &Accumulator{}
 	require.NoError(t, listener.Start(acc))
 
 	time.Sleep(time.Millisecond * 250)
@@ -132,12 +133,12 @@ func BenchmarkUDP(b *testing.B) {
 	listener := Statsd{
 		User:                   "root",
 		Password:               "taosdata",
-		Log:                    testutil.Logger{},
+		Log:                    logrus.New().WithField("test", "BenchmarkUDP"),
 		Protocol:               "udp",
 		ServiceAddress:         "localhost:8125",
 		AllowedPendingMessages: 250000,
 	}
-	acc := &testutil.Accumulator{Discard: true}
+	acc := &Accumulator{Discard: true}
 
 	// send multiple messages to socket
 	for n := 0; n < b.N; n++ {
@@ -175,13 +176,13 @@ func BenchmarkTCP(b *testing.B) {
 	listener := Statsd{
 		User:                   "root",
 		Password:               "taosdata",
-		Log:                    testutil.Logger{},
+		Log:                    logrus.New().WithField("test", "BenchmarkTCP"),
 		Protocol:               "tcp",
 		ServiceAddress:         "localhost:8125",
 		AllowedPendingMessages: 250000,
 		MaxTCPConnections:      250,
 	}
-	acc := &testutil.Accumulator{Discard: true}
+	acc := &Accumulator{Discard: true}
 
 	// send multiple messages to socket
 	for n := 0; n < b.N; n++ {
@@ -410,7 +411,7 @@ func TestParse_Counters(t *testing.T) {
 func TestParse_Timings(t *testing.T) {
 	s := NewTestStatsd()
 	s.Percentiles = []Number{90.0}
-	acc := &testutil.Accumulator{}
+	acc := &Accumulator{}
 
 	// Test that timings work
 	validLines := []string{
@@ -443,7 +444,7 @@ func TestParse_Timings(t *testing.T) {
 // Tests low-level functionality of distributions
 func TestParse_Distributions(t *testing.T) {
 	s := NewTestStatsd()
-	acc := &testutil.Accumulator{}
+	acc := &Accumulator{}
 
 	parseMetrics := func() {
 		// Test that distributions work
@@ -860,7 +861,7 @@ func TestParse_DataDogTags(t *testing.T) {
 			name: "counter",
 			line: "my_counter:1|c|#host:localhost,environment:prod,endpoint:/:tenant?/oauth/ro",
 			expected: []telegraf.Metric{
-				testutil.MustMetric(
+				telegrafMetric.New(
 					"my_counter",
 					map[string]string{
 						"endpoint":    "/:tenant?/oauth/ro",
@@ -880,7 +881,7 @@ func TestParse_DataDogTags(t *testing.T) {
 			name: "gauge",
 			line: "my_gauge:10.1|g|#live",
 			expected: []telegraf.Metric{
-				testutil.MustMetric(
+				telegrafMetric.New(
 					"my_gauge",
 					map[string]string{
 						"live":        "true",
@@ -898,7 +899,7 @@ func TestParse_DataDogTags(t *testing.T) {
 			name: "set",
 			line: "my_set:1|s|#host:localhost",
 			expected: []telegraf.Metric{
-				testutil.MustMetric(
+				telegrafMetric.New(
 					"my_set",
 					map[string]string{
 						"host":        "localhost",
@@ -915,7 +916,7 @@ func TestParse_DataDogTags(t *testing.T) {
 			name: "timer",
 			line: "my_timer:3|ms|@0.1|#live,host:localhost",
 			expected: []telegraf.Metric{
-				testutil.MustMetric(
+				telegrafMetric.New(
 					"my_timer",
 					map[string]string{
 						"host":        "localhost",
@@ -938,7 +939,7 @@ func TestParse_DataDogTags(t *testing.T) {
 			name: "empty tag set",
 			line: "cpu:42|c|#",
 			expected: []telegraf.Metric{
-				testutil.MustMetric(
+				telegrafMetric.New(
 					"cpu",
 					map[string]string{
 						"metric_type": "counter",
@@ -955,7 +956,7 @@ func TestParse_DataDogTags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var acc testutil.Accumulator
+			var acc Accumulator
 
 			s := NewTestStatsd()
 			s.DataDogExtensions = true
@@ -963,8 +964,8 @@ func TestParse_DataDogTags(t *testing.T) {
 			require.NoError(t, s.parseStatsdLine(tt.line))
 			require.NoError(t, s.Gather(&acc))
 
-			testutil.RequireMetricsEqual(t, tt.expected, acc.GetTelegrafMetrics(),
-				testutil.SortMetrics(), testutil.IgnoreTime())
+			RequireMetricsEqual(t, tt.expected, acc.GetTelegrafMetrics(),
+				SortMetrics(), IgnoreTime())
 		})
 	}
 }
@@ -1046,7 +1047,7 @@ func TestCachesExpireAfterMaxTTL(t *testing.T) {
 	s := NewTestStatsd()
 	s.MaxTTL = 100 * time.Microsecond
 
-	acc := &testutil.Accumulator{}
+	acc := &Accumulator{}
 	require.NoError(t, s.parseStatsdLine("valid:45|c"))
 	require.NoError(t, s.parseStatsdLine("valid:45|c"))
 	require.NoError(t, s.Gather(acc))
@@ -1062,9 +1063,9 @@ func TestCachesExpireAfterMaxTTL(t *testing.T) {
 	// Wait for the metrics to arrive
 	acc.Wait(3)
 
-	testutil.RequireMetricsEqual(t,
+	RequireMetricsEqual(t,
 		[]telegraf.Metric{
-			testutil.MustMetric(
+			telegrafMetric.New(
 				"valid",
 				map[string]string{
 					"metric_type": "counter",
@@ -1075,7 +1076,7 @@ func TestCachesExpireAfterMaxTTL(t *testing.T) {
 				time.Now(),
 				telegraf.Counter,
 			),
-			testutil.MustMetric(
+			telegrafMetric.New(
 				"valid",
 				map[string]string{
 					"metric_type": "counter",
@@ -1086,7 +1087,7 @@ func TestCachesExpireAfterMaxTTL(t *testing.T) {
 				time.Now(),
 				telegraf.Counter,
 			),
-			testutil.MustMetric(
+			telegrafMetric.New(
 				"valid",
 				map[string]string{
 					"metric_type": "counter",
@@ -1099,7 +1100,7 @@ func TestCachesExpireAfterMaxTTL(t *testing.T) {
 			),
 		},
 		acc.GetTelegrafMetrics(),
-		testutil.IgnoreTime(),
+		IgnoreTime(),
 	)
 }
 
@@ -1199,7 +1200,7 @@ func TestParse_TimingsMultipleFieldsWithTemplate(t *testing.T) {
 	s := NewTestStatsd()
 	s.Templates = []string{"measurement.field"}
 	s.Percentiles = []Number{90.0}
-	acc := &testutil.Accumulator{}
+	acc := &Accumulator{}
 
 	validLines := []string{
 		"test_timing.success:1|ms",
@@ -1247,7 +1248,7 @@ func TestParse_TimingsMultipleFieldsWithoutTemplate(t *testing.T) {
 	s := NewTestStatsd()
 	s.Templates = []string{}
 	s.Percentiles = []Number{90.0}
-	acc := &testutil.Accumulator{}
+	acc := &Accumulator{}
 
 	validLines := []string{
 		"test_timing.success:1|ms",
@@ -1423,7 +1424,7 @@ func BenchmarkParseWith2Templates3TagsAndFilter(b *testing.B) {
 func TestParse_Timings_Delete(t *testing.T) {
 	s := NewTestStatsd()
 	s.DeleteTimings = true
-	fakeacc := &testutil.Accumulator{}
+	fakeacc := &Accumulator{}
 
 	line := "timing:100|ms"
 	require.NoError(t, s.parseStatsdLine(line), "Parsing line %s should not have resulted in an error", line)
@@ -1439,7 +1440,7 @@ func TestParse_Timings_Delete(t *testing.T) {
 func TestParse_Gauges_Delete(t *testing.T) {
 	s := NewTestStatsd()
 	s.DeleteGauges = true
-	fakeacc := &testutil.Accumulator{}
+	fakeacc := &Accumulator{}
 
 	line := "current.users:100|g"
 	require.NoError(t, s.parseStatsdLine(line), "Parsing line %s should not have resulted in an error", line)
@@ -1455,7 +1456,7 @@ func TestParse_Gauges_Delete(t *testing.T) {
 func TestParse_Sets_Delete(t *testing.T) {
 	s := NewTestStatsd()
 	s.DeleteSets = true
-	fakeacc := &testutil.Accumulator{}
+	fakeacc := &Accumulator{}
 
 	line := "unique.user.ids:100|s"
 	require.NoError(t, s.parseStatsdLine(line), "Parsing line %s should not have resulted in an error", line)
@@ -1471,7 +1472,7 @@ func TestParse_Sets_Delete(t *testing.T) {
 func TestParse_Counters_Delete(t *testing.T) {
 	s := NewTestStatsd()
 	s.DeleteCounters = true
-	fakeacc := &testutil.Accumulator{}
+	fakeacc := &Accumulator{}
 
 	line := "total.users:100|c"
 	require.NoError(t, s.parseStatsdLine(line), "Parsing line %s should not have resulted in an error\n", line)
@@ -1591,13 +1592,13 @@ func TestTCP(t *testing.T) {
 	statsd := Statsd{
 		User:                   "root",
 		Password:               "taosdata",
-		Log:                    testutil.Logger{},
+		Log:                    logger.Logger,
 		Protocol:               "tcp",
 		ServiceAddress:         "localhost:0",
 		AllowedPendingMessages: 10000,
 		MaxTCPConnections:      2,
 	}
-	var acc testutil.Accumulator
+	var acc Accumulator
 	require.NoError(t, statsd.Start(&acc))
 	defer statsd.Stop()
 
@@ -1621,9 +1622,9 @@ func TestTCP(t *testing.T) {
 		}
 	}
 
-	testutil.RequireMetricsEqual(t,
+	RequireMetricsEqual(t,
 		[]telegraf.Metric{
-			testutil.MustMetric(
+			telegrafMetric.New(
 				"cpu_time_idle",
 				map[string]string{
 					"metric_type": "counter",
@@ -1636,7 +1637,7 @@ func TestTCP(t *testing.T) {
 			),
 		},
 		acc.GetTelegrafMetrics(),
-		testutil.IgnoreTime(),
+		IgnoreTime(),
 	)
 }
 
@@ -1644,12 +1645,12 @@ func TestUdp(t *testing.T) {
 	statsd := Statsd{
 		User:                   "root",
 		Password:               "taosdata",
-		Log:                    testutil.Logger{},
+		Log:                    logrus.New().WithField("test", "TestUdp"),
 		Protocol:               "udp",
 		ServiceAddress:         "localhost:14223",
 		AllowedPendingMessages: 250000,
 	}
-	var acc testutil.Accumulator
+	var acc Accumulator
 	require.NoError(t, statsd.Start(&acc))
 	defer statsd.Stop()
 
@@ -1670,9 +1671,9 @@ func TestUdp(t *testing.T) {
 		}
 	}
 
-	testutil.RequireMetricsEqual(t,
+	RequireMetricsEqual(t,
 		[]telegraf.Metric{
-			testutil.MustMetric(
+			telegrafMetric.New(
 				"cpu_time_idle",
 				map[string]string{
 					"metric_type": "counter",
@@ -1685,14 +1686,14 @@ func TestUdp(t *testing.T) {
 			),
 		},
 		acc.GetTelegrafMetrics(),
-		testutil.IgnoreTime(),
+		IgnoreTime(),
 	)
 }
 
 func TestParse_Ints(t *testing.T) {
 	s := NewTestStatsd()
 	s.Percentiles = []Number{90}
-	acc := &testutil.Accumulator{}
+	acc := &Accumulator{}
 
 	require.NoError(t, s.Gather(acc))
 	require.Equal(t, s.Percentiles, []Number{90.0})

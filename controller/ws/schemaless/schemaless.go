@@ -16,9 +16,9 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
@@ -34,6 +34,7 @@ func NewSchemalessController() *SchemalessController {
 	schemaless.Config.MaxMessageSize = 0
 
 	schemaless.HandleConnect(func(session *melody.Session) {
+		monitor.RecordWSSMLConn()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws connect")
 		session.Set(taosSchemalessKey, NewTaosSchemaless(session))
@@ -106,6 +107,7 @@ func NewSchemalessController() *SchemalessController {
 	})
 
 	schemaless.HandleDisconnect(func(session *melody.Session) {
+		monitor.RecordWSSMLDisconnect()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws disconnect")
 		t, exist := session.Get(taosSchemalessKey)
@@ -190,7 +192,7 @@ func (t *TaosSchemaless) waitSignal(logger *logrus.Entry) {
 			}
 			logger.Trace("get whitelist")
 			s := log.GetLogNow(isDebug)
-			whitelist, err := tool.GetWhitelist(t.conn)
+			whitelist, err := tool.GetWhitelist(t.conn, logger, isDebug)
 			logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 			if err != nil {
 				logger.Errorf("get whitelist error, close connection, err:%s", err)
@@ -296,7 +298,7 @@ func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, r
 		return
 	}
 	s := log.GetLogNow(isDebug)
-	whitelist, err := tool.GetWhitelist(conn)
+	whitelist, err := tool.GetWhitelist(conn, logger, isDebug)
 	logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.Errorf("get whitelist error, close connection, err:%s", err)
@@ -313,7 +315,7 @@ func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, r
 		return
 	}
 	logger.Trace("register change whitelist")
-	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle)
+	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle, logger, isDebug)
 	if err != nil {
 		logger.Errorf("register change whitelist error:%s", err)
 		syncinterface.TaosClose(conn, t.logger, isDebug)
@@ -321,7 +323,7 @@ func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, r
 		return
 	}
 	logger.Trace("register drop user")
-	err = tool.RegisterDropUser(conn, t.dropUserHandle)
+	err = tool.RegisterDropUser(conn, t.dropUserHandle, logger, isDebug)
 	if err != nil {
 		logger.Errorf("register drop user error:%s", err)
 		syncinterface.TaosClose(conn, t.logger, isDebug)
@@ -358,7 +360,7 @@ type schemalessResp struct {
 }
 
 func (t *TaosSchemaless) insert(ctx context.Context, session *melody.Session, req schemalessWriteReq) {
-	action := SchemalessConn
+	action := SchemalessWrite
 	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
 	logger.Tracef("schemaless insert request:%+v", req)
 	isDebug := log.IsDebug()
@@ -375,7 +377,7 @@ func (t *TaosSchemaless) insert(ctx context.Context, session *melody.Session, re
 	var result unsafe.Pointer
 	defer func() {
 		if result != nil {
-			syncinterface.FreeResult(result, logger, isDebug)
+			syncinterface.TaosSchemalessFree(result, logger, isDebug)
 		}
 	}()
 	var err error
@@ -393,15 +395,15 @@ func (t *TaosSchemaless) insert(ctx context.Context, session *melody.Session, re
 		isDebug,
 	)
 
-	if code := wrapper.TaosError(result); code != 0 {
-		err = tErrors.NewError(code, wrapper.TaosErrorStr(result))
+	if code := syncinterface.TaosError(result, logger, isDebug); code != 0 {
+		err = tErrors.NewError(code, syncinterface.TaosErrorStr(result, logger, isDebug))
 	}
 	if err != nil {
 		logger.Errorf("insert error, err:%s", err)
 		wstool.WSError(ctx, session, logger, err, action, req.ReqID)
 		return
 	}
-	affectedRows = wrapper.TaosAffectedRows(result)
+	affectedRows = syncinterface.TaosAffectedRows(result, logger, isDebug)
 	logger.Tracef("insert success, affected rows:%d, total rows:%d", affectedRows, totalRows)
 	resp := &schemalessResp{
 		ReqID:        req.ReqID,

@@ -12,5 +12,14 @@ func GetRealIP(r *http.Request) net.IP {
 		return net.ParseIP(ip)
 	}
 	host, _, _ := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	return net.ParseIP(host)
+	parsedIP := net.ParseIP(host)
+	if parsedIP != nil {
+		return parsedIP
+	}
+	// Fallback to resolving the host if the host has zone information
+	ipAddr, err := net.ResolveIPAddr("ip", host)
+	if err != nil {
+		return nil
+	}
+	return ipAddr.IP
 }

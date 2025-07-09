@@ -8,9 +8,10 @@ import (
 	"unsafe"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
+	"github.com/taosdata/taosadapter/v3/log"
 )
 
 func TestWhiteListHandle(t *testing.T) {
@@ -217,16 +218,19 @@ func TestRegisterChangePassHandle(t *testing.T) {
 }
 
 func TestGetWhitelist(t *testing.T) {
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
-	defer wrapper.TaosClose(conn)
+	logger := log.GetLogger("test")
+	isDebug := log.IsDebug()
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
+	defer syncinterface.TaosClose(conn, logger, isDebug)
 	assert.NoError(t, err)
-	ipNets, err := GetWhitelist(conn)
+	ipNets, err := GetWhitelist(conn, logger, isDebug)
 	assert.NoError(t, err)
 	assert.NotNil(t, ipNets)
 	t.Log(ipNets)
-	_, ipNet, _ := net.ParseCIDR("0.0.0.0/0")
-	assert.Equal(t, []*net.IPNet{ipNet}, ipNets)
-	ipNets, err = GetWhitelist(nil)
+	_, ipNetV4, _ := net.ParseCIDR("0.0.0.0/0")
+	_, ipNetV6, _ := net.ParseCIDR("::/0")
+	assert.Equal(t, []*net.IPNet{ipNetV4, ipNetV6}, ipNets)
+	ipNets, err = GetWhitelist(nil, logger, isDebug)
 	assert.Error(t, err)
 	assert.Nil(t, ipNets)
 }
@@ -238,14 +242,39 @@ func TestCheckWhitelist(t *testing.T) {
 	assert.True(t, contains)
 	contains = CheckWhitelist(ipNets, net.ParseIP("192.168.1.1"))
 	assert.False(t, contains)
+	_, ipNet, _ = net.ParseCIDR("0.0.0.0/0")
+	ipNets = []*net.IPNet{ipNet}
+	contains = CheckWhitelist(ipNets, net.ParseIP("192.168.1.1"))
+	assert.True(t, contains)
+	// invalid ip
+	contains = CheckWhitelist(ipNets, net.ParseIP(""))
+	assert.False(t, contains)
+	// ipv6
+	_, ipNet, _ = net.ParseCIDR("::1/128")
+	ipNets = []*net.IPNet{ipNet}
+	contains = CheckWhitelist(ipNets, net.ParseIP("::1"))
+	assert.True(t, contains)
+	contains = CheckWhitelist(ipNets, net.ParseIP("::2"))
+	assert.False(t, contains)
+	_, ipNet, _ = net.ParseCIDR("::/0")
+	ipNets = []*net.IPNet{ipNet}
+	contains = CheckWhitelist(ipNets, net.ParseIP("::1"))
+	assert.True(t, contains)
+	contains = CheckWhitelist(ipNets, net.ParseIP("::2"))
+	assert.True(t, contains)
+	// invalid ip
+	contains = CheckWhitelist(ipNets, net.ParseIP(""))
+	assert.False(t, contains)
 }
 
 func TestRegisterChangeWhitelist(t *testing.T) {
+	logger := log.GetLogger("test")
+	isDebug := log.IsDebug()
 	c, h := GetRegisterChangeWhiteListHandle()
 	defer PutRegisterChangeWhiteListHandle(h)
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	assert.NoError(t, err)
-	defer wrapper.TaosClose(conn)
+	defer syncinterface.TaosClose(conn, logger, isDebug)
 	done := make(chan struct{})
 	go func() {
 		select {
@@ -254,29 +283,31 @@ func TestRegisterChangeWhitelist(t *testing.T) {
 		case <-done:
 		}
 	}()
-	err = RegisterChangeWhitelist(conn, h)
+	err = RegisterChangeWhitelist(conn, h, logger, isDebug)
 	assert.NoError(t, err)
 	time.Sleep(time.Second * 5)
 	close(done)
 }
 
 func TestRegisterChangePass(t *testing.T) {
+	logger := log.GetLogger("test")
+	isDebug := log.IsDebug()
 	c, h := GetRegisterChangePassHandle()
 	defer PutRegisterChangePassHandle(h)
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	assert.NoError(t, err)
-	defer wrapper.TaosClose(conn)
+	defer syncinterface.TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create user test_notify pass 'notify_123'")
 	assert.NoError(t, err)
 	defer func() {
 		// ignore error
 		_ = exec(conn, "drop user test_notify")
 	}()
-	conn2, err := wrapper.TaosConnect("", "test_notify", "notify_123", "", 0)
+	conn2, err := syncinterface.TaosConnect("", "test_notify", "notify_123", "", 0, logger, isDebug)
 	assert.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
-	err = RegisterChangePass(conn2, h)
+	err = RegisterChangePass(conn2, h, logger, isDebug)
 	assert.NoError(t, err)
 	select {
 	case data := <-c:
@@ -296,22 +327,24 @@ func TestRegisterChangePass(t *testing.T) {
 }
 
 func TestRegisterDropUser(t *testing.T) {
+	logger := log.GetLogger("test")
+	isDebug := log.IsDebug()
 	c, h := GetRegisterDropUserHandle()
 	defer PutRegisterDropUserHandle(h)
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	assert.NoError(t, err)
-	defer wrapper.TaosClose(conn)
+	defer syncinterface.TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create user test_drop_user pass 'notify_123'")
 	assert.NoError(t, err)
 	defer func() {
 		// ignore error
 		_ = exec(conn, "drop user test_drop_user")
 	}()
-	conn2, err := wrapper.TaosConnect("", "test_drop_user", "notify_123", "", 0)
+	conn2, err := syncinterface.TaosConnect("", "test_drop_user", "notify_123", "", 0, logger, isDebug)
 	assert.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
-	err = RegisterDropUser(conn2, h)
+	err = RegisterDropUser(conn2, h, logger, isDebug)
 	assert.NoError(t, err)
 	select {
 	case data := <-c:
@@ -331,13 +364,15 @@ func TestRegisterDropUser(t *testing.T) {
 }
 
 func exec(conn unsafe.Pointer, sql string) error {
-	result := wrapper.TaosQuery(conn, sql)
-	code := wrapper.TaosError(result)
+	logger := log.GetLogger("test")
+	isDebug := log.IsDebug()
+	result := syncinterface.TaosQuery(conn, sql, logger, isDebug)
+	code := syncinterface.TaosError(result, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(result)
-		wrapper.TaosFreeResult(result)
+		errStr := syncinterface.TaosErrorStr(result, logger, isDebug)
+		syncinterface.TaosSyncQueryFree(result, logger, isDebug)
 		return tErrors.NewError(code, errStr)
 	}
-	wrapper.TaosFreeResult(result)
+	syncinterface.TaosSyncQueryFree(result, logger, isDebug)
 	return nil
 }

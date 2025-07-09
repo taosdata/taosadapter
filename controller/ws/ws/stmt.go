@@ -36,10 +36,10 @@ type stmtInitResponse struct {
 	StmtID  uint64 `json:"stmt_id"`
 }
 
-func (h *messageHandler) stmtInit(ctx context.Context, session *melody.Session, action string, req stmtInitRequest, logger *logrus.Entry, isDebug bool) {
-	stmtInit := syncinterface.TaosStmtInitWithReqID(h.conn, int64(req.ReqID), logger, isDebug)
+func (h *messageHandler) stmtInit(ctx context.Context, session *melody.Session, action string, req stmtInitRequest, innerReqID uint64, logger *logrus.Entry, isDebug bool) {
+	stmtInit := syncinterface.TaosStmtInitWithReqID(h.conn, int64(innerReqID), logger, isDebug)
 	if stmtInit == nil {
-		errStr := wrapper.TaosStmtErrStr(stmtInit)
+		errStr := syncinterface.TaosStmtErrStr(stmtInit, logger, isDebug)
 		logger.Errorf("stmt init error, err:%s", errStr)
 		commonErrorResponse(ctx, session, logger, action, req.ReqID, 0xffff, errStr)
 		return
@@ -101,7 +101,7 @@ func (h *messageHandler) stmtPrepare(ctx context.Context, session *melody.Sessio
 	defer stmtItem.Unlock()
 	code := syncinterface.TaosStmtPrepare(stmtItem.stmt, req.SQL, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt prepare error, code:%d, err:%s", code, errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 		return
@@ -109,7 +109,7 @@ func (h *messageHandler) stmtPrepare(ctx context.Context, session *melody.Sessio
 	logger.Tracef("stmt prepare success, stmt_id:%d", req.StmtID)
 	isInsert, code := syncinterface.TaosStmtIsInsert(stmtItem.stmt, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("check stmt is insert error, code:%d, err:%s", code, errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 		return
@@ -150,7 +150,7 @@ func (h *messageHandler) stmtSetTableName(ctx context.Context, session *melody.S
 	defer stmtItem.Unlock()
 	code := syncinterface.TaosStmtSetTBName(stmtItem.stmt, req.Name, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt set table name error, err:%s", errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 		return
@@ -189,13 +189,13 @@ func (h *messageHandler) stmtSetTags(ctx context.Context, session *melody.Sessio
 	defer stmtItem.Unlock()
 	code, tagNums, tagFields := syncinterface.TaosStmtGetTagFields(stmtItem.stmt, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt get tag fields error, err:%s", errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 		return
 	}
 	defer func() {
-		wrapper.TaosStmtReclaimFields(stmtItem.stmt, tagFields)
+		syncinterface.TaosStmtReclaimFields(stmtItem.stmt, tagFields, logger, isDebug)
 	}()
 	logger.Tracef("stmt tag nums:%d", tagNums)
 	if tagNums == 0 {
@@ -221,7 +221,7 @@ func (h *messageHandler) stmtSetTags(ctx context.Context, session *melody.Sessio
 	}
 	code = syncinterface.TaosStmtSetTags(stmtItem.stmt, data, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt set tags error, code:%d, err:%s", code, errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 		return
@@ -259,13 +259,13 @@ func (h *messageHandler) stmtBind(ctx context.Context, session *melody.Session, 
 	defer stmtItem.Unlock()
 	code, colNums, colFields := syncinterface.TaosStmtGetColFields(stmtItem.stmt, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt get col fields error,code:%d, err:%s", code, errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 		return
 	}
 	defer func() {
-		wrapper.TaosStmtReclaimFields(stmtItem.stmt, colFields)
+		syncinterface.TaosStmtReclaimFields(stmtItem.stmt, colFields, logger, isDebug)
 	}()
 	if colNums == 0 {
 		logger.Trace("no columns")
@@ -301,7 +301,7 @@ func (h *messageHandler) stmtBind(ctx context.Context, session *melody.Session, 
 	}
 	code = syncinterface.TaosStmtBindParamBatch(stmtItem.stmt, data, fieldTypes, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt bind param error, err:%s", errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 		return
@@ -338,7 +338,7 @@ func (h *messageHandler) stmtAddBatch(ctx context.Context, session *melody.Sessi
 	defer stmtItem.Unlock()
 	code := syncinterface.TaosStmtAddBatch(stmtItem.stmt, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt add batch error, code:%d, err:%s", code, errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 		return
@@ -376,13 +376,13 @@ func (h *messageHandler) stmtExec(ctx context.Context, session *melody.Session, 
 	defer stmtItem.Unlock()
 	code := syncinterface.TaosStmtExecute(stmtItem.stmt, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt execute error, code:%d, err:%s", code, errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 		return
 	}
 	s := log.GetLogNow(isDebug)
-	affected := wrapper.TaosStmtAffectedRowsOnce(stmtItem.stmt)
+	affected := syncinterface.TaosStmtAffectedRowsOnce(stmtItem.stmt, logger, isDebug)
 	logger.Debugf("stmt_affected_rows_once, affected:%d, cost:%s", affected, log.GetLogDuration(isDebug, s))
 	resp := &stmtExecResponse{
 		Action:   action,
@@ -434,13 +434,13 @@ func (h *messageHandler) stmtGetTagFields(ctx context.Context, session *melody.S
 	defer stmtItem.Unlock()
 	code, tagNums, tagFields := syncinterface.TaosStmtGetTagFields(stmtItem.stmt, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt get tag fields error, err:%s", errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 		return
 	}
 	defer func() {
-		wrapper.TaosStmtReclaimFields(stmtItem.stmt, tagFields)
+		syncinterface.TaosStmtReclaimFields(stmtItem.stmt, tagFields, logger, isDebug)
 	}()
 	if tagNums == 0 {
 		logger.Trace("no tags")
@@ -490,13 +490,13 @@ func (h *messageHandler) stmtGetColFields(ctx context.Context, session *melody.S
 	defer stmtItem.Unlock()
 	code, colNums, colFields := syncinterface.TaosStmtGetColFields(stmtItem.stmt, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt get col fields error, err:%s", errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 		return
 	}
 	defer func() {
-		wrapper.TaosStmtReclaimFields(stmtItem.stmt, colFields)
+		syncinterface.TaosStmtReclaimFields(stmtItem.stmt, colFields, logger, isDebug)
 	}()
 	if colNums == 0 {
 		logger.Trace("no columns")
@@ -552,17 +552,17 @@ func (h *messageHandler) stmtUseResult(ctx context.Context, session *melody.Sess
 	}
 	defer stmtItem.Unlock()
 	logger.Trace("call stmt use result")
-	result := wrapper.TaosStmtUseResult(stmtItem.stmt)
+	result := syncinterface.TaosStmtUseResult(stmtItem.stmt, logger, isDebug)
 	if result == nil {
-		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt use result error, err:%s", errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, 0xffff, errStr, req.StmtID)
 		return
 	}
 
-	fieldsCount := wrapper.TaosNumFields(result)
-	rowsHeader, _ := wrapper.ReadColumn(result, fieldsCount)
-	precision := wrapper.TaosResultPrecision(result)
+	fieldsCount := syncinterface.TaosNumFields(result, logger, isDebug)
+	rowsHeader, _ := syncinterface.ReadColumn(result, fieldsCount, logger, isDebug)
+	precision := syncinterface.TaosResultPrecision(result, logger, isDebug)
 	logger.Tracef("stmt use result success, stmt_id:%d, fields_count:%d, precision:%d", req.StmtID, fieldsCount, precision)
 	queryResult := QueryResult{
 		TaosResult:  result,
@@ -614,7 +614,7 @@ func (h *messageHandler) stmtNumParams(ctx context.Context, session *melody.Sess
 	defer stmtItem.Unlock()
 	count, code := syncinterface.TaosStmtNumParams(stmtItem.stmt, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt get col fields error, err:%s", errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
 		return
@@ -693,13 +693,13 @@ func (h *messageHandler) stmtBinarySetTags(ctx context.Context, session *melody.
 	defer stmtItem.Unlock()
 	code, tagNums, tagFields := syncinterface.TaosStmtGetTagFields(stmtItem.stmt, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt get tag fields error, code:%d, err:%s", code, errStr)
 		stmtErrorResponse(ctx, session, logger, action, reqID, code, errStr, stmtID)
 		return
 	}
 	defer func() {
-		wrapper.TaosStmtReclaimFields(stmtItem.stmt, tagFields)
+		syncinterface.TaosStmtReclaimFields(stmtItem.stmt, tagFields, logger, isDebug)
 	}()
 	if tagNums == 0 {
 		logger.Trace("no tags")
@@ -729,7 +729,7 @@ func (h *messageHandler) stmtBinarySetTags(ctx context.Context, session *melody.
 	}
 	code = syncinterface.TaosStmtSetTags(stmtItem.stmt, reTags, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt set tags error, code:%d, msg:%s", code, errStr)
 		stmtErrorResponse(ctx, session, logger, action, reqID, code, errStr, stmtID)
 		return
@@ -759,13 +759,13 @@ func (h *messageHandler) stmtBinaryBind(ctx context.Context, session *melody.Ses
 	if stmtItem.isInsert {
 		code, colNums, colFields := syncinterface.TaosStmtGetColFields(stmtItem.stmt, logger, isDebug)
 		if code != 0 {
-			errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+			errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 			logger.Errorf("stmt get col fields error, code:%d, err:%s", code, errStr)
 			stmtErrorResponse(ctx, session, logger, action, reqID, code, errStr, stmtID)
 			return
 		}
 		defer func() {
-			wrapper.TaosStmtReclaimFields(stmtItem.stmt, colFields)
+			syncinterface.TaosStmtReclaimFields(stmtItem.stmt, colFields, logger, isDebug)
 		}()
 		if colNums == 0 {
 			logger.Trace("no columns")
@@ -816,7 +816,7 @@ func (h *messageHandler) stmtBinaryBind(ctx context.Context, session *melody.Ses
 
 	code := syncinterface.TaosStmtBindParamBatch(stmtItem.stmt, data, fieldTypes, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosStmtErrStr(stmtItem.stmt)
+		errStr := syncinterface.TaosStmtErrStr(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt bind param error, code:%d, err:%s", code, errStr)
 		stmtErrorResponse(ctx, session, logger, action, reqID, code, errStr, stmtID)
 		return

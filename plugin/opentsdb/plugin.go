@@ -14,7 +14,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/plugin"
@@ -159,7 +158,7 @@ func (p *Plugin) insertJson(c *gin.Context) {
 	if app != "" {
 		errCode := syncinterface.TaosOptionsConnection(taosConn.TaosConnection, common.TSDB_OPTION_CONNECTION_USER_APP, &app, logger, isDebug)
 		if errCode != 0 {
-			logger.Errorf("set app error, app:%s, code:%d, msg:%s", app, errCode, wrapper.TaosErrorStr(nil))
+			logger.Errorf("set app error, app:%s, code:%d, msg:%s", app, errCode, syncinterface.TaosErrorStr(nil, logger, isDebug))
 		}
 	}
 	s = log.GetLogNow(isDebug)
@@ -285,7 +284,7 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 	if app != "" {
 		errCode := syncinterface.TaosOptionsConnection(taosConn.TaosConnection, common.TSDB_OPTION_CONNECTION_USER_APP, &app, logger, isDebug)
 		if errCode != 0 {
-			logger.Errorf("set app error, app:%s, code:%d, msg:%s", app, errCode, wrapper.TaosErrorStr(nil))
+			logger.Errorf("set app error, app:%s, code:%d, msg:%s", app, errCode, syncinterface.TaosErrorStr(nil, logger, isDebug))
 		}
 	}
 	s = log.GetLogNow(isDebug)

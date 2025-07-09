@@ -32,7 +32,7 @@ func TestDropUser(t *testing.T) {
 	connReq := connRequest{ReqID: 1, User: "test_ws_drop_user", Password: "pass_123"}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)

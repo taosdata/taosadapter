@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
-	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	stmtCommon "github.com/taosdata/taosadapter/v3/driver/common/stmt"
@@ -28,7 +27,6 @@ func TestMain(m *testing.M) {
 	config.Init()
 	log.ConfigLog()
 	_ = log.SetLevel("trace")
-	db.PrepareConnection()
 	m.Run()
 }
 func TestTaosConnect(t *testing.T) {
@@ -77,7 +75,7 @@ func TestTaosSchemalessInsertRawTTLWithReqIDTBNameKey(t *testing.T) {
 	errCode, result := TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn, "measurement,host=host1 field1=2i,field2=2.0 1577836800000000000", wrapper.InfluxDBLineProtocol, "", 0, reqID, "", logger, isDebug)
 	assert.Equal(t, int32(1), errCode)
 	assert.NotNil(t, result)
-	FreeResult(result, logger, isDebug)
+	TaosSchemalessFree(result, logger, isDebug)
 }
 
 func TestTaosGetTablesVgID(t *testing.T) {
@@ -120,34 +118,34 @@ func TestTaosStmt(t *testing.T) {
 	code := TaosSelectDB(conn, "syncinterface_test_stmt", logger, isDebug)
 	assert.Equal(t, 0, code)
 	stmt := TaosStmtInitWithReqID(conn, reqID, logger, isDebug)
-	if !assert.NotNil(t, stmt, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.NotNil(t, stmt, TaosStmtErrStr(stmt, logger, isDebug)) {
 		return
 	}
 	defer func() {
 		code = TaosStmtClose(stmt, logger, isDebug)
-		assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt))
+		assert.Equal(t, 0, code, TaosStmtErrStr(stmt, logger, isDebug))
 	}()
 	code = TaosStmtPrepare(stmt, "insert into ? using `syncinterface_test_stmt`.`stb1` tags(?) values(?,?)", logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.Equal(t, 0, code, TaosStmtErrStr(stmt, logger, isDebug)) {
 		return
 	}
 	isInsert, code := TaosStmtIsInsert(stmt, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.Equal(t, 0, code, TaosStmtErrStr(stmt, logger, isDebug)) {
 		return
 	}
 	assert.True(t, isInsert)
 	code = TaosStmtSetTBName(stmt, "db1", logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.Equal(t, 0, code, TaosStmtErrStr(stmt, logger, isDebug)) {
 		return
 	}
 	code, num, fields := TaosStmtGetColFields(stmt, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.Equal(t, 0, code, TaosStmtErrStr(stmt, logger, isDebug)) {
 		return
 	}
 	assert.Equal(t, 2, num)
 	assert.NotNil(t, fields)
 	defer func() {
-		wrapper.TaosStmtReclaimFields(stmt, fields)
+		TaosStmtReclaimFields(stmt, fields, logger, isDebug)
 	}()
 	colFields := wrapper.StmtParseFields(num, fields)
 	assert.Equal(t, 2, len(colFields))
@@ -156,13 +154,13 @@ func TestTaosStmt(t *testing.T) {
 	assert.Equal(t, "v", colFields[1].Name)
 	assert.Equal(t, int8(common.TSDB_DATA_TYPE_INT), colFields[1].FieldType)
 	code, num, tags := TaosStmtGetTagFields(stmt, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.Equal(t, 0, code, TaosStmtErrStr(stmt, logger, isDebug)) {
 		return
 	}
 	assert.Equal(t, 1, num)
 	assert.NotNil(t, tags)
 	defer func() {
-		wrapper.TaosStmtReclaimFields(stmt, tags)
+		TaosStmtReclaimFields(stmt, tags, logger, isDebug)
 	}()
 	tagFields := wrapper.StmtParseFields(num, tags)
 	assert.Equal(t, 1, len(tagFields))
@@ -170,7 +168,7 @@ func TestTaosStmt(t *testing.T) {
 	assert.Equal(t, int8(common.TSDB_DATA_TYPE_INT), tagFields[0].FieldType)
 
 	num, code = TaosStmtNumParams(stmt, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.Equal(t, 0, code, TaosStmtErrStr(stmt, logger, isDebug)) {
 		return
 	}
 	assert.Equal(t, 2, num)
@@ -181,7 +179,7 @@ func TestTaosStmt(t *testing.T) {
 	assert.Equal(t, 8, paramLen)
 
 	code = TaosStmtSetTags(stmt, []driver.Value{types.TaosInt(1)}, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.Equal(t, 0, code, TaosStmtErrStr(stmt, logger, isDebug)) {
 		return
 	}
 	now := time.Now()
@@ -191,18 +189,18 @@ func TestTaosStmt(t *testing.T) {
 	}
 	dataType := []*types.ColumnType{{Type: types.TaosTimestampType}, {Type: types.TaosIntType}}
 	code = TaosStmtBindParamBatch(stmt, data, dataType, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.Equal(t, 0, code, TaosStmtErrStr(stmt, logger, isDebug)) {
 		return
 	}
 	code = TaosStmtAddBatch(stmt, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.Equal(t, 0, code, TaosStmtErrStr(stmt, logger, isDebug)) {
 		return
 	}
 	code = TaosStmtExecute(stmt, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmtErrStr(stmt)) {
+	if !assert.Equal(t, 0, code, TaosStmtErrStr(stmt, logger, isDebug)) {
 		return
 	}
-	affected := wrapper.TaosStmtAffectedRowsOnce(stmt)
+	affected := TaosStmtAffectedRowsOnce(stmt, logger, isDebug)
 	assert.Equal(t, 2, affected)
 }
 
@@ -285,8 +283,7 @@ func TestTMQWriteRaw(t *testing.T) {
 	}()
 	errCode := TaosSelectDB(conn, "syncinterface_test_write_raw", logger, isDebug)
 	assert.Equal(t, 0, errCode)
-	meta := wrapper.BuildRawMeta(length, metaType, unsafe.Pointer(&data[0]))
-	code := TMQWriteRaw(conn, meta, logger, isDebug)
+	code := TMQWriteRaw(conn, length, metaType, unsafe.Pointer(&data[0]), logger, isDebug)
 	assert.Equal(t, int32(0), code)
 	d, err := query(conn, "describe stb")
 	assert.NoError(t, err)
@@ -493,30 +490,30 @@ func TestTaosStmt2(t *testing.T) {
 	}
 	handle := cgo.NewHandle(caller)
 	stmt := TaosStmt2Init(conn, reqID, false, false, handle, logger, isDebug)
-	if !assert.NotNil(t, stmt, wrapper.TaosStmt2Error(stmt)) {
+	if !assert.NotNil(t, stmt, TaosStmt2Error(stmt, logger, isDebug)) {
 		return
 	}
 	defer func() {
 		code = TaosStmt2Close(stmt, logger, isDebug)
-		assert.Equal(t, 0, code, wrapper.TaosStmt2Error(stmt))
+		assert.Equal(t, 0, code, TaosStmt2Error(stmt, logger, isDebug))
 	}()
 	code = TaosStmt2Prepare(stmt, "insert into ? using `syncinterface_test_stmt2`.`stb1` tags(?) values(?,?)", logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmt2Error(stmt)) {
+	if !assert.Equal(t, 0, code, TaosStmt2Error(stmt, logger, isDebug)) {
 		return
 	}
 	isInsert, code := TaosStmt2IsInsert(stmt, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmt2Error(stmt)) {
+	if !assert.Equal(t, 0, code, TaosStmt2Error(stmt, logger, isDebug)) {
 		return
 	}
 	assert.True(t, isInsert)
 	code, count, fields := TaosStmt2GetFields(stmt, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmt2Error(stmt)) {
+	if !assert.Equal(t, 0, code, TaosStmt2Error(stmt, logger, isDebug)) {
 		return
 	}
 	assert.Equal(t, 4, count)
 	assert.NotNil(t, fields)
 	defer func() {
-		wrapper.TaosStmt2FreeFields(stmt, fields)
+		TaosStmt2FreeFields(stmt, fields, logger, isDebug)
 	}()
 	fs := wrapper.Stmt2ParseAllFields(count, fields)
 	assert.Equal(t, 4, len(fs))
@@ -543,13 +540,13 @@ func TestTaosStmt2(t *testing.T) {
 	assert.NoError(t, err)
 
 	code, num, fields2 := TaosStmt2GetFields(stmt, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmt2Error(stmt)) {
+	if !assert.Equal(t, 0, code, TaosStmt2Error(stmt, logger, isDebug)) {
 		return
 	}
 	assert.Equal(t, 4, num)
 	assert.NotNil(t, fields)
 	defer func() {
-		wrapper.TaosStmt2FreeFields(stmt, fields2)
+		TaosStmt2FreeFields(stmt, fields2, logger, isDebug)
 	}()
 	fsAfterBindTableName := wrapper.Stmt2ParseAllFields(num, fields2)
 	assert.Equal(t, 4, len(fsAfterBindTableName))
@@ -588,7 +585,7 @@ func TestTaosStmt2(t *testing.T) {
 	assert.NoError(t, err)
 
 	code = TaosStmt2Exec(stmt, logger, isDebug)
-	if !assert.Equal(t, 0, code, wrapper.TaosStmt2Error(stmt)) {
+	if !assert.Equal(t, 0, code, TaosStmt2Error(stmt, logger, isDebug)) {
 		return
 	}
 	result := <-caller.ExecResult
@@ -598,34 +595,34 @@ func TestTaosStmt2(t *testing.T) {
 }
 
 func exec(conn unsafe.Pointer, sql string) error {
-	result := wrapper.TaosQuery(conn, sql)
-	defer wrapper.TaosFreeResult(result)
-	code := wrapper.TaosError(result)
+	result := TaosQuery(conn, sql, logger, isDebug)
+	defer TaosSyncQueryFree(result, logger, isDebug)
+	code := TaosError(result, logger, isDebug)
 	if code != 0 {
-		return taoserrors.NewError(code, wrapper.TaosErrorStr(result))
+		return taoserrors.NewError(code, TaosErrorStr(result, logger, isDebug))
 	}
 	return nil
 }
 
 func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
-	res := wrapper.TaosQuery(conn, sql)
-	defer wrapper.TaosFreeResult(res)
-	code := wrapper.TaosError(res)
+	res := TaosQuery(conn, sql, logger, isDebug)
+	defer TaosSyncQueryFree(res, logger, isDebug)
+	code := TaosError(res, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(res)
+		errStr := TaosErrorStr(res, logger, isDebug)
 		return nil, taoserrors.NewError(code, errStr)
 	}
-	fileCount := wrapper.TaosNumFields(res)
-	rh, err := wrapper.ReadColumn(res, fileCount)
+	fileCount := TaosNumFields(res, logger, isDebug)
+	rh, err := ReadColumn(res, fileCount, logger, isDebug)
 	if err != nil {
 		return nil, err
 	}
-	precision := wrapper.TaosResultPrecision(res)
+	precision := TaosResultPrecision(res, logger, isDebug)
 	var result [][]driver.Value
 	for {
-		columns, errCode, block := wrapper.TaosFetchRawBlock(res)
+		columns, errCode, block := TaosFetchRawBlock(res, logger, isDebug)
 		if errCode != 0 {
-			errStr := wrapper.TaosErrorStr(res)
+			errStr := TaosErrorStr(res, logger, isDebug)
 			return nil, taoserrors.NewError(errCode, errStr)
 		}
 		if columns == 0 {
@@ -651,13 +648,13 @@ func TestTaosOptionsConnection(t *testing.T) {
 	app := "test_sync_interface"
 	code := TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_APP, &app, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(nil)
+		errStr := TaosErrorStr(nil, logger, isDebug)
 		t.Error(t, taoserrors.NewError(code, errStr))
 		return
 	}
 	code = TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_APP, nil, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(nil)
+		errStr := TaosErrorStr(nil, logger, isDebug)
 		t.Error(t, taoserrors.NewError(code, errStr))
 		return
 	}
@@ -687,4 +684,55 @@ func TestTaosCheckServerStatus(t *testing.T) {
 	status, detail = TaosCheckServerStatus(nil, 0, logger, isDebug)
 	assert.Equal(t, int32(2), status)
 	assert.Equal(t, "", detail)
+}
+
+func TestTMQSubscription(t *testing.T) {
+	reqID := generator.GetReqID()
+	var logger = logger.WithField("test", "TestTaosCheckServerStatus").WithField(config.ReqIDKey, reqID)
+	conn, err := TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer TaosClose(conn, logger, isDebug)
+	err = exec(conn, "create database if not exists `syncinterface_test_subscription`")
+	assert.NoError(t, err)
+	defer func() {
+		err = exec(conn, "drop database if exists `syncinterface_test_subscription`")
+		assert.NoError(t, err)
+	}()
+	err = exec(conn, "create topic topic_syncinterface_subscription as database syncinterface_test_subscription")
+	assert.NoError(t, err)
+	defer func() {
+		err = exec(conn, "drop topic if exists `topic_syncinterface_subscription`")
+		assert.NoError(t, err)
+	}()
+	cfg := TMQConfNew(logger, isDebug)
+	defer TMQConfDestroy(cfg, logger, isDebug)
+	TMQConfSet(cfg, "client.id", "test", logger, isDebug)
+	TMQConfSet(cfg, "group.id", "test", logger, isDebug)
+	consumer, err := wrapper.TMQConsumerNew(cfg)
+	assert.NoError(t, err)
+	assert.NotNil(t, consumer)
+	topicList := TMQListNew(logger, isDebug)
+	defer TMQListDestroy(topicList, logger, isDebug)
+	code := TMQListAppend(topicList, "topic_syncinterface_subscription", logger, isDebug)
+	if code != 0 {
+		errStr := TMQErr2Str(code, logger, isDebug)
+		t.Error(t, taoserrors.NewError(int(code), errStr))
+		return
+	}
+	code = wrapper.TMQSubscribe(consumer, topicList)
+	if code != 0 {
+		errStr := TMQErr2Str(code, logger, isDebug)
+		t.Error(t, taoserrors.NewError(int(code), errStr))
+		return
+	}
+	defer wrapper.TMQConsumerClose(consumer)
+	code, topicsPointer := TMQSubscription(consumer, logger, isDebug)
+	assert.Equal(t, int32(0), code)
+	assert.NotNil(t, topicsPointer)
+	defer TMQListDestroy(topicsPointer, logger, isDebug)
+	topics := wrapper.TMQListToCArray(topicsPointer, int(TMQListGetSize(topicsPointer, logger, isDebug)))
+	assert.Equal(t, 1, len(topics))
+	assert.Equal(t, "topic_syncinterface_subscription", topics[0])
 }

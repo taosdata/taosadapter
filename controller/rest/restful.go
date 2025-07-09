@@ -21,7 +21,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
@@ -238,7 +237,7 @@ func trySetConnectionOptions(c *gin.Context, conn unsafe.Pointer, logger *logrus
 		if val != "" {
 			code := syncinterface.TaosOptionsConnection(conn, options[i], &val, logger, isDebug)
 			if code != httperror.SUCCESS {
-				errStr := wrapper.TaosErrorStr(nil)
+				errStr := syncinterface.TaosErrorStr(nil, logger, isDebug)
 				logger.Errorf("set connection options error, option:%d, val:%s, code:%d, message:%s", options[i], val, code, errStr)
 				TaosErrorResponse(c, logger, code, errStr)
 				return false
@@ -274,23 +273,23 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 		}
 	}()
 	res := result.Res
-	code := wrapper.TaosError(res)
+	code := syncinterface.TaosError(res, logger, isDebug)
 	if code != httperror.SUCCESS {
 		monitor.RestRecordResult(sqlType, false)
-		errStr := wrapper.TaosErrorStr(res)
+		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
 		logger.Errorf("taos query error, QID:0x%x, code:%d, msg:%s, sql: %s", reqID, code, errStr, log.GetLogSql(sql))
 		TaosErrorResponse(c, logger, code, errStr)
 		return
 	}
 	monitor.RestRecordResult(sqlType, true)
-	isUpdate := wrapper.TaosIsUpdateQuery(res)
+	isUpdate := syncinterface.TaosIsUpdateQuery(res, logger, isDebug)
 	logger.Tracef("sql isUpdate:%t", isUpdate)
 	w := c.Writer
 	c.Header("Content-Type", "application/json; charset=utf-8")
 	c.Header("Transfer-Encoding", "chunked")
 	w.WriteHeader(http.StatusOK)
 	if isUpdate {
-		affectRows := wrapper.TaosAffectedRows(res)
+		affectRows := syncinterface.TaosAffectedRows(res, logger, isDebug)
 		logger.Tracef("sql affectRows:%d", affectRows)
 		var err error
 		if returnObj {
@@ -343,9 +342,9 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 		c.AbortWithStatusJSON(http.StatusServiceUnavailable, "query memory exceeds threshold")
 		return
 	}
-	fieldsCount := wrapper.TaosNumFields(res)
+	fieldsCount := syncinterface.TaosNumFields(res, logger, isDebug)
 	logger.Tracef("get fieldsCount:%d", fieldsCount)
-	rowsHeader, err := wrapper.ReadColumn(res, fieldsCount)
+	rowsHeader, err := syncinterface.ReadColumn(res, fieldsCount, logger, isDebug)
 	if err != nil {
 		logger.Errorf("read column error, error:%s, sql:%s", err, log.GetLogSql(sql))
 		tError, ok := err.(*tErrors.TaosError)
@@ -384,7 +383,7 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 	flushTiming += tmpFlushTiming
 	total := 0
 	builder.WritePure(Query3)
-	precision := wrapper.TaosResultPrecision(res)
+	precision := syncinterface.TaosResultPrecision(res, logger, isDebug)
 	logger.Tracef("get precision:%d", precision)
 	fetched := false
 	pHeaderList := make([]unsafe.Pointer, fieldsCount)
@@ -410,7 +409,7 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 			fetched = true
 		}
 		logger.Tracef("get fetch result, rows:%d", result.N)
-		block := wrapper.TaosGetRawBlock(res)
+		block := syncinterface.TaosGetRawBlock(res, logger, isDebug)
 		logger.Trace("start parse block")
 		blockSize := result.N
 		nullBitMapOffset := uintptr(ctools.BitmapLen(blockSize))
@@ -736,7 +735,7 @@ func (ctl *Restful) des(c *gin.Context) {
 	user := c.Param("user")
 	password := c.Param("password")
 	logger := c.MustGet(LoggerKey).(*logrus.Entry)
-	if len(user) == 0 || len(user) > 24 || len(password) == 0 || len(password) > 24 {
+	if len(user) == 0 || len(user) > 24 || len(password) == 0 {
 		logger.Errorf("user or password length error,user length: %d,password length: %d", len(user), len(password))
 		BadRequestResponse(c, logger, httperror.HTTP_GEN_TAOSD_TOKEN_ERR)
 		return

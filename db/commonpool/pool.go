@@ -16,10 +16,11 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
+	"github.com/taosdata/taosadapter/v3/monitor/metrics"
 	"github.com/taosdata/taosadapter/v3/tools/connectpool"
 	"golang.org/x/sync/singleflight"
 )
@@ -40,6 +41,7 @@ type ConnectorPool struct {
 	changePassHandle      cgo.Handle
 	whitelistChangeHandle cgo.Handle
 	dropUserHandle        cgo.Handle
+	gauge                 *metrics.Gauge
 }
 
 func NewConnectorPool(user, password string) (*ConnectorPool, error) {
@@ -80,13 +82,16 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	p, err := connectpool.NewConnectPool(poolConfig)
 
 	if err != nil {
+		// failed to create connection pool, maybe the user is not exist or password is wrong
+		// put the handles back to pool
+		cp.putHandle()
 		return nil, err
 	}
 	cp.pool = p
 	v, _ := p.Get()
 	// notify modify
 	cp.ctx, cp.cancel = context.WithCancel(context.Background())
-	err = tool.RegisterChangePass(v, cp.changePassHandle)
+	err = tool.RegisterChangePass(v, cp.changePassHandle, cp.logger, log.IsDebug())
 	if err != nil {
 		_ = p.Put(v)
 		p.Release()
@@ -94,7 +99,7 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 		return nil, err
 	}
 	// notify drop
-	err = tool.RegisterDropUser(v, cp.dropUserHandle)
+	err = tool.RegisterDropUser(v, cp.dropUserHandle, cp.logger, log.IsDebug())
 	if err != nil {
 		_ = p.Put(v)
 		p.Release()
@@ -102,7 +107,7 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 		return nil, err
 	}
 	// whitelist
-	ipNets, err := tool.GetWhitelist(v)
+	ipNets, err := tool.GetWhitelist(v, cp.logger, log.IsDebug())
 	if err != nil {
 		_ = p.Put(v)
 		p.Release()
@@ -111,7 +116,7 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 	}
 	cp.ipNets = ipNets
 	// register whitelist modify callback
-	err = tool.RegisterChangeWhitelist(v, cp.whitelistChangeHandle)
+	err = tool.RegisterChangeWhitelist(v, cp.whitelistChangeHandle, cp.logger, log.IsDebug())
 	if err != nil {
 		_ = p.Put(v)
 		p.Release()
@@ -143,7 +148,7 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 			case <-cp.whitelistChan:
 				// whitelist changed
 				cp.logger.Info("whitelist change")
-				ipNets, err = tool.GetWhitelist(v)
+				ipNets, err = tool.GetWhitelist(v, cp.logger, log.IsDebug())
 				if err != nil {
 					// fetch whitelist error
 					cp.logger.WithError(err).Error("fetch whitelist error! release connection!")
@@ -163,7 +168,8 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 			}
 		}
 	}()
-
+	gauge := monitor.RecordNewConnectionPool(user)
+	cp.gauge = gauge
 	return cp, nil
 }
 
@@ -192,13 +198,22 @@ func (cp *ConnectorPool) Get() (unsafe.Pointer, error) {
 		}
 		return nil, err
 	}
+	if cp.gauge != nil {
+		cp.gauge.Inc()
+	}
 	return v, nil
 }
 
 func (cp *ConnectorPool) Put(c unsafe.Pointer) error {
-	wrapper.TaosResetCurrentDB(c)
-	wrapper.TaosOptionsConnection(c, common.TSDB_OPTION_CONNECTION_CLEAR, nil)
-	return cp.pool.Put(c)
+	syncinterface.TaosResetCurrentDB(c, cp.logger, log.IsDebug())
+	syncinterface.TaosOptionsConnection(c, common.TSDB_OPTION_CONNECTION_CLEAR, nil, cp.logger, log.IsDebug())
+	if err := cp.pool.Put(c); err != nil {
+		return err
+	}
+	if cp.gauge != nil {
+		cp.gauge.Dec()
+	}
+	return nil
 }
 
 func (cp *ConnectorPool) Close(c unsafe.Pointer) error {
@@ -312,7 +327,7 @@ func getConnectDirect(connectionPool *ConnectorPool, clientIP net.IP) (*Conn, er
 	}
 	ipStr := clientIP.String()
 	// ignore error, because we have checked the ip
-	wrapper.TaosOptionsConnection(c, common.TSDB_OPTION_CONNECTION_USER_IP, &ipStr)
+	syncinterface.TaosOptionsConnection(c, common.TSDB_OPTION_CONNECTION_USER_IP, &ipStr, connectionPool.logger, log.IsDebug())
 	return &Conn{
 		TaosConnection: c,
 		pool:           connectionPool,

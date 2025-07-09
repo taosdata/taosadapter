@@ -27,7 +27,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
-	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
@@ -44,6 +43,7 @@ func NewQueryController() *QueryController {
 	queryM.Config.MaxMessageSize = 0
 
 	queryM.HandleConnect(func(session *melody.Session) {
+		monitor.RecordWSQueryConn()
 		logger := wstool.GetLogger(session)
 		ipAddr := iptool.GetRealIP(session.Request)
 		logger.WithField("ip", ipAddr.String()).Debug("ws connect")
@@ -191,6 +191,7 @@ func NewQueryController() *QueryController {
 	})
 
 	queryM.HandleDisconnect(func(session *melody.Session) {
+		monitor.RecordWSQueryDisconnect()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws disconnect")
 		t, exist := session.Get(TaosSessionKey)
@@ -205,7 +206,7 @@ func (s *QueryController) Init(ctl gin.IRouter) {
 	ctl.GET("rest/ws", func(c *gin.Context) {
 		// generate session id
 		sessionID := generator.GetSessionID()
-		logger := log.GetLogger("TMQ").WithFields(logrus.Fields{
+		logger := log.GetLogger("QRY").WithFields(logrus.Fields{
 			config.SessionIDKey: sessionID})
 		_ = s.queryM.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": logger})
 	})
@@ -279,7 +280,7 @@ func (t *Taos) waitSignal(logger *logrus.Entry) {
 			}
 			logger.Trace("get whitelist")
 			s := log.GetLogNow(isDebug)
-			whitelist, err := tool.GetWhitelist(t.conn)
+			whitelist, err := tool.GetWhitelist(t.conn, logger, isDebug)
 			logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 			if err != nil {
 				logger.WithField("clientIP", t.ipStr).WithError(err).Errorln("get whitelist error! close connection!")
@@ -339,7 +340,7 @@ func (r *Result) FreeResult(logger *logrus.Entry) {
 		logger = r.logger
 	}
 	if r.TaosResult != nil {
-		syncinterface.FreeResult(r.TaosResult, logger, log.IsDebug())
+		async.FreeResultAsync(r.TaosResult, logger, log.IsDebug())
 		r.TaosResult = nil
 	}
 }
@@ -356,6 +357,7 @@ func (t *Taos) addResult(result *Result) {
 	t.Results.PushBack(result)
 	t.logger.Trace("add result to list finished")
 	t.resultLocker.Unlock()
+	monitor.WSQuerySqlResultCount.Inc()
 }
 
 func (t *Taos) getResult(index uint64) *list.Element {
@@ -385,6 +387,7 @@ func (t *Taos) removeResult(item *list.Element) {
 	t.resultLocker.Lock()
 	defer t.resultLocker.Unlock()
 	t.Results.Remove(item)
+	monitor.WSQuerySqlResultCount.Dec()
 }
 
 type WSConnectReq struct {
@@ -426,7 +429,7 @@ func (t *Taos) connect(ctx context.Context, session *melody.Session, req *WSConn
 	}
 	logger.Trace("get whitelist")
 	s := log.GetLogNow(isDebug)
-	whitelist, err := tool.GetWhitelist(conn)
+	whitelist, err := tool.GetWhitelist(conn, logger, isDebug)
 	logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.WithError(err).Errorln("get whitelist error")
@@ -444,7 +447,7 @@ func (t *Taos) connect(ctx context.Context, session *melody.Session, req *WSConn
 	}
 	s = log.GetLogNow(isDebug)
 	logger.Trace("register whitelist change")
-	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle)
+	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle, logger, isDebug)
 	logger.Debugf("register whitelist change cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.WithError(err).Errorln("register whitelist change error")
@@ -454,7 +457,7 @@ func (t *Taos) connect(ctx context.Context, session *melody.Session, req *WSConn
 	}
 	s = log.GetLogNow(isDebug)
 	logger.Trace("register drop user")
-	err = tool.RegisterDropUser(conn, t.dropUserHandle)
+	err = tool.RegisterDropUser(conn, t.dropUserHandle, logger, isDebug)
 	logger.Debugf("register drop user cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.WithError(err).Errorln("register drop user error")
@@ -505,58 +508,58 @@ func (t *Taos) query(ctx context.Context, session *melody.Session, req *WSQueryR
 	logger.Tracef("req_id: 0x%x,query sql: %s", req.ReqID, req.SQL)
 	sqlType := monitor.WSRecordRequest(req.SQL)
 	isDebug := log.IsDebug()
-	logger.Trace("get handler lock")
+	logger.Trace("get handler from pool")
 	s := log.GetLogNow(isDebug)
 	handler := async.GlobalAsync.HandlerPool.Get()
-	logger.Debugf("get handler cost:%s", log.GetLogDuration(isDebug, s))
+	logger.Tracef("get handler cost:%s", log.GetLogDuration(isDebug, s))
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Trace("execute query")
 	s = log.GetLogNow(isDebug)
 	result := async.GlobalAsync.TaosQuery(t.conn, logger, isDebug, req.SQL, handler, int64(req.ReqID))
-	logger.Debugf("query cost:%s", log.GetLogDuration(isDebug, s))
-	code := wrapper.TaosError(result.Res)
+	logger.Tracef("query cost:%s", log.GetLogDuration(isDebug, s))
+	code := syncinterface.TaosError(result.Res, logger, isDebug)
 	if code != httperror.SUCCESS {
 		monitor.WSRecordResult(sqlType, false)
-		errStr := wrapper.TaosErrorStr(result.Res)
+		errStr := syncinterface.TaosErrorStr(result.Res, logger, isDebug)
 		logger.Errorf("query error, code: %d, message: %s", code, errStr)
 		logger.Trace("get thread lock for free result")
-		syncinterface.FreeResult(result.Res, logger, isDebug)
+		async.FreeResultAsync(result.Res, logger, isDebug)
 		wsErrorMsg(ctx, session, logger, code, errStr, WSQuery, req.ReqID)
 		return
 	}
 	monitor.WSRecordResult(sqlType, true)
 	logger.Trace("check is_update_query")
 	s = log.GetLogNow(isDebug)
-	isUpdate := wrapper.TaosIsUpdateQuery(result.Res)
+	isUpdate := syncinterface.TaosIsUpdateQuery(result.Res, logger, isDebug)
 	logger.Debugf("is_update_query %t cost: %s", isUpdate, log.GetLogDuration(isDebug, s))
 	queryResult := &WSQueryResult{Action: WSQuery, ReqID: req.ReqID}
 	if isUpdate {
 		var affectRows int
 		s = log.GetLogNow(isDebug)
-		affectRows = wrapper.TaosAffectedRows(result.Res)
-		logger.Debugf("affected_rows %d cost: %s", affectRows, log.GetLogDuration(isDebug, s))
+		affectRows = syncinterface.TaosAffectedRows(result.Res, logger, isDebug)
+		logger.Debugf("affected_rows %d, cost: %s", affectRows, log.GetLogDuration(isDebug, s))
 		queryResult.IsUpdate = true
 		queryResult.AffectedRows = affectRows
 		logger.Trace("get thread lock for free result")
-		syncinterface.FreeResult(result.Res, logger, isDebug)
+		async.FreeResultAsync(result.Res, logger, isDebug)
 		queryResult.Timing = wstool.GetDuration(ctx)
 		wstool.WSWriteJson(session, logger, queryResult)
 		return
 	}
 	// query
 	s = log.GetLogNow(isDebug)
-	fieldsCount := wrapper.TaosNumFields(result.Res)
+	fieldsCount := syncinterface.TaosNumFields(result.Res, logger, isDebug)
 	logger.Debugf("num_fields %d cost: %s", fieldsCount, log.GetLogDuration(isDebug, s))
 	queryResult.FieldsCount = fieldsCount
 	s = log.GetLogNow(isDebug)
-	rowsHeader, _ := wrapper.ReadColumn(result.Res, fieldsCount)
-	logger.Debugf("read column cost:%s", log.GetLogDuration(isDebug, s))
+	rowsHeader, _ := syncinterface.ReadColumn(result.Res, fieldsCount, logger, isDebug)
+	logger.Tracef("read column cost:%s", log.GetLogDuration(isDebug, s))
 	queryResult.FieldsNames = rowsHeader.ColNames
 	queryResult.FieldsLengths = rowsHeader.ColLength
 	queryResult.FieldsTypes = rowsHeader.ColTypes
 	s = log.GetLogNow(isDebug)
-	precision := wrapper.TaosResultPrecision(result.Res)
-	logger.Debugf("result_precision %d cost: %s ", precision, log.GetLogDuration(isDebug, s))
+	precision := syncinterface.TaosResultPrecision(result.Res, logger, isDebug)
+	logger.Tracef("result_precision %d, cost: %s ", precision, log.GetLogDuration(isDebug, s))
 	queryResult.Precision = precision
 	resultItem := &Result{
 		TaosResult:  result.Res,
@@ -596,18 +599,9 @@ func (t *Taos) writeRaw(ctx context.Context, session *melody.Session, reqID, mes
 		wsTMQErrorMsg(ctx, session, logger, 0xffff, "server not connected", WSWriteRaw, reqID, &messageID)
 		return
 	}
-	meta := wrapper.BuildRawMeta(length, metaType, data)
-	s := log.GetLogNow(isDebug)
-	logger.Trace("get thread lock for write raw meta")
-	thread.SyncLocker.Lock()
-	logger.Debugf("get thread lock cost:%s", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	logger.Trace("write raw meta")
-	errCode := wrapper.TMQWriteRaw(t.conn, meta)
-	logger.Debugf("write_raw_meta cost:%s", log.GetLogDuration(isDebug, s))
-	thread.SyncLocker.Unlock()
+	errCode := syncinterface.TMQWriteRaw(t.conn, length, metaType, data, logger, isDebug)
 	if errCode != 0 {
-		errStr := wrapper.TMQErr2Str(errCode)
+		errStr := syncinterface.TMQErr2Str(errCode, logger, isDebug)
 		logger.Errorf("write raw meta error, code: %d, message: %s", errCode, errStr)
 		wsErrorMsg(ctx, session, logger, int(errCode)&0xffff, errStr, WSWriteRaw, reqID)
 		return
@@ -639,17 +633,9 @@ func (t *Taos) writeRawBlock(ctx context.Context, session *melody.Session, reqID
 		wsErrorMsg(ctx, session, logger, 0xffff, "server not connected", WSWriteRawBlock, reqID)
 		return
 	}
-	logger.Trace("get thread lock for write raw block")
-	s := log.GetLogNow(isDebug)
-	thread.SyncLocker.Lock()
-	logger.Debugf("get thread lock cost:%s", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	logger.Trace("write raw block")
-	errCode := wrapper.TaosWriteRawBlockWithReqID(t.conn, numOfRows, rawBlock, tableName, int64(reqID))
-	thread.SyncLocker.Unlock()
-	logger.Debugf("write raw cost:%s", log.GetLogDuration(isDebug, s))
+	errCode := syncinterface.TaosWriteRawBlockWithReqID(t.conn, numOfRows, rawBlock, tableName, int64(reqID), logger, isDebug)
 	if errCode != 0 {
-		errStr := wrapper.TMQErr2Str(int32(errCode))
+		errStr := syncinterface.TMQErr2Str(int32(errCode), logger, isDebug)
 		logger.Errorf("write raw block error, code: %d, message: %s", errCode, errStr)
 		wsErrorMsg(ctx, session, logger, errCode&0xffff, errStr, WSWriteRawBlock, reqID)
 		return
@@ -682,17 +668,9 @@ func (t *Taos) writeRawBlockWithFields(ctx context.Context, session *melody.Sess
 		wsErrorMsg(ctx, session, logger, 0xffff, "server not connected", WSWriteRawBlockWithFields, reqID)
 		return
 	}
-	logger.Trace("get thread lock for write raw block with fields")
-	s := log.GetLogNow(isDebug)
-	thread.SyncLocker.Lock()
-	logger.Debugf("get thread lock cost:%s", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	logger.Trace("write raw block with fields")
-	errCode := wrapper.TaosWriteRawBlockWithFieldsWithReqID(t.conn, numOfRows, rawBlock, tableName, fields, numFields, int64(reqID))
-	thread.SyncLocker.Unlock()
-	logger.Debugf("write raw block with fields cost:%s", log.GetLogDuration(isDebug, s))
+	errCode := syncinterface.TaosWriteRawBlockWithFieldsWithReqID(t.conn, numOfRows, rawBlock, tableName, fields, numFields, int64(reqID), logger, isDebug)
 	if errCode != 0 {
-		errStr := wrapper.TMQErr2Str(int32(errCode))
+		errStr := syncinterface.TMQErr2Str(int32(errCode), logger, isDebug)
 		logger.Errorf("write raw block with fields error, code: %d, message: %s", errCode, errStr)
 		wsErrorMsg(ctx, session, logger, errCode&0xffff, errStr, WSWriteRawBlockWithFields, reqID)
 		return
@@ -744,7 +722,7 @@ func (t *Taos) fetch(ctx context.Context, session *melody.Session, req *WSFetchR
 	}
 	s := log.GetLogNow(isDebug)
 	handler := async.GlobalAsync.HandlerPool.Get()
-	logger.Debugf("get handler cost:%s", log.GetLogDuration(isDebug, s))
+	logger.Tracef("get handler cost:%s", log.GetLogDuration(isDebug, s))
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	s = log.GetLogNow(isDebug)
 	logger.Trace("call fetch_raw_block_a")
@@ -764,7 +742,7 @@ func (t *Taos) fetch(ctx context.Context, session *melody.Session, req *WSFetchR
 		return
 	}
 	if result.N < 0 {
-		errStr := wrapper.TaosErrorStr(result.Res)
+		errStr := syncinterface.TaosErrorStr(result.Res, logger, isDebug)
 		logger.Errorf("fetch raw block error, code: %d, message: %s", result.N, errStr)
 		resultS.Unlock()
 		t.FreeResult(resultItem, logger)
@@ -772,11 +750,11 @@ func (t *Taos) fetch(ctx context.Context, session *melody.Session, req *WSFetchR
 		return
 	}
 	s = log.GetLogNow(isDebug)
-	resultS.Lengths = wrapper.FetchLengths(resultS.TaosResult, resultS.FieldsCount)
+	resultS.Lengths = syncinterface.TaosFetchLengths(resultS.TaosResult, resultS.FieldsCount, logger, isDebug)
 	logger.Debugf("fetch_lengths %d cost: %s", resultS.Lengths, log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
 	logger.Trace("get raw block")
-	block := wrapper.TaosGetRawBlock(resultS.TaosResult)
+	block := syncinterface.TaosGetRawBlock(resultS.TaosResult, logger, isDebug)
 	logger.Debugf("get_raw_block cost:%s", log.GetLogDuration(isDebug, s))
 	resultS.Block = block
 	resultS.Size = result.N
@@ -881,17 +859,23 @@ func (t *Taos) FreeResult(element *list.Element, logger *logrus.Entry) {
 func (t *Taos) freeAllResult() {
 	t.resultLocker.Lock()
 	defer t.resultLocker.Unlock()
+	defer func() {
+		// clean up the list
+		t.Results = t.Results.Init()
+	}()
 	root := t.Results.Front()
 	if root == nil {
 		return
 	}
 	root.Value.(*Result).FreeResult(t.logger)
+	monitor.WSQuerySqlResultCount.Dec()
 	item := root.Next()
 	for {
 		if item == nil || item == root {
 			return
 		}
 		item.Value.(*Result).FreeResult(t.logger)
+		monitor.WSQuerySqlResultCount.Dec()
 		item = item.Next()
 	}
 }

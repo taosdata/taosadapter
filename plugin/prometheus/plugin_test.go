@@ -11,13 +11,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
-	"github.com/prometheus/prometheus/prompb"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/plugin/prometheus/prompb"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 func TestMain(m *testing.M) {
@@ -27,15 +28,17 @@ func TestMain(m *testing.M) {
 	viper.Set("prometheus.enable", true)
 	log.ConfigLog()
 	db.PrepareConnection()
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	logger := log.GetLogger("test")
+	isDebug := log.IsDebug()
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	if err != nil {
 		panic(err)
 	}
-	r := wrapper.TaosQuery(conn, "create database if not exists test_plugin_prometheus")
-	wrapper.TaosFreeResult(r)
+	r := syncinterface.TaosQuery(conn, "create database if not exists test_plugin_prometheus", logger, isDebug)
+	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	m.Run()
-	r = wrapper.TaosQuery(conn, "drop database if exists test_plugin_prometheus")
-	wrapper.TaosFreeResult(r)
+	r = syncinterface.TaosQuery(conn, "drop database if exists test_plugin_prometheus", logger, isDebug)
+	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 }
 
 // @author: xftan
@@ -77,7 +80,7 @@ func TestPrometheus(t *testing.T) {
 	assert.NoError(t, err)
 	compressed := snappy.Encode(nil, data)
 	req, _ := http.NewRequest("POST", "/remote_write/test_plugin_prometheus", bytes.NewBuffer(compressed))
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 202, w.Code)
@@ -103,7 +106,7 @@ func TestPrometheus(t *testing.T) {
 	w = httptest.NewRecorder()
 	compressedR := snappy.Encode(nil, rdata)
 	req, _ = http.NewRequest("POST", "/remote_read/test_plugin_prometheus", bytes.NewBuffer(compressedR))
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 202, w.Code)
@@ -165,7 +168,7 @@ func TestPrometheusEscapeString(t *testing.T) {
 	assert.NoError(t, err)
 	compressed := snappy.Encode(nil, data)
 	req, _ := http.NewRequest("POST", "/remote_write/test_plugin_prometheus", bytes.NewBuffer(compressed))
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 202, w.Code)
@@ -191,7 +194,7 @@ func TestPrometheusEscapeString(t *testing.T) {
 	w = httptest.NewRecorder()
 	compressedR := snappy.Encode(nil, rdata)
 	req, _ = http.NewRequest("POST", "/remote_read/test_plugin_prometheus", bytes.NewBuffer(compressedR))
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 202, w.Code)
@@ -250,7 +253,7 @@ func TestPrometheusWithTTL(t *testing.T) {
 	assert.NoError(t, err)
 	compressed := snappy.Encode(nil, data)
 	req, _ := http.NewRequest("POST", "/remote_write/test_plugin_prometheus?ttl=14", bytes.NewBuffer(compressed))
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 202, w.Code)
@@ -276,7 +279,7 @@ func TestPrometheusWithTTL(t *testing.T) {
 	w = httptest.NewRecorder()
 	compressedR := snappy.Encode(nil, rdata)
 	req, _ = http.NewRequest("POST", "/remote_read/test_plugin_prometheus", bytes.NewBuffer(compressedR))
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 202, w.Code)
@@ -338,7 +341,7 @@ func TestPrometheusEscape(t *testing.T) {
 	assert.NoError(t, err)
 	compressed := snappy.Encode(nil, data)
 	req, _ := http.NewRequest("POST", "/remote_write/test_plugin_prometheus", bytes.NewBuffer(compressed))
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 202, w.Code)
@@ -364,7 +367,7 @@ func TestPrometheusEscape(t *testing.T) {
 	w = httptest.NewRecorder()
 	compressedR := snappy.Encode(nil, rdata)
 	req, _ = http.NewRequest("POST", "/remote_read/test_plugin_prometheus", bytes.NewBuffer(compressedR))
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 202, w.Code)
@@ -428,7 +431,7 @@ func TestPrometheusWithLimit(t *testing.T) {
 	assert.NoError(t, err)
 	compressed := snappy.Encode(nil, data)
 	req, _ := http.NewRequest("POST", "/remote_write/test_plugin_prometheus", bytes.NewBuffer(compressed))
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 202, w.Code)
@@ -454,7 +457,7 @@ func TestPrometheusWithLimit(t *testing.T) {
 	w = httptest.NewRecorder()
 	compressedR := snappy.Encode(nil, rdata)
 	req, _ = http.NewRequest("POST", "/remote_read/test_plugin_prometheus", bytes.NewBuffer(compressedR))
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.SetBasicAuth("root", "taosdata")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 202, w.Code)

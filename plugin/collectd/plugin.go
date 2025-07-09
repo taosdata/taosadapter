@@ -56,7 +56,7 @@ func (p *Plugin) Start() error {
 			return err
 		}
 	}
-	conn, err := udpListen("udp4", fmt.Sprintf(":%d", p.conf.Port))
+	conn, err := udpListen("udp", fmt.Sprintf(":%d", p.conf.Port))
 	if err != nil {
 		return err
 	}

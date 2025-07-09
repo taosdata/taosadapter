@@ -16,10 +16,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	"github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 // @author: xftan
@@ -34,15 +35,17 @@ func TestInfluxdb(t *testing.T) {
 	config.Init()
 	log.ConfigLog()
 	db.PrepareConnection()
+	logger := log.GetLogger("test")
+	isDebug := log.IsDebug()
 	p := Influxdb{}
 	router := gin.Default()
-	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	defer func() {
-		wrapper.TaosClose(conn)
+		syncinterface.TaosClose(conn, logger, isDebug)
 	}()
 	err = exec(conn, "drop database if exists test_plugin_influxdb")
 	assert.NoError(t, err)
@@ -62,19 +65,19 @@ func TestInfluxdb(t *testing.T) {
 	w := httptest.NewRecorder()
 	reader := strings.NewReader(fmt.Sprintf("measurement,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
 	req, _ := http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb&app=test_influxdb", reader)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 204, w.Code)
 	w = httptest.NewRecorder()
 	reader = strings.NewReader("measurement,host=host1 field1=a1")
 	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb&app=test_influxdb", reader)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 500, w.Code)
 	w = httptest.NewRecorder()
 	reader = strings.NewReader(fmt.Sprintf("measurement,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
 	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata&app=test_influxdb", reader)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 400, w.Code)
 	time.Sleep(time.Second)
@@ -92,11 +95,16 @@ func TestInfluxdb(t *testing.T) {
 	w = httptest.NewRecorder()
 	reader = strings.NewReader(fmt.Sprintf("measurement_ttl,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
 	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb_ttl&ttl=1000&app=test_influxdb", reader)
-	req.RemoteAddr = "127.0.0.1:33333"
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	router.ServeHTTP(w, req)
-	time.Sleep(time.Second)
-	values, err = query(conn, "select `ttl` from information_schema.ins_tables "+
-		" where db_name='test_plugin_influxdb_ttl' and stable_name='measurement_ttl'")
+	for i := 0; i < 10; i++ {
+		values, err = query(conn, "select `ttl` from information_schema.ins_tables "+
+			" where db_name='test_plugin_influxdb_ttl' and stable_name='measurement_ttl'")
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 	assert.NoError(t, err)
 	if values[0][0].(int32) != 1000 {
 		t.Fatal("ttl miss")
@@ -104,35 +112,39 @@ func TestInfluxdb(t *testing.T) {
 }
 
 func exec(conn unsafe.Pointer, sql string) error {
-	res := wrapper.TaosQuery(conn, sql)
-	defer wrapper.TaosFreeResult(res)
-	code := wrapper.TaosError(res)
+	logger := log.GetLogger("test")
+	isDebug := log.IsDebug()
+	res := syncinterface.TaosQuery(conn, sql, logger, isDebug)
+	defer syncinterface.TaosSyncQueryFree(res, logger, isDebug)
+	code := syncinterface.TaosError(res, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(res)
+		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
 		return errors.NewError(code, errStr)
 	}
 	return nil
 }
 
 func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
-	res := wrapper.TaosQuery(conn, sql)
-	defer wrapper.TaosFreeResult(res)
-	code := wrapper.TaosError(res)
+	logger := log.GetLogger("test")
+	isDebug := log.IsDebug()
+	res := syncinterface.TaosQuery(conn, sql, logger, isDebug)
+	defer syncinterface.TaosSyncQueryFree(res, logger, isDebug)
+	code := syncinterface.TaosError(res, logger, isDebug)
 	if code != 0 {
-		errStr := wrapper.TaosErrorStr(res)
+		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
 		return nil, errors.NewError(code, errStr)
 	}
-	fileCount := wrapper.TaosNumFields(res)
-	rh, err := wrapper.ReadColumn(res, fileCount)
+	fileCount := syncinterface.TaosNumFields(res, logger, isDebug)
+	rh, err := syncinterface.ReadColumn(res, fileCount, logger, isDebug)
 	if err != nil {
 		return nil, err
 	}
-	precision := wrapper.TaosResultPrecision(res)
+	precision := syncinterface.TaosResultPrecision(res, logger, isDebug)
 	var result [][]driver.Value
 	for {
-		columns, errCode, block := wrapper.TaosFetchRawBlock(res)
+		columns, errCode, block := syncinterface.TaosFetchRawBlock(res, logger, isDebug)
 		if errCode != 0 {
-			errStr := wrapper.TaosErrorStr(res)
+			errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
 			return nil, errors.NewError(errCode, errStr)
 		}
 		if columns == 0 {

@@ -133,7 +133,7 @@ func TestWsSchemaless(t *testing.T) {
 	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", DB: "test_ws_schemaless"}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)
@@ -213,7 +213,7 @@ func TestWsSchemalessError(t *testing.T) {
 	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", DB: "test_ws_schemaless_error"}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
-	var connResp commonResp
+	var connResp connResponse
 	err = json.Unmarshal(resp, &connResp)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)

@@ -5,10 +5,13 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/sirupsen/logrus"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
+	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/thread"
 )
 
@@ -42,18 +45,26 @@ func putWhiteListHandle(handle cgo.Handle) {
 	}
 }
 
-func GetWhitelist(conn unsafe.Pointer) ([]*net.IPNet, error) {
+func GetWhitelist(conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) ([]*net.IPNet, error) {
 	c, handler := getWhiteListHandle()
 	defer putWhiteListHandle(handler)
-	thread.SyncLocker.Lock()
-	wrapper.TaosFetchWhitelistA(conn, handler)
-	thread.SyncLocker.Unlock()
+	taosFetchWhiteListA(conn, handler, logger, isDebug)
 	data := <-c
-	if data.ErrCode != 0 {
-		err := errors.NewError(int(data.ErrCode), wrapper.TaosErrorStr(nil))
-		return nil, err
+	monitor.TaosFetchWhitelistACallBackCounter.Inc()
+	if data.Err != nil {
+		monitor.TaosFetchWhitelistACallBackFailCounter.Inc()
+		return nil, data.Err
 	}
+	monitor.TaosFetchWhitelistACallBackSuccessCounter.Inc()
 	return data.IPNets, nil
+}
+
+func taosFetchWhiteListA(conn unsafe.Pointer, handle cgo.Handle, logger *logrus.Entry, isDebug bool) {
+	thread.AsyncSemaphore.Acquire()
+	defer func() {
+		thread.AsyncSemaphore.Release()
+	}()
+	syncinterface.TaosFetchWhitelistA(conn, handle, logger, isDebug)
 }
 
 func CheckWhitelist(whitelist []*net.IPNet, ip net.IP) bool {
@@ -94,10 +105,10 @@ func PutRegisterChangeWhiteListHandle(handle cgo.Handle) {
 	}
 }
 
-func RegisterChangeWhitelist(conn unsafe.Pointer, handle cgo.Handle) error {
-	errCode := wrapper.TaosSetNotifyCB(conn, handle, common.TAOS_NOTIFY_WHITELIST_VER)
+func RegisterChangeWhitelist(conn unsafe.Pointer, handle cgo.Handle, logger *logrus.Entry, isDebug bool) error {
+	errCode := syncinterface.TaosSetNotifyCB(conn, handle, common.TAOS_NOTIFY_WHITELIST_VER, logger, isDebug)
 	if errCode != 0 {
-		return errors.NewError(int(errCode), wrapper.TaosErrorStr(nil))
+		return errors.NewError(int(errCode), syncinterface.TaosErrorStr(nil, logger, isDebug))
 	}
 	return nil
 }
@@ -131,10 +142,10 @@ func PutRegisterDropUserHandle(handle cgo.Handle) {
 	}
 }
 
-func RegisterDropUser(conn unsafe.Pointer, handle cgo.Handle) error {
-	errCode := wrapper.TaosSetNotifyCB(conn, handle, common.TAOS_NOTIFY_USER_DROPPED)
+func RegisterDropUser(conn unsafe.Pointer, handle cgo.Handle, logger *logrus.Entry, isDebug bool) error {
+	errCode := syncinterface.TaosSetNotifyCB(conn, handle, common.TAOS_NOTIFY_USER_DROPPED, logger, isDebug)
 	if errCode != 0 {
-		return errors.NewError(int(errCode), wrapper.TaosErrorStr(nil))
+		return errors.NewError(int(errCode), syncinterface.TaosErrorStr(nil, logger, isDebug))
 	}
 	return nil
 }
@@ -168,10 +179,10 @@ func PutRegisterChangePassHandle(handle cgo.Handle) {
 	}
 }
 
-func RegisterChangePass(conn unsafe.Pointer, handle cgo.Handle) error {
-	errCode := wrapper.TaosSetNotifyCB(conn, handle, common.TAOS_NOTIFY_PASSVER)
+func RegisterChangePass(conn unsafe.Pointer, handle cgo.Handle, logger *logrus.Entry, isDebug bool) error {
+	errCode := syncinterface.TaosSetNotifyCB(conn, handle, common.TAOS_NOTIFY_PASSVER, logger, isDebug)
 	if errCode != 0 {
-		return errors.NewError(int(errCode), wrapper.TaosErrorStr(nil))
+		return errors.NewError(int(errCode), syncinterface.TaosErrorStr(nil, logger, isDebug))
 	}
 	return nil
 }
