@@ -18,6 +18,8 @@ StandardError=journal
 Restart=always
 StartLimitBurst=3
 StartLimitInterval=60s
+EnvironmentFile=-/usr/local/taos/cfg/set_taos_malloc_env.conf
+
 
 [Install]
 WantedBy=multi-user.target
