@@ -18,7 +18,7 @@ StandardError=journal
 Restart=always
 StartLimitBurst=3
 StartLimitInterval=60s
-EnvironmentFile=-/etc/default/taos/set_taos_malloc_env.conf
+EnvironmentFile=-/etc/default/taosadapter
 
 
 [Install]
