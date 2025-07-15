@@ -53,10 +53,11 @@ type ModifyConfig struct {
 }
 
 type RecordSql struct {
-	StartTime string `json:"start_time"`
-	EndTime   string `json:"end_time"`
-	File      string `json:"file"`
-	Location  string `json:"location"`
+	StartTime     string `json:"start_time"`
+	EndTime       string `json:"end_time"`
+	File          string `json:"file"`
+	Location      string `json:"location"`
+	MaxConcurrent int32  `json:"max_concurrent"`
 }
 
 func checkConcurrent(locker *locker) gin.HandlerFunc {
@@ -120,10 +121,10 @@ func (ctl *ConfigController) startRecordSql(c *gin.Context) {
 		BadRequestResponseWithMsg(c, logger, 0xffff, "unmarshal json error")
 		return
 	}
-	err = recordsql.StartRecordSql(recordSql.StartTime, recordSql.EndTime, config.Conf.Log.Path, recordSql.File, recordSql.Location)
+	err = recordsql.StartRecordSql(recordSql.StartTime, recordSql.EndTime, config.Conf.Log.Path, recordSql.File, recordSql.Location, recordSql.MaxConcurrent)
 	if err != nil {
 		logger.Errorf("start record sql error, err:%s", err)
-		BadRequestResponseWithMsg(c, logger, 0xffff, "start record sql error")
+		BadRequestResponseWithMsg(c, logger, 0xffff, fmt.Sprintf("start record sql error: %s", err))
 		return
 	}
 	c.JSON(http.StatusOK, &Message{

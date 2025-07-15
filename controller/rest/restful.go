@@ -160,11 +160,9 @@ func DoQuery(c *gin.Context, db string, location *time.Location, reqID int64, re
 	ip := iptool.GetRealIP(c.Request)
 
 	// record sql to file
-	recordSql := recordsql.Enabled()
-	var record *recordsql.Record
+	record, recordSql := recordsql.GetSQLRecord()
 	var recordTime time.Time
 	if recordSql {
-		record = recordsql.GetSQLRecord()
 		defer recordsql.PutSQLRecord(record)
 		record.Init(sql, ip.String(), user, recordsql.HTTPType, uint64(reqID), c.MustGet(StartTimeKey).(time.Time))
 		recordTime = time.Now()
