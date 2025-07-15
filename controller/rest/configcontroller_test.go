@@ -170,8 +170,8 @@ func TestRecordSql(t *testing.T) {
 	user = "root"
 	password = "taosdata"
 	w = httptest.NewRecorder()
-	start := time.Now().Format(recordsql.RecordSQLTimeFormat)
-	end := time.Now().Add(time.Minute).Format(recordsql.RecordSQLTimeFormat)
+	start := time.Now().Format(recordsql.InputTimeFormat)
+	end := time.Now().Add(time.Minute).Format(recordsql.InputTimeFormat)
 	body = strings.NewReader(fmt.Sprintf(`{"start_time":"%s","end_time":"%s","file":"test.csv"}`, start, end))
 	req, _ = http.NewRequest(http.MethodPost, "/record_sql", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()

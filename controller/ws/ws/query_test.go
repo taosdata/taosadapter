@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"encoding/binary"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -14,8 +18,10 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
+	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 )
 
@@ -1224,4 +1230,176 @@ func checkBlockResult(t *testing.T, blockResult [][]driver.Value) {
 	assert.Equal(t, nil, blockResult[2][14])
 	assert.Equal(t, nil, blockResult[2][15])
 	assert.Equal(t, nil, blockResult[2][16])
+}
+
+func TestQueryRecordSql(t *testing.T) {
+	tmpDir := t.TempDir()
+	file := "test.csv"
+	output := filepath.Join(tmpDir, file)
+	sql := "select 1"
+	sql2 := "select 2"
+	now := time.Now()
+	defer func() {
+		f, err := os.Open(output)
+		require.NoError(t, err)
+		defer func() {
+			err = f.Close()
+			assert.NoError(t, err)
+		}()
+		csvReader := csv.NewReader(f)
+		records, err := csvReader.ReadAll()
+		require.Equal(t, 3, len(records), csvReader)
+		assert.Equal(t, recordsql.CsvHeader, records[0])
+		var checkRecord = func(record []string, qid string, expectSql string) {
+			t.Log(record)
+			assert.Equal(t, expectSql, record[recordsql.SQLIndex])
+			assert.Equal(t, "127.0.0.1", record[recordsql.IPIndex])
+			assert.Equal(t, "root", record[recordsql.UserIndex])
+			assert.Equal(t, recordsql.WSType.String(), record[recordsql.ConnTypeIndex])
+			assert.Equal(t, qid, record[recordsql.QIDIndex])
+			receiveTime, err := time.Parse(recordsql.ResultTimeFormat, record[recordsql.ReceiveTimeIndex])
+			assert.NoError(t, err)
+			freeTime, err := time.Parse(recordsql.ResultTimeFormat, record[recordsql.FreeTimeIndex])
+			assert.NoError(t, err)
+			assert.True(t, freeTime.After(receiveTime))
+			assert.True(t, receiveTime.After(now))
+			assert.Equal(t, "0", record[recordsql.GetConnDurationIndex])
+			queryDuration, err := strconv.Atoi(record[recordsql.QueryDurationIndex])
+			assert.NoError(t, err)
+			assert.Greater(t, queryDuration, 0)
+			fetchDuration, err := strconv.Atoi(record[recordsql.FetchDurationIndex])
+			assert.NoError(t, err)
+			assert.Greater(t, fetchDuration, 0)
+		}
+		checkRecord(records[1], "0x2", sql)
+		checkRecord(records[2], "0x223", sql2)
+	}()
+	start := time.Now().Format(recordsql.InputTimeFormat)
+	end := time.Now().Add(time.Second).Format(recordsql.InputTimeFormat)
+	err := recordsql.StartRecordSql(start, end, tmpDir, file, "", 0)
+	require.NoError(t, err)
+	defer func() {
+		recordsql.StopRecordSql()
+	}()
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	// connect
+	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata"}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp connResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+	assert.Equal(t, Connect, connResp.Action)
+
+	// query
+	queryReq := queryRequest{ReqID: 2, Sql: sql}
+	resp, err = doWebSocket(ws, WSQuery, &queryReq)
+	assert.NoError(t, err)
+	var queryResp queryResponse
+	err = json.Unmarshal(resp, &queryResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(2), queryResp.ReqID)
+	assert.Equal(t, 0, queryResp.Code, queryResp.Message)
+
+	// fetch
+	fetchReq := fetchRequest{ReqID: 3, ID: queryResp.ID}
+	resp, err = doWebSocket(ws, WSFetch, &fetchReq)
+	assert.NoError(t, err)
+	var fetchResp fetchResponse
+	err = json.Unmarshal(resp, &fetchResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(3), fetchResp.ReqID)
+	assert.Equal(t, 0, fetchResp.Code, fetchResp.Message)
+	assert.Equal(t, 1, fetchResp.Rows)
+
+	// fetch block
+	fetchBlockReq := fetchBlockRequest{ReqID: 4, ID: queryResp.ID}
+	fetchBlockResp, err := doWebSocket(ws, WSFetchBlock, &fetchBlockReq)
+	assert.NoError(t, err)
+	resultID, _, err := parseblock.ParseBlock(fetchBlockResp[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), resultID)
+
+	// fetch
+
+	fetchReq = fetchRequest{ReqID: 5, ID: queryResp.ID}
+	resp, err = doWebSocket(ws, WSFetch, &fetchReq)
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &fetchResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(5), fetchResp.ReqID)
+	assert.Equal(t, 0, fetchResp.Code, fetchResp.Message)
+	assert.Equal(t, true, fetchResp.Completed)
+
+	// binary
+
+	// query
+
+	var buffer bytes.Buffer
+	wstool.WriteUint64(&buffer, 0x223) // req id
+	wstool.WriteUint64(&buffer, 0)     // message id
+	wstool.WriteUint64(&buffer, uint64(BinaryQueryMessage))
+	wstool.WriteUint16(&buffer, 1)                 // version
+	wstool.WriteUint32(&buffer, uint32(len(sql2))) // sql length
+	buffer.WriteString(sql2)
+	err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
+	assert.NoError(t, err)
+	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &queryResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0x223), queryResp.ReqID)
+	assert.Equal(t, 0, queryResp.Code, queryResp.Message)
+
+	// fetch raw block
+	buffer.Reset()
+	wstool.WriteUint64(&buffer, 3)            // req id
+	wstool.WriteUint64(&buffer, queryResp.ID) // message id
+	wstool.WriteUint64(&buffer, uint64(FetchRawBlockMessage))
+	wstool.WriteUint16(&buffer, 1) // version
+	err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
+	assert.NoError(t, err)
+	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
+	fetchRawBlockResp := parseFetchRawBlock(resp)
+	assert.Equal(t, uint64(0xffffffffffffffff), fetchRawBlockResp.Flag)
+	assert.Equal(t, uint64(3), fetchRawBlockResp.ReqID)
+	assert.Equal(t, uint32(0), fetchRawBlockResp.Code, fetchRawBlockResp.Message)
+	assert.Equal(t, uint64(2), fetchRawBlockResp.ResultID)
+	assert.Equal(t, false, fetchRawBlockResp.Finished)
+	rows := parser.RawBlockGetNumOfRows(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]))
+	assert.Equal(t, int32(1), rows)
+	_, err = ReadBlockSimple(unsafe.Pointer(&fetchRawBlockResp.RawBlock[0]), queryResp.Precision)
+	assert.NoError(t, err)
+
+	// fetch raw block
+	buffer.Reset()
+	wstool.WriteUint64(&buffer, 5)            // req id
+	wstool.WriteUint64(&buffer, queryResp.ID) // message id
+	wstool.WriteUint64(&buffer, uint64(FetchRawBlockMessage))
+	wstool.WriteUint16(&buffer, 1) // version
+	err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
+	assert.NoError(t, err)
+	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
+	fetchRawBlockResp = parseFetchRawBlock(resp)
+	assert.Equal(t, uint64(0xffffffffffffffff), fetchRawBlockResp.Flag)
+	assert.Equal(t, uint64(5), fetchRawBlockResp.ReqID)
+	assert.Equal(t, uint32(0), fetchRawBlockResp.Code, fetchRawBlockResp.Message)
+	assert.Equal(t, uint64(2), fetchRawBlockResp.ResultID)
+	assert.Equal(t, true, fetchRawBlockResp.Finished)
+
 }

@@ -60,11 +60,9 @@ type queryResponse struct {
 }
 
 func (h *messageHandler) query(ctx context.Context, session *melody.Session, action string, req queryRequest, innerReqID uint64, logger *logrus.Entry, isDebug bool) {
-	recordSql := recordsql.Enabled()
-	var record *recordsql.Record
+	record, recordSql := recordsql.GetSQLRecord()
 	var recordTime time.Time
 	if recordSql {
-		record = recordsql.GetSQLRecord()
 		record.Init(req.Sql, h.ipStr, h.user, recordsql.WSType, innerReqID, time.Now())
 	}
 	sqlType := monitor.WSRecordRequest(req.Sql)
@@ -174,11 +172,9 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 		return
 	}
 	var reqSql = bytesutil.ToUnsafeString(sql)
-	recordSql := recordsql.Enabled()
-	var record *recordsql.Record
+	record, recordSql := recordsql.GetSQLRecord()
 	var recordTime time.Time
 	if recordSql {
-		record = recordsql.GetSQLRecord()
 		// copy sql to record, can not use reqSql directly, because it is only alive in this function scope
 		sqlStr := string(sql)
 		record.Init(sqlStr, h.ipStr, h.user, recordsql.WSType, innerReqID, time.Now())

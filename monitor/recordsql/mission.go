@@ -10,26 +10,33 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/log"
 )
 
+type outputWriter interface {
+	Write([]string) error
+	Flush()
+}
 type RecordMission struct {
-	enabled    bool
-	enableLock sync.RWMutex
-	ctx        context.Context
-	cancelFunc context.CancelFunc
-	startTime  time.Time
-	endTime    time.Time
-	outFile    *os.File
-	csvWriter  *csv.Writer
-	startChan  chan struct{}
-	writeLock  sync.Mutex
-	list       *RecordList
-	logger     *logrus.Entry
-	closeOnce  sync.Once
+	running       bool
+	runningLock   sync.RWMutex
+	ctx           context.Context
+	cancelFunc    context.CancelFunc
+	maxConcurrent int32
+	currentCount  atomic.Int32
+	startTime     time.Time
+	endTime       time.Time
+	outFile       *os.File
+	csvWriter     outputWriter
+	startChan     chan struct{}
+	writeLock     sync.Mutex
+	list          *RecordList
+	logger        *logrus.Entry
+	closeOnce     sync.Once
 }
 
 var globalRecordMission *RecordMission
@@ -41,20 +48,49 @@ func getGlobalRecordMission() *RecordMission {
 	return globalRecordMission
 }
 
-func setGlobalRecordSql(record *RecordMission) {
+func setGlobalRecordMission(record *RecordMission) {
 	lock.Lock()
 	defer lock.Unlock()
 	globalRecordMission = record
 }
 
-const RecordSQLTimeFormat = "2006-01-02 15:04:05"
+const InputTimeFormat = "2006-01-02 15:04:05"
+
+const ResultTimeFormat = "2006-01-02 15:04:05.000000"
+const (
+	SQLIndex = iota
+	IPIndex
+	UserIndex
+	ConnTypeIndex
+	QIDIndex
+	ReceiveTimeIndex
+	FreeTimeIndex
+	QueryDurationIndex
+	FetchDurationIndex
+	GetConnDurationIndex
+	TotalDurationIndex
+)
+
+var CsvHeader = []string{
+	"SQL",
+	"IP",
+	"User",
+	"ConnType",
+	"QID",
+	"ReceiveTime",
+	"FreeTime",
+	"QueryDuration(us)",
+	"FetchDuration(us)",
+	"GetConnDuration(us)",
+	"TotalDuration(us)",
+}
 
 // record sql logger
 var logger = log.GetLogger("RSQ")
 
-func StartRecordSql(startTime, endTime string, logPath string, outFile string, location string) error {
-	if Enabled() {
-		return fmt.Errorf("record sql is already enabled")
+func StartRecordSql(startTime, endTime string, logPath string, outFile string, location string, maxConcurrent int32) error {
+	if IsRunning() {
+		return fmt.Errorf("record sql is already running")
 	}
 
 	loc := time.Local
@@ -67,25 +103,22 @@ func StartRecordSql(startTime, endTime string, logPath string, outFile string, l
 	if location != "" {
 		loc, err = time.LoadLocation(location)
 		if err != nil {
-			return fmt.Errorf("invalid location format: %v, error: %v", location, err)
+			return fmt.Errorf("invalid location format: %s, error: %s", location, err)
 		}
 	}
-	startTimeParsed, err := time.ParseInLocation(RecordSQLTimeFormat, startTime, loc)
+	startTimeParsed, err := time.ParseInLocation(InputTimeFormat, startTime, loc)
 	if err != nil {
-		return fmt.Errorf("invalid start time format: %v, error: %v", startTime, err)
+		return fmt.Errorf("invalid start time format: %s, error: %s", startTime, err)
 	}
-	endTimeParsed, err := time.ParseInLocation(RecordSQLTimeFormat, endTime, loc)
+	endTimeParsed, err := time.ParseInLocation(InputTimeFormat, endTime, loc)
 	if err != nil {
-		return fmt.Errorf("invalid end time format: %v, error: %v", endTime, err)
-	}
-	if startTimeParsed.IsZero() || endTimeParsed.IsZero() {
-		return fmt.Errorf("start time or end time is zero")
+		return fmt.Errorf("invalid end time format: %s, error: %s", endTime, err)
 	}
 	if startTimeParsed.After(endTimeParsed) {
-		return fmt.Errorf("start time %v is after end time %v", startTime, endTime)
+		return fmt.Errorf("start time %s is after end time %s", startTime, endTime)
 	}
 	if endTimeParsed.Before(time.Now()) {
-		return fmt.Errorf("end time %v is in the past", endTime)
+		return fmt.Errorf("end time %s is in the past", endTime)
 	}
 	if outFile == "" {
 		return fmt.Errorf("output file cannot be empty")
@@ -93,13 +126,13 @@ func StartRecordSql(startTime, endTime string, logPath string, outFile string, l
 
 	logPathAbs, err := filepath.Abs(logPath)
 	if err != nil {
-		return fmt.Errorf("error getting absolute path for log path %s: %v", logPath, err)
+		return fmt.Errorf("error getting absolute path for log path %s: %s", logPath, err)
 	}
 	writeFile := path.Join(logPathAbs, outFile)
 	// check if the output file is in the same directory as the log path
 	absWriteFile, err := filepath.Abs(writeFile)
 	if err != nil {
-		return fmt.Errorf("error getting absolute path for output file %s: %v", writeFile, err)
+		return fmt.Errorf("error getting absolute path for output file %s: %s", writeFile, err)
 	}
 	outFileDir := path.Dir(absWriteFile)
 	if outFileDir != logPathAbs {
@@ -108,23 +141,28 @@ func StartRecordSql(startTime, endTime string, logPath string, outFile string, l
 	// create the output file
 	f, err := os.Create(writeFile)
 	if err != nil {
-		return fmt.Errorf("error creating output file %s: %v", logPathAbs, err)
+		return fmt.Errorf("error creating output file %s: %s", logPathAbs, err)
 	}
 	csvWriter := csv.NewWriter(f)
+	err = csvWriter.Write(CsvHeader)
+	if err != nil {
+		return fmt.Errorf("error writing csv header: %s", err)
+	}
 	ctx, cancel := context.WithDeadline(context.Background(), endTimeParsed)
 	mission := &RecordMission{
-		startTime:  startTimeParsed,
-		endTime:    endTimeParsed,
-		outFile:    f,
-		csvWriter:  csvWriter,
-		ctx:        ctx,
-		cancelFunc: cancel,
-		startChan:  make(chan struct{}, 1),
-		list:       NewRecordList(),
-		logger:     logger,
+		startTime:     startTimeParsed,
+		endTime:       endTimeParsed,
+		outFile:       f,
+		csvWriter:     csvWriter,
+		ctx:           ctx,
+		cancelFunc:    cancel,
+		startChan:     make(chan struct{}, 1),
+		list:          NewRecordList(),
+		logger:        logger,
+		maxConcurrent: maxConcurrent,
 	}
 	go mission.start()
-	setGlobalRecordSql(mission)
+	setGlobalRecordMission(mission)
 	return nil
 }
 
@@ -134,26 +172,27 @@ func StopRecordSql() {
 		return
 	}
 	mission.Stop()
+	setGlobalRecordMission(nil)
 }
 
-func Enabled() bool {
+func IsRunning() bool {
 	mission := getGlobalRecordMission()
 	if mission == nil {
 		return false
 	}
-	return mission.getEnabled()
+	return mission.isRunning()
 }
 
-func (c *RecordMission) getEnabled() bool {
-	c.enableLock.RLock()
-	defer c.enableLock.RUnlock()
-	return c.enabled
+func (c *RecordMission) isRunning() bool {
+	c.runningLock.RLock()
+	defer c.runningLock.RUnlock()
+	return c.running
 }
 
-func (c *RecordMission) setEnabled(enabled bool) {
-	c.enableLock.Lock()
-	defer c.enableLock.Unlock()
-	c.enabled = enabled
+func (c *RecordMission) setRunning(running bool) {
+	c.runningLock.Lock()
+	defer c.runningLock.Unlock()
+	c.running = running
 }
 
 func (c *RecordMission) start() {
@@ -168,7 +207,7 @@ func (c *RecordMission) start() {
 	}()
 	duration := time.Until(c.startTime)
 	if duration <= 0 {
-		c.setEnabled(true)
+		c.setRunning(true)
 		go c.run()
 		return
 	}
@@ -179,7 +218,7 @@ func (c *RecordMission) start() {
 	}()
 	select {
 	case <-timer.C:
-		c.setEnabled(true)
+		c.setRunning(true)
 		go c.run()
 		return
 	case <-c.ctx.Done():
@@ -201,7 +240,9 @@ func (c *RecordMission) run() {
 func (c *RecordMission) Stop() {
 	c.closeOnce.Do(func() {
 		// set flag false to stop
-		c.setEnabled(false)
+		c.runningLock.Lock()
+		defer c.runningLock.Unlock()
+		c.running = false
 		// cancel the context to stop the goroutine
 		c.cancelFunc()
 		// wait for the start to complete
@@ -216,34 +257,35 @@ func (c *RecordMission) Stop() {
 		// close file
 		err := c.outFile.Close()
 		if err != nil {
-			c.logger.Errorf("error closing output file: %v", err)
+			c.logger.Errorf("error closing output file: %s", err)
 		}
 	})
 }
 
 func (c *RecordMission) writeRecord(record *Record) {
-	c.writeLock.Lock()
-	defer c.writeLock.Unlock()
+	c.currentCount.Add(-1)
 	record.Lock()
 	defer record.Unlock()
 	if len(record.SQL) == 0 {
 		return
 	}
+	c.writeLock.Lock()
+	defer c.writeLock.Unlock()
 	row := record.toRow()
 	err := c.csvWriter.Write(row)
 	if err != nil {
-		c.logger.Errorf("error writing record to csv: %v", err)
+		c.logger.Errorf("error writing record to csv: %s", err)
 	}
 }
 
-type RecordSQLType uint8
+type ConnType uint8
 
 const (
-	HTTPType RecordSQLType = 1
-	WSType   RecordSQLType = 2
+	HTTPType ConnType = 1
+	WSType   ConnType = 2
 )
 
-func (t RecordSQLType) String() string {
+func (t ConnType) String() string {
 	switch t {
 	case HTTPType:
 		return "http"
@@ -258,7 +300,7 @@ type Record struct {
 	SQL             string         // SQL
 	IP              string         // Client ip
 	User            string         // Username
-	Type            RecordSQLType  // ConnType (HTTP,WS)
+	ConnType        ConnType       // ConnType (HTTP,WS)
 	QID             uint64         // Query ID
 	ReceiveTime     time.Time      // Receive time
 	FreeTime        time.Time      // taos free time
@@ -271,13 +313,13 @@ type Record struct {
 	sync.Mutex                     // lock for thread safety
 }
 
-func (r *Record) Init(sql string, ip string, user string, typ RecordSQLType, qid uint64, receiveTime time.Time) {
+func (r *Record) Init(sql string, ip string, user string, connType ConnType, qid uint64, receiveTime time.Time) {
 	r.Lock()
 	defer r.Unlock()
 	r.SQL = sql
 	r.IP = ip
 	r.User = user
-	r.Type = typ
+	r.ConnType = connType
 	r.QID = qid
 	r.ReceiveTime = receiveTime
 }
@@ -306,29 +348,15 @@ func (r *Record) SetFreeTime(freeTime time.Time) {
 	r.FreeTime = freeTime
 }
 
-const (
-	SQLIndex = iota
-	IPIndex
-	UserIndex
-	TypeIndex
-	QIDIndex
-	ReceiveTimeIndex
-	FreeTimeIndex
-	QueryDurationIndex
-	FetchDurationIndex
-	GetConnDurationIndex
-	TotalDurationIndex
-)
-
 func (r *Record) toRow() []string {
 	row := make([]string, 11)
 	row[SQLIndex] = r.SQL
 	row[IPIndex] = r.IP
 	row[UserIndex] = r.User
-	row[TypeIndex] = r.Type.String()
+	row[ConnTypeIndex] = r.ConnType.String()
 	row[QIDIndex] = fmt.Sprintf("0x%x", r.QID)
-	row[ReceiveTimeIndex] = r.ReceiveTime.Format(RecordSQLTimeFormat)
-	row[FreeTimeIndex] = r.FreeTime.Format(RecordSQLTimeFormat)
+	row[ReceiveTimeIndex] = r.ReceiveTime.Format(ResultTimeFormat)
+	row[FreeTimeIndex] = r.FreeTime.Format(ResultTimeFormat)
 	row[QueryDurationIndex] = strconv.FormatInt(r.QueryDuration.Microseconds(), 10)
 	row[FetchDurationIndex] = strconv.FormatInt(r.FetchDuration.Microseconds(), 10)
 	row[GetConnDurationIndex] = strconv.FormatInt(r.GetConnDuration.Microseconds(), 10)
@@ -345,7 +373,7 @@ func (r *Record) reset() {
 	r.SQL = ""
 	r.IP = ""
 	r.User = ""
-	r.Type = 0
+	r.ConnType = 0
 	r.QID = 0
 	r.ReceiveTime = time.Time{}
 	r.FreeTime = time.Time{}
@@ -368,21 +396,30 @@ func (r *Record) write() {
 
 var sqlRecordPool sync.Pool
 
-func GetSQLRecord() *Record {
+func GetSQLRecord() (record *Record, running bool) {
 	mission := getGlobalRecordMission()
-	var r *Record
-	record := sqlRecordPool.Get()
-	if record == nil {
-		r = &Record{}
+	if mission == nil {
+		return nil, false
+	}
+	mission.runningLock.RLock()
+	defer mission.runningLock.RUnlock()
+	if !mission.running {
+		return nil, false
+	}
+	if mission.maxConcurrent > 0 && mission.currentCount.Load() >= mission.maxConcurrent {
+		return nil, false
+	}
+	cachedRecord := sqlRecordPool.Get()
+	if cachedRecord == nil {
+		record = &Record{}
 	} else {
-		r = record.(*Record)
+		record = cachedRecord.(*Record)
 	}
-	r.mission = mission
-	if mission != nil {
-		ele := mission.list.Add(r)
-		r.ele = ele
-	}
-	return r
+	record.mission = mission
+	mission.currentCount.Add(1)
+	ele := mission.list.Add(record)
+	record.ele = ele
+	return record, true
 }
 
 func PutSQLRecord(record *Record) {

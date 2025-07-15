@@ -42,8 +42,9 @@ func (rl *RecordList) Remove(ele *list.Element) interface{} {
 func (rl *RecordList) RemoveAll() []*Record {
 	rl.lock.Lock()
 	defer rl.lock.Unlock()
-	records := make([]*Record, rl.list.Len())
-	for i := 0; i < rl.list.Len(); i++ {
+	count := rl.list.Len()
+	records := make([]*Record, count)
+	for i := 0; i < count; i++ {
 		ele := rl.list.Front()
 		records[i] = rl.list.Remove(ele).(*Record)
 		ele.Value = nil
