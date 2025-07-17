@@ -1276,10 +1276,10 @@ func TestQueryRecordSql(t *testing.T) {
 	}()
 	start := time.Now().Format(recordsql.InputTimeFormat)
 	end := time.Now().Add(time.Second).Format(recordsql.InputTimeFormat)
-	err := recordsql.StartRecordSql(start, end, tmpDir, file, "", 0)
+	err := recordsql.StartRecordSql(start, end, tmpDir, file, "", 0, 1024)
 	require.NoError(t, err)
 	defer func() {
-		recordsql.StopRecordSql()
+		_ = recordsql.StopRecordSql()
 	}()
 	s := httptest.NewServer(router)
 	defer s.Close()

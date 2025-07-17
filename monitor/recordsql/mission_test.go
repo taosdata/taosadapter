@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	rotatelogs "github.com/taosdata/file-rotatelogs/v2"
 )
 
 func TestGlobalRecordMission(t *testing.T) {
@@ -69,21 +70,26 @@ func TestStartRecordSql(t *testing.T) {
 	validStart := time.Now().Add(1 * time.Hour).Format(InputTimeFormat)
 	validEnd := time.Now().Add(2 * time.Hour).Format(InputTimeFormat)
 	validOutFile := "output.csv"
+	total, _, err := rotatelogs.GetDiskSize(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to get disk size: %v", err)
+	}
 
 	// Mock global state
 	originalGlobal := getGlobalRecordMission()
 	defer setGlobalRecordMission(originalGlobal)
 
 	tests := []struct {
-		name        string
-		startTime   string
-		endTime     string
-		logPath     string
-		outFile     string
-		location    string
-		preTest     func()
-		postTest    func()
-		expectedErr string
+		name         string
+		startTime    string
+		endTime      string
+		logPath      string
+		outFile      string
+		location     string
+		reservedDisk uint64
+		preTest      func()
+		postTest     func()
+		expectedErr  string
 	}{
 		{
 			name:        "already running",
@@ -150,7 +156,7 @@ func TestStartRecordSql(t *testing.T) {
 			endTime:     validEnd,
 			logPath:     "/nonexistent/path",
 			outFile:     validOutFile,
-			expectedErr: "error creating output file",
+			expectedErr: "error getting disk size for log path",
 		},
 		{
 			name:      "output file not in log path",
@@ -160,6 +166,15 @@ func TestStartRecordSql(t *testing.T) {
 			outFile:   "../output.csv",
 			// This expects the test to create a file one level above tempDir
 			expectedErr: "output file directory does not match log path",
+		},
+		{
+			name:         "reserved disk size exceeds total disk size",
+			startTime:    validStart,
+			endTime:      validEnd,
+			logPath:      tempDir,
+			outFile:      validOutFile,
+			reservedDisk: total + 1, // Set reserved disk size larger than total
+			expectedErr:  "not enough disk space in log path",
 		},
 		{
 			name:        "successful start",
@@ -196,8 +211,11 @@ func TestStartRecordSql(t *testing.T) {
 				err := os.MkdirAll(parentDir, 0755)
 				require.NoError(t, err)
 			}
-
-			err := StartRecordSql(tt.startTime, tt.endTime, tt.logPath, tt.outFile, tt.location, 1)
+			var reservedDisk uint64 = 1024
+			if tt.reservedDisk != 0 {
+				reservedDisk = tt.reservedDisk
+			}
+			err := StartRecordSql(tt.startTime, tt.endTime, tt.logPath, tt.outFile, tt.location, 1, reservedDisk)
 
 			if tt.expectedErr != "" {
 				require.Error(t, err)
@@ -269,7 +287,7 @@ func TestStopRecordSql(t *testing.T) {
 			expectedMission := tt.setup()
 
 			// Run the function
-			StopRecordSql()
+			_ = StopRecordSql()
 
 			// Verify results
 			if tt.expectStop && expectedMission != nil {
@@ -305,7 +323,7 @@ func TestStopRecordSqlConcurrency(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			StopRecordSql()
+			_ = StopRecordSql()
 		}()
 	}
 	wg.Wait()
@@ -439,6 +457,46 @@ func TestRecordMissionRun(t *testing.T) {
 		// Verify it's running
 		assert.True(t, mission.isRunning())
 
+		// Cancel the context to stop
+		cancel()
+
+		// Give some time to stop
+		time.Sleep(10 * time.Millisecond)
+		assert.False(t, mission.isRunning())
+	})
+	t.Run("check get disk size", func(t *testing.T) {
+		// Setup
+		tmpDir := t.TempDir()
+		CheckDiskSizeInterval = 10 * time.Millisecond
+		defer func() { CheckDiskSizeInterval = 25 * time.Second }()
+		ctx, cancel := context.WithCancel(context.Background())
+
+		tempFile, err := os.CreateTemp("", "test-recording-*.csv")
+		require.NoError(t, err)
+		defer func() {
+			err = os.Remove(tempFile.Name())
+			assert.NoError(t, err)
+		}()
+
+		mission := &RecordMission{
+			outFile:    tempFile,
+			csvWriter:  csv.NewWriter(tempFile),
+			ctx:        ctx,
+			cancelFunc: cancel,
+			startChan:  make(chan struct{}, 1),
+			list:       NewRecordList(),
+			logger:     logger,
+			running:    true, // manually set to running
+			logDir:     tmpDir,
+		}
+
+		// Execute in goroutine
+		go mission.run()
+		close(mission.startChan)
+		// Verify it's running
+		assert.True(t, mission.isRunning())
+		time.Sleep(time.Millisecond * 20)
+		assert.Greater(t, mission.availDiskSize.Load(), uint64(0))
 		// Cancel the context to stop
 		cancel()
 
@@ -770,6 +828,22 @@ func TestWriteRecord(t *testing.T) {
 		mission.writeRecord(r)
 		assert.True(t, mockCSV.writeCalled)
 	})
+
+	t.Run("no enough disk space", func(t *testing.T) {
+		mockCSV := &mockCSVWriter{err: os.ErrNotExist} // Simulate disk space error
+		mission := &RecordMission{
+			csvWriter:        mockCSV,
+			logger:           logrus.NewEntry(logrus.New()),
+			reservedDiskSize: 1024,
+		}
+		mission.availDiskSize.Store(10) // Set available disk size less than reserved
+		r := &Record{
+			SQL: "SELECT 1",
+		}
+
+		mission.writeRecord(r)
+		assert.False(t, mockCSV.writeCalled)
+	})
 }
 
 func TestConnTypeString(t *testing.T) {
@@ -885,4 +959,125 @@ func (m *mockCSVWriter) Write(record []string) error {
 }
 
 func (m *mockCSVWriter) Flush() {
+}
+
+func TestGetRecordState(t *testing.T) {
+	// Setup
+	tempDir := t.TempDir()
+	tempFile, err := os.CreateTemp(tempDir, "test-recording-*.csv")
+	require.NoError(t, err)
+	defer func() {
+		err = tempFile.Close()
+		assert.NoError(t, err)
+	}()
+
+	originalMission := getGlobalRecordMission()
+	defer setGlobalRecordMission(originalMission)
+
+	tests := []struct {
+		name          string
+		setupMission  func() *RecordMission
+		expectedState RecordState
+	}{
+		{
+			name:         "no mission exists",
+			setupMission: func() *RecordMission { return nil },
+			expectedState: RecordState{
+				Exists: false,
+			},
+		},
+		{
+			name: "mission exists but not running",
+			setupMission: func() *RecordMission {
+				ctx, cancel := context.WithCancel(context.Background())
+				return &RecordMission{
+					running:          false,
+					ctx:              ctx,
+					cancelFunc:       cancel,
+					maxConcurrent:    10,
+					startTime:        time.Now(),
+					endTime:          time.Now().Add(1 * time.Hour),
+					outFile:          tempFile,
+					logDir:           tempDir,
+					reservedDiskSize: 1024,
+					csvWriter:        csv.NewWriter(tempFile),
+					startChan:        make(chan struct{}),
+					list:             NewRecordList(),
+					logger:           logrus.NewEntry(logrus.New()),
+				}
+			},
+			expectedState: RecordState{
+				Exists:             true,
+				Running:            false,
+				StartTime:          time.Now().Format(ResultTimeFormat),
+				EndTime:            time.Now().Add(1 * time.Hour).Format(ResultTimeFormat),
+				File:               filepath.Base(tempFile.Name()),
+				MaxConcurrent:      10,
+				CurrentConcurrent:  0,
+				ReservedDiskBytes:  1024,
+				AvailableDiskBytes: 0,
+			},
+		},
+		{
+			name: "mission exists and running",
+			setupMission: func() *RecordMission {
+				ctx, cancel := context.WithCancel(context.Background())
+				mission := &RecordMission{
+					running:          true,
+					ctx:              ctx,
+					cancelFunc:       cancel,
+					maxConcurrent:    20,
+					startTime:        time.Now(),
+					endTime:          time.Now().Add(2 * time.Hour),
+					outFile:          tempFile,
+					logDir:           tempDir,
+					reservedDiskSize: 2048,
+					csvWriter:        csv.NewWriter(tempFile),
+					startChan:        make(chan struct{}),
+					list:             NewRecordList(),
+					logger:           logrus.NewEntry(logrus.New()),
+				}
+				mission.currentCount.Store(5)
+				mission.availDiskSize.Store(512)
+				return mission
+			},
+			expectedState: RecordState{
+				Exists:             true,
+				Running:            true,
+				StartTime:          time.Now().Format(ResultTimeFormat),
+				EndTime:            time.Now().Add(2 * time.Hour).Format(ResultTimeFormat),
+				File:               filepath.Base(tempFile.Name()),
+				MaxConcurrent:      20,
+				CurrentConcurrent:  5,
+				ReservedDiskBytes:  2048,
+				AvailableDiskBytes: 512,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup test mission
+			mission := tt.setupMission()
+			setGlobalRecordMission(mission)
+
+			// Execute
+			state := GetRecordState()
+
+			// Verify
+			assert.Equal(t, tt.expectedState.Exists, state.Exists)
+			if tt.expectedState.Exists {
+				assert.Equal(t, tt.expectedState.Running, state.Running)
+				assert.Equal(t, tt.expectedState.File, state.File)
+				assert.Equal(t, tt.expectedState.MaxConcurrent, state.MaxConcurrent)
+				assert.Equal(t, tt.expectedState.CurrentConcurrent, state.CurrentConcurrent)
+				assert.Equal(t, tt.expectedState.ReservedDiskBytes, state.ReservedDiskBytes)
+				assert.Equal(t, tt.expectedState.AvailableDiskBytes, state.AvailableDiskBytes)
+
+				// For time fields, we can't compare exact values, so just check they're formatted
+				assert.NotEmpty(t, state.StartTime)
+				assert.NotEmpty(t, state.EndTime)
+			}
+		})
+	}
 }
