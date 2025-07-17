@@ -14,29 +14,48 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	rotatelogs "github.com/taosdata/file-rotatelogs/v2"
 	"github.com/taosdata/taosadapter/v3/log"
 )
+
+var CheckDiskSizeInterval = 25 * time.Second
 
 type outputWriter interface {
 	Write([]string) error
 	Flush()
 }
+
 type RecordMission struct {
-	running       bool
-	runningLock   sync.RWMutex
-	ctx           context.Context
-	cancelFunc    context.CancelFunc
-	maxConcurrent int32
-	currentCount  atomic.Int32
-	startTime     time.Time
-	endTime       time.Time
-	outFile       *os.File
-	csvWriter     outputWriter
-	startChan     chan struct{}
-	writeLock     sync.Mutex
-	list          *RecordList
-	logger        *logrus.Entry
-	closeOnce     sync.Once
+	running          bool
+	runningLock      sync.RWMutex
+	ctx              context.Context
+	cancelFunc       context.CancelFunc
+	maxConcurrent    int32
+	currentCount     atomic.Int32
+	startTime        time.Time
+	endTime          time.Time
+	outFile          *os.File
+	logDir           string
+	availDiskSize    atomic.Uint64
+	reservedDiskSize uint64
+	csvWriter        outputWriter
+	startChan        chan struct{}
+	writeLock        sync.Mutex
+	list             *RecordList
+	logger           *logrus.Entry
+	closeOnce        sync.Once
+}
+
+type RecordState struct {
+	Exists             bool   `json:"exists"`
+	Running            bool   `json:"running"`
+	StartTime          string `json:"start_time"`
+	EndTime            string `json:"end_time"`
+	File               string `json:"file"`
+	MaxConcurrent      int32  `json:"max_concurrent"`
+	CurrentConcurrent  int32  `json:"current_concurrent"`
+	ReservedDiskBytes  uint64 `json:"reserved_disk_bytes"`
+	AvailableDiskBytes uint64 `json:"available_disk_bytes"`
 }
 
 var globalRecordMission *RecordMission
@@ -88,18 +107,13 @@ var CsvHeader = []string{
 // record sql logger
 var logger = log.GetLogger("RSQ")
 
-func StartRecordSql(startTime, endTime string, logPath string, outFile string, location string, maxConcurrent int32) error {
+func StartRecordSql(startTime, endTime string, logPath string, outFile string, location string, maxConcurrent int32, reservedDiskSize uint64) error {
 	if IsRunning() {
 		return fmt.Errorf("record sql is already running")
 	}
 
 	loc := time.Local
 	var err error
-	defer func() {
-		if err != nil {
-			logger.Error(err.Error())
-		}
-	}()
 	if location != "" {
 		loc, err = time.LoadLocation(location)
 		if err != nil {
@@ -134,6 +148,14 @@ func StartRecordSql(startTime, endTime string, logPath string, outFile string, l
 	if err != nil {
 		return fmt.Errorf("error getting absolute path for output file %s: %s", writeFile, err)
 	}
+	// check if the log path has enough disk space
+	_, avail, err := rotatelogs.GetDiskSize(logPathAbs)
+	if err != nil {
+		return fmt.Errorf("error getting disk size for log path %s: %s", logPathAbs, err)
+	}
+	if avail < reservedDiskSize {
+		return fmt.Errorf("not enough disk space in log path %s, available: %d, required: %d", logPathAbs, avail, reservedDiskSize)
+	}
 	outFileDir := path.Dir(absWriteFile)
 	if outFileDir != logPathAbs {
 		return fmt.Errorf("output file directory does not match log path, out dir: %s, log dir: %s", outFileDir, logPathAbs)
@@ -150,29 +172,43 @@ func StartRecordSql(startTime, endTime string, logPath string, outFile string, l
 	}
 	ctx, cancel := context.WithDeadline(context.Background(), endTimeParsed)
 	mission := &RecordMission{
-		startTime:     startTimeParsed,
-		endTime:       endTimeParsed,
-		outFile:       f,
-		csvWriter:     csvWriter,
-		ctx:           ctx,
-		cancelFunc:    cancel,
-		startChan:     make(chan struct{}, 1),
-		list:          NewRecordList(),
-		logger:        logger,
-		maxConcurrent: maxConcurrent,
+		startTime:        startTimeParsed,
+		endTime:          endTimeParsed,
+		outFile:          f,
+		csvWriter:        csvWriter,
+		ctx:              ctx,
+		cancelFunc:       cancel,
+		startChan:        make(chan struct{}, 1),
+		list:             NewRecordList(),
+		logger:           logger,
+		maxConcurrent:    maxConcurrent,
+		logDir:           logPathAbs,
+		reservedDiskSize: reservedDiskSize,
 	}
+	mission.availDiskSize.Store(avail)
 	go mission.start()
 	setGlobalRecordMission(mission)
 	return nil
 }
 
-func StopRecordSql() {
+type MissionInfo struct {
+	StartTime string `json:"start_time"`
+	EndTime   string `json:"end_time"`
+	File      string `json:"file"`
+}
+
+func StopRecordSql() *MissionInfo {
 	mission := getGlobalRecordMission()
 	if mission == nil {
-		return
+		return nil
 	}
 	mission.Stop()
 	setGlobalRecordMission(nil)
+	return &MissionInfo{
+		StartTime: mission.startTime.Format(InputTimeFormat),
+		EndTime:   mission.endTime.Format(InputTimeFormat),
+		File:      path.Base(mission.outFile.Name()),
+	}
 }
 
 func IsRunning() bool {
@@ -228,11 +264,18 @@ func (c *RecordMission) start() {
 
 func (c *RecordMission) run() {
 	c.logger.Infof("start recording sql")
+	ticker := time.NewTicker(CheckDiskSizeInterval)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-c.ctx.Done():
 			c.Stop()
 			return
+		case <-ticker.C:
+			_, avail, err := rotatelogs.GetDiskSize(c.logDir)
+			if err == nil {
+				c.availDiskSize.Store(avail)
+			}
 		}
 	}
 }
@@ -263,7 +306,12 @@ func (c *RecordMission) Stop() {
 }
 
 func (c *RecordMission) writeRecord(record *Record) {
+	logger.Tracef("write record: %s", record.SQL)
 	c.currentCount.Add(-1)
+	if c.availDiskSize.Load() < c.reservedDiskSize {
+		c.logger.Warn("not enough disk space, skip writing record")
+		return
+	}
 	record.Lock()
 	defer record.Unlock()
 	if len(record.SQL) == 0 {
@@ -272,9 +320,10 @@ func (c *RecordMission) writeRecord(record *Record) {
 	c.writeLock.Lock()
 	defer c.writeLock.Unlock()
 	row := record.toRow()
+	c.logger.Tracef("writing record to csv: %s", row)
 	err := c.csvWriter.Write(row)
 	if err != nil {
-		c.logger.Errorf("error writing record to csv: %s", err)
+		c.logger.Errorf("error writing record to csv: %s, data: %s", err, row)
 	}
 }
 
@@ -397,16 +446,20 @@ func (r *Record) write() {
 var sqlRecordPool sync.Pool
 
 func GetSQLRecord() (record *Record, running bool) {
+	logger.Tracef("start get sql record")
 	mission := getGlobalRecordMission()
 	if mission == nil {
+		logger.Tracef("no record mission running")
 		return nil, false
 	}
 	mission.runningLock.RLock()
 	defer mission.runningLock.RUnlock()
 	if !mission.running {
+		logger.Tracef("record mission is not running")
 		return nil, false
 	}
 	if mission.maxConcurrent > 0 && mission.currentCount.Load() >= mission.maxConcurrent {
+		logger.Tracef("max concurrent limit reached, current: %d, max: %d", mission.currentCount.Load(), mission.maxConcurrent)
 		return nil, false
 	}
 	cachedRecord := sqlRecordPool.Get()
@@ -419,6 +472,7 @@ func GetSQLRecord() (record *Record, running bool) {
 	mission.currentCount.Add(1)
 	ele := mission.list.Add(record)
 	record.ele = ele
+	logger.Tracef("get sql record scuccess")
 	return record, true
 }
 
@@ -426,4 +480,27 @@ func PutSQLRecord(record *Record) {
 	record.write()
 	record.reset()
 	sqlRecordPool.Put(record)
+}
+
+func GetRecordState() *RecordState {
+	mission := getGlobalRecordMission()
+	if mission == nil {
+		return &RecordState{
+			Exists: false,
+		}
+	}
+	mission.runningLock.RLock()
+	defer mission.runningLock.RUnlock()
+	state := &RecordState{
+		Exists:             true,
+		Running:            mission.running,
+		StartTime:          mission.startTime.Format(ResultTimeFormat),
+		EndTime:            mission.endTime.Format(ResultTimeFormat),
+		File:               path.Base(mission.outFile.Name()),
+		MaxConcurrent:      mission.maxConcurrent,
+		CurrentConcurrent:  mission.currentCount.Load(),
+		ReservedDiskBytes:  mission.reservedDiskSize,
+		AvailableDiskBytes: mission.availDiskSize.Load(),
+	}
+	return state
 }

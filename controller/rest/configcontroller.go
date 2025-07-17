@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync/atomic"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -21,6 +22,7 @@ func (ctl *ConfigController) Init(r gin.IRouter) {
 	r.PUT("config", prepareCtx, checkConcurrent(changeConfigLocker), CheckAuth, checkTDengineConnection, ctl.changeConfig)
 	r.POST("record_sql", prepareCtx, checkConcurrent(recordSqlLocker), CheckAuth, checkTDengineConnection, ctl.startRecordSql)
 	r.DELETE("record_sql", prepareCtx, checkConcurrent(recordSqlLocker), CheckAuth, checkTDengineConnection, ctl.stopRecordSql)
+	r.GET("record_sql", prepareCtx, CheckAuth, checkTDengineConnection, ctl.getRecordSqlState)
 }
 
 const (
@@ -105,6 +107,13 @@ func (ctl *ConfigController) changeConfig(c *gin.Context) {
 	logger.Debugf("change config success")
 }
 
+const DefaultRecordFileEndTime = "9999-01-01 00:00:00" // 9999-01-01 00:00:00
+
+type StartRecordSuccessResp struct {
+	Message
+	File string `json:"file"`
+}
+
 func (ctl *ConfigController) startRecordSql(c *gin.Context) {
 	logger := c.MustGet(LoggerKey).(*logrus.Entry)
 	body, err := c.GetRawData()
@@ -115,34 +124,93 @@ func (ctl *ConfigController) startRecordSql(c *gin.Context) {
 	}
 	logger.Tracef("get start record sql request, req:%s", body)
 	var recordSql RecordSql
-	err = json.Unmarshal(body, &recordSql)
-	if err != nil {
-		logger.Errorf("unmarshal json error, err:%s, req:%s", err, body)
-		BadRequestResponseWithMsg(c, logger, 0xffff, "unmarshal json error")
-		return
+	if len(body) != 0 {
+		err = json.Unmarshal(body, &recordSql)
+		if err != nil {
+			logger.Errorf("unmarshal json error, err:%s, req:%s", err, body)
+			BadRequestResponseWithMsg(c, logger, 0xffff, "unmarshal json error")
+			return
+		}
+	} else {
+		logger.Debugf("no request body, use default record sql config")
+		now := time.Now()
+		microseconds := now.Nanosecond() / 1000
+		formattedWithMicro := fmt.Sprintf(
+			"%04d%02d%02d_%02d%02d%02d_%06d",
+			now.Year(), now.Month(), now.Day(),
+			now.Hour(), now.Minute(), now.Second(),
+			microseconds,
+		)
+		recordFile := fmt.Sprintf("record_sql_%d_%s.csv", config.Conf.InstanceID, formattedWithMicro)
+		logger.Debugf("use default record sql config %s", recordFile)
+		recordSql = RecordSql{
+			StartTime:     now.Format(recordsql.InputTimeFormat),
+			EndTime:       DefaultRecordFileEndTime,
+			File:          recordFile,
+			Location:      "",
+			MaxConcurrent: 0,
+		}
 	}
-	err = recordsql.StartRecordSql(recordSql.StartTime, recordSql.EndTime, config.Conf.Log.Path, recordSql.File, recordSql.Location, recordSql.MaxConcurrent)
+
+	err = recordsql.StartRecordSql(
+		recordSql.StartTime,
+		recordSql.EndTime,
+		config.Conf.Log.Path,
+		recordSql.File,
+		recordSql.Location,
+		recordSql.MaxConcurrent,
+		uint64(config.Conf.Log.ReservedDiskSize),
+	)
 	if err != nil {
 		logger.Errorf("start record sql error, err:%s", err)
 		BadRequestResponseWithMsg(c, logger, 0xffff, fmt.Sprintf("start record sql error: %s", err))
 		return
 	}
-	c.JSON(http.StatusOK, &Message{
-		Code: 0,
-		Desc: "",
+	c.JSON(http.StatusOK, &StartRecordSuccessResp{
+		File: recordSql.File,
 	})
 	logger.Debugf("start record sql success")
+}
+
+type StopRecordSqlResp struct {
+	Message
+	Info *recordsql.MissionInfo
 }
 
 func (ctl *ConfigController) stopRecordSql(c *gin.Context) {
 	logger := c.MustGet(LoggerKey).(*logrus.Entry)
 	logger.Debugf("get stop record sql request")
-	recordsql.StopRecordSql()
-	c.JSON(http.StatusOK, &Message{
-		Code: 0,
-		Desc: "",
-	})
+	info := recordsql.StopRecordSql()
+	if info != nil {
+		logger.Tracef("stop record sql info: %+v", info)
+		c.JSON(http.StatusOK, &StopRecordSqlResp{
+			Info: info,
+		})
+	} else {
+		logger.Tracef("no record sql running")
+		c.JSON(http.StatusOK, &Message{
+			Code: 0,
+			Desc: "",
+		})
+	}
 	logger.Debugf("stop record sql success")
+}
+
+type GetRecordSqlStateResp struct {
+	Message
+	State *recordsql.RecordState
+}
+
+func (ctl *ConfigController) getRecordSqlState(c *gin.Context) {
+	logger := c.MustGet(LoggerKey).(*logrus.Entry)
+	logger.Debugf("get record sql state request")
+	state := recordsql.GetRecordState()
+	resp := &GetRecordSqlStateResp{
+		State: state,
+	}
+	logger.Tracef("get record sql state: %+v", state)
+	c.JSON(http.StatusOK, resp)
+	logger.Debugf("get stop record sql success")
 }
 
 func init() {
