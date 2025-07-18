@@ -57,7 +57,7 @@ func TestStatsd(t *testing.T) {
 	//	echo "foo:1|c" | nc -u -w0 127.0.0.1 8125
 	c, err := net.Dial("udp", "127.0.0.1:6044")
 	assert.NoError(t, err)
-	_, err = c.Write([]byte(fmt.Sprintf("foo:%d|c", number)))
+	_, err = fmt.Fprintf(c, "foo:%d|c", number)
 	assert.NoError(t, err)
 	time.Sleep(time.Second)
 	defer func() {
