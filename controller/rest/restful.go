@@ -408,10 +408,7 @@ func execute(
 	pHeaderList := make([]unsafe.Pointer, fieldsCount)
 	pStartList := make([]unsafe.Pointer, fieldsCount)
 	timeBuffer := make([]byte, 0, 30)
-	for {
-		if config.Conf.RestfulRowLimit > -1 && total == config.Conf.RestfulRowLimit {
-			break
-		}
+	for config.Conf.RestfulRowLimit < 0 || total != config.Conf.RestfulRowLimit {
 		if recordSql {
 			recordTime = time.Now()
 		}
