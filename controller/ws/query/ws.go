@@ -206,7 +206,7 @@ func (s *QueryController) Init(ctl gin.IRouter) {
 	ctl.GET("rest/ws", func(c *gin.Context) {
 		// generate session id
 		sessionID := generator.GetSessionID()
-		logger := log.GetLogger("TMQ").WithFields(logrus.Fields{
+		logger := log.GetLogger("QRY").WithFields(logrus.Fields{
 			config.SessionIDKey: sessionID})
 		_ = s.queryM.HandleRequestWithKeys(c.Writer, c.Request, map[string]interface{}{"logger": logger})
 	})

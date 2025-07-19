@@ -18,6 +18,8 @@ StandardError=journal
 Restart=always
 StartLimitBurst=3
 StartLimitInterval=60s
+EnvironmentFile=-/etc/default/taosadapter
+
 
 [Install]
 WantedBy=multi-user.target
