@@ -178,7 +178,7 @@ func TestRecordSql(t *testing.T) {
 	assert.Equal(t, 200, w.Code, w.Body.String())
 	assert.Equal(t, `{"code":0,"desc":""}`, w.Body.String())
 
-	// success
+	// start record sql with start time and end time
 	tmpDir := t.TempDir()
 	oldPath := config.Conf.Log.Path
 	config.Conf.Log.Path = tmpDir
@@ -251,7 +251,7 @@ func TestRecordSql(t *testing.T) {
 	t.Log(expect)
 	assert.True(t, bytes.Contains(recordContent, []byte(expect)))
 
-	// success
+	// start record sql without start time and end time
 	config.Conf.Log.Path = tmpDir
 	user = "root"
 	password = "taosdata"
@@ -319,8 +319,8 @@ func TestRecordSql(t *testing.T) {
 	t.Log(w.Body.String())
 	err = json.Unmarshal(w.Body.Bytes(), &stopResp)
 	assert.NoError(t, err)
-	assert.Equal(t, stopResp.StartTime, start)
-	assert.Equal(t, stopResp.EndTime, recordsql.DefaultRecordFileEndTime)
+	assert.Equal(t, stateResp.StartTime, stopResp.StartTime)
+	assert.Equal(t, recordsql.DefaultRecordFileEndTime, stopResp.EndTime)
 
 	files, err = getRecordFiles(tmpDir)
 	require.NoError(t, err)
@@ -352,6 +352,9 @@ func getRecordFiles(dir string) ([]string, error) {
 	var files []string
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
 			return err
 		}
 		if !info.IsDir() && strings.HasPrefix(info.Name(), fmt.Sprintf("%sadapterSql_", version.CUS_PROMPT)) && !strings.HasSuffix(info.Name(), "_lock") {

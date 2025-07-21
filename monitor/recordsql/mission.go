@@ -40,20 +40,19 @@ type outputWriter interface {
 }
 
 type RecordMission struct {
-	running       bool
-	runningLock   sync.RWMutex
-	ctx           context.Context
-	cancelFunc    context.CancelFunc
-	maxConcurrent int32
-	currentCount  atomic.Int32
-	startTime     time.Time
-	endTime       time.Time
-	csvWriter     outputWriter
-	startChan     chan struct{}
-	writeLock     sync.Mutex
-	list          *RecordList
-	logger        *logrus.Entry
-	closeOnce     sync.Once
+	running      bool
+	runningLock  sync.RWMutex
+	ctx          context.Context
+	cancelFunc   context.CancelFunc
+	currentCount atomic.Int32
+	startTime    time.Time
+	endTime      time.Time
+	csvWriter    outputWriter
+	startChan    chan struct{}
+	writeLock    sync.Mutex
+	list         *RecordList
+	logger       *logrus.Entry
+	closeOnce    sync.Once
 }
 
 type RecordState struct {
@@ -77,20 +76,6 @@ func setGlobalRecordMission(record *RecordMission) {
 	lock.Lock()
 	defer lock.Unlock()
 	globalRecordMission = record
-}
-
-var CsvHeader = []string{
-	"SQL",
-	"IP",
-	"User",
-	"ConnType",
-	"QID",
-	"ReceiveTime",
-	"FreeTime",
-	"QueryDuration(us)",
-	"FetchDuration(us)",
-	"GetConnDuration(us)",
-	"TotalDuration(us)",
 }
 
 // record sql logger
@@ -223,13 +208,8 @@ func (c *RecordMission) start() {
 
 func (c *RecordMission) run() {
 	c.logger.Infof("start recording sql")
-	for {
-		select {
-		case <-c.ctx.Done():
-			c.Stop()
-			return
-		}
-	}
+	<-c.ctx.Done()
+	c.Stop()
 }
 
 func (c *RecordMission) Stop() {

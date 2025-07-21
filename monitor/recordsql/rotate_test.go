@@ -26,6 +26,10 @@ func TestGetRotateWriter(t *testing.T) {
 	config.Conf.Log.Path = tmpDir
 	writer, err := getRotateWriter()
 	require.NoError(t, err)
+	defer func() {
+		err = writer.Close()
+		assert.NoError(t, err, "Failed to close writer")
+	}()
 	_, err = writer.Write([]byte("test"))
 	require.NoError(t, err)
 	files, err := getRecordFiles(tmpDir)
@@ -51,6 +55,9 @@ func getRecordFiles(dir string) ([]string, error) {
 	var files []string
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
 			return err
 		}
 		if !info.IsDir() && strings.HasPrefix(info.Name(), fmt.Sprintf("%sadapterSql_", version.CUS_PROMPT)) && !strings.HasSuffix(info.Name(), "_lock") {
