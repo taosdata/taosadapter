@@ -1238,18 +1238,17 @@ func TestQueryRecordSql(t *testing.T) {
 	output := filepath.Join(tmpDir, file)
 	sql := "select 1"
 	sql2 := "select 2"
+	f, err := os.Create(output)
+	require.NoError(t, err)
 	now := time.Now()
 	defer func() {
-		f, err := os.Open(output)
+		bs, err := os.ReadFile(output)
 		require.NoError(t, err)
-		defer func() {
-			err = f.Close()
-			assert.NoError(t, err)
-		}()
-		csvReader := csv.NewReader(f)
+		t.Log(string(bs))
+		csvReader := csv.NewReader(bytes.NewReader(bs))
 		records, err := csvReader.ReadAll()
-		require.Equal(t, 3, len(records), csvReader)
-		assert.Equal(t, recordsql.CsvHeader, records[0])
+		assert.NoError(t, err)
+		require.Equal(t, 2, len(records), records)
 		var checkRecord = func(record []string, qid string, expectSql string) {
 			t.Log(record)
 			assert.Equal(t, expectSql, record[recordsql.SQLIndex])
@@ -1271,12 +1270,12 @@ func TestQueryRecordSql(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Greater(t, fetchDuration, 0)
 		}
-		checkRecord(records[1], "0x2", sql)
-		checkRecord(records[2], "0x223", sql2)
+		checkRecord(records[0], "0x2", sql)
+		checkRecord(records[1], "0x223", sql2)
 	}()
 	start := time.Now().Format(recordsql.InputTimeFormat)
 	end := time.Now().Add(time.Second).Format(recordsql.InputTimeFormat)
-	err := recordsql.StartRecordSql(start, end, tmpDir, file, "", 0, 1024)
+	err = recordsql.StartRecordSqlWithTestWriter(start, end, "", f)
 	require.NoError(t, err)
 	defer func() {
 		_ = recordsql.StopRecordSql()

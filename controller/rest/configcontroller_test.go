@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
 	"github.com/taosdata/taosadapter/v3/tools/testtools"
+	"github.com/taosdata/taosadapter/v3/version"
 )
 
 func TestChangeConfig(t *testing.T) {
@@ -155,6 +157,16 @@ func TestRecordSql(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 400, w.Code, w.Body.String())
 
+	// get record sql state
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/record_sql", nil)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	t.Log(w.Body.String())
+	assert.Equal(t, `{"code":0,"desc":"","exists":false,"running":false,"start_time":"","end_time":"","current_concurrent":0}`, w.Body.String())
+
 	// stop record sql
 	user = "root"
 	password = "taosdata"
@@ -175,7 +187,7 @@ func TestRecordSql(t *testing.T) {
 	w = httptest.NewRecorder()
 	start := time.Now().Format(recordsql.InputTimeFormat)
 	end := time.Now().Add(time.Minute).Format(recordsql.InputTimeFormat)
-	body = strings.NewReader(fmt.Sprintf(`{"start_time":"%s","end_time":"%s","file":"test.csv"}`, start, end))
+	body = strings.NewReader(fmt.Sprintf(`{"start_time":"%s","end_time":"%s"}`, start, end))
 	req, _ = http.NewRequest(http.MethodPost, "/record_sql", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.SetBasicAuth(user, password)
@@ -197,6 +209,20 @@ func TestRecordSql(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
+	// get record sql state
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/record_sql", nil)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	t.Log(w.Body.String())
+	var stateResp GetRecordSqlStateResp
+	err = json.Unmarshal(w.Body.Bytes(), &stateResp)
+	assert.NoError(t, err)
+	assert.Equal(t, start, stateResp.StartTime)
+	assert.Equal(t, end, stateResp.EndTime)
+
 	// stop record sql
 	user = "root"
 	password = "taosdata"
@@ -209,12 +235,15 @@ func TestRecordSql(t *testing.T) {
 	var stopResp StopRecordSqlResp
 	err = json.Unmarshal(w.Body.Bytes(), &stopResp)
 	assert.NoError(t, err)
-	assert.Equal(t, stopResp.Info.StartTime, start)
-	assert.Equal(t, stopResp.Info.EndTime, end)
-	assert.Equal(t, stopResp.Info.File, "test.csv")
+	assert.Equal(t, stopResp.StartTime, start)
+	assert.Equal(t, stopResp.EndTime, end)
 
 	// check record sql file
-	recordFile := fmt.Sprintf("%s/test.csv", tmpDir)
+	files, err := getRecordFiles(tmpDir)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(files))
+	t.Log(files)
+	recordFile := filepath.Join(tmpDir, files[0])
 	recordContent, err := os.ReadFile(recordFile)
 	assert.NoError(t, err)
 	expect := fmt.Sprintf("show databases,%s,root,http,", host)
@@ -234,11 +263,7 @@ func TestRecordSql(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code, w.Body.String())
 	config.Conf.Log.Path = oldPath
-	var resp StartRecordSuccessResp
 	t.Log(w.Body.String())
-	err = json.Unmarshal(w.Body.Bytes(), &resp)
-	require.NoError(t, err)
-	outFile := resp.File
 
 	time.Sleep(time.Millisecond * 10)
 	// execute sql
@@ -253,7 +278,6 @@ func TestRecordSql(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
-	assert.NoError(t, err)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create database if not exists test_record_sql")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
@@ -263,7 +287,6 @@ func TestRecordSql(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 
 	// wrong sql
-	assert.NoError(t, err)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("xxxx")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
@@ -273,7 +296,6 @@ func TestRecordSql(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 
 	// get record sql state
-	assert.NoError(t, err)
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest(http.MethodGet, "/record_sql", nil)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
@@ -281,9 +303,9 @@ func TestRecordSql(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	t.Log(w.Body.String())
-	var state StartRecordSuccessResp
-	err = json.Unmarshal(w.Body.Bytes(), &state)
+	err = json.Unmarshal(w.Body.Bytes(), &stateResp)
 	assert.NoError(t, err)
+	assert.Equal(t, recordsql.DefaultRecordFileEndTime, stateResp.EndTime)
 
 	// stop record sql
 	user = "root"
@@ -294,14 +316,24 @@ func TestRecordSql(t *testing.T) {
 	req.SetBasicAuth(user, password)
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code, w.Body.String())
+	t.Log(w.Body.String())
 	err = json.Unmarshal(w.Body.Bytes(), &stopResp)
 	assert.NoError(t, err)
-	assert.Equal(t, stopResp.Info.StartTime, start)
-	assert.Equal(t, stopResp.Info.EndTime, DefaultRecordFileEndTime)
-	assert.Equal(t, stopResp.Info.File, outFile)
+	assert.Equal(t, stopResp.StartTime, start)
+	assert.Equal(t, stopResp.EndTime, recordsql.DefaultRecordFileEndTime)
 
-	//check record sql file
-	recordFile = fmt.Sprintf("%s/%s", tmpDir, outFile)
+	files, err = getRecordFiles(tmpDir)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(files))
+	t.Log(files)
+	recordFile = ""
+	for _, file := range files {
+		if !strings.HasSuffix(file, ".csv") {
+			recordFile = file
+		}
+	}
+	require.True(t, recordFile != "")
+	recordFile = filepath.Join(tmpDir, recordFile)
 	recordContent, err = os.ReadFile(recordFile)
 	assert.NoError(t, err)
 	expect = fmt.Sprintf("show databases,%s,root,http,", host)
@@ -314,4 +346,18 @@ func TestRecordSql(t *testing.T) {
 	expect = fmt.Sprintf("xxxx,%s,root,http,", host)
 	t.Log(expect)
 	assert.True(t, bytes.Contains(recordContent, []byte(expect)))
+}
+
+func getRecordFiles(dir string) ([]string, error) {
+	var files []string
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasPrefix(info.Name(), fmt.Sprintf("%sadapterSql_", version.CUS_PROMPT)) && !strings.HasSuffix(info.Name(), "_lock") {
+			files = append(files, info.Name())
+		}
+		return nil
+	})
+	return files, err
 }

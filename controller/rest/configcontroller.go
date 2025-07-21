@@ -55,11 +55,9 @@ type ModifyConfig struct {
 }
 
 type RecordSql struct {
-	StartTime     string `json:"start_time"`
-	EndTime       string `json:"end_time"`
-	File          string `json:"file"`
-	Location      string `json:"location"`
-	MaxConcurrent int32  `json:"max_concurrent"`
+	StartTime string `json:"start_time"`
+	EndTime   string `json:"end_time"`
+	Location  string `json:"location"`
 }
 
 func checkConcurrent(locker *locker) gin.HandlerFunc {
@@ -107,13 +105,6 @@ func (ctl *ConfigController) changeConfig(c *gin.Context) {
 	logger.Debugf("change config success")
 }
 
-const DefaultRecordFileEndTime = "9999-01-01 00:00:00" // 9999-01-01 00:00:00
-
-type StartRecordSuccessResp struct {
-	Message
-	File string `json:"file"`
-}
-
 func (ctl *ConfigController) startRecordSql(c *gin.Context) {
 	logger := c.MustGet(LoggerKey).(*logrus.Entry)
 	body, err := c.GetRawData()
@@ -144,37 +135,33 @@ func (ctl *ConfigController) startRecordSql(c *gin.Context) {
 		recordFile := fmt.Sprintf("record_sql_%d_%s.csv", config.Conf.InstanceID, formattedWithMicro)
 		logger.Debugf("use default record sql config %s", recordFile)
 		recordSql = RecordSql{
-			StartTime:     now.Format(recordsql.InputTimeFormat),
-			EndTime:       DefaultRecordFileEndTime,
-			File:          recordFile,
-			Location:      "",
-			MaxConcurrent: 0,
+			StartTime: now.Format(recordsql.InputTimeFormat),
+			EndTime:   recordsql.DefaultRecordFileEndTime,
+			Location:  "",
 		}
 	}
 
 	err = recordsql.StartRecordSql(
 		recordSql.StartTime,
 		recordSql.EndTime,
-		config.Conf.Log.Path,
-		recordSql.File,
 		recordSql.Location,
-		recordSql.MaxConcurrent,
-		uint64(config.Conf.Log.ReservedDiskSize),
 	)
 	if err != nil {
 		logger.Errorf("start record sql error, err:%s", err)
 		BadRequestResponseWithMsg(c, logger, 0xffff, fmt.Sprintf("start record sql error: %s", err))
 		return
 	}
-	c.JSON(http.StatusOK, &StartRecordSuccessResp{
-		File: recordSql.File,
+	c.JSON(http.StatusOK, &Message{
+		Code: 0,
+		Desc: "",
 	})
 	logger.Debugf("start record sql success")
 }
 
 type StopRecordSqlResp struct {
 	Message
-	Info *recordsql.MissionInfo
+	StartTime string `json:"start_time"`
+	EndTime   string `json:"end_time"`
 }
 
 func (ctl *ConfigController) stopRecordSql(c *gin.Context) {
@@ -184,7 +171,8 @@ func (ctl *ConfigController) stopRecordSql(c *gin.Context) {
 	if info != nil {
 		logger.Tracef("stop record sql info: %+v", info)
 		c.JSON(http.StatusOK, &StopRecordSqlResp{
-			Info: info,
+			StartTime: info.StartTime,
+			EndTime:   info.EndTime,
 		})
 	} else {
 		logger.Tracef("no record sql running")
@@ -198,15 +186,23 @@ func (ctl *ConfigController) stopRecordSql(c *gin.Context) {
 
 type GetRecordSqlStateResp struct {
 	Message
-	State *recordsql.RecordState
+	Exists            bool   `json:"exists"`
+	Running           bool   `json:"running"`
+	StartTime         string `json:"start_time"`
+	EndTime           string `json:"end_time"`
+	CurrentConcurrent int32  `json:"current_concurrent"`
 }
 
 func (ctl *ConfigController) getRecordSqlState(c *gin.Context) {
 	logger := c.MustGet(LoggerKey).(*logrus.Entry)
 	logger.Debugf("get record sql state request")
-	state := recordsql.GetRecordState()
+	state := recordsql.GetState()
 	resp := &GetRecordSqlStateResp{
-		State: state,
+		Exists:            state.Exists,
+		Running:           state.Running,
+		StartTime:         state.StartTime,
+		EndTime:           state.EndTime,
+		CurrentConcurrent: state.CurrentConcurrent,
 	}
 	logger.Tracef("get record sql state: %+v", state)
 	c.JSON(http.StatusOK, resp)
