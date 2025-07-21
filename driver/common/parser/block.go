@@ -91,11 +91,16 @@ func RawBlockGetColDataOffset(colCount int) uintptr {
 type FormatTimeFunc func(ts int64, precision int) driver.Value
 
 func IsVarDataType(colType uint8) bool {
-	return colType == common.TSDB_DATA_TYPE_BINARY ||
-		colType == common.TSDB_DATA_TYPE_NCHAR ||
-		colType == common.TSDB_DATA_TYPE_JSON ||
-		colType == common.TSDB_DATA_TYPE_VARBINARY ||
-		colType == common.TSDB_DATA_TYPE_GEOMETRY
+	switch colType {
+	case common.TSDB_DATA_TYPE_BINARY,
+		common.TSDB_DATA_TYPE_NCHAR,
+		common.TSDB_DATA_TYPE_JSON,
+		common.TSDB_DATA_TYPE_VARBINARY,
+		common.TSDB_DATA_TYPE_GEOMETRY,
+		common.TSDB_DATA_TYPE_BLOB:
+		return true
+	}
+	return false
 }
 
 func BitmapLen(n int) int {
@@ -203,26 +208,34 @@ func rawConvertDecimal128(pStart unsafe.Pointer, row int, arg ...interface{}) dr
 }
 
 func rawConvertVarBinary(pHeader, pStart unsafe.Pointer, row int) driver.Value {
-	result := rawGetBytes(pHeader, pStart, row)
+	result := rawGetBytes(pHeader, pStart, row, false)
 	if result == nil {
 		return nil
 	}
 	return result
 }
 
-func rawGetBytes(pHeader, pStart unsafe.Pointer, row int) []byte {
+func rawGetBytes(pHeader, pStart unsafe.Pointer, row int, isUint32 bool) []byte {
 	offset := *((*int32)(tools.AddPointer(pHeader, uintptr(row*4))))
 	if offset == -1 {
 		return nil
 	}
 	currentRow := tools.AddPointer(pStart, uintptr(offset))
-	clen := *((*uint16)(currentRow))
+	var clen int
+	var step uintptr
+	if isUint32 {
+		clen = int(*((*uint32)(currentRow)))
+		step = 4
+	} else {
+		clen = int(*((*uint16)(currentRow)))
+		step = 2
+	}
 	if clen == 0 {
 		return make([]byte, 0)
 	}
-	currentRow = tools.AddPointer(currentRow, 2)
+	currentRow = tools.AddPointer(currentRow, step)
 	result := make([]byte, clen)
-	Copy(currentRow, result, 0, int(clen))
+	Copy(currentRow, result, 0, clen)
 	return result
 }
 
@@ -231,11 +244,19 @@ func rawConvertGeometry(pHeader, pStart unsafe.Pointer, row int) driver.Value {
 }
 
 func rawConvertBinary(pHeader, pStart unsafe.Pointer, row int) driver.Value {
-	result := rawGetBytes(pHeader, pStart, row)
+	result := rawGetBytes(pHeader, pStart, row, false)
 	if result == nil {
 		return nil
 	}
 	return *(*string)(unsafe.Pointer(&result))
+}
+
+func rawConvertBlob(pHeader, pStart unsafe.Pointer, row int) driver.Value {
+	result := rawGetBytes(pHeader, pStart, row, true)
+	if result == nil {
+		return nil
+	}
+	return result
 }
 
 func rawConvertNchar(pHeader, pStart unsafe.Pointer, row int) driver.Value {
@@ -356,4 +377,5 @@ func init() {
 	rawConvertVarDataSlice[uint8(common.TSDB_DATA_TYPE_JSON)] = rawConvertJson
 	rawConvertVarDataSlice[uint8(common.TSDB_DATA_TYPE_VARBINARY)] = rawConvertVarBinary
 	rawConvertVarDataSlice[uint8(common.TSDB_DATA_TYPE_GEOMETRY)] = rawConvertGeometry
+	rawConvertVarDataSlice[uint8(common.TSDB_DATA_TYPE_BLOB)] = rawConvertBlob
 }

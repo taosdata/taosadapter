@@ -1,6 +1,8 @@
 package ctools
 
 import (
+	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -256,5 +258,16 @@ func TestJsonWriteRawBlock(t *testing.T) {
 				assert.Equal(t, tt.expect, w.String())
 			}
 		})
+	}
+}
+
+func TestFastHex(t *testing.T) {
+	for i := uint8(0); i < math.MaxUint8; i++ {
+		fast := string([]byte{
+			hexTable[i>>4],
+			hexTable[i&0x0f],
+		})
+		slow := fmt.Sprintf("%02x", i)
+		assert.Equal(t, slow, fast, i)
 	}
 }
