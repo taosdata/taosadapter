@@ -132,7 +132,15 @@ func StartRecordSqlWithTestWriter(startTime, endTime string, location string, te
 		list:       NewRecordList(),
 		logger:     logger,
 	}
-	go mission.start()
+	duration := time.Until(mission.startTime)
+	if duration <= 0 {
+		// run immediately
+		mission.setRunning(true)
+		go mission.run()
+		close(mission.startChan)
+	} else {
+		go mission.start()
+	}
 	setGlobalRecordMission(mission)
 	return nil
 }
@@ -186,11 +194,6 @@ func (c *RecordMission) start() {
 		close(c.startChan)
 	}()
 	duration := time.Until(c.startTime)
-	if duration <= 0 {
-		c.setRunning(true)
-		go c.run()
-		return
-	}
 	c.logger.Infof("start recording after %s", duration.String())
 	timer := time.NewTimer(duration)
 	defer func() {
@@ -238,6 +241,7 @@ func (c *RecordMission) writeRecord(record *Record) {
 	record.Lock()
 	defer record.Unlock()
 	if len(record.SQL) == 0 {
+		logger.Warn("record SQL is empty, skip writing")
 		return
 	}
 	c.writeLock.Lock()

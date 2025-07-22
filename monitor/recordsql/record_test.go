@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/taosdata/taosadapter/v3/config"
 )
 
 func TestRecordInit(t *testing.T) {
@@ -395,4 +396,54 @@ func TestGetRecordState(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRotate(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldPath := config.Conf.Log.Path
+	defer func() {
+		config.Conf.Log.Path = oldPath
+	}()
+	if globalRotateWriter != nil {
+		_ = globalRotateWriter.Close()
+		globalRotateWriter = nil
+	}
+	defer func() {
+		if globalRotateWriter != nil {
+			err := globalRotateWriter.Close()
+			assert.NoError(t, err, "Failed to close globalRotateWriter")
+			globalRotateWriter = nil
+		}
+	}()
+	config.Conf.Log.Path = tmpDir
+	oldRotateSize := config.Conf.Log.RotationSize
+	defer func() {
+		config.Conf.Log.RotationSize = oldRotateSize
+	}()
+	config.Conf.Log.RotationSize = 20
+	err := StartRecordSql(time.Now().Format(InputTimeFormat), time.Now().Add(time.Second*2).Format(InputTimeFormat), "")
+	require.NoError(t, err)
+	defer func() {
+		_ = StopRecordSql()
+	}()
+	record := &Record{
+		SQL:             "SELECT * FROM test",
+		IP:              "127.0.0.1",
+		User:            "root",
+		ConnType:        WSType,
+		QID:             0x12345,
+		ReceiveTime:     time.Now(),
+		FreeTime:        time.Now().Add(time.Second),
+		QueryDuration:   100,
+		FetchDuration:   100,
+		GetConnDuration: 100,
+		totalDuration:   100,
+	}
+	for i := 0; i < 10; i++ {
+		getGlobalRecordMission().writeRecord(record)
+		getGlobalRecordMission().csvWriter.Flush()
+	}
+	files, err := getRecordFiles(tmpDir)
+	assert.NoError(t, err)
+	assert.Equal(t, 10, len(files), files)
 }

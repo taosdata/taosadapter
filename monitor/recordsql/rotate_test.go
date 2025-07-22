@@ -14,8 +14,18 @@ import (
 )
 
 func TestGetRotateWriter(t *testing.T) {
-	config.Init()
 	tmpDir := t.TempDir()
+	if globalRotateWriter != nil {
+		_ = globalRotateWriter.Close()
+		globalRotateWriter = nil
+	}
+	defer func() {
+		if globalRotateWriter != nil {
+			err := globalRotateWriter.Close()
+			assert.NoError(t, err, "Failed to close globalRotateWriter")
+			globalRotateWriter = nil
+		}
+	}()
 	oldPath := config.Conf.Log.Path
 	defer func() {
 		config.Conf.Log.Path = oldPath

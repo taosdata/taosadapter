@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/taosdata/taosadapter/v3/config"
 )
 
 func TestGlobalRecordMission(t *testing.T) {
@@ -33,6 +34,7 @@ func TestGlobalRecordMission(t *testing.T) {
 		if got != testRecord {
 			t.Errorf("Expected %v, got %v", testRecord, got)
 		}
+		setGlobalRecordMission(nil)
 	})
 
 	t.Run("Test concurrent access", func(t *testing.T) {
@@ -58,6 +60,7 @@ func TestGlobalRecordMission(t *testing.T) {
 		if got != testRecord {
 			t.Errorf("Expected %v after concurrent access, got %v", testRecord, got)
 		}
+		setGlobalRecordMission(nil)
 	})
 }
 
@@ -140,7 +143,7 @@ func TestStartRecordSql(t *testing.T) {
 			endTime:     validEnd,
 			logPath:     tempDir,
 			outFile:     validOutFile,
-			postTest:    func() { getGlobalRecordMission().cancelFunc() },
+			postTest:    func() { StopRecordSql() },
 			expectedErr: "",
 		},
 		{
@@ -150,7 +153,7 @@ func TestStartRecordSql(t *testing.T) {
 			logPath:   tempDir,
 			outFile:   "with_location.csv",
 			location:  "UTC",
-			postTest:  func() { getGlobalRecordMission().cancelFunc() },
+			postTest:  func() { StopRecordSql() },
 		},
 	}
 
@@ -198,6 +201,30 @@ func TestStartRecordSql(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStartRecordSqlWithRotateFail(t *testing.T) {
+	oldPath := config.Conf.Log.Path
+	defer func() {
+		config.Conf.Log.Path = oldPath
+	}()
+	if globalRotateWriter != nil {
+		_ = globalRotateWriter.Close()
+		globalRotateWriter = nil
+	}
+	defer func() {
+		if globalRotateWriter != nil {
+			err := globalRotateWriter.Close()
+			assert.NoError(t, err, "Failed to close globalRotateWriter")
+			globalRotateWriter = nil
+		}
+	}()
+	config.Conf.Log.Path = "/"
+	mission := getGlobalRecordMission()
+	t.Log(mission)
+	err := StartRecordSql(time.Now().Format(InputTimeFormat), time.Now().Add(time.Second*2).Format(InputTimeFormat), "")
+	assert.Error(t, err)
+	_ = StopRecordSql()
 }
 
 func TestStopRecordSql(t *testing.T) {
