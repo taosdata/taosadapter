@@ -136,7 +136,7 @@ func (ctl *ConfigController) startRecordSql(c *gin.Context) {
 		logger.Debugf("use default record sql config %s", recordFile)
 		recordSql = RecordSql{
 			StartTime: now.Format(recordsql.InputTimeFormat),
-			EndTime:   recordsql.DefaultRecordFileEndTime,
+			EndTime:   recordsql.DefaultRecordSqlEndTime,
 			Location:  "",
 		}
 	}

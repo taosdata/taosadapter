@@ -305,7 +305,7 @@ func TestRecordSql(t *testing.T) {
 	t.Log(w.Body.String())
 	err = json.Unmarshal(w.Body.Bytes(), &stateResp)
 	assert.NoError(t, err)
-	assert.Equal(t, recordsql.DefaultRecordFileEndTime, stateResp.EndTime)
+	assert.Equal(t, recordsql.DefaultRecordSqlEndTime, stateResp.EndTime)
 
 	// stop record sql
 	user = "root"
@@ -320,7 +320,7 @@ func TestRecordSql(t *testing.T) {
 	err = json.Unmarshal(w.Body.Bytes(), &stopResp)
 	assert.NoError(t, err)
 	assert.Equal(t, stateResp.StartTime, stopResp.StartTime)
-	assert.Equal(t, recordsql.DefaultRecordFileEndTime, stopResp.EndTime)
+	assert.Equal(t, recordsql.DefaultRecordSqlEndTime, stopResp.EndTime)
 
 	files, err = getRecordFiles(tmpDir)
 	require.NoError(t, err)

@@ -10,10 +10,12 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/log"
 )
 
-const DefaultRecordFileEndTime = "2300-01-01 00:00:00"
+const DefaultRecordSqlEndTime = "2300-01-01 00:00:00"
+const DefaultFlushInterval = 5 * time.Second
 const (
 	InputTimeFormat  = "2006-01-02 15:04:05"
 	ResultTimeFormat = "2006-01-02 15:04:05.000000"
@@ -136,7 +138,7 @@ func StartRecordSqlWithTestWriter(startTime, endTime string, location string, te
 	if duration <= 0 {
 		// run immediately
 		mission.setRunning(true)
-		go mission.run()
+		go mission.run(DefaultFlushInterval)
 		close(mission.startChan)
 	} else {
 		go mission.start()
@@ -202,21 +204,33 @@ func (c *RecordMission) start() {
 	select {
 	case <-timer.C:
 		c.setRunning(true)
-		go c.run()
+		go c.run(DefaultFlushInterval)
 		return
 	case <-c.ctx.Done():
 		return
 	}
 }
 
-func (c *RecordMission) run() {
+func (c *RecordMission) run(flushInterval time.Duration) {
 	c.logger.Infof("start recording sql")
-	<-c.ctx.Done()
-	c.Stop()
+	ticker := time.NewTicker(flushInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-c.ctx.Done():
+			c.Stop()
+		case <-ticker.C:
+			if c.writeLock.TryLock() {
+				c.csvWriter.Flush()
+				c.writeLock.Unlock()
+			}
+		}
+	}
 }
 
 func (c *RecordMission) Stop() {
 	c.closeOnce.Do(func() {
+		c.logger.Infof("stop recording sql")
 		// set flag false to stop
 		c.runningLock.Lock()
 		defer c.runningLock.Unlock()
@@ -271,4 +285,24 @@ func GetState() RecordState {
 		CurrentConcurrent: mission.currentCount.Load(),
 	}
 	return state
+}
+
+func Init() error {
+	if config.Conf.Log.EnableSqlToCsvLogging {
+		return StartRecordSql(time.Now().Format(InputTimeFormat), DefaultRecordSqlEndTime, "")
+	}
+	return nil
+}
+
+func Close() {
+	// close the global record mission and writer
+	mission := getGlobalRecordMission()
+	if mission != nil {
+		mission.Stop()
+		setGlobalRecordMission(nil)
+	}
+	// close the global rotate writer if it exists
+	if globalRotateWriter != nil {
+		_ = globalRotateWriter.Close()
+	}
 }

@@ -436,11 +436,18 @@ func TestRecordMissionRun(t *testing.T) {
 		}
 
 		// Execute in goroutine
-		go mission.run()
+		go mission.run(time.Millisecond)
 		close(mission.startChan)
 		// Verify it's running
 		assert.True(t, mission.isRunning())
-
+		mission.writeLock.Lock()
+		err = mission.csvWriter.Write([]string{"Test", "Record"})
+		mission.writeLock.Unlock()
+		require.NoError(t, err)
+		time.Sleep(time.Millisecond * 5)
+		bs, err := os.ReadFile(tempFile.Name())
+		assert.NoError(t, err)
+		assert.Equal(t, "Test,Record\n", string(bs))
 		// Cancel the context to stop
 		cancel()
 
@@ -580,4 +587,20 @@ func TestRecordMissionStop(t *testing.T) {
 		// Verify - main thing is that it doesn't panic
 		assert.False(t, mission.isRunning())
 	})
+}
+
+func TestInit(t *testing.T) {
+	old := config.Conf.Log.EnableSqlToCsvLogging
+	defer func() {
+		config.Conf.Log.EnableSqlToCsvLogging = old
+	}()
+	config.Conf.Log.EnableSqlToCsvLogging = false
+	err := Init()
+	require.NoError(t, err)
+	config.Conf.Log.EnableSqlToCsvLogging = true
+	err = Init()
+	assert.NoError(t, err)
+	info := GetState()
+	assert.Equal(t, DefaultRecordSqlEndTime, info.EndTime)
+	Close()
 }
