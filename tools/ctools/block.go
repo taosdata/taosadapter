@@ -16,7 +16,16 @@ import (
 )
 
 func IsVarDataType(colType uint8) bool {
-	return colType == common.TSDB_DATA_TYPE_BINARY || colType == common.TSDB_DATA_TYPE_NCHAR || colType == common.TSDB_DATA_TYPE_JSON || colType == common.TSDB_DATA_TYPE_VARBINARY || colType == common.TSDB_DATA_TYPE_GEOMETRY
+	switch colType {
+	case common.TSDB_DATA_TYPE_BINARY,
+		common.TSDB_DATA_TYPE_NCHAR,
+		common.TSDB_DATA_TYPE_JSON,
+		common.TSDB_DATA_TYPE_VARBINARY,
+		common.TSDB_DATA_TYPE_GEOMETRY,
+		common.TSDB_DATA_TYPE_BLOB:
+		return true
+	}
+	return false
 }
 
 func BitmapLen(n int) int {
@@ -138,30 +147,45 @@ func WriteRawJsonBinary(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Poin
 }
 
 func WriteRawJsonVarBinary(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
+	WriteRawJsonHexData(builder, pHeader, pStart, row, false)
+}
+
+var hexTable = [16]byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'}
+
+func WriteRawJsonHexData(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int, isUint32 bool) {
 	offset := *((*int32)(tools.AddPointer(pHeader, uintptr(row*4))))
 	if offset == -1 {
 		builder.WriteNil()
 		return
 	}
 	currentRow := tools.AddPointer(pStart, uintptr(offset))
-	clen := *((*uint16)(currentRow))
-	currentRow = unsafe.Pointer(uintptr(currentRow) + 2)
+	var clen int
+	var step uintptr
+	if isUint32 {
+		clen = int(*((*uint32)(currentRow)))
+		step = 4
+	} else {
+		clen = int(*((*uint16)(currentRow)))
+		step = 2
+	}
+	currentRow = unsafe.Pointer(uintptr(currentRow) + step)
 
 	builder.AddByte('"')
 	var b byte
-	for index := uint16(0); index < clen; index++ {
+	for index := 0; index < clen; index++ {
 		b = *((*byte)(unsafe.Pointer(uintptr(currentRow) + uintptr(index))))
-		s := strconv.FormatInt(int64(b), 16)
-		if len(s) == 1 {
-			builder.AddByte('0')
-		}
-		builder.WriteRaw(s)
+		builder.AddByte(hexTable[b>>4])
+		builder.AddByte(hexTable[b&0x0f])
 	}
 	builder.AddByte('"')
 }
 
+func WriteRawJsonBlob(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
+	WriteRawJsonHexData(builder, pHeader, pStart, row, true)
+}
+
 func WriteRawJsonGeometry(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
-	WriteRawJsonVarBinary(builder, pHeader, pStart, row)
+	WriteRawJsonHexData(builder, pHeader, pStart, row, false)
 }
 
 func WriteRawJsonNchar(builder *jsonbuilder.Stream, pHeader, pStart unsafe.Pointer, row int) {
@@ -208,6 +232,8 @@ func JsonWriteRawBlock(builder *jsonbuilder.Stream, colType uint8, pHeader, pSta
 			WriteRawJsonVarBinary(builder, pHeader, pStart, row)
 		case uint8(common.TSDB_DATA_TYPE_GEOMETRY):
 			WriteRawJsonGeometry(builder, pHeader, pStart, row)
+		case uint8(common.TSDB_DATA_TYPE_BLOB):
+			WriteRawJsonBlob(builder, pHeader, pStart, row)
 		}
 	} else {
 		if ItemIsNull(pHeader, row) {
