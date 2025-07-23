@@ -158,7 +158,6 @@ func StopRecordSql() *MissionInfo {
 		return nil
 	}
 	mission.Stop()
-	setGlobalRecordMission(nil)
 	return &MissionInfo{
 		StartTime: mission.startTime.Format(InputTimeFormat),
 		EndTime:   mission.endTime.Format(InputTimeFormat),
@@ -246,6 +245,7 @@ func (c *RecordMission) Stop() {
 		}
 		// flush csv
 		c.csvWriter.Flush()
+		setGlobalRecordMission(nil)
 	})
 }
 
@@ -299,8 +299,8 @@ func Close() {
 	mission := getGlobalRecordMission()
 	if mission != nil {
 		mission.Stop()
-		setGlobalRecordMission(nil)
 	}
+	setGlobalRecordMission(nil)
 	// close the global rotate writer if it exists
 	if globalRotateWriter != nil {
 		_ = globalRotateWriter.Close()
