@@ -90,7 +90,7 @@ func (a *Accumulator) addFields(
 	defer a.Unlock()
 	atomic.AddUint64(&a.nMetrics, 1)
 	if a.Cond != nil {
-		a.Cond.Broadcast()
+		a.Broadcast()
 	}
 	if a.Discard {
 		return
@@ -229,7 +229,7 @@ func (a *Accumulator) AddError(err error) {
 	a.Lock()
 	a.Errors = append(a.Errors, err)
 	if a.Cond != nil {
-		a.Cond.Broadcast()
+		a.Broadcast()
 	}
 	a.Unlock()
 }
