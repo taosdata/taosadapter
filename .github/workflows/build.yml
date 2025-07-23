@@ -345,9 +345,126 @@ jobs:
         with:
           version: latest
 
+  build_asan:
+    runs-on: ${{ matrix.os }}
+    name: Build-asan${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
+    outputs:
+      commit_id: ${{ steps.get_commit_id.outputs.commit_id }}
+    steps:
+      - name: checkout TDengine by pr
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          repository: 'taosdata/TDengine'
+          path: 'TDengine'
+          ref: ${{ github.base_ref }}
+
+      - name: checkout TDengine by push
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+        with:
+          repository: 'taosdata/TDengine'
+          path: 'TDengine'
+          ref: ${{ github.ref_name }}
+
+      - name: checkout TDengine manually
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v4
+        with:
+          repository: 'taosdata/TDengine'
+          path: 'TDengine'
+          ref: ${{ inputs.tbBranch }}
+
+      - name: get_commit_id
+        id: get_commit_id
+        run: |
+          cd TDengine
+          echo "commit_id=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Cache server by pr
+        if: github.event_name == 'pull_request'
+        id: cache-server-pr
+        uses: actions/cache@v4
+        with:
+          path: server.tar.gz
+          key: ${{ matrix.os }}-build-asan-${{ github.base_ref }}-${{ steps.get_commit_id.outputs.commit_id }}
+
+      - name: Cache server by push
+        if: github.event_name == 'push'
+        id: cache-server-push
+        uses: actions/cache@v4
+        with:
+          path: server.tar.gz
+          key: ${{ matrix.os }}-build-asan-${{ github.ref_name }}-${{ steps.get_commit_id.outputs.commit_id }}
+
+      - name: Cache server manually
+        if: github.event_name == 'workflow_dispatch'
+        id: cache-server-manually
+        uses: actions/cache@v4
+        with:
+          path: server.tar.gz
+          key: ${{ matrix.os }}-build-asan-${{ inputs.tbBranch }}-${{ steps.get_commit_id.outputs.commit_id }}
+
+      - name: Get CMake
+        if: >
+          (github.event_name == 'workflow_dispatch' && steps.cache-server-manually.outputs.cache-hit != 'true') ||
+          (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true') ||
+          (github.event_name == 'push' && steps.cache-server-push.outputs.cache-hit != 'true')
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: 3.31.6
+
+      - name: Cache externals built
+        if: >
+          (github.event_name == 'workflow_dispatch' && steps.cache-server-manually.outputs.cache-hit != 'true') ||
+          (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true') ||
+          (github.event_name == 'push' && steps.cache-server-push.outputs.cache-hit != 'true')
+        uses: actions/cache@v4
+        id: cache-ext
+        with:
+          path: TDengine/.externals
+          key: ${{ runner.os }}-${{ matrix.os }}-asan-${{ hashFiles('TDengine/cmake/external.cmake', 'cmake/in/**') }}-build-ext-v3
+
+      - name: install TDengine
+        if: >
+          (github.event_name == 'workflow_dispatch' && steps.cache-server-manually.outputs.cache-hit != 'true') ||
+          (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true') ||
+          (github.event_name == 'push' && steps.cache-server-push.outputs.cache-hit != 'true')
+        run: |
+          cd TDengine
+          mkdir debug
+          cd debug
+          cmake .. -DBUILD_TEST=off -DBUILD_DEPENDENCY_TESTS=0 -DBUILD_SANITIZER=1
+          make -j 8
+
+      - name: package
+        if: >
+          (github.event_name == 'workflow_dispatch' && steps.cache-server-manually.outputs.cache-hit != 'true') ||
+          (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true') ||
+          (github.event_name == 'push' && steps.cache-server-push.outputs.cache-hit != 'true')
+        run: |
+          mkdir -p ./release
+          cp ./TDengine/debug/build/bin/taos ./release/
+          cp ./TDengine/debug/build/bin/taosd ./release/
+          cp ./TDengine/debug/build/lib/libtaosnative.so ./release/
+          cp ./TDengine/include/client/taos.h ./release/
+          cat >./release/install.sh<<EOF 
+          chmod +x ./taos
+          chmod +x ./taosd
+          cp ./taos /bin/
+          cp ./taosd /bin/
+          cp ./libtaosnative.so /usr/lib
+          cp ./taos.h /usr/include
+          EOF
+          tar -zcvf server.tar.gz ./release
+
+
   test_go_asan:
     runs-on: ${{ matrix.os }}
-    needs: build
+    needs: build_asan
     strategy:
       matrix:
         go: [ 'stable' ]
@@ -360,9 +477,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ matrix.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
-          restore-keys: |
-            ${{ matrix.os }}-build-${{ github.base_ref }}-
+          key: ${{ matrix.os }}-build-asan-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
 
       - name: get cache server by push
         if: github.event_name == 'push'
@@ -370,9 +485,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ matrix.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
-          restore-keys: |
-            ${{ matrix.os }}-build-${{ github.ref_name }}-
+          key: ${{ matrix.os }}-build-asan-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
 
       - name: get cache server manually
         if: github.event_name == 'workflow_dispatch'
@@ -380,9 +493,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: server.tar.gz
-          key: ${{ matrix.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
-          restore-keys: |
-            ${{ matrix.os }}-build-${{ inputs.tbBranch }}-
+          key: ${{ matrix.os }}-build-asan-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
 
 
       - name: install
