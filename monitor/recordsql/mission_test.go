@@ -445,9 +445,19 @@ func TestRecordMissionRun(t *testing.T) {
 		mission.writeLock.Unlock()
 		require.NoError(t, err)
 		time.Sleep(time.Millisecond * 5)
-		bs, err := os.ReadFile(tempFile.Name())
-		assert.NoError(t, err)
-		assert.Equal(t, "Test,Record\n", string(bs))
+		// Check if the file has been written
+		var fileWritten bool
+		for i := 0; i < 10; i++ {
+			bs, err := os.ReadFile(tempFile.Name())
+			if err == nil && string(bs) == "Test,Record\n" {
+				fileWritten = true
+				break
+			}
+			time.Sleep(time.Millisecond * 5)
+		}
+		if !fileWritten {
+			t.Errorf("file not written")
+		}
 		// Cancel the context to stop
 		cancel()
 
