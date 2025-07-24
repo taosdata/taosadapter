@@ -67,15 +67,22 @@ compress = false
 # Minimum disk space to reserve. Log files will not be written if disk space falls below this limit.
 reservedDiskSize = "1GB"
 
-# Enable logging of HTTP SQL queries.
+# Enable logging of SQL via HTTP and WebSocket requests to CSV files.
+enableSqlToCsvLogging = false
+
+# Deprecated: use enableSqlToCsvLogging instead.
+#Enable logging of HTTP SQL queries.
 enableRecordHttpSql = false
 
+# Deprecated: use enableSqlToCsvLogging instead.
 # Number of HTTP SQL log rotations before deletion.
 sqlRotationCount = 2
 
+# Deprecated: use enableSqlToCsvLogging instead.
 # Time interval for rotating HTTP SQL logs.
 sqlRotationTime = "24h"
 
+# Deprecated: use enableSqlToCsvLogging instead.
 # Maximum size of HTTP SQL log files before rotation.
 sqlRotationSize = "1GB"
 
