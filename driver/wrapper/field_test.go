@@ -298,6 +298,18 @@ func TestRowsHeader_TypeDatabaseName(t *testing.T) {
 			},
 			want: "DECIMAL(20,4)",
 		},
+		{
+			name: "BLOB",
+			fields: fields{
+				ColTypes:   []uint8{common.TSDB_DATA_TYPE_BLOB},
+				Precisions: []int64{4095},
+				Scales:     []int64{0},
+			},
+			args: args{
+				i: 0,
+			},
+			want: "BLOB",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

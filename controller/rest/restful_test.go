@@ -156,21 +156,25 @@ func TestAllType(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
-	body = strings.NewReader("create table if not exists alltype(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100),v16 decimal(20,4)) tags (info json)")
+	body = strings.NewReader("create table if not exists alltype(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100),v16 decimal(20,4),v17 blob) tags (info json)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
-	body = strings.NewReader(fmt.Sprintf(`insert into t1 using alltype tags('{"table":"t1"}') values (%d,true,2,3,4,5,6,7,8,9,10.123,11.123,'中文"binary','中文nchar','\xaabbcc','point(100 100)',4467440737095516.123)`, now))
+	insertSql := fmt.Sprintf(`insert into t1 using alltype tags('{"table":"t1"}') values 
+(%d,true,2,3,4,5,6,7,8,9,10.123,11.123,'中文"binary','中文nchar','\xaabbcc','point(100 100)',4467440737095516.123,'\x010203ffdd')
+(%d,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)`,
+		now, now+1)
+	body = strings.NewReader(insertSql)
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	w = httptest.NewRecorder()
-	body = strings.NewReader(fmt.Sprintf(`select alltype.*,info->'table' from alltype where ts = %d`, now))
+	body = strings.NewReader(fmt.Sprintf(`select alltype.*,info->'table' from alltype where ts >= %d`, now))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
@@ -179,7 +183,30 @@ func TestAllType(t *testing.T) {
 	var result TDEngineRestfulRespDoc
 	err := json.Unmarshal(w.Body.Bytes(), &result)
 	assert.NoError(t, err)
-	expect := [18]interface{}{
+	expectMeta := [][]interface{}{
+		{"ts", "TIMESTAMP", float64(8)},
+		{"v1", "BOOL", float64(1)},
+		{"v2", "TINYINT", float64(1)},
+		{"v3", "SMALLINT", float64(2)},
+		{"v4", "INT", float64(4)},
+		{"v5", "BIGINT", float64(8)},
+		{"v6", "TINYINT UNSIGNED", float64(1)},
+		{"v7", "SMALLINT UNSIGNED", float64(2)},
+		{"v8", "INT UNSIGNED", float64(4)},
+		{"v9", "BIGINT UNSIGNED", float64(8)},
+		{"v10", "FLOAT", float64(4)},
+		{"v11", "DOUBLE", float64(8)},
+		{"v12", "VARCHAR", float64(20)},
+		{"v13", "NCHAR", float64(20)},
+		{"v14", "VARBINARY", float64(20)},
+		{"v15", "GEOMETRY", float64(100)},
+		{"v16", "DECIMAL(20,4)", float64(16)},
+		{"v17", "BLOB", float64(4194304)},
+		{"info", "JSON", float64(4095)},
+		{"info->'table'", "JSON", float64(4095)},
+	}
+	assert.Equal(t, expectMeta, result.ColumnMeta)
+	expect := [19]interface{}{
 		true,
 		float64(2),
 		float64(3),
@@ -196,14 +223,19 @@ func TestAllType(t *testing.T) {
 		"aabbcc",
 		"010100000000000000000059400000000000005940",
 		"4467440737095516.1230",
+		"010203ffdd",
 		map[string]interface{}{"table": "t1"},
 		"t1",
 	}
 	assert.Equal(t, 0, result.Code)
-	for i := 0; i < 18; i++ {
+	for i := 0; i < len(expect); i++ {
 		assert.Equal(t, expect[i], result.Data[0][i+1])
 	}
-
+	for i := 0; i < len(expect)-2; i++ {
+		assert.Nil(t, result.Data[1][i+1])
+	}
+	assert.Equal(t, expect[len(expect)-2], result.Data[1][len(expect)-1])
+	assert.Equal(t, expect[len(expect)-1], result.Data[1][len(expect)])
 	w = httptest.NewRecorder()
 	body = strings.NewReader(fmt.Sprintf(`select alltype.*,info->'table' from alltype where ts = %d`, now))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype?row_with_meta=true&timing=true", body)
@@ -216,13 +248,12 @@ func TestAllType(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 0, result.Code)
 	assert.Greater(t, objResult.Timing, uint64(0))
-	for i := 0; i < 18; i++ {
+	for i := 0; i < len(expect); i++ {
 		colName := objResult.ColumnMeta[i+1][0].(string)
 		assert.Equal(t, expect[i], objResult.Data[0][colName])
 	}
-
 	w = httptest.NewRecorder()
-	body = strings.NewReader(fmt.Sprintf(`insert into t2 using alltype tags('{"table":"t2"}') values (%d,true,2,3,4,5,6,7,8,9,10.123,11.123,'中文"binary','中文nchar','\xaabbcc','point(100 100)',6467440737095516.123)`, now))
+	body = strings.NewReader(fmt.Sprintf(`insert into t2 using alltype tags('{"table":"t2"}') values (%d,true,2,3,4,5,6,7,8,9,10.123,11.123,'中文"binary','中文nchar','\xaabbcc','point(100 100)',6467440737095516.123,'\x010203ffdd')`, now))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype?row_with_meta=true", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
@@ -233,7 +264,7 @@ func TestAllType(t *testing.T) {
 	assert.Equal(t, []byte(`{"code":0,"column_meta":[["affected_rows","INT",4]],"data":[{"affected_rows":1}],"rows":1}`), w.Body.Bytes())
 
 	w = httptest.NewRecorder()
-	body = strings.NewReader(fmt.Sprintf(`insert into t3 using alltype tags('{"table":"t3"}') values (%d,true,2,3,4,5,6,7,8,9,10.123,11.123,'中文"binary','中文nchar','\xaabbcc','point(100 100)',8467440737095516.123)`, now))
+	body = strings.NewReader(fmt.Sprintf(`insert into t3 using alltype tags('{"table":"t3"}') values (%d,true,2,3,4,5,6,7,8,9,10.123,11.123,'中文"binary','中文nchar','\xaabbcc','point(100 100)',8467440737095516.123,'\x010203ffdd')`, now))
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype?row_with_meta=true&timing=true", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
