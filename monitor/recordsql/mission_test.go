@@ -467,6 +467,106 @@ func TestRecordMissionRun(t *testing.T) {
 	})
 }
 
+func TestGetRecordState(t *testing.T) {
+	// Setup
+	tempDir := t.TempDir()
+	tempFile, err := os.CreateTemp(tempDir, "test-recording-*.csv")
+	require.NoError(t, err)
+	defer func() {
+		err = tempFile.Close()
+		assert.NoError(t, err)
+	}()
+
+	originalMission := getGlobalRecordMission()
+	defer setGlobalRecordMission(originalMission)
+
+	tests := []struct {
+		name          string
+		setupMission  func() *RecordMission
+		expectedState RecordState
+	}{
+		{
+			name:         "no mission exists",
+			setupMission: func() *RecordMission { return nil },
+			expectedState: RecordState{
+				Exists: false,
+			},
+		},
+		{
+			name: "mission exists but not running",
+			setupMission: func() *RecordMission {
+				ctx, cancel := context.WithCancel(context.Background())
+				return &RecordMission{
+					running:    false,
+					ctx:        ctx,
+					cancelFunc: cancel,
+					startTime:  time.Now(),
+					endTime:    time.Now().Add(1 * time.Hour),
+					csvWriter:  csv.NewWriter(tempFile),
+					startChan:  make(chan struct{}),
+					list:       NewRecordList(),
+					logger:     logrus.NewEntry(logrus.New()),
+				}
+			},
+			expectedState: RecordState{
+				Exists:            true,
+				Running:           false,
+				StartTime:         time.Now().Format(ResultTimeFormat),
+				EndTime:           time.Now().Add(1 * time.Hour).Format(ResultTimeFormat),
+				CurrentConcurrent: 0,
+			},
+		},
+		{
+			name: "mission exists and running",
+			setupMission: func() *RecordMission {
+				ctx, cancel := context.WithCancel(context.Background())
+				mission := &RecordMission{
+					running:    true,
+					ctx:        ctx,
+					cancelFunc: cancel,
+					startTime:  time.Now(),
+					endTime:    time.Now().Add(2 * time.Hour),
+					csvWriter:  csv.NewWriter(tempFile),
+					startChan:  make(chan struct{}),
+					list:       NewRecordList(),
+					logger:     logrus.NewEntry(logrus.New()),
+				}
+				mission.currentCount.Store(5)
+				return mission
+			},
+			expectedState: RecordState{
+				Exists:            true,
+				Running:           true,
+				StartTime:         time.Now().Format(ResultTimeFormat),
+				EndTime:           time.Now().Add(2 * time.Hour).Format(ResultTimeFormat),
+				CurrentConcurrent: 5,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup test mission
+			mission := tt.setupMission()
+			setGlobalRecordMission(mission)
+
+			// Execute
+			state := GetState()
+
+			// Verify
+			assert.Equal(t, tt.expectedState.Exists, state.Exists)
+			if tt.expectedState.Exists {
+				assert.Equal(t, tt.expectedState.Running, state.Running)
+				assert.Equal(t, tt.expectedState.CurrentConcurrent, state.CurrentConcurrent)
+
+				// For time fields, we can't compare exact values, so just check they're formatted
+				assert.NotEmpty(t, state.StartTime)
+				assert.NotEmpty(t, state.EndTime)
+			}
+		})
+	}
+}
+
 func TestRecordMissionStop(t *testing.T) {
 	t.Run("normal stop", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
