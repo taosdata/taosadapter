@@ -41,6 +41,7 @@ type messageHandler struct {
 	session               *melody.Session
 	ip                    net.IP
 	ipStr                 string
+	user                  string
 	whitelistChangeHandle cgo.Handle
 	dropUserHandle        cgo.Handle
 }

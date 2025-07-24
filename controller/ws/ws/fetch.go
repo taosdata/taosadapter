@@ -3,6 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/binary"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
@@ -68,7 +69,14 @@ func (h *messageHandler) fetch(ctx context.Context, session *melody.Session, act
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugf("get handler, cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
+	var recordTime time.Time
+	if item.record != nil {
+		recordTime = time.Now()
+	}
 	result := async.GlobalAsync.TaosFetchRawBlockA(item.TaosResult, logger, isDebug, handler)
+	if item.record != nil {
+		item.record.AddFetchDuration(time.Since(recordTime))
+	}
 	logger.Debugf("fetch_raw_block_a, cost:%s", log.GetLogDuration(isDebug, s))
 	if result.N == 0 {
 		item.Unlock()
@@ -178,7 +186,14 @@ func (h *messageHandler) fetchRawBlock(ctx context.Context, session *melody.Sess
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Tracef("get handler cost:%s", log.GetLogDuration(isDebug, s))
+	var recordTime time.Time
+	if item.record != nil {
+		recordTime = time.Now()
+	}
 	result := async.GlobalAsync.TaosFetchRawBlockA(item.TaosResult, logger, isDebug, handler)
+	if item.record != nil {
+		item.record.AddFetchDuration(time.Since(recordTime))
+	}
 	if result.N == 0 {
 		item.Unlock()
 		logger.Trace("fetch raw block success")
