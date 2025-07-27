@@ -120,7 +120,7 @@ func (l *TCPListener) remember(id uint64, conn *Connection) {
 
 func (l *TCPListener) refuser(conn *net.TCPConn) {
 	_ = conn.Close()
-	logger.Infof("Refused TCP Connection from %s", conn.RemoteAddr())
+	logger.Debugf("Refused TCP Connection from %s", conn.RemoteAddr())
 	logger.Warn("Maximum TCP Connections reached")
 }
 
@@ -254,7 +254,7 @@ func (l *TCPListener) stop() error {
 func (p *Plugin) Init(_ gin.IRouter) error {
 	p.conf.setValue()
 	if !p.conf.Enable {
-		logger.Info("opentsdb_telnet disabled")
+		logger.Debug("opentsdb_telnet disabled")
 		return nil
 	}
 	if len(p.conf.PortList) == 0 {
@@ -320,7 +320,7 @@ func (p *Plugin) tcp(port int, index int) error {
 		return err
 	}
 
-	logger.Infof("TCP listening on %q", listener.Addr().String())
+	logger.Debugf("TCP listening on %q", listener.Addr().String())
 	tcpListener := NewTCPListener(p, index, listener, p.conf.MaxTCPConnections, p.conf.TCPKeepAlive)
 	p.TCPListeners[index] = tcpListener
 	p.wg.Add(1)

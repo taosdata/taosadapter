@@ -133,21 +133,21 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 			select {
 			case <-cp.changePassChan:
 				// password changed
-				cp.logger.Info("password changed")
+				cp.logger.Trace("password changed")
 				connectionLocker.Lock()
 				cp.Release()
 				connectionLocker.Unlock()
 				return
 			case <-cp.dropUserChan:
 				// user dropped
-				cp.logger.Info("user dropped")
+				cp.logger.Trace("user dropped")
 				connectionLocker.Lock()
 				cp.Release()
 				connectionLocker.Unlock()
 				return
 			case <-cp.whitelistChan:
 				// whitelist changed
-				cp.logger.Info("whitelist change")
+				cp.logger.Trace("whitelist change")
 				ipNets, err = tool.GetWhitelist(v, cp.logger, log.IsDebug())
 				if err != nil {
 					// fetch whitelist error

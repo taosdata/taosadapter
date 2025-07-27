@@ -42,7 +42,7 @@ func (p *Plugin) Version() string {
 func (p *Plugin) Init(r gin.IRouter) error {
 	p.conf.setValue()
 	if !p.conf.Enable {
-		logger.Info("opentsdb disabled")
+		logger.Debug("opentsdb disabled")
 		return nil
 	}
 	r.Use(func(c *gin.Context) {

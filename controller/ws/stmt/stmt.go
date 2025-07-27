@@ -294,7 +294,7 @@ func (t *TaosStmt) waitSignal(logger *logrus.Entry) {
 	for {
 		select {
 		case <-t.dropUserChan:
-			logger.Info("get drop user signal")
+			logger.Trace("get drop user signal")
 			isDebug := log.IsDebug()
 			t.lock(logger, isDebug)
 			if t.closed {
@@ -302,11 +302,11 @@ func (t *TaosStmt) waitSignal(logger *logrus.Entry) {
 				t.Unlock()
 				return
 			}
-			logger.Info("user dropped! close connection!")
+			logger.Trace("user dropped! close connection!")
 			t.signalExit(logger, isDebug)
 			return
 		case <-t.whitelistChangeChan:
-			logger.Info("get whitelist change signal")
+			logger.Trace("get whitelist change signal")
 			isDebug := log.IsDebug()
 			t.lock(logger, isDebug)
 			if t.closed {
@@ -1172,7 +1172,7 @@ func (t *TaosStmt) Close(logger *logrus.Entry) {
 	if t.closed {
 		return
 	}
-	logger.Info("stmt connection close")
+	logger.Trace("stmt connection close")
 	t.closed = true
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

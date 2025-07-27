@@ -64,11 +64,7 @@ func Init() *gin.Engine {
 }
 
 func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin.Engine {
-	if debug {
-		gin.SetMode(gin.DebugMode)
-	} else {
-		gin.SetMode(gin.ReleaseMode)
-	}
+	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(log.GinLog())
 	router.Use(log.GinRecoverLog())
