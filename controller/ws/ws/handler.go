@@ -74,7 +74,7 @@ func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 	for {
 		select {
 		case <-h.dropUserChan:
-			logger.Info("get drop user signal")
+			logger.Trace("get drop user signal")
 			isDebug := log.IsDebug()
 			h.lock(logger, isDebug)
 			if h.isClosed() {
@@ -82,11 +82,11 @@ func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 				h.Unlock()
 				return
 			}
-			logger.Info("user dropped, close connection")
+			logger.Trace("user dropped, close connection")
 			h.signalExit(logger, isDebug)
 			return
 		case <-h.whitelistChangeChan:
-			logger.Info("get whitelist change signal")
+			logger.Trace("get whitelist change signal")
 			isDebug := log.IsDebug()
 			h.lock(logger, isDebug)
 			if h.isClosed() {

@@ -40,7 +40,7 @@ func (p *Influxdb) Version() string {
 func (p *Influxdb) Init(r gin.IRouter) error {
 	p.conf.setValue()
 	if !p.conf.Enable {
-		logger.Info("influxdb disabled")
+		logger.Debug("influxdb disabled")
 		return nil
 	}
 	r.Use(func(c *gin.Context) {

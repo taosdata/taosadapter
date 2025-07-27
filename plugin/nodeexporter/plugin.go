@@ -42,7 +42,7 @@ type Req struct {
 func (p *NodeExporter) Init(_ gin.IRouter) error {
 	p.conf.setValue()
 	if !p.conf.Enable {
-		logger.Info("node_exporter disabled")
+		logger.Debug("node_exporter disabled")
 		return nil
 	}
 	err := p.prepareUrls()
