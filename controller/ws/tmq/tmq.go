@@ -355,7 +355,7 @@ func (t *TMQ) waitSignal(logger *logrus.Entry) {
 	for {
 		select {
 		case <-t.dropUserChan:
-			logger.Info("get drop user signal")
+			logger.Trace("get drop user signal")
 			isDebug := log.IsDebug()
 			t.lock(logger, isDebug)
 			if t.isClosed() {
@@ -363,11 +363,11 @@ func (t *TMQ) waitSignal(logger *logrus.Entry) {
 				t.Unlock()
 				return
 			}
-			logger.Info("user dropped! close connection!")
+			logger.Trace("user dropped! close connection!")
 			t.signalExit(logger, isDebug)
 			return
 		case <-t.whitelistChangeChan:
-			logger.Info("get whitelist change signal")
+			logger.Trace("get whitelist change signal")
 			isDebug := log.IsDebug()
 			t.lock(logger, isDebug)
 			if t.isClosed() {
@@ -1469,9 +1469,9 @@ func (t *TMQ) Close(logger *logrus.Entry) {
 	t.closed = true
 	t.closedLock.Unlock()
 	start := time.Now()
-	logger.Info("tmq close")
+	logger.Trace("tmq close")
 	defer func() {
-		logger.Infof("tmq close end, cost:%s", time.Since(start).String())
+		logger.Debugf("tmq close end, cost:%s", time.Since(start).String())
 	}()
 	close(t.exit)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

@@ -326,7 +326,7 @@ func (s *Statsd) Start(ac telegraf.Accumulator) error {
 			return err
 		}
 
-		s.Log.Infof("UDP listening on %q", conn.LocalAddr().String())
+		s.Log.Debugf("UDP listening on %q", conn.LocalAddr().String())
 		s.UDPlistener = conn
 
 		s.wg.Add(1)
@@ -346,7 +346,7 @@ func (s *Statsd) Start(ac telegraf.Accumulator) error {
 			return err
 		}
 
-		s.Log.Infof("TCP listening on %q", listener.Addr().String())
+		s.Log.Debugf("TCP listening on %q", listener.Addr().String())
 		s.TCPlistener = listener
 
 		s.wg.Add(1)
@@ -368,7 +368,7 @@ func (s *Statsd) Start(ac telegraf.Accumulator) error {
 			}
 		}()
 	}
-	s.Log.Infof("Started the statsd service on %q", s.ServiceAddress)
+	s.Log.Debugf("Started the statsd service on %q", s.ServiceAddress)
 	return nil
 }
 
@@ -958,7 +958,7 @@ func (s *Statsd) refuser(conn *net.TCPConn) {
 	// Ignore the returned error as we cannot do anything about it anyway
 	//nolint:errcheck,revive
 	conn.Close()
-	s.Log.Infof("Refused TCP Connection from %s", conn.RemoteAddr())
+	s.Log.Debugf("Refused TCP Connection from %s", conn.RemoteAddr())
 	s.Log.Warn("Maximum TCP Connections reached, you may want to adjust max_tcp_connections")
 }
 
@@ -978,7 +978,7 @@ func (s *Statsd) remember(id string, conn *net.TCPConn) {
 
 func (s *Statsd) Stop() {
 	s.Lock()
-	s.Log.Infof("Stopping the statsd service")
+	s.Log.Debugf("Stopping the statsd service")
 	close(s.done)
 	if s.isUDP() {
 		// Ignore the returned error as we cannot do anything about it anyway
@@ -1010,7 +1010,7 @@ func (s *Statsd) Stop() {
 
 	s.Lock()
 	close(s.in)
-	s.Log.Infof("Stopped listener service on %q", s.ServiceAddress)
+	s.Log.Debugf("Stopped listener service on %q", s.ServiceAddress)
 	s.Unlock()
 }
 
