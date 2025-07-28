@@ -32,7 +32,7 @@ type Plugin struct {
 func (p *Plugin) Init(r gin.IRouter) error {
 	p.conf.setValue()
 	if !p.conf.Enable {
-		logger.Info("opentsdb_telnet disabled")
+		logger.Debug("opentsdb_telnet disabled")
 		return nil
 	}
 	r.Use(plugin.Auth(func(c *gin.Context, code int, err error) {

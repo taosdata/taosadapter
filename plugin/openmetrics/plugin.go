@@ -57,7 +57,7 @@ type Mission struct {
 func (p *OpenMetrics) Init(_ gin.IRouter) error {
 	p.conf.setValue(viper.GetViper())
 	if !p.conf.Enable {
-		logger.Info("node_exporter disabled")
+		logger.Debug("node_exporter disabled")
 		return nil
 	}
 	err := p.conf.CheckConfig()

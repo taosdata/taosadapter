@@ -31,7 +31,7 @@ type Plugin struct {
 func (p *Plugin) Init(_ gin.IRouter) error {
 	p.conf.setValue()
 	if !p.conf.Enable {
-		logger.Info("statsd disabled")
+		logger.Debug("statsd disabled")
 		return nil
 	}
 	return nil

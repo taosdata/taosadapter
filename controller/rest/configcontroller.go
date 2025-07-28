@@ -88,7 +88,7 @@ func (ctl *ConfigController) changeConfig(c *gin.Context) {
 	}
 	if modifyConfig.LogLevel != nil {
 		logLevel := *modifyConfig.LogLevel
-		logger.Infof("change config, log.level:%s", logLevel)
+		logger.Debugf("change config, log.level:%s", logLevel)
 		err = log.SetLevel(logLevel)
 		if err != nil {
 			logger.Errorf("change log.level error, err:%s", err)
