@@ -60,7 +60,7 @@ func TestPlugin(t *testing.T) {
 		err = c.Close()
 		assert.NoError(t, err)
 	}()
-	_, err = c.Write([]byte(fmt.Sprintf("put sys.if.bytes.out 1479496100 %d host=web01 interface=eth0\r\n", number)))
+	_, err = fmt.Fprintf(c, "put sys.if.bytes.out 1479496100 %d host=web01 interface=eth0\r\n", number)
 	assert.NoError(t, err)
 	time.Sleep(time.Second)
 

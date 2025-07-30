@@ -123,7 +123,7 @@ func TestTaosStmt(t *testing.T) {
 	}
 	defer func() {
 		code = TaosStmtClose(stmt, logger, isDebug)
-		assert.Equal(t, 0, code, TaosStmtErrStr(stmt, logger, isDebug))
+		assert.Equal(t, 0, code)
 	}()
 	code = TaosStmtPrepare(stmt, "insert into ? using `syncinterface_test_stmt`.`stb1` tags(?) values(?,?)", logger, isDebug)
 	if !assert.Equal(t, 0, code, TaosStmtErrStr(stmt, logger, isDebug)) {
@@ -495,7 +495,7 @@ func TestTaosStmt2(t *testing.T) {
 	}
 	defer func() {
 		code = TaosStmt2Close(stmt, logger, isDebug)
-		assert.Equal(t, 0, code, TaosStmt2Error(stmt, logger, isDebug))
+		assert.Equal(t, 0, code)
 	}()
 	code = TaosStmt2Prepare(stmt, "insert into ? using `syncinterface_test_stmt2`.`stb1` tags(?) values(?,?)", logger, isDebug)
 	if !assert.Equal(t, 0, code, TaosStmt2Error(stmt, logger, isDebug)) {

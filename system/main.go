@@ -20,6 +20,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
+	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
 	"github.com/taosdata/taosadapter/v3/plugin"
 	"github.com/taosdata/taosadapter/v3/version"
 )
@@ -32,6 +33,10 @@ func Init() *gin.Engine {
 	config.Init()
 	log.ConfigLog()
 	db.PrepareConnection()
+	err := recordsql.Init()
+	if err != nil {
+		logger.Fatal("record sql init failed: ", err)
+	}
 	keys := viper.AllKeys()
 	sort.Strings(keys)
 	logger.Info("                     global config")
@@ -136,6 +141,7 @@ func (p *program) Stop(s service.Service) error {
 	logger.Println("Stop Plugins ...")
 	plugin.StopWithCtx(ctx)
 	logger.Println("Server exiting")
+	recordsql.Close()
 	ctxLog, cancelLog := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelLog()
 	logger.Println("Flushing Log")
