@@ -20,6 +20,8 @@ type Log struct {
 	Compress         bool
 	ReservedDiskSize uint
 
+	EnableSqlToCsvLogging bool
+
 	EnableRecordHttpSql bool
 	SqlRotationCount    uint
 	SqlRotationTime     time.Duration
@@ -80,6 +82,10 @@ func initLog() {
 	viper.SetDefault("log.sqlRotationSize", "1GB")
 	_ = viper.BindEnv("log.sqlRotationSize", "TAOS_ADAPTER_LOG_SQL_ROTATION_SIZE")
 	pflag.String("log.sqlRotationSize", "1GB", `record sql log rotation size(KB MB GB), must be a positive integer. Env "TAOS_ADAPTER_LOG_SQL_ROTATION_SIZE"`)
+
+	viper.SetDefault("log.enableSqlToCsvLogging", false)
+	_ = viper.BindEnv("log.enableSqlToCsvLogging", "TAOS_ADAPTER_LOG_ENABLE_SQL_TO_CSV_LOGGING")
+	pflag.Bool("log.enableSqlToCsvLogging", false, `whether to enable sql to csv logging. Env "TAOS_ADAPTER_LOG_ENABLE_SQL_TO_CSV_LOGGING"`)
 }
 
 func (l *Log) setValue() {
@@ -95,4 +101,5 @@ func (l *Log) setValue() {
 	l.SqlRotationCount = viper.GetUint("log.sqlRotationCount")
 	l.SqlRotationTime = viper.GetDuration("log.sqlRotationTime")
 	l.SqlRotationSize = viper.GetSizeInBytes("log.sqlRotationSize")
+	l.EnableSqlToCsvLogging = viper.GetBool("log.enableSqlToCsvLogging")
 }
