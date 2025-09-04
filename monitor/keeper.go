@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/monitor/metrics"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
+	"github.com/taosdata/taosadapter/v3/tools/innerjson"
 	"github.com/taosdata/taosadapter/v3/tools/sqltype"
 )
 
@@ -1143,7 +1143,7 @@ func upload(p *process.Process, client *http.Client, reqID int64) error {
 	for _, metric := range inflightMetrics {
 		data.Metrics[metric.MetricName()] = int(metric.Value())
 	}
-	jsonData, err := json.Marshal(data)
+	jsonData, err := innerjson.Marshal(data)
 	if err != nil {
 		return err
 	}
