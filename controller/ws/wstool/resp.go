@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/sirupsen/logrus"
+	"github.com/taosdata/taosadapter/v3/tools/innerjson"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
 	"github.com/taosdata/taosadapter/v3/version"
 )
@@ -18,7 +19,9 @@ type TDEngineRestfulResp struct {
 }
 
 func WSWriteJson(session *melody.Session, logger *logrus.Entry, data interface{}) {
-	b, err := json.Marshal(data)
+	// use innerjson to marshal, because some string maybe contains HTML characters &, <, and >
+	// such as "where ts >= 123" will be escaped to "where ts \u003e= 123" by encoding/json
+	b, err := innerjson.Marshal(data)
 	if err != nil {
 		logger.Errorf("marshal json failed:%s, data:%#v", err, data)
 		return
@@ -59,5 +62,5 @@ func init() {
 		Action:  ClientVersion,
 		Version: version.TaosClientVersion,
 	}
-	VersionResp, _ = json.Marshal(resp)
+	VersionResp, _ = innerjson.Marshal(resp)
 }

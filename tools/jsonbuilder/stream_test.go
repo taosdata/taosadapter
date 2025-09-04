@@ -240,6 +240,7 @@ func TestWriteString(t *testing.T) {
 		{"he\tllo", `"he\tllo"`},
 		{"\x01\x02hello", `"\u0001\u0002hello"`},
 		{"\x03\x04world", `"\u0003\u0004world"`},
+		{"<>&", `"<>&"`},
 	}
 
 	for _, test := range tests {
@@ -269,6 +270,9 @@ func TestWriteStringByte(t *testing.T) {
 		{'\t', `\t`},     // 制表符转义
 		{0x01, `\u0001`}, // 触发 default 分支的控制字符
 		{0x04, `\u0004`}, // 触发 default 分支的控制字符
+		{'>', ">"},
+		{'<', "<"},
+		{'&', "&"},
 	}
 
 	for _, test := range tests {
