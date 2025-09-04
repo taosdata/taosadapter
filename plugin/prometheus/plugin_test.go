@@ -34,6 +34,9 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
+	defer func() {
+		syncinterface.TaosClose(conn, logger, isDebug)
+	}()
 	r := syncinterface.TaosQuery(conn, "create database if not exists test_plugin_prometheus", logger, isDebug)
 	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	m.Run()

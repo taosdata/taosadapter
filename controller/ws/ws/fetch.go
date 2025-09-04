@@ -18,7 +18,7 @@ import (
 func (h *messageHandler) resultValidateAndLock(ctx context.Context, session *melody.Session, action string, reqID uint64, resultID uint64, logger *logrus.Entry) (item *QueryResult, locked bool) {
 	item = h.queryResults.Get(resultID)
 	if item == nil {
-		logger.Errorf("result is nil, result_id:%d", resultID)
+		logger.Debugf("result is nil, result_id:%d", resultID)
 		commonErrorResponse(ctx, session, logger, action, reqID, 0xffff, "result is nil")
 		return nil, false
 	}
@@ -53,7 +53,7 @@ func (h *messageHandler) fetch(ctx context.Context, session *melody.Session, act
 	logger.Tracef("get result by id, id:%d", req.ID)
 	item := h.queryResults.Get(req.ID)
 	if item == nil {
-		logger.Errorf("result is nil")
+		logger.Debug("result is nil")
 		commonErrorResponse(ctx, session, logger, action, req.ReqID, 0xffff, "result is nil")
 		return
 	}
@@ -171,7 +171,7 @@ func (h *messageHandler) fetchRawBlock(ctx context.Context, session *melody.Sess
 	item := h.queryResults.Get(resultID)
 	logger.Tracef("fetch raw block, result_id:%d", resultID)
 	if item == nil {
-		logger.Errorf("result is nil, result_id:%d", resultID)
+		logger.Debugf("result is nil, result_id:%d", resultID)
 		fetchRawBlockErrorResponse(session, logger, 0xffff, "result is nil", reqID, resultID, uint64(wstool.GetDuration(ctx)))
 		return
 	}
