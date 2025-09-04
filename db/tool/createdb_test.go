@@ -35,6 +35,7 @@ func TestCreateDBWithConnection(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	defer syncinterface.TaosClose(conn, logger, isDebug)
 	type args struct {
 		connection unsafe.Pointer
 		db         string
