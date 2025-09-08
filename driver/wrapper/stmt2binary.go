@@ -360,6 +360,7 @@ import "C"
 import (
 	"encoding/binary"
 	"fmt"
+	"runtime"
 	"unsafe"
 
 	"github.com/taosdata/taosadapter/v3/driver/common/stmt"
@@ -396,14 +397,16 @@ func TaosStmt2BindBinaryTest(stmt2 unsafe.Pointer, data []byte, colIdx int32) er
 	if totalLength != uint32(len(data)) {
 		return fmt.Errorf("total length not match, expect %d, but get %d", len(data), totalLength)
 	}
-	dataP := C.CBytes(data)
-	defer C.free(dataP)
-	errMsg := (*C.char)(C.malloc(128))
-	defer C.free(unsafe.Pointer(errMsg))
-
-	code := C.go_stmt2_bind_binary_test(stmt2, (*C.char)(dataP), C.int32_t(colIdx), errMsg)
+	var p runtime.Pinner
+	defer p.Unpin()
+	dataP := unsafe.Pointer(&data[0])
+	p.Pin(dataP)
+	errMsg := make([]byte, 128)
+	errP := unsafe.Pointer(&errMsg[0])
+	p.Pin(errP)
+	code := C.go_stmt2_bind_binary_test(stmt2, (*C.char)(dataP), C.int32_t(colIdx), (*C.char)(errP))
 	if code != 0 {
-		msg := C.GoString(errMsg)
+		msg := string(errMsg)
 		return taosError.NewError(int(code), msg)
 	}
 	return nil
