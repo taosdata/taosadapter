@@ -290,35 +290,64 @@ func (h *messageHandler) stmt2BinaryBind(ctx context.Context, session *melody.Se
 		return
 	}
 	v := binary.LittleEndian.Uint16(message[24:])
-	if v != Stmt2BindProtocolVersion1 {
+	if v == Stmt2BindProtocolVersion1 {
+		colIndex := int32(binary.LittleEndian.Uint32(message[26:]))
+		stmtItem, locked := h.stmt2ValidateAndLock(ctx, session, action, reqID, stmtID, logger, isDebug)
+		if !locked {
+			return
+		}
+		defer stmtItem.Unlock()
+		bindData := message[30:]
+		err := syncinterface.TaosStmt2BindBinary(stmtItem.stmt, bindData, colIndex, logger, isDebug)
+		if err != nil {
+			logger.Errorf("stmt2 bind error, err:%s", err.Error())
+			var tError *errors2.TaosError
+			if errors.As(err, &tError) {
+				stmtErrorResponse(ctx, session, logger, action, reqID, int(tError.Code), tError.ErrStr, stmtID)
+				return
+			}
+			stmtErrorResponse(ctx, session, logger, action, reqID, 0xffff, err.Error(), stmtID)
+			return
+		}
+		logger.Trace("stmt2 bind success")
+		resp := &stmt2BindResponse{
+			Action: action,
+			ReqID:  reqID,
+			Timing: wstool.GetDuration(ctx),
+			StmtID: stmtID,
+		}
+		wstool.WSWriteJson(session, logger, resp)
+	} else if v == Stmt2BindProtocolVersion2 {
+		colIndex := int32(binary.LittleEndian.Uint32(message[26:]))
+		stmtItem, locked := h.stmt2ValidateAndLock(ctx, session, action, reqID, stmtID, logger, isDebug)
+		if !locked {
+			return
+		}
+		defer stmtItem.Unlock()
+		bindData := message[30:]
+		err := syncinterface.TaosStmt2BindBinaryTest(stmtItem.stmt, bindData, colIndex, logger, isDebug)
+		if err != nil {
+			logger.Errorf("stmt2 bind error, err:%s", err.Error())
+			var tError *errors2.TaosError
+			if errors.As(err, &tError) {
+				stmtErrorResponse(ctx, session, logger, action, reqID, int(tError.Code), tError.ErrStr, stmtID)
+				return
+			}
+			stmtErrorResponse(ctx, session, logger, action, reqID, 0xffff, err.Error(), stmtID)
+			return
+		}
+		logger.Trace("stmt2 bind success")
+		resp := &stmt2BindResponse{
+			Action: action,
+			ReqID:  reqID,
+			Timing: wstool.GetDuration(ctx),
+			StmtID: stmtID,
+		}
+		wstool.WSWriteJson(session, logger, resp)
+	} else {
 		logger.Errorf("unknown stmt2 bind version, version:%d, stmt_id:%d", v, stmtID)
 		stmtErrorResponse(ctx, session, logger, action, reqID, 0xffff, "unknown stmt2 bind version", stmtID)
 		return
 	}
-	colIndex := int32(binary.LittleEndian.Uint32(message[26:]))
-	stmtItem, locked := h.stmt2ValidateAndLock(ctx, session, action, reqID, stmtID, logger, isDebug)
-	if !locked {
-		return
-	}
-	defer stmtItem.Unlock()
-	bindData := message[30:]
-	err := syncinterface.TaosStmt2BindBinary(stmtItem.stmt, bindData, colIndex, logger, isDebug)
-	if err != nil {
-		logger.Errorf("stmt2 bind error, err:%s", err.Error())
-		var tError *errors2.TaosError
-		if errors.As(err, &tError) {
-			stmtErrorResponse(ctx, session, logger, action, reqID, int(tError.Code), tError.ErrStr, stmtID)
-			return
-		}
-		stmtErrorResponse(ctx, session, logger, action, reqID, 0xffff, err.Error(), stmtID)
-		return
-	}
-	logger.Trace("stmt2 bind success")
-	resp := &stmt2BindResponse{
-		Action: action,
-		ReqID:  reqID,
-		Timing: wstool.GetDuration(ctx),
-		StmtID: stmtID,
-	}
-	wstool.WSWriteJson(session, logger, resp)
+
 }

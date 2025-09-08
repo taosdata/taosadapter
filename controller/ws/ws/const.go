@@ -90,4 +90,5 @@ func getActionString(binaryAction uint64) string {
 const (
 	BinaryProtocolVersion1    uint16 = 1
 	Stmt2BindProtocolVersion1 uint16 = 1
+	Stmt2BindProtocolVersion2 uint16 = 2
 )

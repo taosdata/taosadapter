@@ -238,6 +238,123 @@ int go_stmt2_bind_binary(TAOS_STMT2 *stmt, char *data, int32_t col_idx, char *er
   }
   return code;
 }
+
+int
+go_generate_stmt2_binds_test(char *data, uint32_t field_count, uint32_t field_offset, TAOS_STMT2_BIND2 *bind_struct,
+                             char *err_msg, int *row) {
+    uint32_t *base_length = (uint32_t *) (data + field_offset);
+    char *data_ptr = (char *) (base_length + 1);
+    int num = 0;
+    for (uint32_t field_index = 0; field_index < field_count; field_index++) {
+        char *bind_data_ptr = data_ptr;
+        TAOS_STMT2_BIND2 *bind = bind_struct + field_index;
+        // total length
+        uint32_t bind_data_totalLength = *(uint32_t *) bind_data_ptr;
+        bind_data_ptr += 4;
+        // buffer_type
+        bind->buffer_type = *(int *) bind_data_ptr;
+        bind_data_ptr += 4;
+        // num
+        if (field_index == 0) {
+            num = *(int *) bind_data_ptr;
+        } else if (num != *(int *) bind_data_ptr) {
+            snprintf(err_msg, 128, "num is not same, tableIndex: %d, preNum: %d, curNum: %d", 0, num,
+                     *(int *) bind_data_ptr);
+            return -1;
+        }
+
+        // bind->num = *(int *) bind_data_ptr;
+        bind_data_ptr += 4;
+        // is_null
+        bind->is_null = (char *) bind_data_ptr;
+        bind_data_ptr += num;
+        // have_length
+        char have_length = *(char *) bind_data_ptr;
+        bind_data_ptr += 1;
+        if (have_length == 0) {
+            bind->length = NULL;
+        } else {
+            bind->length = (int32_t *) bind_data_ptr;
+            bind_data_ptr += num * 4;
+        }
+        // buffer_length
+        int32_t buffer_length = *(int32_t *) bind_data_ptr;
+        bind_data_ptr += 4;
+        // buffer
+        if (buffer_length > 0) {
+            bind->buffer = (void *) bind_data_ptr;
+            bind_data_ptr += buffer_length;
+        } else {
+            bind->buffer = NULL;
+        }
+        // check bind data length
+        if (bind_data_ptr - data_ptr != bind_data_totalLength) {
+            snprintf(err_msg, 128, "bind data length error, tableIndex: %d, fieldIndex: %d", 0, field_index);
+            return -1;
+        }
+        data_ptr = bind_data_ptr;
+    }
+    *row = num;
+    return 0;
+}
+
+
+int go_stmt2_bind_binary_test(TAOS_STMT2 *stmt, char *data, int32_t col_idx, char *err_msg) {
+    uint32_t *header = (uint32_t *) data;
+    uint32_t total_length = header[0];
+    uint32_t count = header[1];
+    uint32_t col_count = header[3];
+    uint32_t tags_offset = header[5];
+    uint32_t cols_offset = header[6];
+
+    // check cols
+    if (cols_offset > 0) {
+        if (col_count == 0) {
+            snprintf(err_msg, 128, "col count is 0, but cols offset is not 0");
+            return -1;
+        }
+        uint32_t colEnd = cols_offset + count * 4;
+        if (colEnd > total_length) {
+            snprintf(err_msg, 128, "cols out of range, total length: %d, colEnd: %d", total_length, colEnd);
+            return -1;
+        }
+        uint32_t *col_length_ptr = (uint32_t *) (data + cols_offset);
+        for (int32_t i = 0; i < count; ++i) {
+            if (col_length_ptr[i] == 0) {
+                snprintf(err_msg, 128, "col length is 0, tableIndex: %d", i);
+                return -1;
+            }
+            colEnd += col_length_ptr[i];
+        }
+        if (colEnd > total_length) {
+            snprintf(err_msg, 128, "cols out of range, total length: %d, colsTotalLength: %d", total_length, colEnd);
+            return -1;
+        }
+    }
+
+    TAOS_STMT2_BIND2 *bind_struct = (TAOS_STMT2_BIND2 *) malloc(sizeof(TAOS_STMT2_BIND2) * col_count);;
+    if (bind_struct == NULL) {
+        snprintf(err_msg, 128, "malloc bind struct error");
+        return -1;
+    }
+    int rows = 0;
+    int code = go_generate_stmt2_binds_test(data, col_count, cols_offset, bind_struct, err_msg, &rows);
+
+    if (code != 0) {
+        free(bind_struct);
+        return code;
+    }
+
+    code = taos_stmt2_bind_param_test(stmt, bind_struct, rows);
+    if (code != 0) {
+        char *msg = taos_stmt2_error(stmt);
+        snprintf(err_msg, 128, "%s", msg);
+    }
+
+    free(bind_struct);
+    return code;
+}
+
 */
 import "C"
 import (
@@ -264,6 +381,27 @@ func TaosStmt2BindBinary(stmt2 unsafe.Pointer, data []byte, colIdx int32) error 
 	defer C.free(unsafe.Pointer(errMsg))
 
 	code := C.go_stmt2_bind_binary(stmt2, (*C.char)(dataP), C.int32_t(colIdx), errMsg)
+	if code != 0 {
+		msg := C.GoString(errMsg)
+		return taosError.NewError(int(code), msg)
+	}
+	return nil
+}
+
+func TaosStmt2BindBinaryTest(stmt2 unsafe.Pointer, data []byte, colIdx int32) error {
+	if len(data) < stmt.DataPosition {
+		return fmt.Errorf("data length is less than 28")
+	}
+	totalLength := binary.LittleEndian.Uint32(data[stmt.TotalLengthPosition:])
+	if totalLength != uint32(len(data)) {
+		return fmt.Errorf("total length not match, expect %d, but get %d", len(data), totalLength)
+	}
+	dataP := C.CBytes(data)
+	defer C.free(dataP)
+	errMsg := (*C.char)(C.malloc(128))
+	defer C.free(unsafe.Pointer(errMsg))
+
+	code := C.go_stmt2_bind_binary_test(stmt2, (*C.char)(dataP), C.int32_t(colIdx), errMsg)
 	if code != 0 {
 		msg := C.GoString(errMsg)
 		return taosError.NewError(int(code), msg)
