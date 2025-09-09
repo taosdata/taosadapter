@@ -236,14 +236,17 @@ func TestUpload(t *testing.T) {
 			}
 			t.Log(string(b))
 			times += 1
-			if times == 1 {
+			switch times {
+			case 1:
 				w.WriteHeader(http.StatusRequestTimeout)
 				return
-			} else if times == 3 {
+			case 3:
 				close(done)
+				fallthrough
+			default:
+				w.WriteHeader(http.StatusOK)
+				return
 			}
-			w.WriteHeader(http.StatusOK)
-			return
 		}
 		w.WriteHeader(http.StatusBadRequest)
 	}))
@@ -261,7 +264,7 @@ func TestUpload(t *testing.T) {
 	case <-done:
 	}
 	stopUpload()
-	time.Sleep(time.Millisecond * 10)
+	time.Sleep(time.Second)
 	config.Conf.UploadKeeper.Enable = false
 	config.Conf.UploadKeeper.Interval = time.Second * 5
 }
