@@ -239,8 +239,9 @@ func TestUpload(t *testing.T) {
 			if times == 1 {
 				w.WriteHeader(http.StatusRequestTimeout)
 				return
+			} else if times == 3 {
+				close(done)
 			}
-			close(done)
 			w.WriteHeader(http.StatusOK)
 			return
 		}
