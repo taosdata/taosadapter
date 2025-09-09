@@ -259,7 +259,10 @@ func TestUpload(t *testing.T) {
 		t.Errorf("upload failed")
 	case <-done:
 	}
+	stopUpload()
+	time.Sleep(time.Millisecond * 10)
 	config.Conf.UploadKeeper.Enable = false
+	config.Conf.UploadKeeper.Interval = time.Second * 5
 }
 
 func TestRecordWSConn(t *testing.T) {

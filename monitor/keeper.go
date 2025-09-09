@@ -1044,6 +1044,13 @@ func RecordWSTMQDisconnect() {
 	}
 }
 
+var closeChan = make(chan struct{}, 1)
+
+// just for test
+func stopUpload() {
+	closeChan <- struct{}{}
+}
+
 func StartUpload() {
 	if config.Conf.UploadKeeper.Enable {
 		client := &http.Client{
@@ -1072,7 +1079,11 @@ func StartUpload() {
 				}
 			}()
 			ticker := time.NewTicker(config.Conf.UploadKeeper.Interval)
-			for range ticker.C {
+			select {
+			case <-closeChan:
+				ticker.Stop()
+				return
+			case <-ticker.C:
 				go func() {
 					reqID := generator.GetUploadKeeperReqID()
 					err := upload(p, client, reqID)
