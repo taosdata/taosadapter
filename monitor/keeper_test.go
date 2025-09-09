@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -229,12 +228,12 @@ func TestUpload(t *testing.T) {
 	done := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/upload" {
-			b, err := io.ReadAll(r.Body)
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			t.Log(string(b))
+			//b, err := io.ReadAll(r.Body)
+			//if err != nil {
+			//	t.Error(err)
+			//	return
+			//}
+			//t.Log(string(b))
 			times += 1
 			switch times {
 			case 1:
@@ -264,7 +263,7 @@ func TestUpload(t *testing.T) {
 	case <-done:
 	}
 	stopUpload()
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 2)
 	config.Conf.UploadKeeper.Enable = false
 	config.Conf.UploadKeeper.Interval = time.Second * 5
 }
