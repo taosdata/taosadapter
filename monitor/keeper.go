@@ -1053,6 +1053,11 @@ func StartUpload() {
 		if err != nil {
 			logger.Panicf("get process error, err:%s", err)
 		}
+		// init cpu record
+		_, err = p.Percent(0)
+		if err != nil {
+			logger.Panicf("get process cpu percent error, err")
+		}
 		go func() {
 			nextUploadTime := getNextUploadTime()
 			logger.Debugf("start upload keeper when %s", nextUploadTime.Format("2006-01-02 15:04:05.000000000"))
@@ -1167,6 +1172,11 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 	if err != nil {
 		return nil, fmt.Errorf("get memory info error, err:%s", err.Error())
 	}
+	cpu, err := p.Percent(0)
+	if err != nil {
+		return nil, fmt.Errorf("get cpu percent error, err:%s", err.Error())
+	}
+	cpu = cpu / float64(runtime.NumCPU())
 	memStats := new(runtime.MemStats)
 	runtime.ReadMemStats(memStats)
 	queryConnInc := WSQueryConnIncrement.Value()
@@ -1325,6 +1335,10 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 					{
 						Name:  "ws_ws_stmt2_count",
 						Value: WSWSStmt2Count.Value(),
+					},
+					{
+						Name:  "cpu_percent",
+						Value: cpu,
 					},
 				},
 			},
