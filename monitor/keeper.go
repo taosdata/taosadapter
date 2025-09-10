@@ -1044,6 +1044,13 @@ func RecordWSTMQDisconnect() {
 	}
 }
 
+var closeChan = make(chan struct{}, 1)
+
+// just for test
+func stopUpload() {
+	closeChan <- struct{}{}
+}
+
 func StartUpload() {
 	if config.Conf.UploadKeeper.Enable {
 		client := &http.Client{
@@ -1052,6 +1059,11 @@ func StartUpload() {
 		p, err := process.NewProcess(int32(os.Getpid()))
 		if err != nil {
 			logger.Panicf("get process error, err:%s", err)
+		}
+		// init cpu record
+		_, err = p.Percent(0)
+		if err != nil {
+			logger.Panicf("get process cpu percent error, err")
 		}
 		go func() {
 			nextUploadTime := getNextUploadTime()
@@ -1067,7 +1079,11 @@ func StartUpload() {
 				}
 			}()
 			ticker := time.NewTicker(config.Conf.UploadKeeper.Interval)
-			for range ticker.C {
+			select {
+			case <-closeChan:
+				ticker.Stop()
+				return
+			case <-ticker.C:
 				go func() {
 					reqID := generator.GetUploadKeeperReqID()
 					err := upload(p, client, reqID)
@@ -1167,6 +1183,11 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 	if err != nil {
 		return nil, fmt.Errorf("get memory info error, err:%s", err.Error())
 	}
+	cpu, err := p.Percent(0)
+	if err != nil {
+		return nil, fmt.Errorf("get cpu percent error, err:%s", err.Error())
+	}
+	cpu = cpu / float64(runtime.NumCPU())
 	memStats := new(runtime.MemStats)
 	runtime.ReadMemStats(memStats)
 	queryConnInc := WSQueryConnIncrement.Value()
@@ -1325,6 +1346,10 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 					{
 						Name:  "ws_ws_stmt2_count",
 						Value: WSWSStmt2Count.Value(),
+					},
+					{
+						Name:  "cpu_percent",
+						Value: cpu,
 					},
 				},
 			},
