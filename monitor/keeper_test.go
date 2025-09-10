@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/sqltype"
@@ -228,20 +228,24 @@ func TestUpload(t *testing.T) {
 	done := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/upload" {
-			b, err := io.ReadAll(r.Body)
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			t.Log(string(b))
+			//b, err := io.ReadAll(r.Body)
+			//if err != nil {
+			//	t.Error(err)
+			//	return
+			//}
+			//t.Log(string(b))
 			times += 1
-			if times == 1 {
+			switch times {
+			case 1:
 				w.WriteHeader(http.StatusRequestTimeout)
 				return
+			case 3:
+				close(done)
+				fallthrough
+			default:
+				w.WriteHeader(http.StatusOK)
+				return
 			}
-			close(done)
-			w.WriteHeader(http.StatusOK)
-			return
 		}
 		w.WriteHeader(http.StatusBadRequest)
 	}))
@@ -258,7 +262,10 @@ func TestUpload(t *testing.T) {
 		t.Errorf("upload failed")
 	case <-done:
 	}
+	stopUpload()
+	time.Sleep(time.Second * 2)
 	config.Conf.UploadKeeper.Enable = false
+	config.Conf.UploadKeeper.Interval = time.Second * 5
 }
 
 func TestRecordWSConn(t *testing.T) {
@@ -293,6 +300,17 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	ts := time.Now()
 	p, err := process.NewProcess(int32(os.Getpid()))
 	assert.NoError(t, err)
+	_, err = p.Percent(0)
+	require.NoError(t, err)
+	go func() {
+		x := 0
+		for {
+			x += 1
+			if x > 1000 {
+				x = 1
+			}
+		}
+	}()
 	RecordWSQueryConn()
 	RecordWSSMLConn()
 	RecordWSStmtConn()
@@ -318,6 +336,7 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	thread.SyncSemaphore.Acquire()
 	g := RecordNewConnectionPool("test")
 	g.Inc()
+	time.Sleep(time.Second)
 	metrics, err := generateExtraMetrics(ts, p)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(metrics))
@@ -591,7 +610,7 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	assert.Equal(t, "endpoint", statusMetricGroup.Tags[0].Name)
 	assert.Equal(t, identity, statusMetricGroup.Tags[0].Value)
 	statusMetric := statusMetricGroup.Metrics
-	assert.Equal(t, 29, len(statusMetric))
+	assert.Equal(t, 30, len(statusMetric))
 	assert.Equal(t, "go_heap_sys", statusMetric[0].Name)
 	assert.Greater(t, statusMetric[0].Value, uint64(0))
 	assert.Equal(t, "go_heap_inuse", statusMetric[1].Name)
@@ -650,6 +669,9 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	assert.Equal(t, float64(1), statusMetric[27].Value)
 	assert.Equal(t, "ws_ws_stmt2_count", statusMetric[28].Name)
 	assert.Equal(t, float64(1), statusMetric[28].Value)
+	assert.Equal(t, "cpu_percent", statusMetric[29].Name)
+	assert.Greater(t, statusMetric[29].Value, float64(0))
+	t.Log(statusMetric[29].Value)
 
 	connPoolTable := metric.Tables[1]
 	assert.Equal(t, "adapter_conn_pool", connPoolTable.Name)
@@ -694,6 +716,7 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	for i := 0; i < len(cInterfaceCountMetrics); i++ {
 		cInterfaceCountMetrics[i].Inc()
 	}
+	time.Sleep(time.Second)
 	metrics, err = generateExtraMetrics(ts, p)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(metrics))
@@ -709,7 +732,7 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	assert.Equal(t, "endpoint", statusMetricGroup.Tags[0].Name)
 	assert.Equal(t, identity, statusMetricGroup.Tags[0].Value)
 	statusMetric = statusMetricGroup.Metrics
-	assert.Equal(t, 29, len(statusMetric))
+	assert.Equal(t, 30, len(statusMetric))
 	assert.Equal(t, "go_heap_sys", statusMetric[0].Name)
 	assert.Greater(t, statusMetric[0].Value, uint64(0))
 	assert.Equal(t, "go_heap_inuse", statusMetric[1].Name)
@@ -768,6 +791,9 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	assert.Equal(t, float64(2), statusMetric[27].Value)
 	assert.Equal(t, "ws_ws_stmt2_count", statusMetric[28].Name)
 	assert.Equal(t, float64(2), statusMetric[28].Value)
+	assert.Equal(t, "cpu_percent", statusMetric[29].Name)
+	assert.Greater(t, statusMetric[29].Value, float64(0))
+	t.Log(statusMetric[29].Value)
 	connPoolTable = metric.Tables[1]
 	assert.Equal(t, "adapter_conn_pool", connPoolTable.Name)
 	assert.Equal(t, 1, len(connPoolTable.MetricGroups))
