@@ -11,7 +11,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller/rest"
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/log"
-	"github.com/taosdata/taosadapter/v3/monitor"
 )
 
 var router *gin.Engine
@@ -31,6 +30,5 @@ func TestMain(m *testing.M) {
 	ctl.Init(router)
 	var pingCtl ping.Controller
 	pingCtl.Init(router)
-	monitor.StartMonitor()
 	m.Run()
 }

@@ -25,6 +25,8 @@ import (
 // @date: 2022/1/17 11:14
 // @description: test monitor function
 func TestMonitor(t *testing.T) {
+	monitor.StartMonitor()
+	defer monitor.StopUpload()
 	machineMemory, err := mem.VirtualMemoryWithContext(context.Background())
 	if err != nil {
 		t.Error(err)

@@ -1047,7 +1047,7 @@ func RecordWSTMQDisconnect() {
 var closeChan = make(chan struct{}, 1)
 
 // just for test
-func stopUpload() {
+func StopUpload() {
 	closeChan <- struct{}{}
 }
 
@@ -1079,18 +1079,20 @@ func StartUpload() {
 				}
 			}()
 			ticker := time.NewTicker(config.Conf.UploadKeeper.Interval)
-			select {
-			case <-closeChan:
-				ticker.Stop()
-				return
-			case <-ticker.C:
-				go func() {
-					reqID := generator.GetUploadKeeperReqID()
-					err := upload(p, client, reqID)
-					if err != nil {
-						logger.Errorf("upload_id:0x%x, upload to keeper error, err:%s", reqID, err)
-					}
-				}()
+			for {
+				select {
+				case <-closeChan:
+					ticker.Stop()
+					return
+				case <-ticker.C:
+					go func() {
+						reqID := generator.GetUploadKeeperReqID()
+						err := upload(p, client, reqID)
+						if err != nil {
+							logger.Errorf("upload_id:0x%x, upload to keeper error, err:%s", reqID, err)
+						}
+					}()
+				}
 			}
 		}()
 	}
