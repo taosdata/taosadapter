@@ -262,7 +262,7 @@ func TestUpload(t *testing.T) {
 		t.Errorf("upload failed")
 	case <-done:
 	}
-	stopUpload()
+	StopUpload()
 	time.Sleep(time.Second * 2)
 	config.Conf.UploadKeeper.Enable = false
 	config.Conf.UploadKeeper.Interval = time.Second * 5

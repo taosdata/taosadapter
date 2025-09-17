@@ -1047,7 +1047,7 @@ func RecordWSTMQDisconnect() {
 var closeChan = make(chan struct{}, 1)
 
 // just for test
-func stopUpload() {
+func StopUpload() {
 	closeChan <- struct{}{}
 }
 
