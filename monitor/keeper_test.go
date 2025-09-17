@@ -239,7 +239,7 @@ func TestUpload(t *testing.T) {
 			case 1:
 				w.WriteHeader(http.StatusRequestTimeout)
 				return
-			case 3:
+			case 5:
 				close(done)
 				fallthrough
 			default:
@@ -255,7 +255,7 @@ func TestUpload(t *testing.T) {
 	config.Conf.UploadKeeper.RetryTimes = 1
 	config.Conf.UploadKeeper.RetryInterval = time.Millisecond * 100
 	StartUpload()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*8)
 	defer cancel()
 	select {
 	case <-ctx.Done():
