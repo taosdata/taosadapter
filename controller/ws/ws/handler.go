@@ -42,6 +42,8 @@ type messageHandler struct {
 	ip                    net.IP
 	ipStr                 string
 	user                  string
+	port                  string
+	appName               string
 	whitelistChangeHandle cgo.Handle
 	dropUserHandle        cgo.Handle
 }
@@ -49,6 +51,7 @@ type messageHandler struct {
 func newHandler(session *melody.Session) *messageHandler {
 	logger := wstool.GetLogger(session)
 	ipAddr := iptool.GetRealIP(session.Request)
+	port, _ := iptool.GetRealPort(session.Request) // ignore error, this port is for sql recording
 	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
 	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
 	return &messageHandler{
@@ -63,6 +66,7 @@ func newHandler(session *melody.Session) *messageHandler {
 		ip:                    ipAddr,
 		ipStr:                 ipAddr.String(),
 		logger:                logger,
+		port:                  port,
 	}
 }
 

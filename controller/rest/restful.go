@@ -40,6 +40,11 @@ var logger = log.GetLogger("RST")
 const StartTimeKey = "st"
 const LoggerKey = "logger"
 const RequireTiming = "require_timing"
+const (
+	ConnTZQueryParamKey  = "conn_tz"
+	AppNameQueryParamKey = "app"
+	IPQueryParamKey      = "ip"
+)
 
 type Restful struct {
 	uploadReplacer *strings.Replacer
@@ -164,7 +169,9 @@ func DoQuery(c *gin.Context, db string, location *time.Location, reqID int64, re
 	var recordTime time.Time
 	if recordSql {
 		defer recordsql.PutSQLRecord(record)
-		record.Init(sql, ip.String(), user, recordsql.HTTPType, uint64(reqID), c.MustGet(StartTimeKey).(time.Time))
+		port, _ := iptool.GetRealPort(c.Request)
+		appName := c.Query(AppNameQueryParamKey)
+		record.Init(sql, ip.String(), port, appName, user, recordsql.HTTPType, uint64(reqID), c.MustGet(StartTimeKey).(time.Time))
 		recordTime = time.Now()
 	}
 	s = log.GetLogNow(isDebug)
@@ -221,7 +228,7 @@ func DoQuery(c *gin.Context, db string, location *time.Location, reqID int64, re
 }
 
 func trySetConnectionOptions(c *gin.Context, conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) bool {
-	keys := [3]string{"conn_tz", "app", "ip"}
+	keys := [3]string{ConnTZQueryParamKey, AppNameQueryParamKey, IPQueryParamKey}
 	options := [3]int{common.TSDB_OPTION_CONNECTION_TIMEZONE, common.TSDB_OPTION_CONNECTION_USER_APP, common.TSDB_OPTION_CONNECTION_USER_IP}
 	for i := 0; i < 3; i++ {
 		val := c.Query(keys[i])

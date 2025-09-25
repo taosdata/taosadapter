@@ -37,13 +37,15 @@ type Record struct {
 	QueryDuration   time.Duration  // taos query interface duration
 	FetchDuration   time.Duration  // taos fetch interface duration total
 	GetConnDuration time.Duration  // taos get connection duration
+	SourcePort      string         // source port
+	AppName         string         // application name
 	totalDuration   time.Duration  // total duration
 	mission         *RecordMission // mission to which this record belongs
 	ele             *list.Element  // element in the record list
 	sync.Mutex                     // lock for thread safety
 }
 
-func (r *Record) Init(sql string, ip string, user string, connType ConnType, qid uint64, receiveTime time.Time) {
+func (r *Record) Init(sql string, ip string, port string, AppName string, user string, connType ConnType, qid uint64, receiveTime time.Time) {
 	r.Lock()
 	defer r.Unlock()
 	r.SQL = sql
@@ -52,6 +54,8 @@ func (r *Record) Init(sql string, ip string, user string, connType ConnType, qid
 	r.ConnType = connType
 	r.QID = qid
 	r.ReceiveTime = receiveTime
+	r.SourcePort = port
+	r.AppName = AppName
 }
 
 func (r *Record) SetQueryDuration(duration time.Duration) {
@@ -80,7 +84,7 @@ func (r *Record) SetFreeTime(freeTime time.Time) {
 
 func (r *Record) toRow() []string {
 	now := time.Now()
-	row := make([]string, 12)
+	row := make([]string, FiledCount)
 	row[TSIndex] = now.Format(ResultTimeFormat)
 	row[SQLIndex] = r.SQL
 	row[IPIndex] = r.IP
@@ -98,6 +102,8 @@ func (r *Record) toRow() []string {
 		r.totalDuration = now.Sub(r.ReceiveTime)
 	}
 	row[TotalDurationIndex] = strconv.FormatInt(r.totalDuration.Microseconds(), 10)
+	row[SourcePortIndex] = r.SourcePort
+	row[AppNameIndex] = r.AppName
 	return row
 }
 
@@ -112,6 +118,8 @@ func (r *Record) reset() {
 	r.QueryDuration = 0
 	r.FetchDuration = 0
 	r.GetConnDuration = 0
+	r.SourcePort = ""
+	r.AppName = ""
 	r.totalDuration = 0
 	r.ele = nil
 	r.mission = nil
