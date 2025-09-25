@@ -20,8 +20,10 @@ func TestRecordInit(t *testing.T) {
 	connType := HTTPType
 	qid := uint64(12345)
 	receiveTime := time.Now()
+	port := "38000"
+	appName := "testapp"
 
-	r.Init(sql, ip, user, connType, qid, receiveTime)
+	r.Init(sql, ip, port, appName, user, connType, qid, receiveTime)
 
 	assert.Equal(t, sql, r.SQL)
 	assert.Equal(t, ip, r.IP)
@@ -29,6 +31,8 @@ func TestRecordInit(t *testing.T) {
 	assert.Equal(t, connType, r.ConnType)
 	assert.Equal(t, qid, r.QID)
 	assert.Equal(t, receiveTime, r.ReceiveTime)
+	assert.Equal(t, appName, r.AppName)
+	assert.Equal(t, port, r.SourcePort)
 }
 
 func TestRecordDurationSetters(t *testing.T) {
@@ -72,6 +76,8 @@ func TestRecordToRow(t *testing.T) {
 		QueryDuration:   50 * time.Millisecond,
 		FetchDuration:   30 * time.Millisecond,
 		GetConnDuration: 20 * time.Millisecond,
+		SourcePort:      "38000",
+		AppName:         "testapp",
 	}
 
 	row := r.toRow()
@@ -90,6 +96,8 @@ func TestRecordToRow(t *testing.T) {
 	assert.Equal(t, "30000", row[FetchDurationIndex])
 	assert.Equal(t, "20000", row[GetConnDurationIndex])
 	assert.Equal(t, "100000", row[TotalDurationIndex])
+	assert.Equal(t, "38000", row[SourcePortIndex])
+	assert.Equal(t, "testapp", row[AppNameIndex])
 }
 
 func TestRecordToRowWithZeroFreeTime(t *testing.T) {
@@ -119,6 +127,8 @@ func TestRecordReset(t *testing.T) {
 		QueryDuration:   50 * time.Millisecond,
 		FetchDuration:   30 * time.Millisecond,
 		GetConnDuration: 20 * time.Millisecond,
+		SourcePort:      "38000",
+		AppName:         "testapp",
 		totalDuration:   100 * time.Millisecond,
 		mission:         &RecordMission{},
 		ele:             &list.Element{},
@@ -137,6 +147,8 @@ func TestRecordReset(t *testing.T) {
 	assert.Equal(t, time.Duration(0), r.FetchDuration)
 	assert.Equal(t, time.Duration(0), r.GetConnDuration)
 	assert.Equal(t, time.Duration(0), r.totalDuration)
+	assert.Empty(t, r.SourcePort)
+	assert.Empty(t, r.AppName)
 	assert.Nil(t, r.ele)
 	assert.Nil(t, r.mission)
 }
@@ -336,6 +348,8 @@ func TestRotate(t *testing.T) {
 		FetchDuration:   100,
 		GetConnDuration: 100,
 		totalDuration:   100,
+		SourcePort:      "38000",
+		AppName:         "testapp",
 	}
 	for i := 0; i < 10; i++ {
 		getGlobalRecordMission().writeRecord(record)

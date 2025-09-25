@@ -34,6 +34,9 @@ const (
 	FetchDurationIndex
 	GetConnDurationIndex
 	TotalDurationIndex
+	SourcePortIndex
+	AppNameIndex
+	FiledCount
 )
 
 type outputWriter interface {
