@@ -146,5 +146,6 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	}
 	// save user for record
 	h.user = req.User
+	h.appName = req.App
 	wstool.WSWriteJson(session, logger, resp)
 }

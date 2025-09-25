@@ -63,7 +63,7 @@ func (h *messageHandler) query(ctx context.Context, session *melody.Session, act
 	record, recordSql := recordsql.GetSQLRecord()
 	var recordTime time.Time
 	if recordSql {
-		record.Init(req.Sql, h.ipStr, h.user, recordsql.WSType, innerReqID, time.Now())
+		record.Init(req.Sql, h.ipStr, h.port, h.appName, h.user, recordsql.WSType, innerReqID, time.Now())
 	}
 	sqlType := monitor.WSRecordRequest(req.Sql)
 	logger.Debugf("get query request, sql:%s", req.Sql)
@@ -177,7 +177,7 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 	if recordSql {
 		// copy sql to record, can not use reqSql directly, because it is only alive in this function scope
 		sqlStr := string(sql)
-		record.Init(sqlStr, h.ipStr, h.user, recordsql.WSType, innerReqID, time.Now())
+		record.Init(sqlStr, h.ipStr, h.port, h.appName, h.user, recordsql.WSType, innerReqID, time.Now())
 	}
 	logger.Debugf("binary query, sql:%s", log.GetLogSql(reqSql))
 	sqlType := monitor.WSRecordRequest(reqSql)
