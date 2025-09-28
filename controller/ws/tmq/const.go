@@ -24,3 +24,11 @@ const (
 )
 
 const OffsetInvalid = -2147467247
+
+const (
+	TmqConfUnknown int32 = -2
+	TmqConfInvalid int32 = -1
+	TmqConfOk      int32 = 0
+)
+
+const TsdbCodeInvalidPara = 0x0118
