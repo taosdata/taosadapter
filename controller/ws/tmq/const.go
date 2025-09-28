@@ -26,9 +26,9 @@ const (
 const OffsetInvalid = -2147467247
 
 const (
-	TMQ_CONF_UNKNOWN int32 = -2
-	TMQ_CONF_INVALID int32 = -1
-	TMQ_CONF_OK      int32 = 0
+	TmqConfUnknown int32 = -2
+	TmqConfInvalid int32 = -1
+	TmqConfOk      int32 = 0
 )
 
-const TSDB_CODE_INVALID_PARA = 0x0118
+const TsdbCodeInvalidPara = 0x0118

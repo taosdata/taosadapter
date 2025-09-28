@@ -645,14 +645,14 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	logger.Debug("call tmq_conf_set")
 	for k, v := range tmqOptions {
 		errCode = syncinterface.TMQConfSet(tmqConfig, k, v, logger, isDebug)
-		if errCode != TMQ_CONF_OK {
+		if errCode != TmqConfOk {
 			// change error code to TSDB_CODE_INVALID_PARA
-			returnCode := TSDB_CODE_INVALID_PARA
+			returnCode := TsdbCodeInvalidPara
 			var errStr string
 			switch errCode {
-			case TMQ_CONF_UNKNOWN:
+			case TmqConfUnknown:
 				errStr = fmt.Sprintf("unknown configuration key: %s", k)
-			case TMQ_CONF_INVALID:
+			case TmqConfInvalid:
 				errStr = fmt.Sprintf("invalid value for key '%s': %s", k, v)
 			default:
 				errStr = fmt.Sprintf("unexpected error (code %d) when setting key '%s' to value '%s'", errCode, k, v)
