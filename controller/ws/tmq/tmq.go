@@ -27,7 +27,6 @@ import (
 	taoserrors "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
-	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
@@ -646,10 +645,20 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	logger.Debug("call tmq_conf_set")
 	for k, v := range tmqOptions {
 		errCode = syncinterface.TMQConfSet(tmqConfig, k, v, logger, isDebug)
-		if errCode != httperror.SUCCESS {
-			errStr := syncinterface.TMQErr2Str(errCode, logger, isDebug)
-			logger.Errorf("tmq conf set error, k:%s, v:%s, code:%d, msg:%s", k, v, errCode, errStr)
-			wsTMQErrorMsg(ctx, session, logger, int(errCode), errStr, action, req.ReqID, nil)
+		if errCode != TmqConfOk {
+			// change error code to TSDB_CODE_INVALID_PARA
+			returnCode := TsdbCodeInvalidPara
+			var errStr string
+			switch errCode {
+			case TmqConfUnknown:
+				errStr = fmt.Sprintf("unknown configuration key: %s", k)
+			case TmqConfInvalid:
+				errStr = fmt.Sprintf("invalid value for key '%s': %s", k, v)
+			default:
+				errStr = fmt.Sprintf("unexpected error (code %d) when setting key '%s' to value '%s'", errCode, k, v)
+			}
+			logger.Errorf("tmq conf set error, k:%s, v:%s, code:%d, return code:%d, msg:%s", k, v, errCode, returnCode, errStr)
+			wsTMQErrorMsg(ctx, session, logger, returnCode, errStr, action, req.ReqID, nil)
 			return
 		}
 	}
