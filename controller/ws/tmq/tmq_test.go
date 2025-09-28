@@ -4088,7 +4088,7 @@ func TestSetConfig(t *testing.T) {
 		err = ws.Close()
 		assert.NoError(t, err)
 	}()
-	init := &TMQSubscribeReq{
+	initConfig := &TMQSubscribeReq{
 		ReqID:                0,
 		User:                 "root",
 		Password:             "taosdata",
@@ -4118,7 +4118,7 @@ func TestSetConfig(t *testing.T) {
 			"max.poll.interval.ms":    "300000",
 		},
 	}
-	b, _ := json.Marshal(init)
+	b, _ := json.Marshal(initConfig)
 	msg, err := doWebSocket(ws, TMQSubscribe, b)
 	assert.NoError(t, err)
 	var subscribeResp TMQSubscribeResp
@@ -4126,12 +4126,48 @@ func TestSetConfig(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
 
+	// unsubscribe
+	b, _ = json.Marshal(&TMQUnsubscribeReq{
+		ReqID: 6,
+	})
+	msg, err = doWebSocket(ws, TMQUnsubscribe, b)
+	assert.NoError(t, err)
 	var unsubscribeResp TMQUnsubscribeResp
 	err = json.Unmarshal(msg, &unsubscribeResp)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, unsubscribeResp.Code, unsubscribeResp.Message)
-
 	err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	assert.NoError(t, err)
+
+	// unknown config key
+	ws2, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/tmq", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws2.Close()
+		assert.NoError(t, err)
+	}()
+	initConfig.Config["wrong_config"] = "wrong"
+	b, _ = json.Marshal(initConfig)
+	msg, err = doWebSocket(ws2, TMQSubscribe, b)
+	assert.NoError(t, err)
+	err = json.Unmarshal(msg, &subscribeResp)
+	assert.NoError(t, err)
+	assert.Equal(t, TsdbCodeInvalidPara, subscribeResp.Code, subscribeResp.Message)
+
+	// unknown value
+	delete(initConfig.Config, "wrong_config")
+	initConfig.Config["session.timeout.ms"] = "abcd"
+	b, _ = json.Marshal(initConfig)
+	msg, err = doWebSocket(ws2, TMQSubscribe, b)
+	assert.NoError(t, err)
+	err = json.Unmarshal(msg, &subscribeResp)
+	assert.NoError(t, err)
+	assert.Equal(t, TsdbCodeInvalidPara, subscribeResp.Code, subscribeResp.Message)
+
+	err = ws2.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	assert.NoError(t, err)
 
 }
