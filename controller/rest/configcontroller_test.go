@@ -2,6 +2,7 @@ package rest
 
 import (
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -199,11 +200,11 @@ func TestRecordSql(t *testing.T) {
 
 	// execute sql
 	sqlRequestAddr := testtools.GetRandomRemoteAddr()
-	host, _, err := net.SplitHostPort(strings.TrimSpace(sqlRequestAddr))
+	host, port, err := net.SplitHostPort(strings.TrimSpace(sqlRequestAddr))
 	assert.NoError(t, err)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("show databases")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql?app=testapp", body)
 	req.RemoteAddr = sqlRequestAddr
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -246,10 +247,16 @@ func TestRecordSql(t *testing.T) {
 	recordFile := filepath.Join(tmpDir, files[0])
 	recordContent, err := os.ReadFile(recordFile)
 	assert.NoError(t, err)
-	expect := fmt.Sprintf("show databases,%s,root,http,", host)
-	t.Log(string(recordContent))
-	t.Log(expect)
-	assert.True(t, bytes.Contains(recordContent, []byte(expect)))
+	csvReader := csv.NewReader(bytes.NewReader(recordContent))
+	records, err := csvReader.ReadAll()
+	assert.NoError(t, err)
+	require.Equal(t, 1, len(records), records)
+	assert.Equal(t, "show databases", records[0][recordsql.SQLIndex])
+	assert.Equal(t, host, records[0][recordsql.IPIndex])
+	assert.Equal(t, "root", records[0][recordsql.UserIndex])
+	assert.Equal(t, "http", records[0][recordsql.ConnTypeIndex])
+	assert.Equal(t, "testapp", records[0][recordsql.AppNameIndex])
+	assert.Equal(t, port, records[0][recordsql.SourcePortIndex])
 
 	// start record sql without start time and end time
 	config.Conf.Log.Path = tmpDir
@@ -268,11 +275,11 @@ func TestRecordSql(t *testing.T) {
 	time.Sleep(time.Millisecond * 10)
 	// execute sql
 	sqlRequestAddr = testtools.GetRandomRemoteAddr()
-	host, _, err = net.SplitHostPort(strings.TrimSpace(sqlRequestAddr))
+	host, port, err = net.SplitHostPort(strings.TrimSpace(sqlRequestAddr))
 	assert.NoError(t, err)
 	w = httptest.NewRecorder()
 	body = strings.NewReader("show databases")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql?app=testapp", body)
 	req.RemoteAddr = sqlRequestAddr
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -280,7 +287,7 @@ func TestRecordSql(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create database if not exists test_record_sql")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql?app=testapp", body)
 	req.RemoteAddr = sqlRequestAddr
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
@@ -289,6 +296,16 @@ func TestRecordSql(t *testing.T) {
 	// wrong sql
 	w = httptest.NewRecorder()
 	body = strings.NewReader("xxxx")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql?app=testapp", body)
+	req.RemoteAddr = sqlRequestAddr
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	// without app
+	// wrong sql
+	w = httptest.NewRecorder()
+	body = strings.NewReader("no app name")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = sqlRequestAddr
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
@@ -333,19 +350,42 @@ func TestRecordSql(t *testing.T) {
 		}
 	}
 	require.True(t, recordFile != "")
+
 	recordFile = filepath.Join(tmpDir, recordFile)
 	recordContent, err = os.ReadFile(recordFile)
 	assert.NoError(t, err)
-	expect = fmt.Sprintf("show databases,%s,root,http,", host)
-	t.Log(string(recordContent))
-	t.Log(expect)
-	assert.True(t, bytes.Contains(recordContent, []byte(expect)))
-	expect = fmt.Sprintf("create database if not exists test_record_sql,%s,root,http,", host)
-	t.Log(expect)
-	assert.True(t, bytes.Contains(recordContent, []byte(expect)))
-	expect = fmt.Sprintf("xxxx,%s,root,http,", host)
-	t.Log(expect)
-	assert.True(t, bytes.Contains(recordContent, []byte(expect)))
+	csvReader = csv.NewReader(bytes.NewReader(recordContent))
+	records, err = csvReader.ReadAll()
+	assert.NoError(t, err)
+	require.Equal(t, 4, len(records), records)
+
+	assert.Equal(t, "show databases", records[0][recordsql.SQLIndex])
+	assert.Equal(t, host, records[0][recordsql.IPIndex])
+	assert.Equal(t, "root", records[0][recordsql.UserIndex])
+	assert.Equal(t, "http", records[0][recordsql.ConnTypeIndex])
+	assert.Equal(t, "testapp", records[0][recordsql.AppNameIndex])
+	assert.Equal(t, port, records[0][recordsql.SourcePortIndex])
+
+	assert.Equal(t, "create database if not exists test_record_sql", records[1][recordsql.SQLIndex])
+	assert.Equal(t, host, records[1][recordsql.IPIndex])
+	assert.Equal(t, "root", records[1][recordsql.UserIndex])
+	assert.Equal(t, "http", records[1][recordsql.ConnTypeIndex])
+	assert.Equal(t, "testapp", records[1][recordsql.AppNameIndex])
+	assert.Equal(t, port, records[1][recordsql.SourcePortIndex])
+
+	assert.Equal(t, "xxxx", records[2][recordsql.SQLIndex])
+	assert.Equal(t, host, records[2][recordsql.IPIndex])
+	assert.Equal(t, "root", records[2][recordsql.UserIndex])
+	assert.Equal(t, "http", records[2][recordsql.ConnTypeIndex])
+	assert.Equal(t, "testapp", records[2][recordsql.AppNameIndex])
+	assert.Equal(t, port, records[2][recordsql.SourcePortIndex])
+
+	assert.Equal(t, "no app name", records[3][recordsql.SQLIndex])
+	assert.Equal(t, host, records[3][recordsql.IPIndex])
+	assert.Equal(t, "root", records[3][recordsql.UserIndex])
+	assert.Equal(t, "http", records[3][recordsql.ConnTypeIndex])
+	assert.Equal(t, "", records[3][recordsql.AppNameIndex])
+	assert.Equal(t, port, records[3][recordsql.SourcePortIndex])
 }
 
 func getRecordFiles(dir string) ([]string, error) {

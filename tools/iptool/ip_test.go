@@ -51,3 +51,50 @@ func TestParseIpv6(t *testing.T) {
 	ip = GetRealIP(req)
 	assert.Nil(t, ip)
 }
+
+func TestGetRealPortWithXRealPortHeader(t *testing.T) {
+	req := httptest.NewRequest("GET", "http://example.com", nil)
+	req.Header.Set("X-Real-Port", "80")
+
+	port, err := GetRealPort(req)
+	assert.NoError(t, err)
+	assert.Equal(t, "80", port)
+
+	req.Header.Set("X-Real-Port", "-80")
+	port, err = GetRealPort(req)
+	assert.Error(t, err)
+	assert.Equal(t, "", port)
+}
+
+func TestGetRealPortWithRemoteAddr(t *testing.T) {
+	req := httptest.NewRequest("GET", "http://example.com", nil)
+	//ipv6
+	req.RemoteAddr = "[fe80::4720:bdc2:e3a7:b2bc]:6041"
+	port, err := GetRealPort(req)
+	assert.NoError(t, err)
+	assert.Equal(t, "6041", port)
+
+	//ipv4
+	req.RemoteAddr = "192.168.1.1:1234"
+	port, err = GetRealPort(req)
+	assert.NoError(t, err)
+	assert.Equal(t, "1234", port)
+
+	//invalid port
+	req.RemoteAddr = "192.168.1.1:-1234"
+	port, err = GetRealPort(req)
+	assert.Error(t, err)
+	assert.Equal(t, "", port)
+
+	//wrong format
+	req.RemoteAddr = "abc[]:123"
+	port, err = GetRealPort(req)
+	assert.Error(t, err)
+	assert.Equal(t, "", port)
+
+	//empty port
+	req.RemoteAddr = "192.168.1.1:"
+	port, err = GetRealPort(req)
+	assert.NoError(t, err)
+	assert.Equal(t, "", port)
+}
