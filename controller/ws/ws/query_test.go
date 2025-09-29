@@ -7,6 +7,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -1241,6 +1242,9 @@ func TestQueryRecordSql(t *testing.T) {
 	f, err := os.Create(output)
 	require.NoError(t, err)
 	now := time.Now()
+	var port string
+	var host string
+	const appName = "test_record_app"
 	defer func() {
 		bs, err := os.ReadFile(output)
 		require.NoError(t, err)
@@ -1252,7 +1256,7 @@ func TestQueryRecordSql(t *testing.T) {
 		var checkRecord = func(record []string, qid string, expectSql string) {
 			t.Log(record)
 			assert.Equal(t, expectSql, record[recordsql.SQLIndex])
-			assert.Equal(t, "127.0.0.1", record[recordsql.IPIndex])
+			assert.Equal(t, host, record[recordsql.IPIndex])
 			assert.Equal(t, "root", record[recordsql.UserIndex])
 			assert.Equal(t, recordsql.WSType.String(), record[recordsql.ConnTypeIndex])
 			assert.Equal(t, qid, record[recordsql.QIDIndex])
@@ -1269,6 +1273,8 @@ func TestQueryRecordSql(t *testing.T) {
 			fetchDuration, err := strconv.Atoi(record[recordsql.FetchDurationIndex])
 			assert.NoError(t, err)
 			assert.Greater(t, fetchDuration, 0)
+			assert.Equal(t, port, record[recordsql.SourcePortIndex])
+			assert.Equal(t, appName, record[recordsql.AppNameIndex])
 		}
 		checkRecord(records[0], "0x2", sql)
 		checkRecord(records[1], "0x223", sql2)
@@ -1291,9 +1297,11 @@ func TestQueryRecordSql(t *testing.T) {
 		err = ws.Close()
 		assert.NoError(t, err)
 	}()
-
+	host, port, err = net.SplitHostPort(strings.TrimSpace(ws.LocalAddr().String()))
+	assert.NoError(t, err)
+	t.Log(host, port)
 	// connect
-	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata"}
+	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", App: appName}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
 	var connResp connResponse
