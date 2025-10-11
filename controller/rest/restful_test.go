@@ -11,7 +11,9 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +25,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/layout"
+	"github.com/taosdata/taosadapter/v3/tools/limiter"
 	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
@@ -34,6 +37,18 @@ func TestMain(m *testing.M) {
 	viper.Set("logLevel", "trace")
 	viper.Set("uploadKeeper.enable", false)
 	config.Init()
+	config.Conf.Request = &config.Request{
+		QueryLimitEnable:                 false,
+		ExcludeQueryLimitSql:             []string{"selectserver_version()", "select1"},
+		ExcludeQueryLimitSqlMaxCharCount: 22,
+		ExcludeQueryLimitSqlMinCharCount: 7,
+		ExcludeQueryLimitSqlRegex:        []*regexp.Regexp{regexp.MustCompile(`(?i)^select\s+.*from\s+information_schema.*`)},
+		Default: &config.LimitConfig{
+			QueryLimit:       1,
+			QueryWaitTimeout: 1,
+			QueryMaxWait:     0,
+		},
+	}
 	db.PrepareConnection()
 	log.ConfigLog()
 	gin.SetMode(gin.ReleaseMode)
@@ -829,4 +844,81 @@ func Test_avoidNegativeDuration(t *testing.T) {
 			assert.Equalf(t, tt.want, avoidNegativeDuration(tt.args.duration), "avoidNegativeDuration(%v)", tt.args.duration)
 		})
 	}
+}
+
+func TestLimitQuery(t *testing.T) {
+	config.Conf.Request.QueryLimitEnable = true
+	config.Conf.Request.Default.QueryMaxWait = 0
+	defer func() {
+		config.Conf.Request.QueryLimitEnable = false
+		limiter.GlobalLimiterMap.Clear()
+	}()
+	wg := sync.WaitGroup{}
+	wg.Add(10)
+	// 10 concurrent queries, unlimited query wait time
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer wg.Done()
+			w := httptest.NewRecorder()
+			body := strings.NewReader("select 2")
+			req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+			req.RemoteAddr = testtools.GetRandomRemoteAddr()
+			req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+			router.ServeHTTP(w, req)
+			assert.Equal(t, 200, w.Code)
+		}()
+	}
+	wg.Wait()
+	limiter.GlobalLimiterMap.Clear()
+	config.Conf.Request.Default.QueryMaxWait = 1
+	limited := false
+	wg.Add(10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer wg.Done()
+			w := httptest.NewRecorder()
+			body := strings.NewReader("select 2")
+			req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+			req.RemoteAddr = testtools.GetRandomRemoteAddr()
+			req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+			router.ServeHTTP(w, req)
+			assert.Contains(t, []int{200, 503}, w.Code)
+			if w.Code == 503 {
+				limited = true
+			}
+		}()
+	}
+	wg.Wait()
+	assert.True(t, limited)
+
+	wg.Add(10)
+	// 10 concurrent queries, unlimited sql
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer wg.Done()
+			w := httptest.NewRecorder()
+			body := strings.NewReader("select 1")
+			req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+			req.RemoteAddr = testtools.GetRandomRemoteAddr()
+			req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+			router.ServeHTTP(w, req)
+			assert.Equal(t, 200, w.Code)
+		}()
+	}
+	wg.Wait()
+
+	// 10 concurrent queries, unlimited sql regex
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer wg.Done()
+			w := httptest.NewRecorder()
+			body := strings.NewReader("select * from information_schema.ins_databases")
+			req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+			req.RemoteAddr = testtools.GetRandomRemoteAddr()
+			req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+			router.ServeHTTP(w, req)
+			assert.Equal(t, 200, w.Code)
+		}()
+	}
+	wg.Wait()
 }
