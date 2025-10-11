@@ -17,6 +17,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
 	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
+	"github.com/taosdata/taosadapter/v3/tools/limiter"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
 )
 
@@ -67,6 +68,26 @@ func (h *messageHandler) query(ctx context.Context, session *melody.Session, act
 	}
 	sqlType := monitor.WSRecordRequest(req.Sql)
 	logger.Debugf("get query request, sql:%s", req.Sql)
+	releaseLimiter := false
+	var l *limiter.Limiter
+	if limiter.CheckShouldLimit(req.Sql, sqlType) {
+		l = limiter.GetLimiter(h.user)
+		logger.Debug("sql limiter start acquire")
+		err := l.Acquire()
+		if err != nil {
+			monitor.RestRecordResult(sqlType, false)
+			logger.Errorf("acquire limiter failed, user:%s, err:%s", h.user, err)
+			commonErrorResponse(ctx, session, logger, action, req.ReqID, 0xfffe, err.Error())
+			return
+		}
+		logger.Debug("sql limiter acquire success")
+		defer func() {
+			if releaseLimiter {
+				l.Release()
+				logger.Debug("sql limiter release")
+			}
+		}()
+	}
 	s := log.GetLogNow(isDebug)
 	logger.Trace("get handler from pool")
 	handler := async.GlobalAsync.HandlerPool.Get()
@@ -129,7 +150,13 @@ func (h *messageHandler) query(ctx context.Context, session *melody.Session, act
 	s = log.GetLogNow(isDebug)
 	precision := syncinterface.TaosResultPrecision(result.Res, logger, isDebug)
 	logger.Tracef("get result_precision:%d, cost:%s", precision, log.GetLogDuration(isDebug, s))
-	queryResult := QueryResult{TaosResult: result.Res, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision}
+	queryResult := QueryResult{
+		TaosResult:  result.Res,
+		FieldsCount: fieldsCount,
+		Header:      rowsHeader,
+		precision:   precision,
+		limiter:     l,
+	}
 	if recordSql {
 		queryResult.record = record
 	}
@@ -181,6 +208,30 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 	}
 	logger.Debugf("binary query, sql:%s", log.GetLogSql(reqSql))
 	sqlType := monitor.WSRecordRequest(reqSql)
+	var l *limiter.Limiter
+	releaseLimiter := false
+	if limiter.CheckShouldLimit(reqSql, sqlType) {
+		l = limiter.GetLimiter(h.user)
+		logger.Debug("sql limiter start acquire")
+		err := l.Acquire()
+		if err != nil {
+			if recordSql {
+				record.SetFreeTime(time.Now())
+				recordsql.PutSQLRecord(record)
+			}
+			monitor.RestRecordResult(sqlType, false)
+			logger.Errorf("acquire limiter failed, user:%s, err:%s", h.user, err)
+			commonErrorResponse(ctx, session, logger, action, innerReqID, 0xfffe, err.Error())
+			return
+		}
+		logger.Debug("sql limiter acquire success")
+		defer func() {
+			if releaseLimiter {
+				l.Release()
+				logger.Debug("sql limiter release")
+			}
+		}()
+	}
 	s := log.GetLogNow(isDebug)
 	logger.Trace("get handler from pool")
 	handler := async.GlobalAsync.HandlerPool.Get()
@@ -200,6 +251,7 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 	logger.Tracef("query cost:%s", log.GetLogDuration(isDebug, s))
 	code := syncinterface.TaosError(result.Res, logger, isDebug)
 	if code != 0 {
+		releaseLimiter = true
 		if recordSql {
 			record.SetFreeTime(time.Now())
 			recordsql.PutSQLRecord(record)
@@ -216,6 +268,7 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 	isUpdate := syncinterface.TaosIsUpdateQuery(result.Res, logger, isDebug)
 	logger.Tracef("get is_update_query %t, cost:%s", isUpdate, log.GetLogDuration(isDebug, s))
 	if isUpdate {
+		releaseLimiter = true
 		if recordSql {
 			record.SetFreeTime(time.Now())
 			recordsql.PutSQLRecord(record)
@@ -242,7 +295,13 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 	s = log.GetLogNow(isDebug)
 	precision := syncinterface.TaosResultPrecision(result.Res, logger, isDebug)
 	logger.Tracef("result_precision cost:%s", log.GetLogDuration(isDebug, s))
-	queryResult := QueryResult{TaosResult: result.Res, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision}
+	queryResult := QueryResult{
+		TaosResult:  result.Res,
+		FieldsCount: fieldsCount,
+		Header:      rowsHeader,
+		precision:   precision,
+		limiter:     l,
+	}
 	if recordSql {
 		queryResult.record = record
 	}
