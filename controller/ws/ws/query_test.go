@@ -20,9 +20,11 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
+	"github.com/taosdata/taosadapter/v3/tools/limiter"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 )
 
@@ -1409,4 +1411,114 @@ func TestQueryRecordSql(t *testing.T) {
 	assert.Equal(t, uint64(2), fetchRawBlockResp.ResultID)
 	assert.Equal(t, true, fetchRawBlockResp.Finished)
 
+}
+
+func TestLimitQuery(t *testing.T) {
+	config.Conf.Request.QueryLimitEnable = true
+	config.Conf.Request.Default.QueryLimit = 1
+	config.Conf.Request.Default.QueryMaxWait = 1
+	defer func() {
+		config.Conf.Request.QueryLimitEnable = false
+		limiter.GlobalLimiterMap.Clear()
+	}()
+	s := httptest.NewServer(router)
+	defer s.Close()
+
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	// connect
+	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata"}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp connResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+	assert.Equal(t, Connect, connResp.Action)
+
+	var queryFuncs = []func(t *testing.T, ws *websocket.Conn, reqID uint64, sql string) queryResponse{
+		jsonQuery,
+		binaryQuery,
+	}
+	reqID := 0
+	for _, queryFunc := range queryFuncs {
+		// first query should be ok
+		reqID++
+		queryResp := jsonQuery(t, ws, 2, "select 2")
+		assert.Equal(t, 0, queryResp.Code, queryResp.Message)
+		needFreeID := queryResp.ID
+		// second query will be limited
+		reqID++
+		queryResp = queryFunc(t, ws, uint64(reqID), "select 2")
+		assert.Equal(t, 0xfffe, queryResp.Code, queryResp.Message)
+		// query with unlimited sql
+		reqID++
+		queryResp = queryFunc(t, ws, uint64(reqID), "select 1")
+		assert.Equal(t, 0, queryResp.Code, queryResp.Message)
+		reqID++
+		freeResult(t, ws, uint64(reqID), queryResp.ID)
+		// query with unlimited sql regex
+		reqID++
+		queryResp = queryFunc(t, ws, uint64(reqID), "select * from information_schema.ins_databases")
+		assert.Equal(t, 0, queryResp.Code, queryResp.Message)
+		reqID++
+		freeResult(t, ws, uint64(reqID), queryResp.ID)
+		// free the first query
+		reqID++
+		freeResult(t, ws, uint64(reqID), needFreeID)
+		// query again should be ok now
+		reqID++
+		queryResp = queryFunc(t, ws, uint64(reqID), "select 2")
+		assert.Equal(t, 0, queryResp.Code, queryResp.Message)
+		reqID++
+		freeResult(t, ws, uint64(reqID), queryResp.ID)
+	}
+}
+
+func binaryQuery(t *testing.T, ws *websocket.Conn, reqID uint64, sql string) queryResponse {
+	var buffer bytes.Buffer
+	wstool.WriteUint64(&buffer, reqID) // req id
+	wstool.WriteUint64(&buffer, 0)     // message id
+	wstool.WriteUint64(&buffer, uint64(BinaryQueryMessage))
+	wstool.WriteUint16(&buffer, 1)                // version
+	wstool.WriteUint32(&buffer, uint32(len(sql))) // sql length
+	buffer.WriteString(sql)
+	err := ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
+	assert.NoError(t, err)
+	_, resp, err := ws.ReadMessage()
+	assert.NoError(t, err)
+	var queryResp queryResponse
+	err = json.Unmarshal(resp, &queryResp)
+	assert.NoError(t, err)
+	assert.Equal(t, reqID, queryResp.ReqID)
+	return queryResp
+}
+
+func jsonQuery(t *testing.T, ws *websocket.Conn, reqID uint64, sql string) queryResponse {
+	queryReq := queryRequest{ReqID: reqID, Sql: sql}
+	resp, err := doWebSocket(ws, WSQuery, &queryReq)
+	assert.NoError(t, err)
+	var queryResp queryResponse
+	err = json.Unmarshal(resp, &queryResp)
+	assert.NoError(t, err)
+	assert.Equal(t, reqID, queryResp.ReqID)
+	return queryResp
+}
+
+func freeResult(t *testing.T, ws *websocket.Conn, reqID uint64, id uint64) {
+	freeReq := freeResultRequest{
+		ReqID: reqID,
+		ID:    id,
+	}
+	err := doWebSocketWithoutResp(ws, WSFreeResult, &freeReq)
+	assert.NoError(t, err)
 }

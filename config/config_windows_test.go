@@ -28,7 +28,7 @@ func TestInit(t *testing.T) {
 			Init()
 			assert.Equal(t, &Config{
 				InstanceID: 32,
-				Cors: CorsConfig{
+				Cors: &CorsConfig{
 					AllowAllOrigins:  true,
 					AllowOrigins:     []string{},
 					AllowHeaders:     []string{},
@@ -45,7 +45,7 @@ func TestInit(t *testing.T) {
 				RestfulRowLimit:     -1,
 				HttpCodeServerError: false,
 				SMLAutoCreateDB:     false,
-				Log: Log{
+				Log: &Log{
 					Level:                 "info",
 					Path:                  "C:\\TDengine\\log",
 					RotationCount:         30,
@@ -60,14 +60,14 @@ func TestInit(t *testing.T) {
 					SqlRotationTime:       time.Hour * 24,
 					SqlRotationSize:       1 * 1024 * 1024 * 1024,
 				},
-				Pool: Pool{
+				Pool: &Pool{
 					MaxConnect:  runtime.GOMAXPROCS(0) * 2,
 					MaxIdle:     0,
 					IdleTimeout: 0,
 					WaitTimeout: 60,
 					MaxWait:     0,
 				},
-				Monitor: Monitor{
+				Monitor: &Monitor{
 					Disable:                   true,
 					CollectDuration:           3 * time.Second,
 					InCGroup:                  false,
@@ -75,13 +75,20 @@ func TestInit(t *testing.T) {
 					PauseAllMemoryThreshold:   80,
 					Identity:                  "",
 				},
-				UploadKeeper: UploadKeeper{
+				UploadKeeper: &UploadKeeper{
 					Enable:        true,
 					Url:           "http://127.0.0.1:6043/adapter_report",
 					Interval:      15 * time.Second,
 					Timeout:       5 * time.Second,
 					RetryTimes:    3,
 					RetryInterval: 5 * time.Second,
+				},
+				Request: &Request{
+					QueryLimitEnable:          false,
+					ExcludeQueryLimitSql:      []string{},
+					ExcludeQueryLimitSqlRegex: nil,
+					Default:                   &LimitConfig{QueryLimit: 0, QueryWaitTimeout: 900, QueryMaxWait: 0},
+					Users:                     nil,
 				},
 			}, Conf)
 			corsC := Conf.Cors.GetConfig()
