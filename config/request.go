@@ -88,26 +88,19 @@ func (r *Request) setValue(v *viper.Viper) error {
 	if len(userConfig) > 0 {
 		r.Users = make(map[string]*LimitConfig, len(userConfig))
 		for k := range userConfig {
-			section := fmt.Sprintf("request.users.%s.", k)
-			queryLimit := r.Default.QueryLimit
-			queryLimitKey := section + "queryLimit"
-			if v.IsSet(queryLimitKey) {
-				queryLimit = v.GetInt(queryLimitKey)
+			userViper := v.Sub("request.users." + k)
+			if userViper == nil {
+				r.Users[k] = r.Default
+				continue
 			}
-			queryWaitTimeout := r.Default.QueryWaitTimeout
-			queryWaitTimeoutKey := section + "queryWaitTimeout"
-			if v.IsSet(queryWaitTimeoutKey) {
-				queryWaitTimeout = v.GetInt(queryWaitTimeoutKey)
-			}
-			queryMaxWait := r.Default.QueryMaxWait
-			queryMaxWaitKey := section + "queryMaxWait"
-			if v.IsSet(queryMaxWaitKey) {
-				queryMaxWait = v.GetInt(queryMaxWaitKey)
-			}
+			userViper.SetDefault("queryLimit", r.Default.QueryLimit)
+			userViper.SetDefault("queryWaitTimeout", r.Default.QueryWaitTimeout)
+			userViper.SetDefault("queryMaxWait", r.Default.QueryMaxWait)
+
 			r.Users[k] = &LimitConfig{
-				QueryLimit:       queryLimit,
-				QueryWaitTimeout: queryWaitTimeout,
-				QueryMaxWait:     queryMaxWait,
+				QueryLimit:       userViper.GetInt("queryLimit"),
+				QueryWaitTimeout: userViper.GetInt("queryWaitTimeout"),
+				QueryMaxWait:     userViper.GetInt("queryMaxWait"),
 			}
 		}
 	}
