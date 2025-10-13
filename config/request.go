@@ -12,8 +12,8 @@ import (
 type Request struct {
 	QueryLimitEnable                 bool
 	ExcludeQueryLimitSql             []string
-	ExcludeQueryLimitSqlMaxCharCount int
-	ExcludeQueryLimitSqlMinCharCount int
+	ExcludeQueryLimitSqlMaxByteCount int
+	ExcludeQueryLimitSqlMinByteCount int
 	ExcludeQueryLimitSqlRegex        []*regexp.Regexp
 	Default                          *LimitConfig
 	Users                            map[string]*LimitConfig
@@ -60,11 +60,11 @@ func (r *Request) setValue(v *viper.Viper) error {
 	if len(r.ExcludeQueryLimitSql) > 0 {
 		for i := 0; i < len(r.ExcludeQueryLimitSql); i++ {
 			r.ExcludeQueryLimitSql[i] = sqltype.RemoveSpacesAndLowercase(r.ExcludeQueryLimitSql[i], 0)
-			if len(r.ExcludeQueryLimitSql[i]) > r.ExcludeQueryLimitSqlMaxCharCount {
-				r.ExcludeQueryLimitSqlMaxCharCount = len(r.ExcludeQueryLimitSql[i])
+			if len(r.ExcludeQueryLimitSql[i]) > r.ExcludeQueryLimitSqlMaxByteCount {
+				r.ExcludeQueryLimitSqlMaxByteCount = len(r.ExcludeQueryLimitSql[i])
 			}
-			if r.ExcludeQueryLimitSqlMinCharCount == 0 || len(r.ExcludeQueryLimitSql[i]) < r.ExcludeQueryLimitSqlMinCharCount {
-				r.ExcludeQueryLimitSqlMinCharCount = len(r.ExcludeQueryLimitSql[i])
+			if r.ExcludeQueryLimitSqlMinByteCount == 0 || len(r.ExcludeQueryLimitSql[i]) < r.ExcludeQueryLimitSqlMinByteCount {
+				r.ExcludeQueryLimitSqlMinByteCount = len(r.ExcludeQueryLimitSql[i])
 			}
 		}
 	}

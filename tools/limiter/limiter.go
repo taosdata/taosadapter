@@ -136,11 +136,11 @@ func CheckShouldLimit(sql string, sqlType sqltype.SqlType) bool {
 	if !config.Conf.Request.QueryLimitEnable || sqlType != sqltype.SelectType {
 		return false
 	}
-	// sql length larger than ExcludeQueryLimitSqlMinCharCount, then check exclude list
-	if config.Conf.Request.ExcludeQueryLimitSqlMinCharCount > 0 && len(sql) >= config.Conf.Request.ExcludeQueryLimitSqlMinCharCount {
-		cleanSql := sqltype.RemoveSpacesAndLowercase(sql, config.Conf.Request.ExcludeQueryLimitSqlMaxCharCount)
-		// only when cleanSql length larger than ExcludeQueryLimitSqlMinCharCount, then check exclude list
-		if len(cleanSql) >= config.Conf.Request.ExcludeQueryLimitSqlMinCharCount {
+	// sql length larger than ExcludeQueryLimitSqlMinByteCount, then check exclude list
+	if config.Conf.Request.ExcludeQueryLimitSqlMinByteCount > 0 && len(sql) >= config.Conf.Request.ExcludeQueryLimitSqlMinByteCount {
+		cleanSql := sqltype.RemoveSpacesAndLowercase(sql, config.Conf.Request.ExcludeQueryLimitSqlMaxByteCount)
+		// only when cleanSql length larger than ExcludeQueryLimitSqlMinByteCount, then check exclude list
+		if len(cleanSql) >= config.Conf.Request.ExcludeQueryLimitSqlMinByteCount {
 			for _, exclude := range config.Conf.Request.ExcludeQueryLimitSql {
 				if strings.HasPrefix(cleanSql, exclude) {
 					return false

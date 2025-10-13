@@ -16,8 +16,8 @@ func TestRequest_setValue(t *testing.T) {
 	type fields struct {
 		QueryLimitEnable                 bool
 		ExcludeQueryLimitSql             []string
-		ExcludeQueryLimitSqlMaxCharCount int
-		ExcludeQueryLimitSqlMinCharCount int
+		ExcludeQueryLimitSqlMaxByteCount int
+		ExcludeQueryLimitSqlMinByteCount int
 		ExcludeQueryLimitSqlRegex        []*regexp.Regexp
 		Default                          *LimitConfig
 		Users                            map[string]*LimitConfig
@@ -48,8 +48,8 @@ queryMaxWait = 300
 			fields: fields{
 				QueryLimitEnable:                 true,
 				ExcludeQueryLimitSql:             []string{"select1", "selectserver_version()"},
-				ExcludeQueryLimitSqlMaxCharCount: 22,
-				ExcludeQueryLimitSqlMinCharCount: 7,
+				ExcludeQueryLimitSqlMaxByteCount: 22,
+				ExcludeQueryLimitSqlMinByteCount: 7,
 				ExcludeQueryLimitSqlRegex: []*regexp.Regexp{
 					regexp.MustCompile(`(?i)^select\s+.*from\s+information_schema.*`),
 				},
@@ -97,8 +97,8 @@ queryMaxWait = 0
 			fields: fields{
 				QueryLimitEnable:                 false,
 				ExcludeQueryLimitSql:             nil,
-				ExcludeQueryLimitSqlMaxCharCount: 0,
-				ExcludeQueryLimitSqlMinCharCount: 0,
+				ExcludeQueryLimitSqlMaxByteCount: 0,
+				ExcludeQueryLimitSqlMinByteCount: 0,
 				ExcludeQueryLimitSqlRegex:        nil,
 				Default: &LimitConfig{
 					QueryLimit:       0,
@@ -125,8 +125,8 @@ queryMaxWait = 0
 				QueryLimitEnable:                 tt.fields.QueryLimitEnable,
 				ExcludeQueryLimitSql:             tt.fields.ExcludeQueryLimitSql,
 				ExcludeQueryLimitSqlRegex:        tt.fields.ExcludeQueryLimitSqlRegex,
-				ExcludeQueryLimitSqlMaxCharCount: tt.fields.ExcludeQueryLimitSqlMaxCharCount,
-				ExcludeQueryLimitSqlMinCharCount: tt.fields.ExcludeQueryLimitSqlMinCharCount,
+				ExcludeQueryLimitSqlMaxByteCount: tt.fields.ExcludeQueryLimitSqlMaxByteCount,
+				ExcludeQueryLimitSqlMinByteCount: tt.fields.ExcludeQueryLimitSqlMinByteCount,
 				Default:                          tt.fields.Default,
 				Users:                            tt.fields.Users,
 			}
