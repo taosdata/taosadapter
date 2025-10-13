@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -60,6 +61,15 @@ func (r *Request) setValue(v *viper.Viper) error {
 	if len(r.ExcludeQueryLimitSql) > 0 {
 		for i := 0; i < len(r.ExcludeQueryLimitSql); i++ {
 			r.ExcludeQueryLimitSql[i] = sqltype.RemoveSpacesAndLowercase(r.ExcludeQueryLimitSql[i], 0)
+			if len(r.ExcludeQueryLimitSql[i]) == 0 {
+				return fmt.Errorf("config request.excludeQueryLimitSql has empty sql")
+			}
+			if !strings.HasPrefix(r.ExcludeQueryLimitSql[i], "select") {
+				return fmt.Errorf("config request.excludeQueryLimitSql only support select sql, but got: %s", r.ExcludeQueryLimitSql[i])
+			}
+			if len(r.ExcludeQueryLimitSql[i]) == len("select") {
+				return fmt.Errorf("config request.excludeQueryLimitSql can't be only 'select'")
+			}
 			if len(r.ExcludeQueryLimitSql[i]) > r.ExcludeQueryLimitSqlMaxByteCount {
 				r.ExcludeQueryLimitSqlMaxByteCount = len(r.ExcludeQueryLimitSql[i])
 			}

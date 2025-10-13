@@ -83,6 +83,33 @@ excludeQueryLimitSqlRegex = ['(?i^select\s+.*from\s+information_schema.*']
 			wantErr: true,
 		},
 		{
+			name: "empty exclude sql",
+			content: `
+[request]
+excludeQueryLimitSql = ['   ']
+`,
+			fields:  fields{},
+			wantErr: true,
+		},
+		{
+			name: "non-select exclude sql",
+			content: `
+[request]
+excludeQueryLimitSql = ['insert into']
+`,
+			fields:  fields{},
+			wantErr: true,
+		},
+		{
+			name: "only select exclude sql",
+			content: `
+[request]
+excludeQueryLimitSql = ['select']
+`,
+			fields:  fields{},
+			wantErr: true,
+		},
+		{
 			name: "default",
 			content: `
 [request.default]
