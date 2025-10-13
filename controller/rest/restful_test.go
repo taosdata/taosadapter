@@ -906,7 +906,7 @@ func TestLimitQuery(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-
+	wg.Add(10)
 	// 10 concurrent queries, unlimited sql regex
 	for i := 0; i < 10; i++ {
 		go func() {
