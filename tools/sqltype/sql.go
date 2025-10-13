@@ -46,11 +46,11 @@ func GetSqlType(sql string) SqlType {
 }
 
 // RemoveSpacesAndLowercase removes all spaces from the input string and converts it to lowercase.
-// If minByteCount is greater than 0, the function stops processing once the result grows to at least minByteCount bytes.
-func RemoveSpacesAndLowercase(str string, minByteCount int) string {
+// If maxResultLen is greater than 0, the function stops processing once the result grows to at least maxResultLen bytes.
+func RemoveSpacesAndLowercase(str string, maxResultLen int) string {
 	var result strings.Builder
-	if minByteCount > 0 {
-		result.Grow(minByteCount)
+	if maxResultLen > 0 {
+		result.Grow(maxResultLen)
 	} else {
 		result.Grow(len(str))
 	}
@@ -58,7 +58,7 @@ func RemoveSpacesAndLowercase(str string, minByteCount int) string {
 		if !unicode.IsSpace(ch) {
 			result.WriteRune(unicode.ToLower(ch))
 		}
-		if minByteCount > 0 && result.Len() >= minByteCount {
+		if maxResultLen > 0 && result.Len() >= maxResultLen {
 			break
 		}
 	}

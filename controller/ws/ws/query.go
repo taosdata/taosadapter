@@ -61,121 +61,8 @@ type queryResponse struct {
 }
 
 func (h *messageHandler) query(ctx context.Context, session *melody.Session, action string, req queryRequest, innerReqID uint64, logger *logrus.Entry, isDebug bool) {
-	record, recordSql := recordsql.GetSQLRecord()
-	var recordTime time.Time
-	if recordSql {
-		record.Init(req.Sql, h.ipStr, h.port, h.appName, h.user, recordsql.WSType, innerReqID, time.Now())
-	}
-	sqlType := monitor.WSRecordRequest(req.Sql)
-	logger.Debugf("get query request, sql:%s", req.Sql)
-	releaseLimiter := false
-	var l *limiter.Limiter
-	if limiter.CheckShouldLimit(req.Sql, sqlType) {
-		l = limiter.GetLimiter(h.user)
-		logger.Debug("sql limiter start acquire")
-		err := l.Acquire()
-		if err != nil {
-			monitor.RestRecordResult(sqlType, false)
-			logger.Errorf("acquire limiter failed, user:%s, err:%s", h.user, err)
-			commonErrorResponse(ctx, session, logger, action, req.ReqID, 0xfffe, err.Error())
-			return
-		}
-		logger.Debug("sql limiter acquire success")
-		defer func() {
-			if releaseLimiter {
-				l.Release()
-				logger.Debug("sql limiter release")
-			}
-		}()
-	}
-	s := log.GetLogNow(isDebug)
-	logger.Trace("get handler from pool")
-	handler := async.GlobalAsync.HandlerPool.Get()
-	logger.Tracef("get handler cost:%s", log.GetLogDuration(isDebug, s))
-	defer func() {
-		async.GlobalAsync.HandlerPool.Put(handler)
-		logger.Trace("put handler back to pool")
-	}()
-	if recordSql {
-		recordTime = time.Now()
-	}
-	result := async.GlobalAsync.TaosQuery(h.conn, logger, isDebug, req.Sql, handler, int64(innerReqID))
-	if recordSql {
-		record.SetQueryDuration(time.Since(recordTime))
-	}
-	code := syncinterface.TaosError(result.Res, logger, isDebug)
-	if code != 0 {
-		if recordSql {
-			record.SetFreeTime(time.Now())
-			recordsql.PutSQLRecord(record)
-		}
-		monitor.WSRecordResult(sqlType, false)
-		errStr := syncinterface.TaosErrorStr(result.Res, logger, isDebug)
-		logger.Errorf("query error, code:%d, message:%s", code, errStr)
-		async.FreeResultAsync(result.Res, logger, isDebug)
-		commonErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr)
-		return
-	}
-
-	monitor.WSRecordResult(sqlType, true)
-	logger.Trace("check is_update_query")
-	s = log.GetLogNow(isDebug)
-	isUpdate := syncinterface.TaosIsUpdateQuery(result.Res, logger, isDebug)
-	logger.Tracef("get is_update_query %t, cost:%s", isUpdate, log.GetLogDuration(isDebug, s))
-	if isUpdate {
-		if recordSql {
-			record.SetFreeTime(time.Now())
-			recordsql.PutSQLRecord(record)
-		}
-		s = log.GetLogNow(isDebug)
-		affectRows := syncinterface.TaosAffectedRows(result.Res, logger, isDebug)
-		logger.Debugf("affected_rows %d, cost:%s", affectRows, log.GetLogDuration(isDebug, s))
-		async.FreeResultAsync(result.Res, logger, isDebug)
-		resp := &queryResponse{
-			Action:       action,
-			ReqID:        req.ReqID,
-			Timing:       wstool.GetDuration(ctx),
-			IsUpdate:     true,
-			AffectedRows: affectRows,
-		}
-		wstool.WSWriteJson(session, logger, resp)
-		return
-	}
-	s = log.GetLogNow(isDebug)
-	fieldsCount := syncinterface.TaosNumFields(result.Res, logger, isDebug)
-	logger.Tracef("get num_fields:%d, cost:%s", fieldsCount, log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	rowsHeader, _ := syncinterface.ReadColumn(result.Res, fieldsCount, logger, isDebug)
-	logger.Tracef("read column cost:%s", log.GetLogDuration(isDebug, s))
-	s = log.GetLogNow(isDebug)
-	precision := syncinterface.TaosResultPrecision(result.Res, logger, isDebug)
-	logger.Tracef("get result_precision:%d, cost:%s", precision, log.GetLogDuration(isDebug, s))
-	queryResult := QueryResult{
-		TaosResult:  result.Res,
-		FieldsCount: fieldsCount,
-		Header:      rowsHeader,
-		precision:   precision,
-		limiter:     l,
-	}
-	if recordSql {
-		queryResult.record = record
-	}
-	idx := h.queryResults.Add(&queryResult)
-	logger.Debug("query success")
-	resp := &queryResponse{
-		Action:           action,
-		ReqID:            req.ReqID,
-		Timing:           wstool.GetDuration(ctx),
-		ID:               idx,
-		FieldsCount:      fieldsCount,
-		FieldsNames:      rowsHeader.ColNames,
-		FieldsLengths:    rowsHeader.ColLength,
-		FieldsTypes:      rowsHeader.ColTypes,
-		Precision:        precision,
-		FieldsPrecisions: rowsHeader.Precisions,
-		FieldsScales:     rowsHeader.Scales,
-	}
-	wstool.WSWriteJson(session, logger, resp)
+	logger.Debugf("get query request, sql:%s", log.GetLogSql(req.Sql))
+	h.doQuery(ctx, session, action, req.ReqID, req.Sql, innerReqID, logger, isDebug)
 }
 
 func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Session, action string, reqID uint64, message []byte, innerReqID uint64, logger *logrus.Entry, isDebug bool) {
@@ -199,33 +86,43 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 		return
 	}
 	var reqSql = bytesutil.ToUnsafeString(sql)
+	logger.Debugf("binary query, sql:%s", log.GetLogSql(reqSql))
+	h.doQuery(ctx, session, action, reqID, reqSql, innerReqID, logger, isDebug)
+}
+
+func (h *messageHandler) doQuery(ctx context.Context, session *melody.Session, action string, reqID uint64, reqSql string, innerReqID uint64, logger *logrus.Entry, isDebug bool) {
+	// csv record sql
 	record, recordSql := recordsql.GetSQLRecord()
 	var recordTime time.Time
 	if recordSql {
-		// copy sql to record, can not use reqSql directly, because it is only alive in this function scope
-		sqlStr := string(sql)
-		record.Init(sqlStr, h.ipStr, h.port, h.appName, h.user, recordsql.WSType, innerReqID, time.Now())
+		record.Init(reqSql, h.ipStr, h.port, h.appName, h.user, recordsql.WSType, innerReqID, time.Now())
 	}
-	logger.Debugf("binary query, sql:%s", log.GetLogSql(reqSql))
 	sqlType := monitor.WSRecordRequest(reqSql)
+	// check if the sql need limit
 	var l *limiter.Limiter
 	releaseLimiter := false
 	if limiter.CheckShouldLimit(reqSql, sqlType) {
+		// need limit
 		l = limiter.GetLimiter(h.user)
 		logger.Debug("sql limiter start acquire")
 		err := l.Acquire()
 		if err != nil {
+			// acquire failed
 			if recordSql {
+				// csv record failed
 				record.SetFreeTime(time.Now())
 				recordsql.PutSQLRecord(record)
 			}
-			monitor.RestRecordResult(sqlType, false)
+			// monitor record failed
+			monitor.WSRecordResult(sqlType, false)
 			logger.Errorf("acquire limiter failed, user:%s, err:%s", h.user, err)
 			commonErrorResponse(ctx, session, logger, action, innerReqID, 0xfffe, err.Error())
 			return
 		}
 		logger.Debug("sql limiter acquire success")
 		defer func() {
+			// if execute error, then release limiter before return
+			// if execute success, then release limiter when the query result is freed
 			if releaseLimiter {
 				l.Release()
 				logger.Debug("sql limiter release")
@@ -244,6 +141,7 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 	if recordSql {
 		recordTime = time.Now()
 	}
+	// execute query
 	result := async.GlobalAsync.TaosQuery(h.conn, logger, isDebug, reqSql, handler, int64(innerReqID))
 	if recordSql {
 		record.SetQueryDuration(time.Since(recordTime))
@@ -251,11 +149,14 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 	logger.Tracef("query cost:%s", log.GetLogDuration(isDebug, s))
 	code := syncinterface.TaosError(result.Res, logger, isDebug)
 	if code != 0 {
+		// execute error, mark need release limiter
 		releaseLimiter = true
 		if recordSql {
+			// csv record failed
 			record.SetFreeTime(time.Now())
 			recordsql.PutSQLRecord(record)
 		}
+		// monitor record failed
 		monitor.WSRecordResult(sqlType, false)
 		errStr := syncinterface.TaosErrorStr(result.Res, logger, isDebug)
 		logger.Errorf("taos query error, code:%d, msg:%s, sql:%s", code, errStr, log.GetLogSql(reqSql))
@@ -263,13 +164,16 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 		commonErrorResponse(ctx, session, logger, action, reqID, code, errStr)
 		return
 	}
+	// monitor record success
 	monitor.WSRecordResult(sqlType, true)
 	s = log.GetLogNow(isDebug)
 	isUpdate := syncinterface.TaosIsUpdateQuery(result.Res, logger, isDebug)
 	logger.Tracef("get is_update_query %t, cost:%s", isUpdate, log.GetLogDuration(isDebug, s))
 	if isUpdate {
+		// for update sql, just return affected rows, mark need release limiter
 		releaseLimiter = true
 		if recordSql {
+			// csv record success
 			record.SetFreeTime(time.Now())
 			recordsql.PutSQLRecord(record)
 		}
@@ -286,6 +190,7 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 		wstool.WSWriteJson(session, logger, resp)
 		return
 	}
+	// for query sql, get schema
 	s = log.GetLogNow(isDebug)
 	fieldsCount := syncinterface.TaosNumFields(result.Res, logger, isDebug)
 	logger.Tracef("num_fields cost:%s", log.GetLogDuration(isDebug, s))
@@ -300,7 +205,7 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 		FieldsCount: fieldsCount,
 		Header:      rowsHeader,
 		precision:   precision,
-		limiter:     l,
+		limiter:     l, // store limiter in query result, release it when the query result is freed.(maybe nil)
 	}
 	if recordSql {
 		queryResult.record = record
@@ -314,8 +219,8 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 		ID:               idx,
 		FieldsCount:      fieldsCount,
 		FieldsNames:      rowsHeader.ColNames,
-		FieldsLengths:    rowsHeader.ColLength,
 		FieldsTypes:      rowsHeader.ColTypes,
+		FieldsLengths:    rowsHeader.ColLength,
 		Precision:        precision,
 		FieldsPrecisions: rowsHeader.Precisions,
 		FieldsScales:     rowsHeader.Scales,
