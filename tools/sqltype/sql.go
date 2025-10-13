@@ -56,11 +56,11 @@ func RemoveSpacesAndLowercase(str string, minByteCount int) string {
 	}
 	for _, ch := range str {
 		if !unicode.IsSpace(ch) {
-			result.WriteRune(ch)
+			result.WriteRune(unicode.ToLower(ch))
 		}
 		if minByteCount > 0 && result.Len() >= minByteCount {
 			break
 		}
 	}
-	return strings.ToLower(result.String())
+	return result.String()
 }
