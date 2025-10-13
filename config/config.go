@@ -14,7 +14,6 @@ import (
 
 type Config struct {
 	InstanceID          uint8
-	Cors                CorsConfig
 	TaosConfigDir       string
 	MaxSyncMethodLimit  int
 	MaxAsyncMethodLimit int
@@ -24,10 +23,12 @@ type Config struct {
 	RestfulRowLimit     int
 	HttpCodeServerError bool
 	SMLAutoCreateDB     bool
-	Log                 Log
-	Pool                Pool
-	Monitor             Monitor
-	UploadKeeper        UploadKeeper
+	Cors                *CorsConfig
+	Log                 *Log
+	Pool                *Pool
+	Monitor             *Monitor
+	UploadKeeper        *UploadKeeper
+	Request             *Request
 }
 
 var (
@@ -87,11 +88,27 @@ func Init() {
 		MaxSyncMethodLimit:  viper.GetInt("maxSyncConcurrentLimit"),
 		MaxAsyncMethodLimit: viper.GetInt("maxAsyncConcurrentLimit"),
 	}
+	Conf.Log = &Log{}
 	Conf.Log.setValue()
+
+	Conf.Cors = &CorsConfig{}
 	Conf.Cors.setValue()
+
+	Conf.Pool = &Pool{}
 	Conf.Pool.setValue()
+
+	Conf.Monitor = &Monitor{}
 	Conf.Monitor.setValue()
+
+	Conf.UploadKeeper = &UploadKeeper{}
 	Conf.UploadKeeper.setValue()
+
+	Conf.Request = &Request{}
+	err = Conf.Request.setValue(viper.GetViper())
+	if err != nil {
+		panic(err)
+	}
+
 	// set log level default value: info
 	if Conf.LogLevel == "" {
 		Conf.LogLevel = "info"
@@ -165,6 +182,10 @@ func init() {
 	initPool()
 	initMonitor()
 	initUploadKeeper()
+	// query request limit
+	initRequest(viper.GetViper())
+	registerFlags()
+
 	err := viper.BindPFlags(pflag.CommandLine)
 	if err != nil {
 		panic(err)
