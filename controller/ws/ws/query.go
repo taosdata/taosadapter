@@ -116,7 +116,7 @@ func (h *messageHandler) doQuery(ctx context.Context, session *melody.Session, a
 			// monitor record failed
 			monitor.WSRecordResult(sqlType, false)
 			logger.Errorf("acquire limiter failed, user:%s, err:%s", h.user, err)
-			commonErrorResponse(ctx, session, logger, action, innerReqID, 0xfffe, err.Error())
+			commonErrorResponse(ctx, session, logger, action, reqID, 0xfffe, err.Error())
 			return
 		}
 		logger.Debug("sql limiter acquire success")
