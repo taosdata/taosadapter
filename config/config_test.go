@@ -1,6 +1,3 @@
-//go:build !windows
-// +build !windows
-
 package config
 
 import (
@@ -26,6 +23,10 @@ func TestInit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			Init()
+			logPath := "/var/log/taos"
+			if runtime.GOOS == "windows" {
+				logPath = "C:\\TDengine\\log"
+			}
 			assert.Equal(t, &Config{
 				InstanceID: 32,
 				Cors: &CorsConfig{
@@ -47,7 +48,7 @@ func TestInit(t *testing.T) {
 				SMLAutoCreateDB:     false,
 				Log: &Log{
 					Level:                 "info",
-					Path:                  "/var/log/taos",
+					Path:                  logPath,
 					RotationCount:         30,
 					RotationTime:          time.Hour * 24,
 					RotationSize:          1 * 1024 * 1024 * 1024, // 1G

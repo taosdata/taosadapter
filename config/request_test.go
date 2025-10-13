@@ -26,7 +26,7 @@ func TestRequest_setValue(t *testing.T) {
 		name    string
 		content string
 		fields  fields
-		wantErr assert.ErrorAssertionFunc
+		wantErr bool
 	}{
 		{
 			name: "normal case",
@@ -47,7 +47,7 @@ queryMaxWait = 300
 `,
 			fields: fields{
 				QueryLimitEnable:                 true,
-				ExcludeQueryLimitSql:             []string{"select 1"},
+				ExcludeQueryLimitSql:             []string{"select1", "selectserver_version()"},
 				ExcludeQueryLimitSqlMaxCharCount: 22,
 				ExcludeQueryLimitSqlMinCharCount: 7,
 				ExcludeQueryLimitSqlRegex: []*regexp.Regexp{
@@ -71,7 +71,7 @@ queryMaxWait = 300
 					},
 				},
 			},
-			wantErr: assert.NoError,
+			wantErr: false,
 		},
 		{
 			name: "error regex",
@@ -80,7 +80,34 @@ queryMaxWait = 300
 excludeQueryLimitSqlRegex = ['(?i^select\s+.*from\s+information_schema.*']
 `,
 			fields:  fields{},
-			wantErr: assert.Error,
+			wantErr: true,
+		},
+		{
+			name: "default",
+			content: `
+[request.default]
+queryLimit = 0
+queryWaitTimeout = 900
+queryMaxWait = 0
+#[request.users.root]
+#queryLimit = 100
+#queryWaitTimeout = 200
+#queryMaxWait = 10
+`,
+			fields: fields{
+				QueryLimitEnable:                 false,
+				ExcludeQueryLimitSql:             nil,
+				ExcludeQueryLimitSqlMaxCharCount: 0,
+				ExcludeQueryLimitSqlMinCharCount: 0,
+				ExcludeQueryLimitSqlRegex:        nil,
+				Default: &LimitConfig{
+					QueryLimit:       0,
+					QueryWaitTimeout: 900,
+					QueryMaxWait:     0,
+				},
+				Users: nil,
+			},
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
@@ -95,13 +122,22 @@ excludeQueryLimitSqlRegex = ['(?i^select\s+.*from\s+information_schema.*']
 			err = v.ReadInConfig()
 			require.NoError(t, err)
 			r := &Request{
-				QueryLimitEnable:          tt.fields.QueryLimitEnable,
-				ExcludeQueryLimitSql:      tt.fields.ExcludeQueryLimitSql,
-				ExcludeQueryLimitSqlRegex: tt.fields.ExcludeQueryLimitSqlRegex,
-				Default:                   tt.fields.Default,
-				Users:                     tt.fields.Users,
+				QueryLimitEnable:                 tt.fields.QueryLimitEnable,
+				ExcludeQueryLimitSql:             tt.fields.ExcludeQueryLimitSql,
+				ExcludeQueryLimitSqlRegex:        tt.fields.ExcludeQueryLimitSqlRegex,
+				ExcludeQueryLimitSqlMaxCharCount: tt.fields.ExcludeQueryLimitSqlMaxCharCount,
+				ExcludeQueryLimitSqlMinCharCount: tt.fields.ExcludeQueryLimitSqlMinCharCount,
+				Default:                          tt.fields.Default,
+				Users:                            tt.fields.Users,
 			}
-			tt.wantErr(t, r.setValue(v))
+			var gotConfig Request
+			err = gotConfig.setValue(v)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, r, &gotConfig)
 		})
 	}
 }

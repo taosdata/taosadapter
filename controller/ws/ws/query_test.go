@@ -1445,42 +1445,53 @@ func TestLimitQuery(t *testing.T) {
 	assert.Equal(t, 0, connResp.Code, connResp.Message)
 	assert.Equal(t, Connect, connResp.Action)
 
-	var queryFuncs = []func(t *testing.T, ws *websocket.Conn, reqID uint64, sql string) queryResponse{
+	var queryFunctions = []func(t *testing.T, ws *websocket.Conn, reqID uint64, sql string) queryResponse{
 		jsonQuery,
 		binaryQuery,
 	}
+	var finishQueryFunctions = []func(t *testing.T, ws *websocket.Conn, reqID uint64, id uint64) error{
+		freeResult,
+		fetchAllResult,
+		fetchAllResultWithBinary,
+	}
 	reqID := 0
-	for _, queryFunc := range queryFuncs {
-		// first query should be ok
-		reqID++
-		queryResp := jsonQuery(t, ws, 2, "select 2")
-		assert.Equal(t, 0, queryResp.Code, queryResp.Message)
-		needFreeID := queryResp.ID
-		// second query will be limited
-		reqID++
-		queryResp = queryFunc(t, ws, uint64(reqID), "select 2")
-		assert.Equal(t, 0xfffe, queryResp.Code, queryResp.Message)
-		// query with unlimited sql
-		reqID++
-		queryResp = queryFunc(t, ws, uint64(reqID), "select 1")
-		assert.Equal(t, 0, queryResp.Code, queryResp.Message)
-		reqID++
-		freeResult(t, ws, uint64(reqID), queryResp.ID)
-		// query with unlimited sql regex
-		reqID++
-		queryResp = queryFunc(t, ws, uint64(reqID), "select * from information_schema.ins_databases")
-		assert.Equal(t, 0, queryResp.Code, queryResp.Message)
-		reqID++
-		freeResult(t, ws, uint64(reqID), queryResp.ID)
-		// free the first query
-		reqID++
-		freeResult(t, ws, uint64(reqID), needFreeID)
-		// query again should be ok now
-		reqID++
-		queryResp = queryFunc(t, ws, uint64(reqID), "select 2")
-		assert.Equal(t, 0, queryResp.Code, queryResp.Message)
-		reqID++
-		freeResult(t, ws, uint64(reqID), queryResp.ID)
+	for _, queryFunc := range queryFunctions {
+		for _, finishQueryFunc := range finishQueryFunctions {
+			// first query should be ok
+			reqID++
+			queryResp := jsonQuery(t, ws, 2, "select 2")
+			assert.Equal(t, 0, queryResp.Code, queryResp.Message)
+			needFreeID := queryResp.ID
+			// second query will be limited
+			reqID++
+			queryResp = queryFunc(t, ws, uint64(reqID), "select 2")
+			assert.Equal(t, 0xfffe, queryResp.Code, queryResp.Message)
+			// query with unlimited sql
+			reqID++
+			queryResp = queryFunc(t, ws, uint64(reqID), "select 1")
+			assert.Equal(t, 0, queryResp.Code, queryResp.Message)
+			reqID++
+			err = finishQueryFunc(t, ws, uint64(reqID), queryResp.ID)
+			require.NoError(t, err)
+			// query with unlimited sql regex
+			reqID++
+			queryResp = queryFunc(t, ws, uint64(reqID), "select * from information_schema.ins_databases")
+			assert.Equal(t, 0, queryResp.Code, queryResp.Message)
+			reqID++
+			err = finishQueryFunc(t, ws, uint64(reqID), queryResp.ID)
+			require.NoError(t, err)
+			// free the first query
+			reqID++
+			err = finishQueryFunc(t, ws, uint64(reqID), needFreeID)
+			require.NoError(t, err)
+			// query again should be ok now
+			reqID++
+			queryResp = queryFunc(t, ws, uint64(reqID), "select 2")
+			assert.Equal(t, 0, queryResp.Code, queryResp.Message)
+			reqID++
+			err = finishQueryFunc(t, ws, uint64(reqID), queryResp.ID)
+			require.NoError(t, err)
+		}
 	}
 }
 
@@ -1514,11 +1525,55 @@ func jsonQuery(t *testing.T, ws *websocket.Conn, reqID uint64, sql string) query
 	return queryResp
 }
 
-func freeResult(t *testing.T, ws *websocket.Conn, reqID uint64, id uint64) {
+func freeResult(t *testing.T, ws *websocket.Conn, reqID uint64, id uint64) error {
 	freeReq := freeResultRequest{
 		ReqID: reqID,
 		ID:    id,
 	}
 	err := doWebSocketWithoutResp(ws, WSFreeResult, &freeReq)
-	assert.NoError(t, err)
+	return err
+}
+
+func fetchAllResult(t *testing.T, ws *websocket.Conn, reqID uint64, id uint64) error {
+	var fetchResp fetchResponse
+	for !fetchResp.Completed {
+		fetchReq := fetchRequest{ReqID: reqID, ID: id}
+		resp, err := doWebSocket(ws, WSFetch, &fetchReq)
+		if err != nil {
+			return err
+		}
+		err = json.Unmarshal(resp, &fetchResp)
+		if err != nil {
+			return err
+		}
+		assert.Equal(t, reqID, fetchResp.ReqID)
+		assert.Equal(t, 0, fetchResp.Code, fetchResp.Message)
+	}
+	return nil
+}
+
+func fetchAllResultWithBinary(t *testing.T, ws *websocket.Conn, reqID uint64, id uint64) error {
+	buffer := bytes.Buffer{}
+	wstool.WriteUint64(&buffer, reqID) // req id
+	wstool.WriteUint64(&buffer, id)    // message id
+	wstool.WriteUint64(&buffer, uint64(FetchRawBlockMessage))
+	wstool.WriteUint16(&buffer, 1)
+	msg := buffer.Bytes()
+	fetchRawBlockResp := &FetchRawBlockResponse{}
+	for !fetchRawBlockResp.Finished {
+		err := ws.WriteMessage(websocket.BinaryMessage, msg)
+		if err != nil {
+			return err
+		}
+		_, resp, err := ws.ReadMessage()
+		if err != nil {
+			return err
+		}
+		assert.NoError(t, err)
+		fetchRawBlockResp = parseFetchRawBlock(resp)
+		assert.Equal(t, uint64(0xffffffffffffffff), fetchRawBlockResp.Flag)
+		assert.Equal(t, reqID, fetchRawBlockResp.ReqID)
+		assert.Equal(t, uint32(0), fetchRawBlockResp.Code, fetchRawBlockResp.Message)
+	}
+	return nil
 }
