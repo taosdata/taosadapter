@@ -9,7 +9,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
@@ -125,15 +124,6 @@ func (ctl *ConfigController) startRecordSql(c *gin.Context) {
 	} else {
 		logger.Debugf("no request body, use default record sql config")
 		now := time.Now()
-		microseconds := now.Nanosecond() / 1000
-		formattedWithMicro := fmt.Sprintf(
-			"%04d%02d%02d_%02d%02d%02d_%06d",
-			now.Year(), now.Month(), now.Day(),
-			now.Hour(), now.Minute(), now.Second(),
-			microseconds,
-		)
-		recordFile := fmt.Sprintf("record_sql_%d_%s.csv", config.Conf.InstanceID, formattedWithMicro)
-		logger.Debugf("use default record sql config %s", recordFile)
 		recordSql = RecordSql{
 			StartTime: now.Format(recordsql.InputTimeFormat),
 			EndTime:   recordsql.DefaultRecordSqlEndTime,

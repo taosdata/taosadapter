@@ -114,10 +114,8 @@ func GetLimiterMetrics() map[string]*RequestLimiterMetrics {
 		user := key.(string)
 		limiter := value.(*Limiter)
 		// reset total and fail count after getting
-		total := limiter.totalCount.Load()
-		fail := limiter.failCount.Load()
-		limiter.totalCount.Add(-total)
-		limiter.failCount.Add(-fail)
+		total := limiter.totalCount.Swap(0)
+		fail := limiter.failCount.Swap(0)
 
 		metrics[user] = &RequestLimiterMetrics{
 			QueryLimit: limiter.limit,
