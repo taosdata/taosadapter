@@ -16,8 +16,8 @@ func TestMain(m *testing.M) {
 	config.Conf.Request = &config.Request{
 		QueryLimitEnable:                 true,
 		ExcludeQueryLimitSql:             []string{"selectserver_version()", "select1"},
-		ExcludeQueryLimitSqlMaxCharCount: 22,
-		ExcludeQueryLimitSqlMinCharCount: 7,
+		ExcludeQueryLimitSqlMaxByteCount: 22,
+		ExcludeQueryLimitSqlMinByteCount: 7,
 		ExcludeQueryLimitSqlRegex:        []*regexp.Regexp{regexp.MustCompile(`(?i)^select\s+.*from\s+information_schema.*`)},
 		Default: &config.LimitConfig{
 			QueryLimit:       2,
