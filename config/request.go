@@ -28,13 +28,13 @@ type LimitConfig struct {
 
 func initRequest(v *viper.Viper) {
 	v.SetDefault("request.queryLimitEnable", false)
-	_ = v.BindEnv("request.queryLimitEnable", "TAOS_ADAPTER_QUERY_LIMIT_ENABLE")
+	_ = v.BindEnv("request.queryLimitEnable", "TAOS_ADAPTER_REQUEST_QUERY_LIMIT_ENABLE")
 
 	v.SetDefault("request.excludeQueryLimitSql", nil)
-	_ = v.BindEnv("request.excludeQueryLimitSql", "TAOS_ADAPTER_EXCLUDE_QUERY_LIMIT_SQL")
+	_ = v.BindEnv("request.excludeQueryLimitSql", "TAOS_ADAPTER_REQUEST_EXCLUDE_QUERY_LIMIT_SQL")
 
 	v.SetDefault("request.excludeQueryLimitSqlRegex", nil)
-	_ = v.BindEnv("request.excludeQueryLimitSqlRegex", "TAOS_ADAPTER_EXCLUDE_QUERY_LIMIT_SQL_REGEX")
+	_ = v.BindEnv("request.excludeQueryLimitSqlRegex", "TAOS_ADAPTER_REQUEST_EXCLUDE_QUERY_LIMIT_SQL_REGEX")
 
 	v.SetDefault("request.default.queryLimit", 0)
 	_ = v.BindEnv("request.default.queryLimit", "TAOS_ADAPTER_REQUEST_DEFAULT_QUERY_LIMIT")
@@ -47,9 +47,9 @@ func initRequest(v *viper.Viper) {
 }
 
 func registerFlags() {
-	pflag.Bool("request.queryLimitEnable", false, `Whether to enable the request limiting function, default false. ENV "TAOS_ADAPTER_QUERY_LIMIT_ENABLE"`)
-	pflag.StringArray("request.excludeQueryLimitSql", nil, `The sql that does not limit the request, uses prefix matching (case-insensitive, spaces removed), default []. ENV "TAOS_ADAPTER_EXCLUDE_QUERY_LIMIT_SQL"`)
-	pflag.StringArray("request.excludeQueryLimitSqlRegex", nil, `The sql that does not limit the request, support regular expressions, default []. ENV "TAOS_ADAPTER_EXCLUDE_QUERY_LIMIT_SQL_REGEX"`)
+	pflag.Bool("request.queryLimitEnable", false, `Whether to enable the request limiting function, default false. ENV "TAOS_ADAPTER_REQUEST_QUERY_LIMIT_ENABLE"`)
+	pflag.StringArray("request.excludeQueryLimitSql", nil, `The sql that does not limit the request, uses prefix matching (case-insensitive, spaces removed), default []. ENV "TAOS_ADAPTER_REQUEST_EXCLUDE_QUERY_LIMIT_SQL"`)
+	pflag.StringArray("request.excludeQueryLimitSqlRegex", nil, `The sql that does not limit the request, support regular expressions, default []. ENV "TAOS_ADAPTER_REQUEST_EXCLUDE_QUERY_LIMIT_SQL_REGEX"`)
 	pflag.Int("request.default.queryLimit", 0, `The default maximum number of queries allowed per user, default 0 means no limit. ENV "TAOS_ADAPTER_REQUEST_DEFAULT_QUERY_LIMIT"`)
 	pflag.Int("request.default.queryWaitTimeout", 900, `The default maximum wait time for a query to be executed, in seconds, default 900. ENV "TAOS_ADAPTER_REQUEST_DEFAULT_QUERY_WAIT_TIMEOUT"`)
 	pflag.Int("request.default.queryMaxWait", 0, `The default maximum number of requests allowed to wait when the request is limited, default 0 means no wait. ENV "TAOS_ADAPTER_REQUEST_DEFAULT_QUERY_MAX_WAIT"`)
