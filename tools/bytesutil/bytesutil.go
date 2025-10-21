@@ -64,7 +64,7 @@ func roundToNearestPow2(n int) int {
 //
 // The returned string is valid only until b is reachable and unmodified.
 func ToUnsafeString(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
+	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
 // stringHeader instead of reflect.StringHeader
