@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -32,6 +33,18 @@ func TestMain(m *testing.M) {
 	viper.Set("logLevel", "trace")
 	viper.Set("uploadKeeper.enable", false)
 	config.Init()
+	config.Conf.Request = &config.Request{
+		QueryLimitEnable:                 false,
+		ExcludeQueryLimitSql:             []string{"selectserver_version()", "select1"},
+		ExcludeQueryLimitSqlMaxByteCount: 22,
+		ExcludeQueryLimitSqlMinByteCount: 7,
+		ExcludeQueryLimitSqlRegex:        []*regexp.Regexp{regexp.MustCompile(`(?i)^select\s+.*from\s+information_schema.*`)},
+		Default: &config.LimitConfig{
+			QueryLimit:       1,
+			QueryWaitTimeout: 1,
+			QueryMaxWait:     0,
+		},
+	}
 	log.ConfigLog()
 	db.PrepareConnection()
 	gin.SetMode(gin.ReleaseMode)

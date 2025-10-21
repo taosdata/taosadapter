@@ -16,6 +16,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/innerjson"
+	"github.com/taosdata/taosadapter/v3/tools/limiter"
 	"github.com/taosdata/taosadapter/v3/tools/sqltype"
 )
 
@@ -855,11 +856,13 @@ var cInterfaceCountMetrics = []*metrics.Gauge{
 	TMQCommitOffsetSuccessCounter,
 }
 
+// RestRecordRequest records a REST request and returns the SQL type.
+// whatever the UploadKeeper is enabled or not, it will return the sql type.
 func RestRecordRequest(sql string) sqltype.SqlType {
+	sqlType := sqltype.GetSqlType(sql)
 	if config.Conf.UploadKeeper.Enable {
 		RestTotal.Inc()
 		RestInProcess.Inc()
-		sqlType := sqltype.GetSqlType(sql)
 		switch sqlType {
 		case sqltype.InsertType:
 			RestWrite.Inc()
@@ -871,9 +874,8 @@ func RestRecordRequest(sql string) sqltype.SqlType {
 			RestOther.Inc()
 			RestOtherInProcess.Inc()
 		}
-		return sqlType
 	}
-	return sqltype.OtherType
+	return sqlType
 }
 
 func RestRecordResult(sqlType sqltype.SqlType, success bool) {
@@ -910,11 +912,13 @@ func RestRecordResult(sqlType sqltype.SqlType, success bool) {
 	}
 }
 
+// WSRecordRequest records a WebSocket request and returns the SQL type.
+// whatever the UploadKeeper is enabled or not, it will return the sql type.
 func WSRecordRequest(sql string) sqltype.SqlType {
+	sqlType := sqltype.GetSqlType(sql)
 	if config.Conf.UploadKeeper.Enable {
 		WSTotal.Inc()
 		WSInProcess.Inc()
-		sqlType := sqltype.GetSqlType(sql)
 		switch sqlType {
 		case sqltype.InsertType:
 			WSWrite.Inc()
@@ -928,7 +932,7 @@ func WSRecordRequest(sql string) sqltype.SqlType {
 		}
 		return sqlType
 	}
-	return sqltype.OtherType
+	return sqlType
 }
 
 func WSRecordResult(sqlType sqltype.SqlType, success bool) {
@@ -1138,6 +1142,58 @@ type Tag struct {
 type Metric struct {
 	Name  string      `json:"name"`
 	Value interface{} `json:"value"`
+}
+
+func getLimiterMetrics() *Table {
+	limiterMetrics := limiter.GetLimiterMetrics()
+	if len(limiterMetrics) == 0 {
+		return nil
+	}
+	table := &Table{
+		Name: "adapter_request_limit",
+	}
+	table.MetricGroups = make([]*MetricGroup, 0, len(limiterMetrics))
+	for user, requestLimiterMetrics := range limiterMetrics {
+		table.MetricGroups = append(table.MetricGroups, &MetricGroup{
+			Tags: []*Tag{
+				{
+					Name:  "endpoint",
+					Value: identity,
+				},
+				{
+					Name:  "user",
+					Value: user,
+				},
+			},
+			Metrics: []*Metric{
+				{
+					Name:  "query_limit",
+					Value: requestLimiterMetrics.QueryLimit,
+				},
+				{
+					Name:  "query_max_wait",
+					Value: requestLimiterMetrics.MaxWait,
+				},
+				{
+					Name:  "query_inflight",
+					Value: requestLimiterMetrics.Inflight,
+				},
+				{
+					Name:  "query_wait_count",
+					Value: requestLimiterMetrics.WaitCount,
+				},
+				{
+					Name:  "query_count",
+					Value: requestLimiterMetrics.TotalCount,
+				},
+				{
+					Name:  "query_wait_fail_count",
+					Value: requestLimiterMetrics.FailCount,
+				},
+			},
+		})
+	}
+	return table
 }
 
 func upload(p *process.Process, client *http.Client, reqID int64) error {
@@ -1417,6 +1473,10 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 		metric.Tables = append(metric.Tables, connTable)
 	}
 	metric.Tables = append(metric.Tables, cInterfaceTable)
+	limitTable := getLimiterMetrics()
+	if limitTable != nil {
+		metric.Tables = append(metric.Tables, limitTable)
+	}
 	return []*ExtraMetric{metric}, nil
 }
 func doRequest(client *http.Client, data []byte, reqID int64) error {

@@ -31,6 +31,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/ctools"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
+	"github.com/taosdata/taosadapter/v3/tools/limiter"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
 	"github.com/taosdata/taosadapter/v3/tools/sqltype"
 )
@@ -223,6 +224,27 @@ func DoQuery(c *gin.Context, db string, location *time.Location, reqID int64, re
 		// To avoid error reporting in the `create database` statement
 		logger.Tracef("select db %s", db)
 		_ = async.GlobalAsync.TaosExecWithoutResult(taosConnect.TaosConnection, logger, isDebug, fmt.Sprintf("use `%s`", db), reqID)
+	}
+	// check if the sql should be limited
+	if limiter.CheckShouldLimit(sql, sqlType) {
+		l := limiter.GetLimiter(user)
+		logger.Debug("sql limiter start acquire")
+		err = l.Acquire()
+		if err != nil {
+			logger.Errorf("acquire limiter failed, user:%s, err:%s", user, err)
+			monitor.RestRecordResult(sqlType, false)
+			if recordSql {
+				// no query executed, set free time directly
+				record.SetFreeTime(time.Now())
+			}
+			ServiceUnavailable(c, logger, err.Error())
+			return
+		}
+		logger.Debug("sql limiter acquire success")
+		defer func() {
+			l.Release()
+			logger.Debug("sql limiter release success")
+		}()
 	}
 	execute(c, logger, isDebug, taosConnect.TaosConnection, sql, reqID, sqlType, returnObj, location, recordSql, record)
 }

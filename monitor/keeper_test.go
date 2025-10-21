@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/thread"
+	"github.com/taosdata/taosadapter/v3/tools/limiter"
 	"github.com/taosdata/taosadapter/v3/tools/sqltype"
 )
 
@@ -687,6 +688,12 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	assert.Equal(t, "conn_pool_in_use", connPoolTable.MetricGroups[0].Metrics[1].Name)
 	assert.Equal(t, float64(1), connPoolTable.MetricGroups[0].Metrics[1].Value)
 
+	config.Conf.Request.QueryLimitEnable = true
+	testUserName := "test_metrics"
+	l := limiter.GetLimiter(testUserName)
+	err = l.Acquire()
+	require.NoError(t, err)
+
 	RecordWSQueryDisconnect()
 	RecordWSSMLDisconnect()
 	RecordWSStmtDisconnect()
@@ -723,7 +730,7 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	metric = metrics[0]
 	assert.Equal(t, strconv.FormatInt(ts.UnixMilli(), 10), metric.Ts)
 	assert.Equal(t, 2, metric.Protocol)
-	assert.Equal(t, 3, len(metric.Tables))
+	assert.Equal(t, 4, len(metric.Tables))
 	statusTable = metric.Tables[0]
 	assert.Equal(t, "adapter_status", statusTable.Name)
 	assert.Equal(t, 1, len(statusTable.MetricGroups))
@@ -821,5 +828,39 @@ func TestGenerateExtraMetrics(t *testing.T) {
 		assert.Equal(t, expectCMetricNames[i], cInterfaceMetric[i].Name)
 		assert.Greater(t, cInterfaceMetric[i].Value, float64(0))
 	}
+	expectLimiterMetricNames := []string{
+		"query_limit",
+		"query_max_wait",
+		"query_inflight",
+		"query_wait_count",
+		"query_count",
+		"query_wait_fail_count",
+	}
+	expectLimiterMetricValues := []interface{}{
+		config.Conf.Request.Default.QueryLimit,
+		int32(config.Conf.Request.Default.QueryMaxWait),
+		int32(1),
+		int32(0),
+		int32(1),
+		int32(0),
+	}
+	limiterTable := metric.Tables[3]
+	assert.Equal(t, "adapter_request_limit", limiterTable.Name)
+	assert.Equal(t, 1, len(limiterTable.MetricGroups))
+	limiterMetricGroup := limiterTable.MetricGroups[0]
+	assert.Equal(t, 2, len(limiterMetricGroup.Tags))
+	assert.Equal(t, "endpoint", limiterMetricGroup.Tags[0].Name)
+	assert.Equal(t, identity, connPoolTable.MetricGroups[0].Tags[0].Value)
+	assert.Equal(t, "user", limiterMetricGroup.Tags[1].Name)
+	assert.Equal(t, testUserName, limiterMetricGroup.Tags[1].Value)
+
+	assert.Equal(t, identity, limiterMetricGroup.Tags[0].Value)
+	limiterMetric := limiterMetricGroup.Metrics
+	assert.Equal(t, len(expectLimiterMetricNames), len(limiterMetric))
+	for i := 0; i < len(limiterMetric); i++ {
+		assert.Equal(t, expectLimiterMetricNames[i], limiterMetric[i].Name)
+		assert.Equal(t, expectLimiterMetricValues[i], limiterMetric[i].Value)
+	}
 	config.Conf.UploadKeeper.Enable = false
+	config.Conf.Request.QueryLimitEnable = false
 }

@@ -57,7 +57,7 @@ func Init() *gin.Engine {
 	logger.Info("=================================================================")
 
 	logger.Infof("start server: %s", log.ServerID)
-	router := createRouter(config.Conf.Debug, &config.Conf.Cors, true)
+	router := createRouter(config.Conf.Debug, config.Conf.Cors, true)
 	controllers := controller.GetControllers()
 	for _, webController := range controllers {
 		webController.Init(router)
