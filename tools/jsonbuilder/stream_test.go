@@ -287,3 +287,33 @@ func TestWriteStringByte(t *testing.T) {
 		ReturnStream(stream)
 	}
 }
+
+func TestWriteInfAndNaN(t *testing.T) {
+	b := &strings.Builder{}
+	stream := BorrowStream(b)
+	defer func() {
+		ReturnStream(stream)
+	}()
+	stream.WriteFloat32(float32(math.Inf(1)))
+	stream.writeByte(',')
+	stream.WriteFloat32(float32(math.NaN()))
+	stream.writeByte(',')
+	stream.WriteFloat64(math.Inf(-1))
+	stream.writeByte(',')
+	stream.WriteFloat64(math.NaN())
+	err := stream.Flush()
+	assert.NoError(t, err)
+	assert.Equal(t, "null,null,null,null", b.String())
+
+	b.Reset()
+	stream.WriteFloat32Lossy(float32(math.Inf(1)))
+	stream.writeByte(',')
+	stream.WriteFloat32Lossy(float32(math.NaN()))
+	stream.writeByte(',')
+	stream.WriteFloat64Lossy(math.Inf(-1))
+	stream.writeByte(',')
+	stream.WriteFloat64Lossy(math.NaN())
+	err = stream.Flush()
+	assert.NoError(t, err)
+	assert.Equal(t, "null,null,null,null", b.String())
+}
