@@ -291,6 +291,9 @@ func TestWriteStringByte(t *testing.T) {
 func TestWriteInfAndNaN(t *testing.T) {
 	b := &strings.Builder{}
 	stream := BorrowStream(b)
+	defer func() {
+		ReturnStream(stream)
+	}()
 	stream.WriteFloat32(float32(math.Inf(1)))
 	stream.writeByte(',')
 	stream.WriteFloat32(float32(math.NaN()))

@@ -957,21 +957,9 @@ func TestLimitQuery(t *testing.T) {
 }
 
 func TestInfAndNan(t *testing.T) {
-	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists rest_test_inf_nan")
-	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
+	checkResp(t, executeSQL("create database if not exists rest_test_inf_nan"))
 	defer func() {
-		w = httptest.NewRecorder()
-		body = strings.NewReader("drop database if exists rest_test_inf_nan")
-		req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-		req.RemoteAddr = testtools.GetRandomRemoteAddr()
-		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-		router.ServeHTTP(w, req)
-		assert.Equal(t, 200, w.Code)
+		checkResp(t, executeSQL("drop database if exists rest_test_inf_nan"))
 	}()
 	logger := logrus.New().WithField("test", "TestInfAndNan")
 
@@ -1000,12 +988,7 @@ func TestInfAndNan(t *testing.T) {
 	}()
 	code = syncinterface.TaosError(schemalessRes, logger, false)
 	assert.Equal(t, 0, code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader("select _ts,field2 from rest_test_inf_nan.measurement order by _ts asc")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
+	w := executeSQL("select _ts,field2 from rest_test_inf_nan.measurement order by _ts asc")
 	assert.Equal(t, 200, w.Code)
 	var result TDEngineRestfulRespDoc
 	resp := w.Body.Bytes()
@@ -1017,4 +1000,14 @@ func TestInfAndNan(t *testing.T) {
 	assert.Equal(t, 2.0, result.Data[0][1])
 	assert.Nil(t, result.Data[1][1])
 	assert.Nil(t, result.Data[2][1])
+}
+
+func executeSQL(sql string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	body := strings.NewReader(sql)
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	return w
 }
