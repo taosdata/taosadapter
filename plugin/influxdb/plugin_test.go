@@ -155,9 +155,12 @@ func TestInfAndNaN(t *testing.T) {
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 204, w.Code)
-	time.Sleep(time.Second)
-	values, err := query(conn, "select * from test_plugin_influxdb_inf_nan.`measurement` order by _ts asc")
-	assert.NoError(t, err)
+	var values [][]driver.Value
+	assert.Eventually(t, func() bool {
+		values, err = query(conn, "select * from test_plugin_influxdb_inf_nan.`measurement` order by _ts asc")
+		return err == nil && len(values) == 3
+	}, 2*time.Second, 200*time.Millisecond)
+
 	assert.Equal(t, float64(2), values[0][2].(float64))
 	assert.True(t, math.IsNaN(values[1][2].(float64)))
 	assert.True(t, math.IsInf(values[2][2].(float64), 1))
