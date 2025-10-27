@@ -18,10 +18,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/layout"
@@ -952,4 +954,60 @@ func TestLimitQuery(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestInfAndNan(t *testing.T) {
+	checkResp(t, executeSQL("create database if not exists rest_test_inf_nan"))
+	defer func() {
+		checkResp(t, executeSQL("drop database if exists rest_test_inf_nan"))
+	}()
+	logger := logrus.New().WithField("test", "TestInfAndNan")
+
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, false)
+	assert.NoError(t, err)
+	defer syncinterface.TaosClose(conn, logger, false)
+	res := syncinterface.TaosQuery(conn, "use rest_test_inf_nan", logger, false)
+	defer func() {
+		syncinterface.TaosSyncQueryFree(res, logger, false)
+	}()
+	code := syncinterface.TaosError(res, logger, false)
+	assert.Equal(t, 0, code)
+	now := time.Now()
+	line := fmt.Sprintf(
+		"measurement,host=host1 field1=1i,field2=2.0 %d\n"+
+			"measurement,host=host1 field1=1i,field2=nan %d\n"+
+			"measurement,host=host1 field1=1i,field2=inf %d",
+		now.UnixNano(),
+		now.Add(time.Second).UnixNano(),
+		now.Add(time.Second*2).UnixNano(),
+	)
+
+	_, schemalessRes := syncinterface.TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn, line, 1, "ns", 0, 0, "", logger, false)
+	defer func() {
+		syncinterface.TaosSyncQueryFree(schemalessRes, logger, false)
+	}()
+	code = syncinterface.TaosError(schemalessRes, logger, false)
+	assert.Equal(t, 0, code)
+	w := executeSQL("select _ts,field2 from rest_test_inf_nan.measurement order by _ts asc")
+	assert.Equal(t, 200, w.Code)
+	var result TDEngineRestfulRespDoc
+	resp := w.Body.Bytes()
+	t.Log(string(resp))
+	err = json.Unmarshal(resp, &result)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, result.Code)
+	assert.Equal(t, 3, len(result.Data))
+	assert.Equal(t, 2.0, result.Data[0][1])
+	assert.Nil(t, result.Data[1][1])
+	assert.Nil(t, result.Data[2][1])
+}
+
+func executeSQL(sql string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	body := strings.NewReader(sql)
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	return w
 }
