@@ -436,7 +436,7 @@ func execute(
 	fetched := false
 	pHeaderList := make([]unsafe.Pointer, fieldsCount)
 	pStartList := make([]unsafe.Pointer, fieldsCount)
-	timeBuffer := make([]byte, 0, 30)
+	timeBuffer := make([]byte, 0, 35)
 	for config.Conf.RestfulRowLimit < 0 || total != config.Conf.RestfulRowLimit {
 		if recordSql {
 			recordTime = time.Now()
