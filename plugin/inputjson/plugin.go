@@ -3,19 +3,33 @@ package inputjson
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"sort"
+	"io"
+	"net/http"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/blues/jsonata-go"
 	"github.com/gin-gonic/gin"
 	"github.com/ncruces/go-strftime"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/db/async"
+	"github.com/taosdata/taosadapter/v3/db/commonpool"
+	errors2 "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/plugin"
+	"github.com/taosdata/taosadapter/v3/tools/connectpool"
+	"github.com/taosdata/taosadapter/v3/tools/generator"
+	"github.com/taosdata/taosadapter/v3/tools/iptool"
 )
+
+const MAXSQLLength = 1024 * 1024 * 1
 
 var logger = log.GetLogger("PLG").WithField("mod", "input_json")
 
@@ -108,32 +122,114 @@ func (p *Plugin) Init(r gin.IRouter) error {
 			p.rules[rule.Endpoint] = parsedRule
 		}
 	}
-	r.POST(":endpoint", plugin.Auth(p.errorResponse), p.HandleRequest)
+	r.POST(":endpoint", plugin.Auth(errorResponse), p.HandleRequest)
 	return nil
 }
 
 type record struct {
 	incompleteValue bool
-	rule            *ParsedRule
 	stb             string
 	subTable        string
 	ts              time.Time
 	keys            string
 	values          string
 }
+type dryRunResp struct {
+	Code int      `json:"code"`
+	Desc string   `json:"desc"`
+	Json string   `json:"json"`
+	Sql  []string `json:"sql"`
+}
+
+type message struct {
+	Code     int    `json:"code"`
+	Desc     string `json:"desc,omitempty"`
+	Affected int    `json:"affected,omitempty"`
+}
+
+func errorResponse(c *gin.Context, code int, err error) {
+	errorRespWithErrorCode(c, code, 0xffff, err.Error())
+}
+
+func errorRespWithErrorCode(c *gin.Context, httpCode int, errCode int, desc string) {
+	c.JSON(httpCode, message{
+		Code: errCode,
+		Desc: desc,
+	})
+}
+
+func successResponse(c *gin.Context, affectedRows int) {
+	c.JSON(http.StatusOK, message{
+		Code:     http.StatusOK,
+		Affected: affectedRows,
+	})
+}
 
 func (p *Plugin) HandleRequest(c *gin.Context) {
 	endpoint := c.Param("endpoint")
 	rule, ok := p.rules[endpoint]
 	if !ok {
-		p.errorResponse(c, 404, fmt.Errorf("no rule found for endpoint: %s", endpoint))
+		errorResponse(c, http.StatusNotFound, fmt.Errorf("no rule found for endpoint: %s", endpoint))
 		return
+	}
+	var reqID int64
+	var err error
+	if reqIDStr := c.Query("req_id"); len(reqIDStr) != 0 {
+		if reqID, err = strconv.ParseInt(reqIDStr, 10, 64); err != nil {
+			logger.Errorf("illegal param, req_id must be numeric:%s, err:%s", reqIDStr, err)
+			errorResponse(c, http.StatusBadRequest, fmt.Errorf("illegal param, req_id must be numeric %s", err.Error()))
+			return
+		}
+	}
+	if reqID == 0 {
+		reqID = generator.GetReqID()
+		logger.Tracef("request:%s, client_ip:%s, req_id not set, generate new QID:0x%x", c.Request.RequestURI, c.ClientIP(), reqID)
+	}
+	logger := logger.WithField(config.ReqIDKey, reqID)
+	isDebug := log.IsDebug()
+	dryRun := c.Query("dry_run") == "true"
+	if dryRun {
+		logger.Debug("dry_run mode enabled, no data will be inserted")
+	}
+	user, password, err := plugin.GetAuth(c)
+	if err != nil {
+		logger.Errorf("get user and password error:%s", err.Error())
+		errorResponse(c, http.StatusUnauthorized, fmt.Errorf("get user and password error:%s", err.Error()))
+		return
+	}
+	s := log.GetLogNow(isDebug)
+	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
+	logger.Debugf("get connection finish, cost:%s", log.GetLogDuration(isDebug, s))
+	if err != nil {
+		logger.Errorf("get connection from pool error, err:%s", err)
+		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
+			errorResponse(c, http.StatusForbidden, fmt.Errorf("whitelist forbidden: %s", err.Error()))
+			return
+		}
+		if errors.Is(err, connectpool.ErrTimeout) || errors.Is(err, connectpool.ErrMaxWait) {
+			errorResponse(c, http.StatusGatewayTimeout, fmt.Errorf("get connect from pool error: %s", err.Error()))
+			return
+		}
+		errorResponse(c, http.StatusInternalServerError, fmt.Errorf("get connect from pool error: %s", err.Error()))
+		return
+	}
+	if dryRun {
+		logger.Tracef("put connection")
+		_ = taosConn.Put()
+	} else {
+		defer func() {
+			logger.Tracef("put connection")
+			putErr := taosConn.Put()
+			if putErr != nil {
+				logger.Errorf("connect pool put error, err:%s", putErr)
+			}
+		}()
 	}
 	// transform json payload if transformation is defined
 	var jsonData []byte
-	jsonData, err := c.GetRawData()
+	jsonData, err = c.GetRawData()
 	if err != nil {
-		p.errorResponse(c, 500, fmt.Errorf("error reading request body: %v", err))
+		errorResponse(c, http.StatusBadRequest, fmt.Errorf("error reading request body: %v", err))
 		return
 	}
 	if rule.TransformationExpr != nil {
@@ -143,38 +239,63 @@ func (p *Plugin) HandleRequest(c *gin.Context) {
 		// it's recommended to use string for large int64 values in json
 		err := json.Unmarshal(jsonData, &v)
 		if err != nil {
-			p.errorResponse(c, 400, fmt.Errorf("error unmarshaling json data: %v", err))
+			errorResponse(c, http.StatusBadRequest, fmt.Errorf("error unmarshaling json data: %v", err))
 			return
 		}
 
 		v, err = rule.TransformationExpr.Eval(v)
 		if err != nil {
-			p.errorResponse(c, 400, fmt.Errorf("error evaluating jsonata expression: %v", err))
+			errorResponse(c, http.StatusBadRequest, fmt.Errorf("error evaluating jsonata expression: %v", err))
 			return
 		}
 		jsonData, err = rule.TransformationExpr.EvalBytes(jsonData)
 		if err != nil {
-			p.errorResponse(c, 400, fmt.Errorf("error evaluating jsonata expression: %v", err))
+			errorResponse(c, http.StatusBadRequest, fmt.Errorf("error evaluating jsonata expression: %v", err))
 			return
 		}
 	}
 	// parse jsonData according to rule
 	if jsonData == nil {
-		p.errorResponse(c, 400, fmt.Errorf("no data after transformation"))
+		errorResponse(c, http.StatusBadRequest, fmt.Errorf("no data after transformation"))
 		return
 	}
 	records, err := parseRecord(rule, jsonData, logger)
 	if err != nil {
-		p.errorResponse(c, 400, fmt.Errorf("error parsing records: %v", err))
+		errorResponse(c, http.StatusBadRequest, fmt.Errorf("error parsing records: %v", err))
 		return
 	}
-
+	sqlArray := generateSql(records)
+	if dryRun {
+		resp := dryRunResp{
+			Json: string(jsonData),
+			Sql:  sqlArray,
+		}
+		c.JSON(200, resp)
+	} else {
+		affectedRows, err := execute(taosConn.TaosConnection, reqID, sqlArray, logger, isDebug)
+		if err != nil {
+			httpRespCode := http.StatusInternalServerError
+			errorCode := 0xffff
+			taosErr, ok := err.(*errors2.TaosError)
+			if ok {
+				respCode, exists := config.ErrorStatusMap[taosErr.Code]
+				if exists {
+					httpRespCode = respCode
+				}
+				errorCode = int(taosErr.Code)
+			}
+			errorRespWithErrorCode(c, httpRespCode, errorCode, err.Error())
+			return
+		}
+		successResponse(c, affectedRows)
+	}
 }
 
 func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*record, error) {
 	var result []map[string]interface{}
-	err := json.Unmarshal(jsonData, &result)
+	err := Unmarshal(jsonData, &result)
 	if err != nil {
+		logger.Errorf("error unmarshaling json data:%s, err:%s", string(jsonData), err.Error())
 		return nil, fmt.Errorf("error unmarshaling json data: %v", err)
 	}
 	records := make([]*record, len(result))
@@ -182,14 +303,13 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 	valueBuilder := &strings.Builder{}
 	timeBuf := make([]byte, 0, 35)
 	for i, item := range result {
-		rec := &record{
-			rule: rule,
-		}
+		rec := &record{}
 		// parse DB
 		var db string
 		if rule.DBKey != "" {
 			v, ok := item[rule.DBKey]
 			if !ok {
+				logger.Errorf("db key %s not found in item: %v", rule.DBKey, item)
 				return nil, fmt.Errorf("db key %s not found in item", rule.DBKey)
 			}
 			db, err = castToString(v)
@@ -205,6 +325,7 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 		if rule.SuperTableKey != "" {
 			v, ok := item[rule.SuperTableKey]
 			if !ok {
+				logger.Errorf("super_table key %s not found in item: %v", rule.SuperTableKey, item)
 				return nil, fmt.Errorf("super table key %s not found in item", rule.SuperTableKey)
 			}
 			stb, err = castToString(v)
@@ -220,6 +341,7 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 		if rule.SubTableKey != "" {
 			v, ok := item[rule.SubTableKey]
 			if !ok {
+				logger.Errorf("sub_table key %s not found in item: %v", rule.SubTableKey, item)
 				return nil, fmt.Errorf("sub table key %s not found in item", rule.SubTableKey)
 			}
 			rec.subTable, err = castToString(v)
@@ -233,11 +355,12 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 		// e.g. 'sub_table_1'
 		valueBuilder.Reset()
 		valueBuilder.WriteByte('\'')
-		valueBuilder.WriteString(rec.subTable)
+		valueBuilder.WriteString(escapeStringValue(rec.subTable))
 		// parse Time
 		if rule.TimeKey != "" {
 			v, ok := item[rule.TimeKey]
 			if !ok {
+				logger.Errorf("time key %s not found in item: %v", rule.TimeKey, item)
 				return nil, fmt.Errorf("time key %s not found in item", rule.TimeKey)
 			}
 			val, err := castToString(v)
@@ -246,6 +369,7 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 			}
 			rec.ts, err = parseTime(val, rule.TimeFormat, rule.TimeTimezone)
 			if err != nil {
+				logger.Errorf("parse time error:%s, format:%s, err:%s", val, rule.TimeFormat, err.Error())
 				return nil, err
 			}
 		} else {
@@ -273,11 +397,13 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 						inCompleteValue = true
 					}
 				} else {
+					logger.Errorf("field key %s not found in item: %v", fieldKey, item)
 					return nil, fmt.Errorf("field key %s not found in json", fieldKey)
 				}
 			}
 			err = writeValue(valueBuilder, v)
 			if err != nil {
+				logger.Errorf("write field error:%s, field:%s, err:%s", fieldKey, fieldKey, err.Error())
 				return nil, err
 			}
 		}
@@ -360,39 +486,78 @@ func escapeStringValue(s string) string {
 	return builder.String()
 }
 
+// escapeIdentifier escapes backticks in identifiers
+// e.g. table`name -> table“name
 func escapeIdentifier(identifier string) string {
 	return strings.ReplaceAll(identifier, "`", "``")
 }
 
-const insertSqlTemplate = "insert into %s (`tbname`%s) values(%s)"
+const InsertSqlStatement = "insert into "
 
-func GenerateSql(records []*record) []string {
-	sort.Slice(records, func(i, j int) bool {
-		// sorting by stb, subTable, ts
-		if records[i].stb != records[j].stb {
-			return records[i].stb < records[j].stb
+func generateSql(records []*record) []string {
+	slices.SortFunc(records, func(a, b *record) int {
+		// sorting by stb, subTable, keys, ts
+		if a.stb != b.stb {
+			return strings.Compare(a.stb, b.stb)
 		}
-		if records[i].subTable != records[j].subTable {
-			return records[i].subTable < records[j].subTable
+		if a.subTable != b.subTable {
+			return strings.Compare(a.subTable, b.subTable)
 		}
-		return records[i].ts.Before(records[j].ts)
+		if a.keys != b.keys {
+			return strings.Compare(a.keys, b.keys)
+		}
+		return a.ts.Compare(b.ts)
 	})
 	sqlBuilder := &strings.Builder{}
 	tmpBuilder := &bytes.Buffer{}
-	//todo
+	var sqlArray []string
+	lastStb := ""
+	lastKey := ""
+	containsStb := false
+	sqlBuilder.WriteString(InsertSqlStatement)
+	for i := 0; i < len(records); i++ {
+		rec := records[i]
+		// new supertable or different field keys
+		// need to write supertable part
+		if rec.stb != lastStb || rec.keys != lastKey {
+			writeSuperTableStatement(tmpBuilder, rec.stb, rec.keys)
+			lastStb = rec.stb
+			lastKey = rec.keys
+			containsStb = true
+		} else {
+			containsStb = false
+		}
+		// write values part
+		tmpBuilder.WriteByte('(')
+		tmpBuilder.WriteString(rec.values)
+		tmpBuilder.WriteByte(')')
+		if sqlBuilder.Len()+tmpBuilder.Len() >= MAXSQLLength {
+			// flush current sql
+			sqlArray = append(sqlArray, sqlBuilder.String())
+			sqlBuilder.Reset()
+			sqlBuilder.WriteString(InsertSqlStatement)
+			if !containsStb {
+				// need to write supertable part
+				writeSuperTableStatement(sqlBuilder, rec.stb, rec.keys)
+			}
+		}
+		sqlBuilder.Write(tmpBuilder.Bytes())
+		tmpBuilder.Reset()
+	}
+	if sqlBuilder.Len() > len(InsertSqlStatement) {
+		sqlArray = append(sqlArray, sqlBuilder.String())
+	}
+	return sqlArray
+}
 
-	//var sqls []string
-	//lastStb := ""
-	//sqlBuilder.WriteString("insert into ")
-	//for i := 0; i < len(records); i++ {
-	//	rec := records[i]
-	//	if rec.stb != lastStb {
-	//		tmpBuilder.WriteString()
-	//		lastStb = rec.stb
-	//		tmpBuilder.Reset()
-	//	}
-	//}
-	return nil
+// writeSuperTableStatement writes the insert into supertable part of the insert statement
+// e.g. `db`.`stb` (`tbname`,`ts`,`field1`,`field2`) values
+func writeSuperTableStatement(builder io.StringWriter, superTable string, keys string) {
+	// strings.Builder and bytes.Buffer will not return error on WriteString
+	_, _ = builder.WriteString(superTable)
+	_, _ = builder.WriteString(" (`tbname`,")
+	_, _ = builder.WriteString(keys)
+	_, _ = builder.WriteString(") values")
 }
 
 // generateFieldKeyStatement generates the field key part of the insert statement
@@ -414,6 +579,20 @@ func writeFieldName(builder *strings.Builder, fieldKey string) {
 	builder.WriteByte('`')
 }
 
+// execute executes the given SQL statements and returns the total affected rows
+func execute(conn unsafe.Pointer, reqID int64, sqlArray []string, logger *logrus.Entry, isDebug bool) (int, error) {
+	totalAffectedRows := 0
+	for i := 0; i < len(sqlArray); i++ {
+		affectedRows, err := async.GlobalAsync.TaosExecWithAffectedRows(conn, logger, isDebug, sqlArray[i], reqID)
+		if err != nil {
+			logger.Errorf("error executing sql: %v, sql: %s", err, sqlArray[i])
+			return 0, err
+		}
+		totalAffectedRows += affectedRows
+	}
+	return totalAffectedRows, nil
+}
+
 func (p *Plugin) Start() error {
 	return nil
 }
@@ -428,16 +607,4 @@ func (p *Plugin) String() string {
 
 func (p *Plugin) Version() string {
 	return "v1"
-}
-
-type message struct {
-	Code    int    `json:"code"`
-	Message string `json:"message,omitempty"`
-}
-
-func (p *Plugin) errorResponse(c *gin.Context, code int, err error) {
-	c.JSON(code, message{
-		Code:    code,
-		Message: err.Error(),
-	})
 }

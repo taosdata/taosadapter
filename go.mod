@@ -4,6 +4,7 @@ go 1.24.0
 
 require (
 	collectd.org v0.6.0
+	github.com/blues/jsonata-go v1.5.4
 	github.com/gin-contrib/cors v1.7.5
 	github.com/gin-contrib/gzip v1.2.3
 	github.com/gin-contrib/pprof v1.5.3

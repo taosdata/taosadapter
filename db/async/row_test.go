@@ -2,10 +2,12 @@ package async
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"testing"
 	"unsafe"
 
 	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
@@ -190,6 +192,96 @@ func TestAsync_TaosExecWithoutResult(t *testing.T) {
 			if err := a.TaosExecWithoutResult(tt.args.taosConnect, logger, false, tt.args.sql, 0); (err != nil) != tt.wantErr {
 				t.Errorf("TaosExecWithoutResult() error = %v, wantErr %v", err, tt.wantErr)
 			}
+		})
+	}
+}
+
+func TestAsync_TaosExecWithAffectedRows(t *testing.T) {
+	var logger = logrus.New().WithField("test", "TaosExecWithAffectedRows")
+	isDebug := log.IsDebug()
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer syncinterface.TaosClose(conn, logger, isDebug)
+	type fields struct {
+		HandlerPool *HandlerPool
+	}
+	type args struct {
+		taosConnect unsafe.Pointer
+		sql         string
+		reqID       int64
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    int
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name:   "create database",
+			fields: fields{NewHandlerPool(10000)},
+			args: args{
+				taosConnect: conn,
+				sql:         "create database if not exists test_async_exec_with_affected_rows",
+			},
+			want:    0,
+			wantErr: assert.NoError,
+		},
+		{
+			name:   "create table",
+			fields: fields{NewHandlerPool(10000)},
+			args: args{
+				taosConnect: conn,
+				sql:         "create table if not exists test_async_exec_with_affected_rows.t1 (ts timestamp, c1 int)",
+			},
+			want:    0,
+			wantErr: assert.NoError,
+		},
+		{
+			name:   "insert data",
+			fields: fields{NewHandlerPool(10000)},
+			args: args{
+				taosConnect: conn,
+				sql:         "insert into test_async_exec_with_affected_rows.t1 values (now, 1), (now + 1s, 2), (now + 2s, 3)",
+			},
+			want:    3,
+			wantErr: assert.NoError,
+		},
+		{
+			name:   "drop database",
+			fields: fields{NewHandlerPool(10000)},
+			args: args{
+				taosConnect: conn,
+				sql:         "drop database if exists test_async_exec_with_affected_rows",
+			},
+			want:    0,
+			wantErr: assert.NoError,
+		},
+		{
+			name: "wrong",
+			fields: fields{
+				HandlerPool: NewHandlerPool(2),
+			},
+			args: args{
+				taosConnect: conn,
+				sql:         "wrong sql",
+			},
+			wantErr: assert.Error,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &Async{
+				HandlerPool: tt.fields.HandlerPool,
+			}
+			got, err := a.TaosExecWithAffectedRows(tt.args.taosConnect, logger, false, tt.args.sql, tt.args.reqID)
+			if !tt.wantErr(t, err, fmt.Sprintf("TaosExecWithAffectedRows(%v, %v, %v, %v, %v)", tt.args.taosConnect, logger, false, tt.args.sql, tt.args.reqID)) {
+				return
+			}
+			assert.Equalf(t, tt.want, got, "TaosExecWithAffectedRows(%v, %v, %v, %v, %v)", tt.args.taosConnect, logger, false, tt.args.sql, tt.args.reqID)
 		})
 	}
 }

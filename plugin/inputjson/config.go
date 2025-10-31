@@ -39,12 +39,6 @@ func (c *Config) setValue(v *viper.Viper) error {
 		return nil
 	}
 	// if enabled , rules must be provided
-	keys := v.AllKeys()
-	fmt.Println("keys:", keys)
-	err := v.Unmarshal(c)
-	if err != nil {
-		return err
-	}
 	rules := v.Get("input_json.rules")
 	rulesList, ok := rules.([]interface{})
 	if !ok {
@@ -53,75 +47,84 @@ func (c *Config) setValue(v *viper.Viper) error {
 	if len(rulesList) == 0 {
 		return fmt.Errorf("input_json.rules is empty")
 	}
-	for _, r := range rulesList {
-		r, ok := r.(map[string]interface{})
+	var err error
+	for index, ruleConfig := range rulesList {
+		r, ok := ruleConfig.(map[string]interface{})
 		if !ok {
-			return fmt.Errorf("input_json.rules item is not valid")
+			return fmt.Errorf("input_json.rules item is not map object")
 		}
 		rule := &Rule{}
 		rule.Endpoint, err = getStringConfig(r, "endpoint", "")
 		if err != nil {
-			return err
+			return fmt.Errorf("input_json.rules item index:%d endpoint is not valid:%s", index, err)
 		}
 		rule.DB, err = getStringConfig(r, "db", "")
 		if err != nil {
-			return err
+			return fmt.Errorf("input_json.rules item index:%d db is not valid:%s", index, err)
 		}
 		rule.DBKey, err = getStringConfig(r, "dbKey", "")
 		if err != nil {
-			return err
+			return fmt.Errorf("input_json.rules item index:%d dbKey is not valid:%s", index, err)
 		}
 		rule.SuperTable, err = getStringConfig(r, "superTable", "")
 		if err != nil {
-			return err
+			return fmt.Errorf("input_json.rules item index:%d superTable is not valid:%s", index, err)
 		}
 		rule.SuperTableKey, err = getStringConfig(r, "superTableKey", "")
 		if err != nil {
-			return err
+			return fmt.Errorf("input_json.rules item index:%d superTableKey is not valid:%s", index, err)
 		}
 		rule.SubTable, err = getStringConfig(r, "subTable", "")
 		if err != nil {
-			return err
+			return fmt.Errorf("input_json.rules item index:%d subTable is not valid:%s", index, err)
 		}
 		rule.SubTableKey, err = getStringConfig(r, "subTableKey", "")
 		if err != nil {
-			return err
+			return fmt.Errorf("input_json.rules item index:%d subTableKey is not valid:%s", index, err)
 		}
 		rule.TimeKey, err = getStringConfig(r, "timeKey", "")
 		if err != nil {
-			return err
+			return fmt.Errorf("input_json.rules item index:%d timeKey is not valid:%s", index, err)
 		}
 		rule.TimeFormat, err = getStringConfig(r, "timeFormat", "")
 		if err != nil {
-			return err
+			return fmt.Errorf("input_json.rules item index:%d timeFormat is not valid:%s", index, err)
 		}
 		rule.TimeTimezone, err = getStringConfig(r, "timeTimezone", "")
 		if err != nil {
-			return err
+			return fmt.Errorf("input_json.rules item index:%d timeTimezone is not valid:%s", index, err)
 		}
 		rule.Transformation, err = getStringConfig(r, "transformation", "")
 		if err != nil {
-			return err
+			return fmt.Errorf("input_json.rules item index:%d transformation is not valid:%s", index, err)
 		}
 
 		rule.TimeFieldName, err = getStringConfig(r, "timeFieldName", "ts")
 		if err != nil {
-			return err
+			return fmt.Errorf("input_json.rules item index:%d timeFieldName is not valid:%s", index, err)
 		}
 
-		if fieldList, exist := r["fields"].([]interface{}); exist {
-			for _, tag := range fieldList {
-				tagMap, ok := tag.(map[string]interface{})
-				if !ok {
-					return fmt.Errorf("input_json.rules.fields item is not valid: %v", tag)
-				}
-				field, err := parseFiled(tagMap)
-				if err != nil {
-					return err
-				}
-				rule.Fields = append(rule.Fields, field)
-			}
+		fields, exist := r["fields"]
+		if !exist {
+			return fmt.Errorf("input_json.rules item index:%d fields is missing", index)
 		}
+		fieldList, ok := fields.([]interface{})
+		if !ok {
+			return fmt.Errorf("input_json.rules item index:%d fields is not array", index)
+		}
+
+		for fieldIndex, fieldConfig := range fieldList {
+			fieldMap, ok := fieldConfig.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("input_json.rules item index:%d, fields item index:%d is not map object", index, fieldIndex)
+			}
+			field, err := parseFiled(fieldMap)
+			if err != nil {
+				return fmt.Errorf("input_json.rules item index:%d, fields item index:%d is not valid:%s", index, fieldIndex, err)
+			}
+			rule.Fields = append(rule.Fields, field)
+		}
+
 		c.Rules = append(c.Rules, rule)
 	}
 	return nil
@@ -190,9 +193,6 @@ func (c *Config) validate() error {
 		if rule.SubTable == "" && rule.SubTableKey == "" {
 			return fmt.Errorf("endpoint:%s subTable and subTableKey are empty", rule.Endpoint)
 		}
-		if rule.TimeKey == "" {
-			return fmt.Errorf("endpoint:%s timeKey is empty", rule.Endpoint)
-		}
 		if rule.TimeFormat == "" {
 			return fmt.Errorf("endpoint:%s timeFormat is empty", rule.Endpoint)
 		}
@@ -201,9 +201,6 @@ func (c *Config) validate() error {
 		}
 		if !isValidIdentifier(rule.SuperTable) {
 			return fmt.Errorf("endpoint:%s superTable:%s is not valid", rule.Endpoint, rule.SuperTable)
-		}
-		if !isValidIdentifier(rule.SubTable) {
-			return fmt.Errorf("endpoint:%s subTable:%s is not valid", rule.Endpoint, rule.SubTable)
 		}
 		if len(rule.Fields) == 0 {
 			return fmt.Errorf("endpoint:%s fields is empty", rule.Endpoint)
