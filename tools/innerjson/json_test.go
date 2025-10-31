@@ -44,4 +44,9 @@ func TestMarshal(t *testing.T) {
 	}
 	_, err = Marshal(tws)
 	assert.Error(t, err)
+	bs, err = Marshal(ts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, expected, string(bs))
 }
