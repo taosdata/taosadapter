@@ -17,14 +17,15 @@ import (
 )
 
 type connRequest struct {
-	ReqID    uint64 `json:"req_id"`
-	User     string `json:"user"`
-	Password string `json:"password"`
-	DB       string `json:"db"`
-	Mode     *int   `json:"mode"`
-	TZ       string `json:"tz"`
-	App      string `json:"app"`
-	IP       string `json:"ip"`
+	ReqID         uint64 `json:"req_id"`
+	User          string `json:"user"`
+	Password      string `json:"password"`
+	DB            string `json:"db"`
+	Mode          *int   `json:"mode"`
+	TZ            string `json:"tz"`
+	App           string `json:"app"`
+	IP            string `json:"ip"`
+	ConnectorInfo string `json:"connector_info"`
 }
 
 type connResponse struct {
@@ -132,6 +133,16 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 		logger.Trace("set app done")
 		if code != 0 {
 			handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set app error")
+			return
+		}
+	}
+	// set connector info
+	if req.ConnectorInfo != "" {
+		logger.Tracef("set connector info, info:%s", req.ConnectorInfo)
+		code = syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_CONNECTOR_INFO, &req.ConnectorInfo, logger, isDebug)
+		logger.Trace("set connector info done")
+		if code != 0 {
+			handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set connector info error")
 			return
 		}
 	}
