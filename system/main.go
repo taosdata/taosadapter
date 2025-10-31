@@ -20,6 +20,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
+	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
 	"github.com/taosdata/taosadapter/v3/plugin"
 	"github.com/taosdata/taosadapter/v3/version"
 )
@@ -32,6 +33,10 @@ func Init() *gin.Engine {
 	config.Init()
 	log.ConfigLog()
 	db.PrepareConnection()
+	err := recordsql.Init()
+	if err != nil {
+		logger.Fatal("record sql init failed: ", err)
+	}
 	keys := viper.AllKeys()
 	sort.Strings(keys)
 	logger.Info("                     global config")
@@ -52,7 +57,7 @@ func Init() *gin.Engine {
 	logger.Info("=================================================================")
 
 	logger.Infof("start server: %s", log.ServerID)
-	router := createRouter(config.Conf.Debug, &config.Conf.Cors, true)
+	router := createRouter(config.Conf.Debug, config.Conf.Cors, true)
 	controllers := controller.GetControllers()
 	for _, webController := range controllers {
 		webController.Init(router)
@@ -64,11 +69,7 @@ func Init() *gin.Engine {
 }
 
 func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin.Engine {
-	if debug {
-		gin.SetMode(gin.DebugMode)
-	} else {
-		gin.SetMode(gin.ReleaseMode)
-	}
+	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(log.GinLog())
 	router.Use(log.GinRecoverLog())
@@ -140,6 +141,7 @@ func (p *program) Stop(s service.Service) error {
 	logger.Println("Stop Plugins ...")
 	plugin.StopWithCtx(ctx)
 	logger.Println("Server exiting")
+	recordsql.Close()
 	ctxLog, cancelLog := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelLog()
 	logger.Println("Flushing Log")

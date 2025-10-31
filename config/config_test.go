@@ -1,6 +1,3 @@
-//go:build !windows
-// +build !windows
-
 package config
 
 import (
@@ -26,9 +23,13 @@ func TestInit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			Init()
+			logPath := "/var/log/taos"
+			if runtime.GOOS == "windows" {
+				logPath = "C:\\TDengine\\log"
+			}
 			assert.Equal(t, &Config{
 				InstanceID: 32,
-				Cors: CorsConfig{
+				Cors: &CorsConfig{
 					AllowAllOrigins:  true,
 					AllowOrigins:     []string{},
 					AllowHeaders:     []string{},
@@ -45,28 +46,29 @@ func TestInit(t *testing.T) {
 				RestfulRowLimit:     -1,
 				HttpCodeServerError: false,
 				SMLAutoCreateDB:     false,
-				Log: Log{
-					Level:               "info",
-					Path:                "/var/log/taos",
-					RotationCount:       30,
-					RotationTime:        time.Hour * 24,
-					RotationSize:        1 * 1024 * 1024 * 1024, // 1G
-					KeepDays:            30,
-					Compress:            false,
-					ReservedDiskSize:    1 * 1024 * 1024 * 1024,
-					EnableRecordHttpSql: false,
-					SqlRotationCount:    2,
-					SqlRotationTime:     time.Hour * 24,
-					SqlRotationSize:     1 * 1024 * 1024 * 1024,
+				Log: &Log{
+					Level:                 "info",
+					Path:                  logPath,
+					RotationCount:         30,
+					RotationTime:          time.Hour * 24,
+					RotationSize:          1 * 1024 * 1024 * 1024, // 1G
+					KeepDays:              30,
+					Compress:              false,
+					ReservedDiskSize:      1 * 1024 * 1024 * 1024,
+					EnableSqlToCsvLogging: false,
+					EnableRecordHttpSql:   false,
+					SqlRotationCount:      2,
+					SqlRotationTime:       time.Hour * 24,
+					SqlRotationSize:       1 * 1024 * 1024 * 1024,
 				},
-				Pool: Pool{
+				Pool: &Pool{
 					MaxConnect:  runtime.GOMAXPROCS(0) * 2,
 					MaxIdle:     0,
 					IdleTimeout: 0,
 					WaitTimeout: 60,
 					MaxWait:     0,
 				},
-				Monitor: Monitor{
+				Monitor: &Monitor{
 					Disable:                   true,
 					CollectDuration:           3 * time.Second,
 					InCGroup:                  false,
@@ -74,13 +76,20 @@ func TestInit(t *testing.T) {
 					PauseAllMemoryThreshold:   80,
 					Identity:                  "",
 				},
-				UploadKeeper: UploadKeeper{
+				UploadKeeper: &UploadKeeper{
 					Enable:        true,
 					Url:           "http://127.0.0.1:6043/adapter_report",
 					Interval:      15 * time.Second,
 					Timeout:       5 * time.Second,
 					RetryTimes:    3,
 					RetryInterval: 5 * time.Second,
+				},
+				Request: &Request{
+					QueryLimitEnable:          false,
+					ExcludeQueryLimitSql:      []string{},
+					ExcludeQueryLimitSqlRegex: nil,
+					Default:                   &LimitConfig{QueryLimit: 0, QueryWaitTimeout: 900, QueryMaxWait: 0},
+					Users:                     nil,
 				},
 			}, Conf)
 			corsC := Conf.Cors.GetConfig()

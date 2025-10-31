@@ -23,14 +23,14 @@ func GinLog() gin.HandlerFunc {
 		clientIP := iptool.GetRealIP(c.Request)
 		reqID, exist := c.Get(config.ReqIDKey)
 		if exist {
-			logger.Infof("QID:0x%x finish request, status_code:%3d, latency:%v, client_ip:%s, method:%s, uri:%s", reqID, statusCode, latencyTime, clientIP, reqMethod, reqUri)
+			logger.Debugf("QID:0x%x finish request, status_code:%3d, latency:%v, client_ip:%s, method:%s, uri:%s", reqID, statusCode, latencyTime, clientIP, reqMethod, reqUri)
 		} else {
-			logger.Infof("finish request, status_code:%3d, latency:%v, client_ip:%s, method:%s, uri:%s", statusCode, latencyTime, clientIP, reqMethod, reqUri)
+			logger.Debugf("finish request, status_code:%3d, latency:%v, client_ip:%s, method:%s, uri:%s", statusCode, latencyTime, clientIP, reqMethod, reqUri)
 		}
 		if config.Conf.Log.EnableRecordHttpSql {
 			sql, exist := c.Get("sql")
 			if exist {
-				sqlLogger.Infof("%d '%s' '%s' '%s' %s", reqID, reqUri, reqMethod, clientIP, sql)
+				sqlLogger.Debugf("%d '%s' '%s' '%s' %s", reqID, reqUri, reqMethod, clientIP, sql)
 			}
 		}
 	}

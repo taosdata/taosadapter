@@ -11,7 +11,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller/rest"
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/log"
-	"github.com/taosdata/taosadapter/v3/monitor"
 )
 
 var router *gin.Engine
@@ -22,6 +21,7 @@ func TestMain(m *testing.M) {
 	viper.Set("monitor.writeToTD", true)
 	viper.Set("monitor.writeInterval", time.Second*5)
 	config.Init()
+	config.Conf.Request.QueryLimitEnable = false
 	log.ConfigLog()
 	db.PrepareConnection()
 	gin.SetMode(gin.ReleaseMode)
@@ -31,6 +31,5 @@ func TestMain(m *testing.M) {
 	ctl.Init(router)
 	var pingCtl ping.Controller
 	pingCtl.Init(router)
-	monitor.StartMonitor()
 	m.Run()
 }

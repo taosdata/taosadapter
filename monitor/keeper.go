@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -16,6 +15,8 @@ import (
 	"github.com/taosdata/taosadapter/v3/monitor/metrics"
 	"github.com/taosdata/taosadapter/v3/thread"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
+	"github.com/taosdata/taosadapter/v3/tools/innerjson"
+	"github.com/taosdata/taosadapter/v3/tools/limiter"
 	"github.com/taosdata/taosadapter/v3/tools/sqltype"
 )
 
@@ -855,11 +856,13 @@ var cInterfaceCountMetrics = []*metrics.Gauge{
 	TMQCommitOffsetSuccessCounter,
 }
 
+// RestRecordRequest records a REST request and returns the SQL type.
+// whatever the UploadKeeper is enabled or not, it will return the sql type.
 func RestRecordRequest(sql string) sqltype.SqlType {
+	sqlType := sqltype.GetSqlType(sql)
 	if config.Conf.UploadKeeper.Enable {
 		RestTotal.Inc()
 		RestInProcess.Inc()
-		sqlType := sqltype.GetSqlType(sql)
 		switch sqlType {
 		case sqltype.InsertType:
 			RestWrite.Inc()
@@ -871,9 +874,8 @@ func RestRecordRequest(sql string) sqltype.SqlType {
 			RestOther.Inc()
 			RestOtherInProcess.Inc()
 		}
-		return sqlType
 	}
-	return sqltype.OtherType
+	return sqlType
 }
 
 func RestRecordResult(sqlType sqltype.SqlType, success bool) {
@@ -910,11 +912,13 @@ func RestRecordResult(sqlType sqltype.SqlType, success bool) {
 	}
 }
 
+// WSRecordRequest records a WebSocket request and returns the SQL type.
+// whatever the UploadKeeper is enabled or not, it will return the sql type.
 func WSRecordRequest(sql string) sqltype.SqlType {
+	sqlType := sqltype.GetSqlType(sql)
 	if config.Conf.UploadKeeper.Enable {
 		WSTotal.Inc()
 		WSInProcess.Inc()
-		sqlType := sqltype.GetSqlType(sql)
 		switch sqlType {
 		case sqltype.InsertType:
 			WSWrite.Inc()
@@ -928,7 +932,7 @@ func WSRecordRequest(sql string) sqltype.SqlType {
 		}
 		return sqlType
 	}
-	return sqltype.OtherType
+	return sqlType
 }
 
 func WSRecordResult(sqlType sqltype.SqlType, success bool) {
@@ -1044,6 +1048,13 @@ func RecordWSTMQDisconnect() {
 	}
 }
 
+var closeChan = make(chan struct{}, 1)
+
+// just for test
+func StopUpload() {
+	closeChan <- struct{}{}
+}
+
 func StartUpload() {
 	if config.Conf.UploadKeeper.Enable {
 		client := &http.Client{
@@ -1052,6 +1063,11 @@ func StartUpload() {
 		p, err := process.NewProcess(int32(os.Getpid()))
 		if err != nil {
 			logger.Panicf("get process error, err:%s", err)
+		}
+		// init cpu record
+		_, err = p.Percent(0)
+		if err != nil {
+			logger.Panicf("get process cpu percent error, err")
 		}
 		go func() {
 			nextUploadTime := getNextUploadTime()
@@ -1067,14 +1083,20 @@ func StartUpload() {
 				}
 			}()
 			ticker := time.NewTicker(config.Conf.UploadKeeper.Interval)
-			for range ticker.C {
-				go func() {
-					reqID := generator.GetUploadKeeperReqID()
-					err := upload(p, client, reqID)
-					if err != nil {
-						logger.Errorf("upload_id:0x%x, upload to keeper error, err:%s", reqID, err)
-					}
-				}()
+			for {
+				select {
+				case <-closeChan:
+					ticker.Stop()
+					return
+				case <-ticker.C:
+					go func() {
+						reqID := generator.GetUploadKeeperReqID()
+						err := upload(p, client, reqID)
+						if err != nil {
+							logger.Errorf("upload_id:0x%x, upload to keeper error, err:%s", reqID, err)
+						}
+					}()
+				}
 			}
 		}()
 	}
@@ -1122,6 +1144,58 @@ type Metric struct {
 	Value interface{} `json:"value"`
 }
 
+func getLimiterMetrics() *Table {
+	limiterMetrics := limiter.GetLimiterMetrics()
+	if len(limiterMetrics) == 0 {
+		return nil
+	}
+	table := &Table{
+		Name: "adapter_request_limit",
+	}
+	table.MetricGroups = make([]*MetricGroup, 0, len(limiterMetrics))
+	for user, requestLimiterMetrics := range limiterMetrics {
+		table.MetricGroups = append(table.MetricGroups, &MetricGroup{
+			Tags: []*Tag{
+				{
+					Name:  "endpoint",
+					Value: identity,
+				},
+				{
+					Name:  "user",
+					Value: user,
+				},
+			},
+			Metrics: []*Metric{
+				{
+					Name:  "query_limit",
+					Value: requestLimiterMetrics.QueryLimit,
+				},
+				{
+					Name:  "query_max_wait",
+					Value: requestLimiterMetrics.MaxWait,
+				},
+				{
+					Name:  "query_inflight",
+					Value: requestLimiterMetrics.Inflight,
+				},
+				{
+					Name:  "query_wait_count",
+					Value: requestLimiterMetrics.WaitCount,
+				},
+				{
+					Name:  "query_count",
+					Value: requestLimiterMetrics.TotalCount,
+				},
+				{
+					Name:  "query_wait_fail_count",
+					Value: requestLimiterMetrics.FailCount,
+				},
+			},
+		})
+	}
+	return table
+}
+
 func upload(p *process.Process, client *http.Client, reqID int64) error {
 	ts := time.Now().Round(config.Conf.UploadKeeper.Interval)
 	extraMetric, err := generateExtraMetrics(ts, p)
@@ -1143,7 +1217,7 @@ func upload(p *process.Process, client *http.Client, reqID int64) error {
 	for _, metric := range inflightMetrics {
 		data.Metrics[metric.MetricName()] = int(metric.Value())
 	}
-	jsonData, err := json.Marshal(data)
+	jsonData, err := innerjson.Marshal(data)
 	if err != nil {
 		return err
 	}
@@ -1167,6 +1241,11 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 	if err != nil {
 		return nil, fmt.Errorf("get memory info error, err:%s", err.Error())
 	}
+	cpu, err := p.Percent(0)
+	if err != nil {
+		return nil, fmt.Errorf("get cpu percent error, err:%s", err.Error())
+	}
+	cpu = cpu / float64(runtime.NumCPU())
 	memStats := new(runtime.MemStats)
 	runtime.ReadMemStats(memStats)
 	queryConnInc := WSQueryConnIncrement.Value()
@@ -1326,6 +1405,10 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 						Name:  "ws_ws_stmt2_count",
 						Value: WSWSStmt2Count.Value(),
 					},
+					{
+						Name:  "cpu_percent",
+						Value: cpu,
+					},
 				},
 			},
 		},
@@ -1390,6 +1473,10 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 		metric.Tables = append(metric.Tables, connTable)
 	}
 	metric.Tables = append(metric.Tables, cInterfaceTable)
+	limitTable := getLimiterMetrics()
+	if limitTable != nil {
+		metric.Tables = append(metric.Tables, limitTable)
+	}
 	return []*ExtraMetric{metric}, nil
 }
 func doRequest(client *http.Client, data []byte, reqID int64) error {

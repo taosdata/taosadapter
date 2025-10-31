@@ -41,6 +41,9 @@ type messageHandler struct {
 	session               *melody.Session
 	ip                    net.IP
 	ipStr                 string
+	user                  string
+	port                  string
+	appName               string
 	whitelistChangeHandle cgo.Handle
 	dropUserHandle        cgo.Handle
 }
@@ -48,6 +51,7 @@ type messageHandler struct {
 func newHandler(session *melody.Session) *messageHandler {
 	logger := wstool.GetLogger(session)
 	ipAddr := iptool.GetRealIP(session.Request)
+	port, _ := iptool.GetRealPort(session.Request) // ignore error, this port is for sql recording
 	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
 	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
 	return &messageHandler{
@@ -62,6 +66,7 @@ func newHandler(session *melody.Session) *messageHandler {
 		ip:                    ipAddr,
 		ipStr:                 ipAddr.String(),
 		logger:                logger,
+		port:                  port,
 	}
 }
 
@@ -74,7 +79,7 @@ func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 	for {
 		select {
 		case <-h.dropUserChan:
-			logger.Info("get drop user signal")
+			logger.Trace("get drop user signal")
 			isDebug := log.IsDebug()
 			h.lock(logger, isDebug)
 			if h.isClosed() {
@@ -82,11 +87,11 @@ func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 				h.Unlock()
 				return
 			}
-			logger.Info("user dropped, close connection")
+			logger.Trace("user dropped, close connection")
 			h.signalExit(logger, isDebug)
 			return
 		case <-h.whitelistChangeChan:
-			logger.Info("get whitelist change signal")
+			logger.Trace("get whitelist change signal")
 			isDebug := log.IsDebug()
 			h.lock(logger, isDebug)
 			if h.isClosed() {

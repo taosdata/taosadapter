@@ -258,7 +258,7 @@ func (t *Taos) waitSignal(logger *logrus.Entry) {
 	for {
 		select {
 		case <-t.dropUserChan:
-			logger.Info("get drop user signal")
+			logger.Trace("get drop user signal")
 			isDebug := log.IsDebug()
 			t.lock(logger, isDebug)
 			if t.closed {
@@ -266,11 +266,11 @@ func (t *Taos) waitSignal(logger *logrus.Entry) {
 				t.Unlock()
 				return
 			}
-			logger.WithField("clientIP", t.ipStr).Info("user dropped! close connection!")
+			logger.WithField("clientIP", t.ipStr).Debug("user dropped! close connection!")
 			t.signalExit(logger, isDebug)
 			return
 		case <-t.whitelistChangeChan:
-			logger.Info("get whitelist change signal")
+			logger.Trace("get whitelist change signal")
 			isDebug := log.IsDebug()
 			t.lock(logger, isDebug)
 			if t.closed {
@@ -708,7 +708,7 @@ func (t *Taos) fetch(ctx context.Context, session *melody.Session, req *WSFetchR
 	isDebug := log.IsDebug()
 	resultItem := t.getResult(req.ID)
 	if resultItem == nil {
-		logger.Errorf("result is nil")
+		logger.Debug("result is nil")
 		wsErrorMsg(ctx, session, logger, 0xffff, "result is nil", WSFetch, req.ReqID)
 		return
 	}
@@ -716,7 +716,7 @@ func (t *Taos) fetch(ctx context.Context, session *melody.Session, req *WSFetchR
 	resultS.Lock()
 	if resultS.TaosResult == nil {
 		resultS.Unlock()
-		logger.Errorf("result is nil")
+		logger.Debug("result is nil")
 		wsErrorMsg(ctx, session, logger, 0xffff, "result is nil", WSFetch, req.ReqID)
 		return
 	}

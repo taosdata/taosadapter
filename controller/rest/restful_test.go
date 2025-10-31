@@ -11,18 +11,23 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/layout"
+	"github.com/taosdata/taosadapter/v3/tools/limiter"
 	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
@@ -34,6 +39,18 @@ func TestMain(m *testing.M) {
 	viper.Set("logLevel", "trace")
 	viper.Set("uploadKeeper.enable", false)
 	config.Init()
+	config.Conf.Request = &config.Request{
+		QueryLimitEnable:                 false,
+		ExcludeQueryLimitSql:             []string{"selectserver_version()", "select1"},
+		ExcludeQueryLimitSqlMaxByteCount: 22,
+		ExcludeQueryLimitSqlMinByteCount: 7,
+		ExcludeQueryLimitSqlRegex:        []*regexp.Regexp{regexp.MustCompile(`(?i)^select\s+.*from\s+information_schema.*`)},
+		Default: &config.LimitConfig{
+			QueryLimit:       1,
+			QueryWaitTimeout: 1,
+			QueryMaxWait:     0,
+		},
+	}
 	db.PrepareConnection()
 	log.ConfigLog()
 	gin.SetMode(gin.ReleaseMode)
@@ -860,4 +877,137 @@ func Test_avoidNegativeDuration(t *testing.T) {
 			assert.Equalf(t, tt.want, avoidNegativeDuration(tt.args.duration), "avoidNegativeDuration(%v)", tt.args.duration)
 		})
 	}
+}
+
+func TestLimitQuery(t *testing.T) {
+	config.Conf.Request.QueryLimitEnable = true
+	config.Conf.Request.Default.QueryMaxWait = 0
+	defer func() {
+		config.Conf.Request.QueryLimitEnable = false
+		limiter.GlobalLimiterMap.Clear()
+	}()
+	wg := sync.WaitGroup{}
+	wg.Add(10)
+	// 10 concurrent queries, unlimited query wait time
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer wg.Done()
+			w := httptest.NewRecorder()
+			body := strings.NewReader("select 2")
+			req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+			req.RemoteAddr = testtools.GetRandomRemoteAddr()
+			req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+			router.ServeHTTP(w, req)
+			assert.Equal(t, 200, w.Code)
+		}()
+	}
+	wg.Wait()
+	limiter.GlobalLimiterMap.Clear()
+	config.Conf.Request.Default.QueryMaxWait = 1
+	limited := false
+	wg.Add(10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer wg.Done()
+			w := httptest.NewRecorder()
+			body := strings.NewReader("select 2")
+			req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+			req.RemoteAddr = testtools.GetRandomRemoteAddr()
+			req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+			router.ServeHTTP(w, req)
+			assert.Contains(t, []int{200, 503}, w.Code)
+			if w.Code == 503 {
+				limited = true
+			}
+		}()
+	}
+	wg.Wait()
+	assert.True(t, limited)
+
+	wg.Add(10)
+	// 10 concurrent queries, unlimited sql
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer wg.Done()
+			w := httptest.NewRecorder()
+			body := strings.NewReader("select 1")
+			req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+			req.RemoteAddr = testtools.GetRandomRemoteAddr()
+			req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+			router.ServeHTTP(w, req)
+			assert.Equal(t, 200, w.Code)
+		}()
+	}
+	wg.Wait()
+	wg.Add(10)
+	// 10 concurrent queries, unlimited sql regex
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer wg.Done()
+			w := httptest.NewRecorder()
+			body := strings.NewReader("select * from information_schema.ins_databases")
+			req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+			req.RemoteAddr = testtools.GetRandomRemoteAddr()
+			req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+			router.ServeHTTP(w, req)
+			assert.Equal(t, 200, w.Code)
+		}()
+	}
+	wg.Wait()
+}
+
+func TestInfAndNan(t *testing.T) {
+	checkResp(t, executeSQL("create database if not exists rest_test_inf_nan"))
+	defer func() {
+		checkResp(t, executeSQL("drop database if exists rest_test_inf_nan"))
+	}()
+	logger := logrus.New().WithField("test", "TestInfAndNan")
+
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, false)
+	assert.NoError(t, err)
+	defer syncinterface.TaosClose(conn, logger, false)
+	res := syncinterface.TaosQuery(conn, "use rest_test_inf_nan", logger, false)
+	defer func() {
+		syncinterface.TaosSyncQueryFree(res, logger, false)
+	}()
+	code := syncinterface.TaosError(res, logger, false)
+	assert.Equal(t, 0, code)
+	now := time.Now()
+	line := fmt.Sprintf(
+		"measurement,host=host1 field1=1i,field2=2.0 %d\n"+
+			"measurement,host=host1 field1=1i,field2=nan %d\n"+
+			"measurement,host=host1 field1=1i,field2=inf %d",
+		now.UnixNano(),
+		now.Add(time.Second).UnixNano(),
+		now.Add(time.Second*2).UnixNano(),
+	)
+
+	_, schemalessRes := syncinterface.TaosSchemalessInsertRawTTLWithReqIDTBNameKey(conn, line, 1, "ns", 0, 0, "", logger, false)
+	defer func() {
+		syncinterface.TaosSyncQueryFree(schemalessRes, logger, false)
+	}()
+	code = syncinterface.TaosError(schemalessRes, logger, false)
+	assert.Equal(t, 0, code)
+	w := executeSQL("select _ts,field2 from rest_test_inf_nan.measurement order by _ts asc")
+	assert.Equal(t, 200, w.Code)
+	var result TDEngineRestfulRespDoc
+	resp := w.Body.Bytes()
+	t.Log(string(resp))
+	err = json.Unmarshal(resp, &result)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, result.Code)
+	assert.Equal(t, 3, len(result.Data))
+	assert.Equal(t, 2.0, result.Data[0][1])
+	assert.Nil(t, result.Data[1][1])
+	assert.Nil(t, result.Data[2][1])
+}
+
+func executeSQL(sql string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	body := strings.NewReader(sql)
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	return w
 }

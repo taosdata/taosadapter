@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/sirupsen/logrus"
@@ -14,6 +15,8 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
+	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
+	"github.com/taosdata/taosadapter/v3/tools/limiter"
 )
 
 type QueryResult struct {
@@ -27,6 +30,8 @@ type QueryResult struct {
 	precision   int
 	buf         []byte
 	inStmt      bool
+	record      *recordsql.Record
+	limiter     *limiter.Limiter
 	sync.Mutex
 }
 
@@ -38,7 +43,14 @@ func (r *QueryResult) free(logger *logrus.Entry) {
 	if r.TaosResult == nil {
 		return
 	}
-
+	if r.record != nil {
+		r.record.SetFreeTime(time.Now())
+		recordsql.PutSQLRecord(r.record)
+		r.record = nil
+	}
+	if r.limiter != nil {
+		r.limiter.Release()
+	}
 	if r.inStmt { // stmt result is no need to free
 		logger.Trace("stmt result is no need to free")
 		r.TaosResult = nil

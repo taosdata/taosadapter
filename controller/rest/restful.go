@@ -24,13 +24,14 @@ import (
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
+	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
 	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/connectpool"
 	"github.com/taosdata/taosadapter/v3/tools/csv"
 	"github.com/taosdata/taosadapter/v3/tools/ctools"
-	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/iptool"
 	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
+	"github.com/taosdata/taosadapter/v3/tools/limiter"
 	"github.com/taosdata/taosadapter/v3/tools/pool"
 	"github.com/taosdata/taosadapter/v3/tools/sqltype"
 )
@@ -40,6 +41,11 @@ var logger = log.GetLogger("RST")
 const StartTimeKey = "st"
 const LoggerKey = "logger"
 const RequireTiming = "require_timing"
+const (
+	ConnTZQueryParamKey  = "conn_tz"
+	AppNameQueryParamKey = "app"
+	IPQueryParamKey      = "ip"
+)
 
 type Restful struct {
 	uploadReplacer *strings.Replacer
@@ -64,30 +70,6 @@ func (ctl *Restful) Init(r gin.IRouter) {
 	api.POST("sql/:db/vgid", prepareCtx, CheckAuth, ctl.tableVgID)
 	api.GET("login/:user/:password", prepareCtx, ctl.des)
 	api.POST("upload", prepareCtx, CheckAuth, ctl.upload)
-}
-
-func prepareCtx(c *gin.Context) {
-	timing := c.Query("timing")
-	if timing == "true" {
-		c.Set(RequireTiming, true)
-	}
-	c.Set(StartTimeKey, time.Now())
-	var reqID int64
-	var err error
-	if reqIDStr := c.Query("req_id"); len(reqIDStr) != 0 {
-		if reqID, err = strconv.ParseInt(reqIDStr, 10, 64); err != nil {
-			logger.Errorf("illegal param, req_id must be numeric:%s, err:%s", reqIDStr, err)
-			BadRequestResponseWithMsg(c, logger, 0xffff, fmt.Sprintf("illegal param, req_id must be numeric %s", err.Error()))
-			return
-		}
-	}
-	if reqID == 0 {
-		reqID = generator.GetReqID()
-		logger.Tracef("request:%s, client_ip:%s, req_id not set, generate new QID:0x%x", c.Request.RequestURI, c.ClientIP(), reqID)
-	}
-	c.Set(config.ReqIDKey, reqID)
-	ctxLogger := logger.WithField(config.ReqIDKey, reqID)
-	c.Set(LoggerKey, ctxLogger)
 }
 
 type TDEngineRestfulRespDoc struct {
@@ -182,8 +164,25 @@ func DoQuery(c *gin.Context, db string, location *time.Location, reqID int64, re
 	password := c.MustGet(PasswordKey).(string)
 	logger.Tracef("connect server, user:%s, pass:%s", user, password)
 	ip := iptool.GetRealIP(c.Request)
+
+	// record sql to file
+	record, recordSql := recordsql.GetSQLRecord()
+	var recordTime time.Time
+	if recordSql {
+		defer recordsql.PutSQLRecord(record)
+		port, _ := iptool.GetRealPort(c.Request)
+		appName := c.Query(AppNameQueryParamKey)
+		record.Init(sql, ip.String(), port, appName, user, recordsql.HTTPType, uint64(reqID), c.MustGet(StartTimeKey).(time.Time))
+		recordTime = time.Now()
+	}
 	s = log.GetLogNow(isDebug)
 	taosConnect, err := commonpool.GetConnection(user, password, ip)
+
+	// record get connection duration
+	if recordSql {
+		record.SetGetConnDuration(time.Since(recordTime))
+	}
+
 	logger.Debugf("get connect, conn:%p, err:%v, cost:%s", taosConnect, err, log.GetLogDuration(isDebug, s))
 	if err != nil {
 		monitor.RestRecordResult(sqlType, false)
@@ -226,11 +225,32 @@ func DoQuery(c *gin.Context, db string, location *time.Location, reqID int64, re
 		logger.Tracef("select db %s", db)
 		_ = async.GlobalAsync.TaosExecWithoutResult(taosConnect.TaosConnection, logger, isDebug, fmt.Sprintf("use `%s`", db), reqID)
 	}
-	execute(c, logger, isDebug, taosConnect.TaosConnection, sql, reqID, sqlType, returnObj, location)
+	// check if the sql should be limited
+	if limiter.CheckShouldLimit(sql, sqlType) {
+		l := limiter.GetLimiter(user)
+		logger.Debug("sql limiter start acquire")
+		err = l.Acquire()
+		if err != nil {
+			logger.Errorf("acquire limiter failed, user:%s, err:%s", user, err)
+			monitor.RestRecordResult(sqlType, false)
+			if recordSql {
+				// no query executed, set free time directly
+				record.SetFreeTime(time.Now())
+			}
+			ServiceUnavailable(c, logger, err.Error())
+			return
+		}
+		logger.Debug("sql limiter acquire success")
+		defer func() {
+			l.Release()
+			logger.Debug("sql limiter release success")
+		}()
+	}
+	execute(c, logger, isDebug, taosConnect.TaosConnection, sql, reqID, sqlType, returnObj, location, recordSql, record)
 }
 
 func trySetConnectionOptions(c *gin.Context, conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) bool {
-	keys := [3]string{"conn_tz", "app", "ip"}
+	keys := [3]string{ConnTZQueryParamKey, AppNameQueryParamKey, IPQueryParamKey}
 	options := [3]int{common.TSDB_OPTION_CONNECTION_TIMEZONE, common.TSDB_OPTION_CONNECTION_USER_APP, common.TSDB_OPTION_CONNECTION_USER_IP}
 	for i := 0; i < 3; i++ {
 		val := c.Query(keys[i])
@@ -260,14 +280,42 @@ var (
 	Timing               = []byte(`,"timing":`)
 )
 
-func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect unsafe.Pointer, sql string, reqID int64, sqlType sqltype.SqlType, returnObj bool, location *time.Location) {
+func execute(
+	c *gin.Context,
+	logger *logrus.Entry,
+	isDebug bool,
+	taosConnect unsafe.Pointer,
+	sql string,
+	reqID int64,
+	sqlType sqltype.SqlType,
+	returnObj bool,
+	location *time.Location,
+	recordSql bool,
+	record *recordsql.Record,
+) {
 	_, calculateTiming := c.Get(RequireTiming)
 	st := c.MustGet(StartTimeKey).(time.Time)
 	flushTiming := int64(0)
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
+
+	var recordTime time.Time
+	if recordSql {
+		recordTime = time.Now()
+	}
+
 	result := async.GlobalAsync.TaosQuery(taosConnect, logger, isDebug, sql, handler, reqID)
+
+	// record query duration
+	if recordSql {
+		record.SetQueryDuration(time.Since(recordTime))
+	}
+
 	defer func() {
+		// record free time
+		if recordSql {
+			record.SetFreeTime(time.Now())
+		}
 		if result != nil && result.Res != nil {
 			async.FreeResultAsync(result.Res, logger, isDebug)
 		}
@@ -389,11 +437,14 @@ func execute(c *gin.Context, logger *logrus.Entry, isDebug bool, taosConnect uns
 	pHeaderList := make([]unsafe.Pointer, fieldsCount)
 	pStartList := make([]unsafe.Pointer, fieldsCount)
 	timeBuffer := make([]byte, 0, 30)
-	for {
-		if config.Conf.RestfulRowLimit > -1 && total == config.Conf.RestfulRowLimit {
-			break
+	for config.Conf.RestfulRowLimit < 0 || total != config.Conf.RestfulRowLimit {
+		if recordSql {
+			recordTime = time.Now()
 		}
 		result = async.GlobalAsync.TaosFetchRawBlockA(res, logger, isDebug, handler)
+		if recordSql {
+			record.AddFetchDuration(time.Since(recordTime))
+		}
 		if result.N == 0 {
 			logger.Trace("fetch finished")
 			break

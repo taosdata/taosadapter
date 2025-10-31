@@ -14,13 +14,10 @@ func prepareEnv() unsafe.Pointer {
 	if err != nil {
 		panic(err)
 	}
-	res := TaosQuery(conn, "create database if not exists test_schemaless_common")
-	if TaosError(res) != 0 {
-		errStr := TaosErrorStr(res)
-		TaosFreeResult(res)
-		panic(errStr)
+	err = exec(conn, "create database if not exists test_schemaless_common")
+	if err != nil {
+		panic(err)
 	}
-	TaosFreeResult(res)
 	code := TaosSelectDB(conn, "test_schemaless_common")
 	if code != 0 {
 		panic("use db test_schemaless_common fail")
@@ -29,13 +26,10 @@ func prepareEnv() unsafe.Pointer {
 }
 
 func cleanEnv(conn unsafe.Pointer) {
-	res := TaosQuery(conn, "drop database if exists test_schemaless_common")
-	if TaosError(res) != 0 {
-		errStr := TaosErrorStr(res)
-		TaosFreeResult(res)
-		panic(errStr)
+	err := exec(conn, "drop database if exists test_schemaless_common")
+	if err != nil {
+		panic(err)
 	}
-	TaosFreeResult(res)
 }
 
 func BenchmarkTelnetSchemaless(b *testing.B) {
@@ -677,7 +671,7 @@ func TestTaosSchemalessInsertRawTTLWithReqID(t *testing.T) {
 func TestTaosSchemalessInsertRawTTLWithReqIDTBNameKey(t *testing.T) {
 	conn := prepareEnv()
 	defer TaosClose(conn)
-	//defer cleanEnv(conn)
+	defer cleanEnv(conn)
 	cases := []struct {
 		name      string
 		row       string

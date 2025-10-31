@@ -3,6 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/binary"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
@@ -17,7 +18,7 @@ import (
 func (h *messageHandler) resultValidateAndLock(ctx context.Context, session *melody.Session, action string, reqID uint64, resultID uint64, logger *logrus.Entry) (item *QueryResult, locked bool) {
 	item = h.queryResults.Get(resultID)
 	if item == nil {
-		logger.Errorf("result is nil, result_id:%d", resultID)
+		logger.Debugf("result is nil, result_id:%d", resultID)
 		commonErrorResponse(ctx, session, logger, action, reqID, 0xffff, "result is nil")
 		return nil, false
 	}
@@ -52,7 +53,7 @@ func (h *messageHandler) fetch(ctx context.Context, session *melody.Session, act
 	logger.Tracef("get result by id, id:%d", req.ID)
 	item := h.queryResults.Get(req.ID)
 	if item == nil {
-		logger.Errorf("result is nil")
+		logger.Debug("result is nil")
 		commonErrorResponse(ctx, session, logger, action, req.ReqID, 0xffff, "result is nil")
 		return
 	}
@@ -68,7 +69,14 @@ func (h *messageHandler) fetch(ctx context.Context, session *melody.Session, act
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Debugf("get handler, cost:%s", log.GetLogDuration(isDebug, s))
 	s = log.GetLogNow(isDebug)
+	var recordTime time.Time
+	if item.record != nil {
+		recordTime = time.Now()
+	}
 	result := async.GlobalAsync.TaosFetchRawBlockA(item.TaosResult, logger, isDebug, handler)
+	if item.record != nil {
+		item.record.AddFetchDuration(time.Since(recordTime))
+	}
 	logger.Debugf("fetch_raw_block_a, cost:%s", log.GetLogDuration(isDebug, s))
 	if result.N == 0 {
 		item.Unlock()
@@ -163,7 +171,7 @@ func (h *messageHandler) fetchRawBlock(ctx context.Context, session *melody.Sess
 	item := h.queryResults.Get(resultID)
 	logger.Tracef("fetch raw block, result_id:%d", resultID)
 	if item == nil {
-		logger.Errorf("result is nil, result_id:%d", resultID)
+		logger.Debugf("result is nil, result_id:%d", resultID)
 		fetchRawBlockErrorResponse(session, logger, 0xffff, "result is nil", reqID, resultID, uint64(wstool.GetDuration(ctx)))
 		return
 	}
@@ -178,7 +186,14 @@ func (h *messageHandler) fetchRawBlock(ctx context.Context, session *melody.Sess
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 	logger.Tracef("get handler cost:%s", log.GetLogDuration(isDebug, s))
+	var recordTime time.Time
+	if item.record != nil {
+		recordTime = time.Now()
+	}
 	result := async.GlobalAsync.TaosFetchRawBlockA(item.TaosResult, logger, isDebug, handler)
+	if item.record != nil {
+		item.record.AddFetchDuration(time.Since(recordTime))
+	}
 	if result.N == 0 {
 		item.Unlock()
 		logger.Trace("fetch raw block success")
