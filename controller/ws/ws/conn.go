@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"unsafe"
 
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
@@ -109,40 +110,69 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	if req.IP != "" {
 		clientIP = req.IP
 	}
-	logger.Tracef("set connection ip, ip:%s", clientIP)
-	code := syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_IP, &clientIP, logger, isDebug)
-	logger.Trace("set connection ip done")
-	if code != 0 {
-		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set connection ip error")
+	if !setConnectOption(
+		ctx,
+		conn,
+		session,
+		logger,
+		isDebug,
+		action,
+		req.ReqID,
+		common.TSDB_OPTION_CONNECTION_USER_IP,
+		clientIP,
+		"connection ip",
+	) {
 		return
 	}
+
 	// set timezone
 	if req.TZ != "" {
-		logger.Tracef("set timezone, tz:%s", req.TZ)
-		code = syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_TIMEZONE, &req.TZ, logger, isDebug)
-		logger.Trace("set timezone done")
-		if code != 0 {
-			handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set timezone error")
+		if !setConnectOption(
+			ctx,
+			conn,
+			session,
+			logger,
+			isDebug,
+			action,
+			req.ReqID,
+			common.TSDB_OPTION_CONNECTION_TIMEZONE,
+			req.TZ,
+			"connection timezone",
+		) {
 			return
 		}
 	}
 	// set connection app
 	if req.App != "" {
-		logger.Tracef("set app, app:%s", req.App)
-		code = syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_APP, &req.App, logger, isDebug)
-		logger.Trace("set app done")
-		if code != 0 {
-			handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set app error")
+		if !setConnectOption(
+			ctx,
+			conn,
+			session,
+			logger,
+			isDebug,
+			action,
+			req.ReqID,
+			common.TSDB_OPTION_CONNECTION_USER_APP,
+			req.App,
+			"app",
+		) {
 			return
 		}
 	}
 	// set connector info
 	if req.ConnectorInfo != "" {
-		logger.Tracef("set connector info, info:%s", req.ConnectorInfo)
-		code = syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_CONNECTOR_INFO, &req.ConnectorInfo, logger, isDebug)
-		logger.Trace("set connector info done")
-		if code != 0 {
-			handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set connector info error")
+		if !setConnectOption(
+			ctx,
+			conn,
+			session,
+			logger,
+			isDebug,
+			action,
+			req.ReqID,
+			common.TSDB_OPTION_CONNECTION_CONNECTOR_INFO,
+			req.ConnectorInfo,
+			"connector info",
+		) {
 			return
 		}
 	}
@@ -159,4 +189,15 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	h.user = req.User
 	h.appName = req.App
 	wstool.WSWriteJson(session, logger, resp)
+}
+
+func setConnectOption(ctx context.Context, conn unsafe.Pointer, session *melody.Session, logger *logrus.Entry, isDebug bool, action string, reqID uint64, option int, value string, optionName string) bool {
+	logger.Tracef("set %s, value: %s", optionName, value)
+	code := syncinterface.TaosOptionsConnection(conn, option, &value, logger, isDebug)
+	logger.Tracef("set %s done", optionName)
+	if code != 0 {
+		handleConnectError(ctx, conn, session, logger, isDebug, action, reqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), fmt.Sprintf("set %s error", optionName))
+		return false
+	}
+	return true
 }
