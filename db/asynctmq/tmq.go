@@ -1,5 +1,4 @@
 //go:build !windows
-// +build !windows
 
 // Package asynctmq is a cgo wrapper for TDengine tmq API
 package asynctmq
