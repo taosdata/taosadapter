@@ -602,15 +602,18 @@ func TestTaosOptionsConnection(t *testing.T) {
 	defer TaosClose(conn)
 	ip := "192.168.9.9"
 	app := "test_options_connection"
+	connectorInfo := "test_app_info"
 	// set ip
 	code := TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_IP, &ip)
 	assert.Equal(t, 0, code, TaosErrorStr(nil))
 	// set app
 	code = TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_APP, &app)
 	assert.Equal(t, 0, code, TaosErrorStr(nil))
+	// set connector info
+	code = TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_CONNECTOR_INFO, &connectorInfo)
 	var values [][]driver.Value
 	for i := 0; i < 10; i++ {
-		values, err = query(conn, "select conn_id from performance_schema.perf_connections where user_ip = '192.168.9.9' and user_app = 'test_options_connection'")
+		values, err = query(conn, "select conn_id from performance_schema.perf_connections where user_ip = '192.168.9.9' and user_app = 'test_options_connection' and connector_info = 'test_app_info'")
 		assert.NoError(t, err)
 		if len(values) == 1 {
 			break
@@ -624,7 +627,7 @@ func TestTaosOptionsConnection(t *testing.T) {
 	code = TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_APP, nil)
 	assert.Equal(t, 0, code, TaosErrorStr(nil))
 	for i := 0; i < 10; i++ {
-		values, err = query(conn, "select conn_id from performance_schema.perf_connections where user_ip = '192.168.9.9' and user_app = 'test_options_connection'")
+		values, err = query(conn, "select conn_id from performance_schema.perf_connections where user_ip = '192.168.9.9' and user_app = 'test_options_connection' and connector_info = 'test_app_info'")
 		assert.NoError(t, err)
 		if len(values) == 0 {
 			break
@@ -642,7 +645,7 @@ func TestTaosOptionsConnection(t *testing.T) {
 	code = TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_APP, &app)
 	assert.Equal(t, 0, code, TaosErrorStr(nil))
 	for i := 0; i < 20; i++ {
-		values, err = query(conn, "select conn_id from performance_schema.perf_connections where user_ip = '192.168.9.9' and user_app = 'test_options_2'")
+		values, err = query(conn, "select conn_id from performance_schema.perf_connections where user_ip = '192.168.9.9' and user_app = 'test_options_2' and connector_info = 'test_app_info'")
 		assert.NoError(t, err)
 		if len(values) == 1 {
 			break
@@ -656,7 +659,7 @@ func TestTaosOptionsConnection(t *testing.T) {
 	code = TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_IP, nil)
 	assert.Equal(t, 0, code, TaosErrorStr(nil))
 	for i := 0; i < 10; i++ {
-		values, err = query(conn, "select conn_id from performance_schema.perf_connections where user_ip = '192.168.9.9' and user_app = 'test_options_2'")
+		values, err = query(conn, "select conn_id from performance_schema.perf_connections where user_ip = '192.168.9.9' and user_app = 'test_options_2' and connector_info = 'test_app_info'")
 		assert.NoError(t, err)
 		if len(values) == 0 {
 			break
@@ -669,13 +672,45 @@ func TestTaosOptionsConnection(t *testing.T) {
 	assert.Equal(t, 1, len(values))
 	assert.Equal(t, connID, values[0][0].(uint32))
 
+	// clear connector info
+	code = TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_CONNECTOR_INFO, nil)
+	assert.Equal(t, 0, code, TaosErrorStr(nil))
+	for i := 0; i < 10; i++ {
+		values, err = query(conn, "select conn_id from performance_schema.perf_connections where user_app = 'test_options_2' and connector_info = 'test_app_info'")
+		assert.NoError(t, err)
+		if len(values) == 0 {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	assert.Equal(t, 0, len(values))
+	values, err = query(conn, "select conn_id from performance_schema.perf_connections where user_app = 'test_options_2'")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(values))
+	assert.Equal(t, connID, values[0][0].(uint32))
+
+	// set connector info
+	connectorInfo = "test_app_info_2"
+	code = TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_CONNECTOR_INFO, &connectorInfo)
+	assert.Equal(t, 0, code, TaosErrorStr(nil))
+	for i := 0; i < 10; i++ {
+		values, err = query(conn, "select conn_id from performance_schema.perf_connections where user_app = 'test_options_2' and connector_info = 'test_app_info_2'")
+		assert.NoError(t, err)
+		if len(values) == 1 {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	assert.Equal(t, 1, len(values))
+	assert.Equal(t, connID, values[0][0].(uint32))
+
 	// clean all
 	code = TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_CLEAR, nil)
 	assert.Equal(t, 0, code, TaosErrorStr(nil))
 	for i := 0; i < 10; i++ {
-		values, err = query(conn, fmt.Sprintf("select user_app,user_ip from performance_schema.perf_connections where conn_id = %d", connID))
+		values, err = query(conn, fmt.Sprintf("select user_app,user_ip,connector_info from performance_schema.perf_connections where conn_id = %d", connID))
 		assert.NoError(t, err)
-		if len(values) == 1 && values[0][0].(string) == "" && values[0][1].(string) == "" {
+		if len(values) == 1 && values[0][0].(string) == "" && values[0][1].(string) == "" && values[0][2].(string) == "" {
 			break
 		}
 		time.Sleep(time.Second)
@@ -686,14 +721,18 @@ func TestTaosOptionsConnection(t *testing.T) {
 	assert.NotEqual(t, ip, values[0][1].(string))
 	ip = "192.168.9.9"
 	app = "test_options_connection"
+	connectorInfo = "test_app_info"
 	// set ip
 	code = TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_IP, &ip)
 	assert.Equal(t, 0, code, TaosErrorStr(nil))
 	// set app
 	code = TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_APP, &app)
 	assert.Equal(t, 0, code, TaosErrorStr(nil))
+	// set connector info
+	code = TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_CONNECTOR_INFO, &connectorInfo)
+	assert.Equal(t, 0, code, TaosErrorStr(nil))
 	for i := 0; i < 10; i++ {
-		values, err = query(conn, "select conn_id from performance_schema.perf_connections where user_ip = '192.168.9.9' and user_app = 'test_options_connection'")
+		values, err = query(conn, "select conn_id from performance_schema.perf_connections where user_ip = '192.168.9.9' and user_app = 'test_options_connection' and connector_info = 'test_app_info'")
 		assert.NoError(t, err)
 		if len(values) == 1 {
 			break

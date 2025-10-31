@@ -450,6 +450,7 @@ type TMQSubscribeReq struct {
 	TZ                   string            `json:"tz"`
 	App                  string            `json:"app"`
 	IP                   string            `json:"ip"`
+	ConnectorInfo        string            `json:"connector_info"`
 	MsgConsumeRawdata    string            `json:"msg_consume_rawdata"`
 	Config               map[string]string `json:"config"`
 }
@@ -745,6 +746,16 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		logger.Debug("set app done")
 		if code != 0 {
 			t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set app error")
+			return
+		}
+	}
+	// set connector info
+	if req.ConnectorInfo != "" {
+		logger.Debugf("set connector info, info:%s", req.ConnectorInfo)
+		code = syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_CONNECTOR_INFO, &req.ConnectorInfo, logger, isDebug)
+		logger.Debug("set connector info done")
+		if code != 0 {
+			t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set connector info error")
 			return
 		}
 	}
