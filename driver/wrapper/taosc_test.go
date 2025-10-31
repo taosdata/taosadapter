@@ -611,6 +611,7 @@ func TestTaosOptionsConnection(t *testing.T) {
 	assert.Equal(t, 0, code, TaosErrorStr(nil))
 	// set connector info
 	code = TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_CONNECTOR_INFO, &connectorInfo)
+	assert.Equal(t, 0, code, TaosErrorStr(nil))
 	var values [][]driver.Value
 	for i := 0; i < 10; i++ {
 		values, err = query(conn, "select conn_id from performance_schema.perf_connections where user_ip = '192.168.9.9' and user_app = 'test_options_connection' and connector_info = 'test_app_info'")
