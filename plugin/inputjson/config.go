@@ -193,7 +193,7 @@ func (c *Config) validate() error {
 		if rule.SubTable == "" && rule.SubTableKey == "" {
 			return fmt.Errorf("endpoint:%s subTable and subTableKey are empty", rule.Endpoint)
 		}
-		if rule.TimeFormat == "" {
+		if rule.TimeKey != "" && rule.TimeFormat == "" {
 			return fmt.Errorf("endpoint:%s timeFormat is empty", rule.Endpoint)
 		}
 		if !isValidIdentifier(rule.DB) {

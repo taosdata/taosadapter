@@ -56,7 +56,11 @@ type ParsedRule struct {
 }
 
 func (p *Plugin) Init(r gin.IRouter) error {
-	err := p.conf.setValue(viper.GetViper())
+	return p.initWithViper(r, viper.GetViper())
+}
+
+func (p *Plugin) initWithViper(r gin.IRouter, v *viper.Viper) error {
+	err := p.conf.setValue(v)
 	if err != nil {
 		return err
 	}
@@ -68,71 +72,81 @@ func (p *Plugin) Init(r gin.IRouter) error {
 	if err != nil {
 		return err
 	}
-	p.rules = make(map[string]*ParsedRule, len(p.conf.Rules))
-	builder := &strings.Builder{}
-	for _, rule := range p.conf.Rules {
-		if rule.Transformation != "" {
-			// compile jsonata expression
-			e, err := jsonata.Compile(rule.Transformation)
-			if err != nil {
-				return fmt.Errorf("error compiling jsonata expression: %v, expr: %s", err, rule.Transformation)
-			}
-			format := rule.TimeFormat
-			if !isPredefinedTimeFormat(rule.TimeFormat) {
-				// convert strftime format
-				format, err = strftime.Layout(rule.TimeFormat)
-				if err != nil {
-					return fmt.Errorf("error compiling strftime time format: %v, format: %s", err, rule.TimeFormat)
-				}
-			}
-			loc := time.Local
-			if rule.TimeTimezone != "" {
-				// load location
-				loc, err = time.LoadLocation(rule.TimeTimezone)
-				if err != nil {
-					return fmt.Errorf("error loading time location: %v, timezone: %s", err, rule.TimeTimezone)
-				}
-			}
-			fieldKeys := make([]string, len(rule.Fields))
-			fieldOptionals := make([]bool, len(rule.Fields))
-			for i, field := range rule.Fields {
-				fieldKeys[i] = field.Key
-				fieldOptionals[i] = field.Optional
-			}
-
-			parsedRule := &ParsedRule{
-				TransformationExpr: e,
-				DB:                 rule.DB,
-				DBKey:              rule.DBKey,
-				SuperTable:         rule.SuperTable,
-				SuperTableKey:      rule.SuperTableKey,
-				SubTable:           rule.SubTable,
-				SubTableKey:        rule.SubTableKey,
-				TimeKey:            rule.TimeKey,
-				TimeFormat:         format,
-				TimeTimezone:       loc,
-				TimeFieldName:      rule.TimeFieldName,
-				FieldKeys:          fieldKeys,
-				FieldOptionals:     fieldOptionals,
-			}
-			builder.Reset()
-			generateFieldKeyStatement(builder, parsedRule, len(rule.Fields))
-			parsedRule.SqlAllColumns = builder.String()
-			builder.Reset()
-			p.rules[rule.Endpoint] = parsedRule
-		}
+	err = p.ParseRulesFromConfig()
+	if err != nil {
+		return fmt.Errorf("parse rules from config failed: %s", err)
 	}
 	r.POST(":endpoint", plugin.Auth(errorResponse), p.HandleRequest)
 	return nil
 }
 
+func (p *Plugin) ParseRulesFromConfig() error {
+	p.rules = make(map[string]*ParsedRule, len(p.conf.Rules))
+	builder := &strings.Builder{}
+	for _, rule := range p.conf.Rules {
+		var e *jsonata.Expr
+		var err error
+		if rule.Transformation != "" {
+			// compile jsonata expression
+			e, err = jsonata.Compile(rule.Transformation)
+			if err != nil {
+				return fmt.Errorf("error compiling jsonata expression: %s, expr: %s", err, rule.Transformation)
+			}
+		}
+		format := rule.TimeFormat
+		if !isPredefinedTimeFormat(rule.TimeFormat) {
+			// convert strftime format
+			format, err = strftime.Layout(rule.TimeFormat)
+			if err != nil {
+				return fmt.Errorf("error compiling strftime time format: %v, format: %s", err, rule.TimeFormat)
+			}
+		}
+		loc := time.Local
+		if rule.TimeTimezone != "" {
+			// load location
+			loc, err = time.LoadLocation(rule.TimeTimezone)
+			if err != nil {
+				return fmt.Errorf("error loading time location: %v, timezone: %s", err, rule.TimeTimezone)
+			}
+		}
+		fieldKeys := make([]string, len(rule.Fields))
+		fieldOptionals := make([]bool, len(rule.Fields))
+		for i, field := range rule.Fields {
+			fieldKeys[i] = field.Key
+			fieldOptionals[i] = field.Optional
+		}
+
+		parsedRule := &ParsedRule{
+			TransformationExpr: e,
+			DB:                 rule.DB,
+			DBKey:              rule.DBKey,
+			SuperTable:         rule.SuperTable,
+			SuperTableKey:      rule.SuperTableKey,
+			SubTable:           rule.SubTable,
+			SubTableKey:        rule.SubTableKey,
+			TimeKey:            rule.TimeKey,
+			TimeFormat:         format,
+			TimeTimezone:       loc,
+			TimeFieldName:      rule.TimeFieldName,
+			FieldKeys:          fieldKeys,
+			FieldOptionals:     fieldOptionals,
+		}
+		builder.Reset()
+		generateFieldKeyStatement(builder, parsedRule, len(rule.Fields))
+		parsedRule.SqlAllColumns = builder.String()
+		builder.Reset()
+		p.rules[rule.Endpoint] = parsedRule
+	}
+
+	return nil
+}
+
 type record struct {
-	incompleteValue bool
-	stb             string
-	subTable        string
-	ts              time.Time
-	keys            string
-	values          string
+	stb      string
+	subTable string
+	ts       time.Time
+	keys     string
+	values   string
 }
 type dryRunResp struct {
 	Code int      `json:"code"`
@@ -264,7 +278,7 @@ func (p *Plugin) HandleRequest(c *gin.Context) {
 		errorResponse(c, http.StatusBadRequest, fmt.Errorf("error parsing records: %v", err))
 		return
 	}
-	sqlArray := generateSql(records)
+	sqlArray := generateSql(records, MAXSQLLength)
 	if dryRun {
 		resp := dryRunResp{
 			Json: string(jsonData),
@@ -291,6 +305,12 @@ func (p *Plugin) HandleRequest(c *gin.Context) {
 	}
 }
 
+// parseRecord parses the json data into records according to the rule
+// 1. If dbKey, superTableKey, subTableKey and timeKey are defined in the rule, it will use the values from the json data, otherwise it will use the static values from the rule.
+// 2. If dbKey, superTableKey, subTableKey and timeKey are defined but not found in the json data, it will return an error.
+// 3. If the value is invalid (nil, empty string, other unsupported types), it will return an error as well, if the value is boolean or number, it will be converted to string.
+// 4. If timeKey is not defined, it will use the current time.
+// 5. If field key is not found in the json data, it will return an error, unless the field is marked as optional in the rule.
 func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*record, error) {
 	var result []map[string]interface{}
 	err := Unmarshal(jsonData, &result)
@@ -314,9 +334,18 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 			}
 			db, err = castToString(v)
 			if err != nil {
-				return nil, err
+				logger.Errorf("cast db key %s to string error in item: %v, value: %v err:%s", rule.DBKey, item, v, err.Error())
+				return nil, fmt.Errorf("cast db key %s to string error in item: %v, value: %v err:%s", rule.DBKey, item, v, err.Error())
+			}
+			if v == nil {
+				logger.Errorf("db key %s has nil value in item: %v", rule.DBKey, item)
+				return nil, fmt.Errorf("db key %s has nil value in item", rule.DBKey)
 			}
 			db = escapeIdentifier(db)
+			if db == "" {
+				logger.Errorf("db key %s is empty in item: %v", rule.DBKey, item)
+				return nil, fmt.Errorf("db key %s is empty in item", rule.DBKey)
+			}
 		} else {
 			db = rule.DB
 		}
@@ -330,9 +359,18 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 			}
 			stb, err = castToString(v)
 			if err != nil {
-				return nil, err
+				logger.Errorf("cast super_table key %s to string error in item: %v, value: %v err:%s", rule.SuperTableKey, item, v, err.Error())
+				return nil, fmt.Errorf("cast super_table key %s to string error in item: %v, value: %v err:%s", rule.SuperTableKey, item, v, err.Error())
+			}
+			if v == nil {
+				logger.Errorf("super_table key %s has nil value in item: %v", rule.SuperTableKey, item)
+				return nil, fmt.Errorf("super table key %s has nil value in item", rule.SuperTableKey)
 			}
 			stb = escapeIdentifier(stb)
+			if stb == "" {
+				logger.Errorf("super_table key %s is empty in item: %v", rule.SuperTableKey, item)
+				return nil, fmt.Errorf("super table key %s is empty in item", rule.SuperTableKey)
+			}
 		} else {
 			stb = rule.SuperTable
 		}
@@ -344,9 +382,18 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 				logger.Errorf("sub_table key %s not found in item: %v", rule.SubTableKey, item)
 				return nil, fmt.Errorf("sub table key %s not found in item", rule.SubTableKey)
 			}
+			if v == nil {
+				logger.Errorf("sub_table key %s has nil value in item: %v", rule.SubTableKey, item)
+				return nil, fmt.Errorf("sub table key %s has nil value in item", rule.SubTableKey)
+			}
 			rec.subTable, err = castToString(v)
 			if err != nil {
-				return nil, err
+				logger.Errorf("cast sub_table key %s to string error in item: %v, value: %v err:%s", rule.SubTableKey, item, v, err.Error())
+				return nil, fmt.Errorf("cast sub_table key %s to string error in item: %v, value: %v err:%s", rule.SubTableKey, item, v, err.Error())
+			}
+			if rec.subTable == "" {
+				logger.Errorf("sub_table key %s is empty in item: %v", rule.SubTableKey, item)
+				return nil, fmt.Errorf("sub table key %s is empty in item", rule.SubTableKey)
 			}
 		} else {
 			rec.subTable = rule.SubTable
@@ -355,7 +402,8 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 		// e.g. 'sub_table_1'
 		valueBuilder.Reset()
 		valueBuilder.WriteByte('\'')
-		valueBuilder.WriteString(escapeStringValue(rec.subTable))
+		writeEscapeStringValue(valueBuilder, rec.subTable)
+		valueBuilder.WriteByte('\'')
 		// parse Time
 		if rule.TimeKey != "" {
 			v, ok := item[rule.TimeKey]
@@ -363,14 +411,19 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 				logger.Errorf("time key %s not found in item: %v", rule.TimeKey, item)
 				return nil, fmt.Errorf("time key %s not found in item", rule.TimeKey)
 			}
+			if v == nil {
+				logger.Errorf("time key %s has nil value in item: %v", rule.TimeKey, item)
+				return nil, fmt.Errorf("time key %s has nil value in item", rule.TimeKey)
+			}
 			val, err := castToString(v)
 			if err != nil {
-				return nil, err
+				logger.Errorf("cast time key %s to string error in item: %v, value: %v err:%s", rule.TimeKey, item, v, err.Error())
+				return nil, fmt.Errorf("cast time key %s to string error in item: %v, value: %v err:%s", rule.TimeKey, item, v, err.Error())
 			}
 			rec.ts, err = parseTime(val, rule.TimeFormat, rule.TimeTimezone)
 			if err != nil {
 				logger.Errorf("parse time error:%s, format:%s, err:%s", val, rule.TimeFormat, err.Error())
-				return nil, err
+				return nil, fmt.Errorf("parse time error:%s, format:%s, err:%s", val, rule.TimeFormat, err.Error())
 			}
 		} else {
 			rec.ts = time.Now()
@@ -380,7 +433,6 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 		valueBuilder.WriteString(",'")
 		timeBuf = timeBuf[:0]
 		timeBuf = rec.ts.AppendFormat(timeBuf, time.RFC3339Nano)
-		valueBuilder.WriteByte('\'')
 		valueBuilder.Write(timeBuf)
 		valueBuilder.WriteByte('\'')
 		// parse Fields
@@ -389,25 +441,27 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 			v, ok := item[fieldKey]
 			if !ok {
 				if rule.FieldOptionals[index] {
-					if inCompleteValue {
-						writeFieldName(fieldBuilder, fieldKey)
-					} else {
+					if !inCompleteValue {
 						fieldBuilder.Reset()
 						generateFieldKeyStatement(fieldBuilder, rule, index)
 						inCompleteValue = true
+						continue
 					}
 				} else {
 					logger.Errorf("field key %s not found in item: %v", fieldKey, item)
 					return nil, fmt.Errorf("field key %s not found in json", fieldKey)
 				}
 			}
+			if inCompleteValue {
+				writeFieldName(fieldBuilder, fieldKey)
+			}
+			valueBuilder.WriteByte(',')
 			err = writeValue(valueBuilder, v)
 			if err != nil {
-				logger.Errorf("write field error:%s, field:%s, err:%s", fieldKey, fieldKey, err.Error())
-				return nil, err
+				logger.Errorf("write field to buffer error error:%s, field:%s, err:%s", fieldKey, fieldKey, err.Error())
+				return nil, fmt.Errorf("write field to buffer error:%s, field:%s, err:%s", fieldKey, fieldKey, err.Error())
 			}
 		}
-		rec.incompleteValue = inCompleteValue
 		if inCompleteValue {
 			rec.keys = fieldBuilder.String()
 			fieldBuilder.Reset()
@@ -445,7 +499,7 @@ func writeValue(builder *strings.Builder, value interface{}) error {
 	switch v := value.(type) {
 	case string:
 		builder.WriteByte('\'')
-		builder.WriteString(escapeStringValue(v))
+		writeEscapeStringValue(builder, v)
 		builder.WriteByte('\'')
 	case json.Number:
 		builder.WriteString(v.String())
@@ -461,8 +515,7 @@ func writeValue(builder *strings.Builder, value interface{}) error {
 	return nil
 }
 
-func escapeStringValue(s string) string {
-	builder := strings.Builder{}
+func writeEscapeStringValue(builder *strings.Builder, s string) {
 	for _, v := range s {
 		switch v {
 		case 0:
@@ -483,7 +536,7 @@ func escapeStringValue(s string) string {
 			builder.WriteRune(v)
 		}
 	}
-	return builder.String()
+	return
 }
 
 // escapeIdentifier escapes backticks in identifiers
@@ -494,7 +547,8 @@ func escapeIdentifier(identifier string) string {
 
 const InsertSqlStatement = "insert into "
 
-func generateSql(records []*record) []string {
+// sortRecords sorts the records by stb, subTable, keys, ts
+func sortRecords(records []*record) {
 	slices.SortFunc(records, func(a, b *record) int {
 		// sorting by stb, subTable, keys, ts
 		if a.stb != b.stb {
@@ -508,6 +562,12 @@ func generateSql(records []*record) []string {
 		}
 		return a.ts.Compare(b.ts)
 	})
+}
+
+// generateSql generates the insert SQL statements from the records
+// it will split the SQL statements if the length exceeds maxSqlLength
+func generateSql(records []*record, maxSqlLength int) []string {
+	sortRecords(records)
 	sqlBuilder := &strings.Builder{}
 	tmpBuilder := &bytes.Buffer{}
 	var sqlArray []string
@@ -531,7 +591,7 @@ func generateSql(records []*record) []string {
 		tmpBuilder.WriteByte('(')
 		tmpBuilder.WriteString(rec.values)
 		tmpBuilder.WriteByte(')')
-		if sqlBuilder.Len()+tmpBuilder.Len() >= MAXSQLLength {
+		if sqlBuilder.Len()+tmpBuilder.Len() >= maxSqlLength {
 			// flush current sql
 			sqlArray = append(sqlArray, sqlBuilder.String())
 			sqlBuilder.Reset()
@@ -555,9 +615,9 @@ func generateSql(records []*record) []string {
 func writeSuperTableStatement(builder io.StringWriter, superTable string, keys string) {
 	// strings.Builder and bytes.Buffer will not return error on WriteString
 	_, _ = builder.WriteString(superTable)
-	_, _ = builder.WriteString(" (`tbname`,")
+	_, _ = builder.WriteString("(`tbname`,")
 	_, _ = builder.WriteString(keys)
-	_, _ = builder.WriteString(") values")
+	_, _ = builder.WriteString(")values")
 }
 
 // generateFieldKeyStatement generates the field key part of the insert statement

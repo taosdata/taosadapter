@@ -18,9 +18,6 @@ func TestConfig_setValue(t *testing.T) {
 		Enable bool
 		Rules  []*Rule
 	}
-	type args struct {
-		v *viper.Viper
-	}
 	tests := []struct {
 		name    string
 		content string
@@ -1494,6 +1491,7 @@ func TestConfig_validate(t *testing.T) {
 						DB:         "test_db",
 						SuperTable: "test_super_table",
 						SubTable:   "test_sub_table",
+						TimeKey:    "ts",
 					},
 				},
 			},
