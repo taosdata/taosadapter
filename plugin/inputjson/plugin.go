@@ -23,6 +23,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	errors2 "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/plugin"
 	"github.com/taosdata/taosadapter/v3/tools/connectpool"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
@@ -34,8 +35,9 @@ const MAXSQLLength = 1024 * 1024 * 1
 var logger = log.GetLogger("PLG").WithField("mod", "input_json")
 
 type Plugin struct {
-	conf  Config
-	rules map[string]*ParsedRule
+	conf    Config
+	rules   map[string]*ParsedRule
+	metrics map[string]*monitor.InputJsonMetric
 }
 
 type ParsedRule struct {
@@ -75,6 +77,10 @@ func (p *Plugin) initWithViper(r gin.IRouter, v *viper.Viper) error {
 	err = p.ParseRulesFromConfig()
 	if err != nil {
 		return fmt.Errorf("parse rules from config failed: %s", err)
+	}
+	p.metrics = make(map[string]*monitor.InputJsonMetric, len(p.rules))
+	for endpoint := range p.rules {
+		p.metrics[endpoint] = monitor.NewInputJsonMetric(endpoint)
 	}
 	r.POST(":endpoint", plugin.Auth(errorResponse), p.HandleRequest)
 	return nil
@@ -172,9 +178,18 @@ func errorRespWithErrorCode(c *gin.Context, httpCode int, errCode int, desc stri
 	})
 }
 
+func taosErrorResponse(c *gin.Context, taosErr *errors2.TaosError) {
+	httpRespCode := http.StatusInternalServerError
+	respCode, exists := config.ErrorStatusMap[taosErr.Code]
+	if exists {
+		httpRespCode = respCode
+	}
+	errorRespWithErrorCode(c, httpRespCode, int(taosErr.Code), taosErr.ErrStr)
+}
+
 func successResponse(c *gin.Context, affectedRows int) {
 	c.JSON(http.StatusOK, message{
-		Code:     http.StatusOK,
+		Code:     0,
 		Affected: affectedRows,
 	})
 }
@@ -191,7 +206,7 @@ func (p *Plugin) HandleRequest(c *gin.Context) {
 	if reqIDStr := c.Query("req_id"); len(reqIDStr) != 0 {
 		if reqID, err = strconv.ParseInt(reqIDStr, 10, 64); err != nil {
 			logger.Errorf("illegal param, req_id must be numeric:%s, err:%s", reqIDStr, err)
-			errorResponse(c, http.StatusBadRequest, fmt.Errorf("illegal param, req_id must be numeric %s", err.Error()))
+			errorResponse(c, http.StatusBadRequest, fmt.Errorf("illegal param, req_id must be numeric %s", err))
 			return
 		}
 	}
@@ -207,8 +222,8 @@ func (p *Plugin) HandleRequest(c *gin.Context) {
 	}
 	user, password, err := plugin.GetAuth(c)
 	if err != nil {
-		logger.Errorf("get user and password error:%s", err.Error())
-		errorResponse(c, http.StatusUnauthorized, fmt.Errorf("get user and password error:%s", err.Error()))
+		logger.Errorf("get user and password error:%s", err)
+		errorResponse(c, http.StatusUnauthorized, fmt.Errorf("get user and password error:%s", err))
 		return
 	}
 	s := log.GetLogNow(isDebug)
@@ -217,14 +232,20 @@ func (p *Plugin) HandleRequest(c *gin.Context) {
 	if err != nil {
 		logger.Errorf("get connection from pool error, err:%s", err)
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
-			errorResponse(c, http.StatusForbidden, fmt.Errorf("whitelist forbidden: %s", err.Error()))
+			errorResponse(c, http.StatusForbidden, fmt.Errorf("whitelist forbidden: %s", err))
 			return
 		}
 		if errors.Is(err, connectpool.ErrTimeout) || errors.Is(err, connectpool.ErrMaxWait) {
-			errorResponse(c, http.StatusGatewayTimeout, fmt.Errorf("get connect from pool error: %s", err.Error()))
+			errorResponse(c, http.StatusGatewayTimeout, fmt.Errorf("get connect from pool error: %s", err))
 			return
 		}
-		errorResponse(c, http.StatusInternalServerError, fmt.Errorf("get connect from pool error: %s", err.Error()))
+		var taosErr *errors2.TaosError
+		ok := errors.As(err, &taosErr)
+		if ok {
+			taosErrorResponse(c, taosErr)
+			return
+		}
+		errorResponse(c, http.StatusInternalServerError, fmt.Errorf("get connect from pool error: %s", err))
 		return
 	}
 	if dryRun {
@@ -233,50 +254,37 @@ func (p *Plugin) HandleRequest(c *gin.Context) {
 	} else {
 		defer func() {
 			logger.Tracef("put connection")
-			putErr := taosConn.Put()
-			if putErr != nil {
-				logger.Errorf("connect pool put error, err:%s", putErr)
-			}
+			_ = taosConn.Put()
 		}()
 	}
 	// transform json payload if transformation is defined
 	var jsonData []byte
 	jsonData, err = c.GetRawData()
 	if err != nil {
-		errorResponse(c, http.StatusBadRequest, fmt.Errorf("error reading request body: %v", err))
+		errorResponse(c, http.StatusBadRequest, fmt.Errorf("error reading request body: %s", err))
 		return
 	}
 	if rule.TransformationExpr != nil {
-		var v interface{}
 		// precision loss may occur here
 		// e.g. large int64 may be converted to float64
 		// it's recommended to use string for large int64 values in json
-		err := json.Unmarshal(jsonData, &v)
-		if err != nil {
-			errorResponse(c, http.StatusBadRequest, fmt.Errorf("error unmarshaling json data: %v", err))
-			return
-		}
-
-		v, err = rule.TransformationExpr.Eval(v)
-		if err != nil {
-			errorResponse(c, http.StatusBadRequest, fmt.Errorf("error evaluating jsonata expression: %v", err))
-			return
-		}
 		jsonData, err = rule.TransformationExpr.EvalBytes(jsonData)
 		if err != nil {
-			errorResponse(c, http.StatusBadRequest, fmt.Errorf("error evaluating jsonata expression: %v", err))
+			errorResponse(c, http.StatusBadRequest, fmt.Errorf("error evaluating jsonata expression: %s", err))
 			return
 		}
 	}
 	// parse jsonData according to rule
-	if jsonData == nil {
-		errorResponse(c, http.StatusBadRequest, fmt.Errorf("no data after transformation"))
-		return
-	}
 	records, err := parseRecord(rule, jsonData, logger)
 	if err != nil {
-		errorResponse(c, http.StatusBadRequest, fmt.Errorf("error parsing records: %v", err))
+		errorResponse(c, http.StatusBadRequest, fmt.Errorf("error parsing records: %s", err))
 		return
+	}
+	metric := p.metrics[endpoint]
+	recordCount := float64(len(records))
+	if metric != nil && !dryRun {
+		metric.TotalRows.Add(recordCount)
+		metric.InflightRows.Add(recordCount)
 	}
 	sqlArray := generateSql(records, MAXSQLLength)
 	if dryRun {
@@ -287,19 +295,25 @@ func (p *Plugin) HandleRequest(c *gin.Context) {
 		c.JSON(200, resp)
 	} else {
 		affectedRows, err := execute(taosConn.TaosConnection, reqID, sqlArray, logger, isDebug)
+		if metric != nil {
+			metric.InflightRows.Sub(recordCount)
+		}
 		if err != nil {
-			httpRespCode := http.StatusInternalServerError
-			errorCode := 0xffff
-			taosErr, ok := err.(*errors2.TaosError)
-			if ok {
-				respCode, exists := config.ErrorStatusMap[taosErr.Code]
-				if exists {
-					httpRespCode = respCode
-				}
-				errorCode = int(taosErr.Code)
+			if metric != nil {
+				metric.FailRows.Add(recordCount)
 			}
-			errorRespWithErrorCode(c, httpRespCode, errorCode, err.Error())
+			var taosErr *errors2.TaosError
+			ok := errors.As(err, &taosErr)
+			if ok {
+				taosErrorResponse(c, taosErr)
+				return
+			}
+			errorRespWithErrorCode(c, http.StatusInternalServerError, 0xffff, err.Error())
 			return
+		}
+		if metric != nil {
+			metric.SuccessRows.Add(recordCount)
+			metric.AffectedRows.Add(recordCount)
 		}
 		successResponse(c, affectedRows)
 	}
@@ -315,8 +329,8 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 	var result []map[string]interface{}
 	err := Unmarshal(jsonData, &result)
 	if err != nil {
-		logger.Errorf("error unmarshaling json data:%s, err:%s", string(jsonData), err.Error())
-		return nil, fmt.Errorf("error unmarshaling json data: %v", err)
+		logger.Errorf("error unmarshaling json data:%s, err:%s", string(jsonData), err)
+		return nil, fmt.Errorf("error unmarshaling json data: %s", err)
 	}
 	records := make([]*record, len(result))
 	fieldBuilder := &strings.Builder{}
@@ -334,8 +348,8 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 			}
 			db, err = castToString(v)
 			if err != nil {
-				logger.Errorf("cast db key %s to string error in item: %v, value: %v err:%s", rule.DBKey, item, v, err.Error())
-				return nil, fmt.Errorf("cast db key %s to string error in item: %v, value: %v err:%s", rule.DBKey, item, v, err.Error())
+				logger.Errorf("cast db key %s to string error in item: %v, value: %v err:%s", rule.DBKey, item, v, err)
+				return nil, fmt.Errorf("cast db key %s to string error in item: %v, value: %v err:%s", rule.DBKey, item, v, err)
 			}
 			if v == nil {
 				logger.Errorf("db key %s has nil value in item: %v", rule.DBKey, item)
@@ -359,8 +373,8 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 			}
 			stb, err = castToString(v)
 			if err != nil {
-				logger.Errorf("cast super_table key %s to string error in item: %v, value: %v err:%s", rule.SuperTableKey, item, v, err.Error())
-				return nil, fmt.Errorf("cast super_table key %s to string error in item: %v, value: %v err:%s", rule.SuperTableKey, item, v, err.Error())
+				logger.Errorf("cast super_table key %s to string error in item: %v, value: %v err:%s", rule.SuperTableKey, item, v, err)
+				return nil, fmt.Errorf("cast super_table key %s to string error in item: %v, value: %v err:%s", rule.SuperTableKey, item, v, err)
 			}
 			if v == nil {
 				logger.Errorf("super_table key %s has nil value in item: %v", rule.SuperTableKey, item)
@@ -388,8 +402,8 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 			}
 			rec.subTable, err = castToString(v)
 			if err != nil {
-				logger.Errorf("cast sub_table key %s to string error in item: %v, value: %v err:%s", rule.SubTableKey, item, v, err.Error())
-				return nil, fmt.Errorf("cast sub_table key %s to string error in item: %v, value: %v err:%s", rule.SubTableKey, item, v, err.Error())
+				logger.Errorf("cast sub_table key %s to string error in item: %v, value: %v err:%s", rule.SubTableKey, item, v, err)
+				return nil, fmt.Errorf("cast sub_table key %s to string error in item: %v, value: %v err:%s", rule.SubTableKey, item, v, err)
 			}
 			if rec.subTable == "" {
 				logger.Errorf("sub_table key %s is empty in item: %v", rule.SubTableKey, item)
@@ -417,13 +431,13 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 			}
 			val, err := castToString(v)
 			if err != nil {
-				logger.Errorf("cast time key %s to string error in item: %v, value: %v err:%s", rule.TimeKey, item, v, err.Error())
-				return nil, fmt.Errorf("cast time key %s to string error in item: %v, value: %v err:%s", rule.TimeKey, item, v, err.Error())
+				logger.Errorf("cast time key %s to string error in item: %v, value: %v err:%s", rule.TimeKey, item, v, err)
+				return nil, fmt.Errorf("cast time key %s to string error in item: %v, value: %v err:%s", rule.TimeKey, item, v, err)
 			}
 			rec.ts, err = parseTime(val, rule.TimeFormat, rule.TimeTimezone)
 			if err != nil {
-				logger.Errorf("parse time error:%s, format:%s, err:%s", val, rule.TimeFormat, err.Error())
-				return nil, fmt.Errorf("parse time error:%s, format:%s, err:%s", val, rule.TimeFormat, err.Error())
+				logger.Errorf("parse time error:%s, format:%s, err:%s", val, rule.TimeFormat, err)
+				return nil, fmt.Errorf("parse time error:%s, format:%s, err:%s", val, rule.TimeFormat, err)
 			}
 		} else {
 			rec.ts = time.Now()
@@ -458,8 +472,8 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 			valueBuilder.WriteByte(',')
 			err = writeValue(valueBuilder, v)
 			if err != nil {
-				logger.Errorf("write field to buffer error error:%s, field:%s, err:%s", fieldKey, fieldKey, err.Error())
-				return nil, fmt.Errorf("write field to buffer error:%s, field:%s, err:%s", fieldKey, fieldKey, err.Error())
+				logger.Errorf("write field to buffer error error:%s, field:%s, err:%s", fieldKey, fieldKey, err)
+				return nil, fmt.Errorf("write field to buffer error:%s, field:%s, err:%s", fieldKey, fieldKey, err)
 			}
 		}
 		if inCompleteValue {

@@ -247,7 +247,7 @@ func isValidIdentifier(name string) bool {
 	return true
 }
 func initViper(v *viper.Viper) {
-	v.SetDefault("input_json.enable", true)
+	v.SetDefault("input_json.enable", false)
 }
 
 func init() {

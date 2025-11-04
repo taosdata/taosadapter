@@ -1172,7 +1172,7 @@ func TestPlugin_ParseRulesFromConfig(t *testing.T) {
 	}
 }
 
-func TestPlugin_Init(t *testing.T) {
+func TestPlugin_InitWithViper(t *testing.T) {
 	tmpDir := t.TempDir()
 	type args struct {
 		r gin.IRouter
@@ -1286,4 +1286,11 @@ fields = [
 			tt.wantErr(t, p.initWithViper(tt.args.r, v), fmt.Sprintf("Init(%v)", tt.args.r))
 		})
 	}
+}
+
+func TestPlugin_Init(t *testing.T) {
+	r := gin.New()
+	p := &Plugin{}
+	err := p.Init(r)
+	assert.NoError(t, err)
 }
