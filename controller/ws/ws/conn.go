@@ -18,15 +18,15 @@ import (
 )
 
 type connRequest struct {
-	ReqID         uint64 `json:"req_id"`
-	User          string `json:"user"`
-	Password      string `json:"password"`
-	DB            string `json:"db"`
-	Mode          *int   `json:"mode"`
-	TZ            string `json:"tz"`
-	App           string `json:"app"`
-	IP            string `json:"ip"`
-	ConnectorInfo string `json:"connector_info"`
+	ReqID     uint64 `json:"req_id"`
+	User      string `json:"user"`
+	Password  string `json:"password"`
+	DB        string `json:"db"`
+	Mode      *int   `json:"mode"`
+	TZ        string `json:"tz"`
+	App       string `json:"app"`
+	IP        string `json:"ip"`
+	Connector string `json:"connector"`
 }
 
 type connResponse struct {
@@ -160,7 +160,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 		}
 	}
 	// set connector info
-	if req.ConnectorInfo != "" {
+	if req.Connector != "" {
 		if !setConnectOption(
 			ctx,
 			conn,
@@ -170,7 +170,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 			action,
 			req.ReqID,
 			common.TSDB_OPTION_CONNECTION_CONNECTOR_INFO,
-			req.ConnectorInfo,
+			req.Connector,
 			"connector info",
 		) {
 			return
