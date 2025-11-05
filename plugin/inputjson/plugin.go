@@ -237,12 +237,8 @@ func (p *Plugin) HandleRequest(c *gin.Context) {
 	if dryRun {
 		logger.Debug("dry_run mode enabled, no data will be inserted")
 	}
-	user, password, err := plugin.GetAuth(c)
-	if err != nil {
-		logger.Errorf("get user and password error:%s", err)
-		errorResponse(c, http.StatusUnauthorized, fmt.Errorf("get user and password error:%s", err))
-		return
-	}
+	user := c.MustGet(plugin.UserKey).(string)
+	password := c.MustGet(plugin.PasswordKey).(string)
 	s := log.GetLogNow(isDebug)
 	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
 	logger.Debugf("get connection finish, cost:%s", log.GetLogDuration(isDebug, s))

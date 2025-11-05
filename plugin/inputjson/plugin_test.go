@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +17,9 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/connectpool"
 )
 
 var testStartTime = time.Date(2025, 11, 3, 10, 0, 0, 0, time.UTC)
@@ -1293,4 +1297,62 @@ func TestPlugin_Init(t *testing.T) {
 	p := &Plugin{}
 	err := p.Init(r)
 	assert.NoError(t, err)
+}
+
+func Test_errorResponse(t *testing.T) {
+	type args struct {
+		httpCode int
+		err      error
+	}
+	tests := []struct {
+		name            string
+		args            args
+		expectHttpCode  int
+		expectErrorCode int
+		expectDesc      string
+	}{
+		{
+			name: "ErrWhitelistForbidden",
+			args: args{
+				httpCode: http.StatusInternalServerError,
+				err:      commonpool.ErrWhitelistForbidden,
+			},
+			expectHttpCode:  http.StatusForbidden,
+			expectErrorCode: 0xffff,
+			expectDesc:      "whitelist forbidden: whitelist prohibits current IP access",
+		},
+		{
+			name: "ErrTimeout",
+			args: args{
+				httpCode: http.StatusInternalServerError,
+				err:      connectpool.ErrTimeout,
+			},
+			expectHttpCode:  http.StatusGatewayTimeout,
+			expectErrorCode: 0xffff,
+			expectDesc:      "get connect from pool error: get connection timeout",
+		},
+		{
+			name: "ErrMaxWait",
+			args: args{
+				httpCode: http.StatusInternalServerError,
+				err:      connectpool.ErrMaxWait,
+			},
+			expectHttpCode:  http.StatusGatewayTimeout,
+			expectErrorCode: 0xffff,
+			expectDesc:      "get connect from pool error: exceeded connection pool max wait",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			errorResponse(c, tt.args.httpCode, tt.args.err)
+			assert.Equalf(t, tt.expectHttpCode, w.Code, "errorResponse(%v, %v)", tt.args.httpCode, tt.args.err)
+			var respBody message
+			err := json.Unmarshal(w.Body.Bytes(), &respBody)
+			assert.NoErrorf(t, err, "errorResponse(%v, %v)", tt.args.httpCode, tt.args.err)
+			assert.Equalf(t, tt.expectErrorCode, respBody.Code, "errorResponse(%v, %v)", tt.args.httpCode, tt.args.err)
+			assert.Equalf(t, tt.expectDesc, respBody.Desc, "errorResponse(%v, %v)", tt.args.httpCode, tt.args.err)
+		})
+	}
 }
