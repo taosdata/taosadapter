@@ -3,6 +3,7 @@ package system
 import (
 	_ "github.com/taosdata/taosadapter/v3/plugin/collectd"       // import collectd plugin
 	_ "github.com/taosdata/taosadapter/v3/plugin/influxdb"       // import influxdb plugin
+	_ "github.com/taosdata/taosadapter/v3/plugin/inputjson"      // import inputjson plugin
 	_ "github.com/taosdata/taosadapter/v3/plugin/nodeexporter"   // import nodeexporter plugin
 	_ "github.com/taosdata/taosadapter/v3/plugin/openmetrics"    // import openmetrics plugin
 	_ "github.com/taosdata/taosadapter/v3/plugin/opentsdb"       // import opentsdb plugin

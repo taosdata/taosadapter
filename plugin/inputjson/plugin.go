@@ -693,3 +693,7 @@ func (p *Plugin) String() string {
 func (p *Plugin) Version() string {
 	return "v1"
 }
+
+func init() {
+	plugin.Register(&Plugin{})
+}
