@@ -165,7 +165,7 @@ type dryRunResp struct {
 
 type message struct {
 	Code     int    `json:"code"`
-	Desc     string `json:"desc,omitempty"`
+	Desc     string `json:"desc"`
 	Affected int    `json:"affected,omitempty"`
 }
 
