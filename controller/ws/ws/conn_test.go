@@ -105,7 +105,15 @@ func TestConnectionOptions(t *testing.T) {
 		err = ws.Close()
 		assert.NoError(t, err)
 	}()
-	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", IP: "192.168.44.55", App: "ws_test_conn_protocol", TZ: "Asia/Shanghai"}
+	connReq := connRequest{
+		ReqID:     1,
+		User:      "root",
+		Password:  "taosdata",
+		TZ:        "Asia/Shanghai",
+		App:       "ws_test_conn_protocol",
+		IP:        "192.168.44.55",
+		Connector: "ws_test_connector_info",
+	}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)
 	var connResp connResponse
@@ -117,7 +125,7 @@ func TestConnectionOptions(t *testing.T) {
 	// check connection options
 	got := false
 	for i := 0; i < 10; i++ {
-		queryResp := restQuery("select conn_id from performance_schema.perf_connections where user_app = 'ws_test_conn_protocol' and user_ip = '192.168.44.55'", "")
+		queryResp := restQuery("select conn_id from performance_schema.perf_connections where user_app = 'ws_test_conn_protocol' and user_ip = '192.168.44.55' and connector_info = 'ws_test_connector_info'", "")
 		if queryResp.Code == 0 && len(queryResp.Data) > 0 {
 			got = true
 			break
