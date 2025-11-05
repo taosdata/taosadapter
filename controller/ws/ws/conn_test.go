@@ -106,13 +106,13 @@ func TestConnectionOptions(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 	connReq := connRequest{
-		ReqID:         1,
-		User:          "root",
-		Password:      "taosdata",
-		TZ:            "Asia/Shanghai",
-		App:           "ws_test_conn_protocol",
-		IP:            "192.168.44.55",
-		ConnectorInfo: "ws_test_connector_info",
+		ReqID:     1,
+		User:      "root",
+		Password:  "taosdata",
+		TZ:        "Asia/Shanghai",
+		App:       "ws_test_conn_protocol",
+		IP:        "192.168.44.55",
+		Connector: "ws_test_connector_info",
 	}
 	resp, err := doWebSocket(ws, Connect, &connReq)
 	assert.NoError(t, err)

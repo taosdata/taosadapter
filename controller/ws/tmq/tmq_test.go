@@ -3512,7 +3512,7 @@ func TestConnectionOptions(t *testing.T) {
 		App:              "tmq_test_conn_protocol",
 		IP:               "192.168.55.55",
 		TZ:               "Asia/Shanghai",
-		ConnectorInfo:    "tmq_test_connector_info",
+		Connector:        "tmq_test_connector_info",
 	})
 	msg, err := doWebSocket(ws, TMQSubscribe, b)
 	assert.NoError(t, err)
@@ -3558,7 +3558,7 @@ func TestWrongPass(t *testing.T) {
 		App:              "tmq_test_conn_protocol",
 		IP:               "192.168.55.55",
 		TZ:               "Asia/Shanghai",
-		ConnectorInfo:    "tmq_test_connector_info",
+		Connector:        "tmq_test_connector_info",
 	})
 	msg, err := doWebSocket(ws, TMQSubscribe, b)
 	assert.NoError(t, err)

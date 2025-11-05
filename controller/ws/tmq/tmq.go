@@ -450,7 +450,7 @@ type TMQSubscribeReq struct {
 	TZ                   string            `json:"tz"`
 	App                  string            `json:"app"`
 	IP                   string            `json:"ip"`
-	ConnectorInfo        string            `json:"connector_info"`
+	Connector            string            `json:"connector"`
 	MsgConsumeRawdata    string            `json:"msg_consume_rawdata"`
 	Config               map[string]string `json:"config"`
 }
@@ -774,7 +774,7 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		}
 	}
 	// set connector info
-	if req.ConnectorInfo != "" {
+	if req.Connector != "" {
 		if !t.setConnectOption(
 			ctx,
 			cPointer,
@@ -785,7 +785,7 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 			action,
 			req.ReqID,
 			common.TSDB_OPTION_CONNECTION_CONNECTOR_INFO,
-			req.ConnectorInfo,
+			req.Connector,
 			"connector info",
 		) {
 			return
