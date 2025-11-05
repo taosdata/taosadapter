@@ -1167,7 +1167,7 @@ func TestPlugin_ParseRulesFromConfig(t *testing.T) {
 				conf:  tt.fields.conf,
 				rules: tt.fields.rules,
 			}
-			tt.wantErr(t, p.ParseRulesFromConfig(), fmt.Sprintf("ParseRulesFromConfig()"))
+			tt.wantErr(t, p.ParseRulesFromConfig(), "ParseRulesFromConfig()")
 		})
 	}
 }

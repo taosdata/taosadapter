@@ -41,20 +41,21 @@ type Plugin struct {
 }
 
 type ParsedRule struct {
-	TransformationExpr *jsonata.Expr
-	DB                 string
-	DBKey              string
-	SuperTable         string
-	SuperTableKey      string
-	SubTable           string
-	SubTableKey        string
-	TimeKey            string
-	TimeFormat         string
-	TimeTimezone       *time.Location
-	TimeFieldName      string
-	SqlAllColumns      string
-	FieldKeys          []string
-	FieldOptionals     []bool
+	TransformationExpr   *jsonata.Expr
+	DB                   string
+	DBKey                string
+	SuperTable           string
+	SuperTableKey        string
+	SubTable             string
+	SubTableKey          string
+	TimeKey              string
+	TimeFormat           string
+	TimeTimezone         *time.Location
+	TimeFieldName        string
+	SqlAllColumns        string
+	FieldKeys            []string
+	FieldOptionals       []bool
+	TransformationString string
 }
 
 func (p *Plugin) Init(r gin.IRouter) error {
@@ -123,19 +124,20 @@ func (p *Plugin) ParseRulesFromConfig() error {
 		}
 
 		parsedRule := &ParsedRule{
-			TransformationExpr: e,
-			DB:                 rule.DB,
-			DBKey:              rule.DBKey,
-			SuperTable:         rule.SuperTable,
-			SuperTableKey:      rule.SuperTableKey,
-			SubTable:           rule.SubTable,
-			SubTableKey:        rule.SubTableKey,
-			TimeKey:            rule.TimeKey,
-			TimeFormat:         format,
-			TimeTimezone:       loc,
-			TimeFieldName:      rule.TimeFieldName,
-			FieldKeys:          fieldKeys,
-			FieldOptionals:     fieldOptionals,
+			TransformationExpr:   e,
+			DB:                   rule.DB,
+			DBKey:                rule.DBKey,
+			SuperTable:           rule.SuperTable,
+			SuperTableKey:        rule.SuperTableKey,
+			SubTable:             rule.SubTable,
+			SubTableKey:          rule.SubTableKey,
+			TimeKey:              rule.TimeKey,
+			TimeFormat:           format,
+			TimeTimezone:         loc,
+			TimeFieldName:        rule.TimeFieldName,
+			FieldKeys:            fieldKeys,
+			FieldOptionals:       fieldOptionals,
+			TransformationString: rule.Transformation,
 		}
 		builder.Reset()
 		generateFieldKeyStatement(builder, parsedRule, len(rule.Fields))
@@ -167,8 +169,31 @@ type message struct {
 	Affected int    `json:"affected,omitempty"`
 }
 
-func errorResponse(c *gin.Context, code int, err error) {
-	errorRespWithErrorCode(c, code, 0xffff, err.Error())
+func errorResponse(c *gin.Context, httpCode int, err error) {
+	var taosErr *errors2.TaosError
+	errCode := 0xffff
+	errMessage := ""
+	ok := errors.As(err, &taosErr)
+	if ok {
+		respCode, exists := config.ErrorStatusMap[taosErr.Code]
+		if exists {
+			httpCode = respCode
+		}
+		errCode = int(taosErr.Code)
+		errMessage = taosErr.ErrStr
+	} else {
+		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
+			httpCode = http.StatusForbidden
+			errMessage = fmt.Sprintf("whitelist forbidden: %s", err)
+		} else if errors.Is(err, connectpool.ErrTimeout) || errors.Is(err, connectpool.ErrMaxWait) {
+			httpCode = http.StatusGatewayTimeout
+			errMessage = fmt.Sprintf("get connect from pool error: %s", err)
+		} else {
+			errMessage = err.Error()
+		}
+	}
+
+	errorRespWithErrorCode(c, httpCode, errCode, errMessage)
 }
 
 func errorRespWithErrorCode(c *gin.Context, httpCode int, errCode int, desc string) {
@@ -176,15 +201,6 @@ func errorRespWithErrorCode(c *gin.Context, httpCode int, errCode int, desc stri
 		Code: errCode,
 		Desc: desc,
 	})
-}
-
-func taosErrorResponse(c *gin.Context, taosErr *errors2.TaosError) {
-	httpRespCode := http.StatusInternalServerError
-	respCode, exists := config.ErrorStatusMap[taosErr.Code]
-	if exists {
-		httpRespCode = respCode
-	}
-	errorRespWithErrorCode(c, httpRespCode, int(taosErr.Code), taosErr.ErrStr)
 }
 
 func successResponse(c *gin.Context, affectedRows int) {
@@ -198,6 +214,7 @@ func (p *Plugin) HandleRequest(c *gin.Context) {
 	endpoint := c.Param("endpoint")
 	rule, ok := p.rules[endpoint]
 	if !ok {
+		logger.Errorf("no rule found for endpoint: %s", endpoint)
 		errorResponse(c, http.StatusNotFound, fmt.Errorf("no rule found for endpoint: %s", endpoint))
 		return
 	}
@@ -231,21 +248,7 @@ func (p *Plugin) HandleRequest(c *gin.Context) {
 	logger.Debugf("get connection finish, cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.Errorf("get connection from pool error, err:%s", err)
-		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
-			errorResponse(c, http.StatusForbidden, fmt.Errorf("whitelist forbidden: %s", err))
-			return
-		}
-		if errors.Is(err, connectpool.ErrTimeout) || errors.Is(err, connectpool.ErrMaxWait) {
-			errorResponse(c, http.StatusGatewayTimeout, fmt.Errorf("get connect from pool error: %s", err))
-			return
-		}
-		var taosErr *errors2.TaosError
-		ok := errors.As(err, &taosErr)
-		if ok {
-			taosErrorResponse(c, taosErr)
-			return
-		}
-		errorResponse(c, http.StatusInternalServerError, fmt.Errorf("get connect from pool error: %s", err))
+		errorResponse(c, http.StatusInternalServerError, err)
 		return
 	}
 	if dryRun {
@@ -261,22 +264,34 @@ func (p *Plugin) HandleRequest(c *gin.Context) {
 	var jsonData []byte
 	jsonData, err = c.GetRawData()
 	if err != nil {
+		logger.Errorf("get raw data error:%s", err)
 		errorResponse(c, http.StatusBadRequest, fmt.Errorf("error reading request body: %s", err))
 		return
 	}
+	transformedJsonData := jsonData
 	if rule.TransformationExpr != nil {
-		// precision loss may occur here
-		// e.g. large int64 may be converted to float64
+		// precision loss may occur here. e.g. large int64 may be converted to float64
 		// it's recommended to use string for large int64 values in json
-		jsonData, err = rule.TransformationExpr.EvalBytes(jsonData)
+
+		// if the result is a singleton array, extract the value inside the array, see
+		// https://docs.jsonata.org/predicate#singleton-array-and-value-equivalence
+		// so that users should use [] in jsonata expression to generate array of records,
+		// e.g. use $each($, function($v,$k) { ... })[] instead of $each($, function($v,$k) { ... })
+		start := log.GetLogNow(isDebug)
+		transformedJsonData, err = rule.TransformationExpr.EvalBytes(jsonData)
+		logger.Debugf("transformed json cost: %s", log.GetLogDuration(isDebug, start))
 		if err != nil {
-			errorResponse(c, http.StatusBadRequest, fmt.Errorf("error evaluating jsonata expression: %s", err))
+			logger.Errorf("transform json data error:%s, input_json:%s, transformation:%s", err, jsonData, rule.TransformationString)
+			errorResponse(c, http.StatusBadRequest, fmt.Errorf("transform json data error: %s", err))
 			return
 		}
 	}
 	// parse jsonData according to rule
-	records, err := parseRecord(rule, jsonData, logger)
+	start := log.GetLogNow(isDebug)
+	records, err := parseRecord(rule, transformedJsonData, logger)
+	logger.Debugf("parse records cost: %s", log.GetLogDuration(isDebug, start))
 	if err != nil {
+		logger.Errorf("parse records error:%s", err)
 		errorResponse(c, http.StatusBadRequest, fmt.Errorf("error parsing records: %s", err))
 		return
 	}
@@ -286,35 +301,36 @@ func (p *Plugin) HandleRequest(c *gin.Context) {
 		metric.TotalRows.Add(recordCount)
 		metric.InflightRows.Add(recordCount)
 	}
+	start = log.GetLogNow(isDebug)
 	sqlArray := generateSql(records, MAXSQLLength)
+	logger.Debugf("generate sql cost: %s", log.GetLogDuration(isDebug, start))
+	logger.Tracef("generate sql array: %v", sqlArray)
 	if dryRun {
 		resp := dryRunResp{
-			Json: string(jsonData),
+			Json: string(transformedJsonData),
 			Sql:  sqlArray,
 		}
 		c.JSON(200, resp)
 	} else {
+		start = log.GetLogNow(isDebug)
 		affectedRows, err := execute(taosConn.TaosConnection, reqID, sqlArray, logger, isDebug)
+		logger.Debugf("execute sql cost: %s", log.GetLogDuration(isDebug, start))
 		if metric != nil {
 			metric.InflightRows.Sub(recordCount)
 		}
 		if err != nil {
+			logger.Errorf("execute sql error:%s", err)
 			if metric != nil {
 				metric.FailRows.Add(recordCount)
 			}
-			var taosErr *errors2.TaosError
-			ok := errors.As(err, &taosErr)
-			if ok {
-				taosErrorResponse(c, taosErr)
-				return
-			}
-			errorRespWithErrorCode(c, http.StatusInternalServerError, 0xffff, err.Error())
+			errorResponse(c, http.StatusInternalServerError, err)
 			return
 		}
 		if metric != nil {
 			metric.SuccessRows.Add(recordCount)
 			metric.AffectedRows.Add(recordCount)
 		}
+		logger.Tracef("insert success, affected rows:%d", affectedRows)
 		successResponse(c, affectedRows)
 	}
 }
@@ -329,7 +345,7 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 	var result []map[string]interface{}
 	err := Unmarshal(jsonData, &result)
 	if err != nil {
-		logger.Errorf("error unmarshaling json data:%s, err:%s", string(jsonData), err)
+		logger.Errorf("error unmarshaling json data:%s, err:%s", jsonData, err)
 		return nil, fmt.Errorf("error unmarshaling json data: %s", err)
 	}
 	records := make([]*record, len(result))
@@ -550,7 +566,6 @@ func writeEscapeStringValue(builder *strings.Builder, s string) {
 			builder.WriteRune(v)
 		}
 	}
-	return
 }
 
 // escapeIdentifier escapes backticks in identifiers

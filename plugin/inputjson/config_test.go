@@ -1,7 +1,6 @@
 package inputjson
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1619,6 +1618,51 @@ func TestConfig_validate(t *testing.T) {
 			},
 			wantErr: assert.Error,
 		},
+		{
+			name: "db and dbkey both set",
+			fields: fields{
+				Enable: true,
+				Rules: []*Rule{
+					{
+						Endpoint: "Rule1",
+						DB:       "test_db",
+						DBKey:    "db_key",
+					},
+				},
+			},
+			wantErr: assert.Error,
+		},
+		{
+			name: "supertable and supertablekey both set",
+			fields: fields{
+				Enable: true,
+				Rules: []*Rule{
+					{
+						Endpoint:      "Rule1",
+						DB:            "test_db",
+						SuperTable:    "test_super_table",
+						SuperTableKey: "super_table_key",
+					},
+				},
+			},
+			wantErr: assert.Error,
+		},
+		{
+			name: "subtable and subtablekey both set",
+			fields: fields{
+				Enable: true,
+				Rules: []*Rule{
+					{
+						Endpoint:    "Rule1",
+						DB:          "test_db",
+						SuperTable:  "test_super_table",
+						SubTable:    "test_sub_table",
+						SubTableKey: "sub_table_key",
+					},
+				},
+			},
+			wantErr: assert.Error,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1626,7 +1670,7 @@ func TestConfig_validate(t *testing.T) {
 				Enable: tt.fields.Enable,
 				Rules:  tt.fields.Rules,
 			}
-			tt.wantErr(t, c.validate(), fmt.Sprintf("validate()"))
+			tt.wantErr(t, c.validate(), "validate()")
 		})
 	}
 }

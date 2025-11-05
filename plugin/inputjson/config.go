@@ -35,7 +35,7 @@ type Field struct {
 
 func (c *Config) setValue(v *viper.Viper) error {
 	c.Enable = v.GetBool("input_json.enable")
-	if c.Enable == false {
+	if !c.Enable {
 		return nil
 	}
 	// if enabled , rules must be provided
@@ -171,7 +171,7 @@ func parseFiled(mapData map[string]interface{}) (*Field, error) {
 }
 
 func (c *Config) validate() error {
-	if c.Enable == false {
+	if !c.Enable {
 		return nil
 	}
 	if len(c.Rules) == 0 {
@@ -187,11 +187,20 @@ func (c *Config) validate() error {
 		if rule.DB == "" && rule.DBKey == "" {
 			return fmt.Errorf("endpoint:%s db and dbKey are empty", rule.Endpoint)
 		}
+		if rule.DB != "" && rule.DBKey != "" {
+			return fmt.Errorf("endpoint:%s db and dbKey are both set", rule.Endpoint)
+		}
 		if rule.SuperTable == "" && rule.SuperTableKey == "" {
 			return fmt.Errorf("endpoint:%s superTable and superTableKey are empty", rule.Endpoint)
 		}
+		if rule.SuperTable != "" && rule.SuperTableKey != "" {
+			return fmt.Errorf("endpoint:%s superTable and superTableKey are both set", rule.Endpoint)
+		}
 		if rule.SubTable == "" && rule.SubTableKey == "" {
 			return fmt.Errorf("endpoint:%s subTable and subTableKey are empty", rule.Endpoint)
+		}
+		if rule.SubTable != "" && rule.SubTableKey != "" {
+			return fmt.Errorf("endpoint:%s subTable and subTableKey are both set", rule.Endpoint)
 		}
 		if rule.TimeKey != "" && rule.TimeFormat == "" {
 			return fmt.Errorf("endpoint:%s timeFormat is empty", rule.Endpoint)
@@ -228,13 +237,19 @@ func isValidEndpoint(endpoint string) bool {
 	}
 
 	for _, char := range endpoint {
-		if !(char >= 'a' && char <= 'z') &&
-			!(char >= 'A' && char <= 'Z') &&
-			!(char >= '0' && char <= '9') {
+		if !isLetter(char) && !isDigit(char) {
 			return false
 		}
 	}
 	return true
+}
+
+func isLetter(char rune) bool {
+	return (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z')
+}
+
+func isDigit(char rune) bool {
+	return char >= '0' && char <= '9'
 }
 
 func isValidIdentifier(name string) bool {

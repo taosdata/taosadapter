@@ -235,8 +235,8 @@ $sort(
                             "voltage": $deviceValue.voltage,
                             "phase": $deviceValue.phase
                         }
-                    })
-                })
+                    })[]
+                })[]
             )
         })
     ).[*][*],
@@ -312,6 +312,27 @@ fields = [
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	t.Log(w.Body.String())
 
+	// valid json but missing fields
+	// phase missing for d_001
+	body = `{
+    "time": "2025-11-04 09:24:13.123456",
+    "Los Angeles": {
+        "group_1": {
+            "d_001": {
+                "current": 10.5,
+                "voltage": 220
+            }
+        }
+    }
+}`
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", "/rule1", strings.NewReader(body))
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.SetBasicAuth(testUser, testPass)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	t.Log(w.Body.String())
+
 	// dry run
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest("POST", "/rule1?dry_run=true", strings.NewReader(inputData))
@@ -330,6 +351,7 @@ fields = [
 	require.NoError(t, err)
 	var respResults []transformationSqlResult
 	err = json.Unmarshal([]byte(resp.Json), &respResults)
+	require.NoError(t, err)
 	assert.Equal(t, expectedResults, respResults)
 
 	// actual insert with db not exists
@@ -401,4 +423,50 @@ fields = [
 		{"d_009", int64(1762248253123), float32(7.9), int32(220), float32(80.0), "New York", int32(2)},
 	}
 	assert.Equal(t, expectedInsertedValues, result.Data)
+
+	// insert single record
+	body = `{
+    "time": "2025-11-04 09:24:13.123456",
+    "望京": {
+        "group_3": {
+            "d_010": {
+                "current": 10.5,
+                "voltage": 220,
+				"phase": 55
+            }
+        }
+    }
+}`
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", "/rule1", strings.NewReader(body))
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.SetBasicAuth(testUser, testPass)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	t.Log(w.Body.String())
+	insertResp = message{}
+	err = json.Unmarshal(w.Body.Bytes(), &insertResp)
+	require.NoError(t, err)
+	assert.Equal(t, 0, insertResp.Code)
+	assert.Equal(t, "", insertResp.Desc)
+	assert.Equal(t, 1, insertResp.Affected)
+
+	// verify data inserted
+	result, err = async.GlobalAsync.TaosExec(taosConn.TaosConnection, logger, false, "select * from test_input_json.meters where tbname = 'd_010';", func(ts int64, precision int) driver.Value {
+		return ts
+	}, 0x123)
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(result.Data))
+	//t.Log(result.Data)
+	expectedInsertedValues = [][]driver.Value{
+		{int64(1762248253123), float32(10.5), int32(220), float32(55.0), "望京", int32(3)},
+	}
+	assert.Equal(t, expectedInsertedValues, result.Data)
+
+	metric := p.metrics["rule1"]
+	assert.Equal(t, float64(19), metric.TotalRows.Value())
+	assert.Equal(t, float64(10), metric.SuccessRows.Value())
+	assert.Equal(t, float64(9), metric.FailRows.Value())
+	assert.Equal(t, float64(0), metric.InflightRows.Value())
+	assert.Equal(t, float64(10), metric.AffectedRows.Value())
 }

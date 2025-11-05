@@ -1228,7 +1228,7 @@ func getInputJsonMetrics() *Table {
 		return nil
 	}
 	table := &Table{
-		Name: "adapter_input_json ",
+		Name: "adapter_input_json",
 	}
 	table.MetricGroups = make([]*MetricGroup, 0, len(InputJsonMetricsMap))
 	for key, value := range InputJsonMetricsMap {
