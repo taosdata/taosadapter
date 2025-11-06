@@ -930,3 +930,9 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	config.Conf.UploadKeeper.Enable = false
 	config.Conf.Request.QueryLimitEnable = false
 }
+
+func TestNewInputJsonMetric(t *testing.T) {
+	config.Conf.UploadKeeper.Enable = false
+	metrics := NewInputJsonMetric("disable_upload_keeper")
+	require.Nil(t, metrics)
+}

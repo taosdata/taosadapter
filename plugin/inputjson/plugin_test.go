@@ -200,8 +200,7 @@ func Test_castToString(t *testing.T) {
 		{
 			name:    "nil input",
 			args:    args{value: nil},
-			want:    "null",
-			wantErr: assert.NoError,
+			wantErr: assert.Error,
 		},
 	}
 	for _, tt := range tests {

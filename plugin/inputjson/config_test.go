@@ -1005,12 +1005,12 @@ func TestIsValidEndpoint(t *testing.T) {
 		{
 			name:     "contains hyphen",
 			endpoint: "api-endpoint",
-			expected: false,
+			expected: true,
 		},
 		{
 			name:     "contains underscore",
 			endpoint: "api_endpoint",
-			expected: false,
+			expected: true,
 		},
 		{
 			name:     "contains dot",

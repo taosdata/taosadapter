@@ -358,14 +358,14 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 				logger.Errorf("db key %s not found in item: %v", rule.DBKey, item)
 				return nil, fmt.Errorf("db key %s not found in item", rule.DBKey)
 			}
+			if v == nil {
+				logger.Errorf("db key %s has nil value in item: %v", rule.DBKey, item)
+				return nil, fmt.Errorf("db key %s has nil value in item", rule.DBKey)
+			}
 			db, err = castToString(v)
 			if err != nil {
 				logger.Errorf("cast db key %s to string error in item: %v, value: %v err:%s", rule.DBKey, item, v, err)
 				return nil, fmt.Errorf("cast db key %s to string error in item: %v, value: %v err:%s", rule.DBKey, item, v, err)
-			}
-			if v == nil {
-				logger.Errorf("db key %s has nil value in item: %v", rule.DBKey, item)
-				return nil, fmt.Errorf("db key %s has nil value in item", rule.DBKey)
 			}
 			db = escapeIdentifier(db)
 			if db == "" {
@@ -383,14 +383,14 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 				logger.Errorf("super_table key %s not found in item: %v", rule.SuperTableKey, item)
 				return nil, fmt.Errorf("super table key %s not found in item", rule.SuperTableKey)
 			}
+			if v == nil {
+				logger.Errorf("super_table key %s has nil value in item: %v", rule.SuperTableKey, item)
+				return nil, fmt.Errorf("super table key %s has nil value in item", rule.SuperTableKey)
+			}
 			stb, err = castToString(v)
 			if err != nil {
 				logger.Errorf("cast super_table key %s to string error in item: %v, value: %v err:%s", rule.SuperTableKey, item, v, err)
 				return nil, fmt.Errorf("cast super_table key %s to string error in item: %v, value: %v err:%s", rule.SuperTableKey, item, v, err)
-			}
-			if v == nil {
-				logger.Errorf("super_table key %s has nil value in item: %v", rule.SuperTableKey, item)
-				return nil, fmt.Errorf("super table key %s has nil value in item", rule.SuperTableKey)
 			}
 			stb = escapeIdentifier(stb)
 			if stb == "" {
@@ -441,15 +441,15 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 				logger.Errorf("time key %s has nil value in item: %v", rule.TimeKey, item)
 				return nil, fmt.Errorf("time key %s has nil value in item", rule.TimeKey)
 			}
-			val, err := castToString(v)
+			timeStr, err := castToString(v)
 			if err != nil {
 				logger.Errorf("cast time key %s to string error in item: %v, value: %v err:%s", rule.TimeKey, item, v, err)
 				return nil, fmt.Errorf("cast time key %s to string error in item: %v, value: %v err:%s", rule.TimeKey, item, v, err)
 			}
-			rec.ts, err = parseTime(val, rule.TimeFormat, rule.TimeTimezone)
+			rec.ts, err = parseTime(timeStr, rule.TimeFormat, rule.TimeTimezone)
 			if err != nil {
-				logger.Errorf("parse time error:%s, format:%s, err:%s", val, rule.TimeFormat, err)
-				return nil, fmt.Errorf("parse time error:%s, format:%s, err:%s", val, rule.TimeFormat, err)
+				logger.Errorf("parse time error:%s, raw_time:%s format:%s", err, timeStr, rule.TimeFormat)
+				return nil, fmt.Errorf("parse time error:%s, raw_time:%s format:%s", err, timeStr, rule.TimeFormat)
 			}
 		} else {
 			rec.ts = time.Now()
@@ -502,9 +502,6 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 }
 
 func castToString(value interface{}) (string, error) {
-	if value == nil {
-		return "null", nil
-	}
 	switch v := value.(type) {
 	case string:
 		return v, nil

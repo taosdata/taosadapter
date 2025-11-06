@@ -13,7 +13,7 @@ import (
 func TestMain(m *testing.M) {
 	viper.Set("uploadKeeper.enable", true)
 	config.Init()
-	log.SetLevel("trace")
+	_ = log.SetLevel("trace")
 	db.PrepareConnection()
 	os.Exit(m.Run())
 }

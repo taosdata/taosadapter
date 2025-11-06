@@ -237,7 +237,7 @@ func isValidEndpoint(endpoint string) bool {
 	}
 
 	for _, char := range endpoint {
-		if !isLetter(char) && !isDigit(char) {
+		if !isLetter(char) && !isDigit(char) && char != '_' && char != '-' {
 			return false
 		}
 	}
