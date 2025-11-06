@@ -3,12 +3,14 @@ package inputjson
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
@@ -273,7 +275,7 @@ fields = [
 	req.SetBasicAuth(testUser, testPass)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusNotFound, w.Code)
-	t.Log(w.Body.String())
+	//t.Log(w.Body.String())
 
 	// invalid req_id
 	w = httptest.NewRecorder()
@@ -282,7 +284,7 @@ fields = [
 	req.SetBasicAuth(testUser, testPass)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	t.Log(w.Body.String())
+	//t.Log(w.Body.String())
 
 	// wrong auth
 	w = httptest.NewRecorder()
@@ -291,7 +293,7 @@ fields = [
 	req.SetBasicAuth(testUser, "wrong_pass")
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
-	t.Log(w.Body.String())
+	//t.Log(w.Body.String())
 
 	// invalid body
 	w = httptest.NewRecorder()
@@ -300,7 +302,7 @@ fields = [
 	req.SetBasicAuth(testUser, testPass)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	t.Log(w.Body.String())
+	//t.Log(w.Body.String())
 
 	// invalid json
 	body := `[invalid json`
@@ -310,7 +312,7 @@ fields = [
 	req.SetBasicAuth(testUser, testPass)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	t.Log(w.Body.String())
+	//t.Log(w.Body.String())
 
 	// valid json but missing fields
 	// phase missing for d_001
@@ -331,7 +333,7 @@ fields = [
 	req.SetBasicAuth(testUser, testPass)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	t.Log(w.Body.String())
+	//t.Log(w.Body.String())
 
 	// dry run
 	w = httptest.NewRecorder()
@@ -355,27 +357,31 @@ fields = [
 	assert.Equal(t, expectedResults, respResults)
 
 	// dry run with large data
-	//	body = `{
-	//    "time": "2025-11-04 09:24:13.123456",
-	//    "%s": {
-	//        "group_1": {
-	//            "d_001": {
-	//                "current": 10.5,
-	//                "voltage": 220,
-	//				"phase": 30
-	//            }
-	//        }
-	//    }
-	//}`
-	//	largeLocation := strings.Repeat("A", MAXSQLLength)
-	//	largeBody := fmt.Sprintf(body, largeLocation)
-	//	w = httptest.NewRecorder()
-	//	req, _ = http.NewRequest("POST", "/rule1?dry_run=true", strings.NewReader(largeBody))
-	//	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	//	req.SetBasicAuth(testUser, testPass)
-	//	r.ServeHTTP(w, req)
-	//	assert.Equal(t, http.StatusBadRequest, w.Code)
-	//	t.Log(w.Body.String())
+	t1 := time.Now()
+	body = `{
+	   "time": "2025-11-04 09:24:13.123456",
+	   "%s": {
+	       "group_1": {
+	           "d_001": {
+	               "current": 10.5,
+	               "voltage": 220,
+					"phase": 30
+	           }
+	       }
+	   }
+	}`
+	largeLocation := strings.Repeat("A", MAXSQLLength)
+	largeBody := fmt.Sprintf(body, largeLocation)
+	t2 := time.Now()
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", "/rule1?dry_run=true", strings.NewReader(largeBody))
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.SetBasicAuth(testUser, testPass)
+	t3 := time.Now()
+	r.ServeHTTP(w, req)
+	t4 := time.Now()
+	t.Log("prepare body:", t2.Sub(t1), "send request:", t3.Sub(t2), "handle request:", t4.Sub(t3))
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 
 	// actual insert with db not exists
 	w = httptest.NewRecorder()
@@ -384,7 +390,7 @@ fields = [
 	req.SetBasicAuth(testUser, testPass)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	t.Log(w.Body.String())
+	//t.Log(w.Body.String())
 	var insertResp message
 	err = json.Unmarshal(w.Body.Bytes(), &insertResp)
 	require.NoError(t, err)
@@ -419,7 +425,7 @@ fields = [
 	req.SetBasicAuth(testUser, testPass)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
-	t.Log(w.Body.String())
+	//t.Log(w.Body.String())
 	insertResp = message{}
 	err = json.Unmarshal(w.Body.Bytes(), &insertResp)
 	require.NoError(t, err)
@@ -466,7 +472,7 @@ fields = [
 	req.SetBasicAuth(testUser, testPass)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
-	t.Log(w.Body.String())
+	//t.Log(w.Body.String())
 	insertResp = message{}
 	err = json.Unmarshal(w.Body.Bytes(), &insertResp)
 	require.NoError(t, err)
