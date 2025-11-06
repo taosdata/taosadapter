@@ -56,7 +56,7 @@ func TestGetLogSql(t *testing.T) {
 	}
 	str := builder.String()
 	sql = GetLogSql(str)
-	assert.Equal(t, sql, str[:MaxLogSqlLength])
+	assert.Equal(t, sql, str[:MaxLogSqlLength]+"...(truncated)")
 }
 func TestTaosLogFormatter_Format(t1 *testing.T) {
 	type args struct {
