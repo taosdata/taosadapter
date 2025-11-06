@@ -295,7 +295,7 @@ const MaxLogSqlLength = 1024
 
 func GetLogSql(sql string) string {
 	if len(sql) > MaxLogSqlLength {
-		return sql[:MaxLogSqlLength]
+		return sql[:MaxLogSqlLength] + "...(truncated)"
 	}
 	return sql
 }

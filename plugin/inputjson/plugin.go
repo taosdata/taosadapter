@@ -617,12 +617,12 @@ func generateSql(records []*record, maxSqlLength int) ([]string, error) {
 		tmpBuilder.WriteByte('(')
 		tmpBuilder.WriteString(rec.values)
 		tmpBuilder.WriteByte(')')
+		if tmpBuilder.Len()+len(InsertSqlStatement) >= maxSqlLength {
+			// value too large to fit in one sql
+			return nil, fmt.Errorf("single record sql length exceeds max sql length: %d, sql value: %s", maxSqlLength, log.GetLogSql(tmpBuilder.String()))
+		}
 		if sqlBuilder.Len()+tmpBuilder.Len() >= maxSqlLength {
 			// flush current sql
-			if sqlBuilder.Len() == len(InsertSqlStatement) {
-				// value too large to fit in one sql
-				return nil, fmt.Errorf("single record sql length exceeds max sql length: %d, sql value: %s", maxSqlLength, tmpBuilder.String())
-			}
 			sqlArray = append(sqlArray, sqlBuilder.String())
 			sqlBuilder.Reset()
 			sqlBuilder.WriteString(InsertSqlStatement)
