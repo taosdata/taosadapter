@@ -267,6 +267,8 @@ jobs:
 
       - name: test
         id: test
+        env:
+          GO_TEST_DISABLE_DISPLAY_LOG: "true"
         run: sudo go test -coverpkg=./... -v --count=1 -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage to Codecov
@@ -526,6 +528,8 @@ jobs:
 
       - name: test
         id: test
+        env:
+          GO_TEST_DISABLE_DISPLAY_LOG: "true"
         run: sudo go test -v --count=1 -asan ./...
 
   govulncheck:

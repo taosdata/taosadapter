@@ -181,7 +181,11 @@ func GetLogger(model string) *logrus.Entry {
 func init() {
 	logrus.SetBufferPool(bufferPool)
 	logger.SetFormatter(globalLogFormatter)
-	logger.SetOutput(os.Stdout)
+	if _, exists := os.LookupEnv("GO_TEST_DISABLE_DISPLAY_LOG"); exists {
+		logger.SetOutput(io.Discard)
+	} else {
+		logger.SetOutput(os.Stdout)
+	}
 }
 
 func randomID() string {
