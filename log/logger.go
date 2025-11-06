@@ -181,7 +181,13 @@ func GetLogger(model string) *logrus.Entry {
 func init() {
 	logrus.SetBufferPool(bufferPool)
 	logger.SetFormatter(globalLogFormatter)
-	if _, exists := os.LookupEnv("GO_TEST_DISABLE_DISPLAY_LOG"); exists {
+	setLoggerOutPut(logger)
+}
+
+const DisableDisplayLogEnv = "GO_TEST_DISABLE_DISPLAY_LOG"
+
+func setLoggerOutPut(logger *logrus.Logger) {
+	if _, exists := os.LookupEnv(DisableDisplayLogEnv); exists {
 		logger.SetOutput(io.Discard)
 	} else {
 		logger.SetOutput(os.Stdout)

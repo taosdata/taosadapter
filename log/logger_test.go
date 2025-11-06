@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/config"
 )
 
@@ -271,4 +274,24 @@ func TestTaosLogFormatter_Format(t1 *testing.T) {
 			assert.Equalf(t1, tt.want, got, "Format(%v)", tt.args.entry)
 		})
 	}
+}
+
+func Test_setLoggerOutPut(t *testing.T) {
+	old, exists := os.LookupEnv(DisableDisplayLogEnv)
+	if exists {
+		defer func() {
+			_ = os.Setenv(DisableDisplayLogEnv, old)
+		}()
+	} else {
+		defer func() {
+			_ = os.Unsetenv(DisableDisplayLogEnv)
+		}()
+	}
+	l := logrus.New()
+	require.NoError(t, os.Unsetenv(DisableDisplayLogEnv))
+	setLoggerOutPut(l)
+	assert.Equal(t, os.Stdout, l.Out)
+	t.Setenv(DisableDisplayLogEnv, "true")
+	setLoggerOutPut(l)
+	assert.Equal(t, io.Discard, l.Out)
 }
