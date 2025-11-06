@@ -349,9 +349,10 @@ func Test_generateSql(t *testing.T) {
 		maxSqlLength int
 	}
 	tests := []struct {
-		name string
-		args args
-		want []string
+		name    string
+		args    args
+		want    []string
+		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "basic case",
@@ -367,7 +368,8 @@ func Test_generateSql(t *testing.T) {
 				},
 				maxSqlLength: MAXSQLLength,
 			},
-			want: []string{"insert into `test`.`stb1`(`tbname`,`ts`,`v`,`tg`)values('ABC','2025-11-03T10:00:00Z',1,'tag1')"},
+			want:    []string{"insert into `test`.`stb1`(`tbname`,`ts`,`v`,`tg`)values('ABC','2025-11-03T10:00:00Z',1,'tag1')"},
+			wantErr: assert.NoError,
 		},
 		{
 			name: "multiple records within max length",
@@ -388,6 +390,7 @@ func Test_generateSql(t *testing.T) {
 					"`db2`.`stb1`(`tbname`,`ts`,`v1`)values('C','2025-11-03T9:00:00Z',9)('C','2025-11-03T10:00:00Z',10)('C','2025-11-03T11:00:00Z',11)" +
 					"`db2`.`stb1`(`tbname`,`ts`,`v1`,`v2`)values('C','2025-11-03T9:00:00Z',9,19)('C','2025-11-03T10:00:00Z',10,20)('C','2025-11-03T11:00:00Z',11,21)",
 			},
+			wantErr: assert.NoError,
 		},
 		{
 			name: "multiple records cutting by max length",
@@ -412,11 +415,25 @@ func Test_generateSql(t *testing.T) {
 				"insert into `db2`.`stb1`(`tbname`,`ts`,`v1`,`v2`)values('C','2025-11-03T9:00:00Z',9,19)('C','2025-11-03T10:00:00Z',10,20)",
 				"insert into `db2`.`stb1`(`tbname`,`ts`,`v1`,`v2`)values('C','2025-11-03T11:00:00Z',11,21)",
 			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "multiple records cutting by max length",
+			args: args{
+				records:      testRecords,
+				maxSqlLength: 10,
+			},
+			want:    nil,
+			wantErr: assert.Error,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.want, generateSql(tt.args.records, tt.args.maxSqlLength), "generateSql(%v, %v)", tt.args.records, tt.args.maxSqlLength)
+			got, err := generateSql(tt.args.records, tt.args.maxSqlLength)
+			if !tt.wantErr(t, err, fmt.Sprintf("generateSql(%v, %v)", tt.args.records, tt.args.maxSqlLength)) {
+				return
+			}
+			assert.Equalf(t, tt.want, got, "generateSql(%v, %v)", tt.args.records, tt.args.maxSqlLength)
 		})
 	}
 }

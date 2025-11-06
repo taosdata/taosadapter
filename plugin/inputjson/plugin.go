@@ -298,9 +298,13 @@ func (p *Plugin) HandleRequest(c *gin.Context) {
 		metric.InflightRows.Add(recordCount)
 	}
 	start = log.GetLogNow(isDebug)
-	sqlArray := generateSql(records, MAXSQLLength)
+	sqlArray, err := generateSql(records, MAXSQLLength)
 	logger.Debugf("generate sql cost: %s", log.GetLogDuration(isDebug, start))
 	logger.Tracef("generate sql array: %v", sqlArray)
+	if err != nil {
+		logger.Errorf("generate sql error:%s", err)
+		errorResponse(c, http.StatusBadRequest, fmt.Errorf("generate sql error: %s", err))
+	}
 	if dryRun {
 		resp := dryRunResp{
 			Json: string(transformedJsonData),
@@ -588,7 +592,7 @@ func sortRecords(records []*record) {
 
 // generateSql generates the insert SQL statements from the records
 // it will split the SQL statements if the length exceeds maxSqlLength
-func generateSql(records []*record, maxSqlLength int) []string {
+func generateSql(records []*record, maxSqlLength int) ([]string, error) {
 	sortRecords(records)
 	sqlBuilder := &strings.Builder{}
 	tmpBuilder := &bytes.Buffer{}
@@ -615,6 +619,10 @@ func generateSql(records []*record, maxSqlLength int) []string {
 		tmpBuilder.WriteByte(')')
 		if sqlBuilder.Len()+tmpBuilder.Len() >= maxSqlLength {
 			// flush current sql
+			if sqlBuilder.Len() == len(InsertSqlStatement) {
+				// value too large to fit in one sql
+				return nil, fmt.Errorf("single record sql length exceeds max sql length: %d, sql value: %s", maxSqlLength, sqlBuilder.String())
+			}
 			sqlArray = append(sqlArray, sqlBuilder.String())
 			sqlBuilder.Reset()
 			sqlBuilder.WriteString(InsertSqlStatement)
@@ -629,7 +637,7 @@ func generateSql(records []*record, maxSqlLength int) []string {
 	if sqlBuilder.Len() > len(InsertSqlStatement) {
 		sqlArray = append(sqlArray, sqlBuilder.String())
 	}
-	return sqlArray
+	return sqlArray, nil
 }
 
 // writeSuperTableStatement writes the insert into supertable part of the insert statement

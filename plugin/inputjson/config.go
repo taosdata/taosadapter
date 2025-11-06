@@ -118,7 +118,7 @@ func (c *Config) setValue(v *viper.Viper) error {
 			if !ok {
 				return fmt.Errorf("input_json.rules item index:%d, fields item index:%d is not map object", index, fieldIndex)
 			}
-			field, err := parseFiled(fieldMap)
+			field, err := parseField(fieldMap)
 			if err != nil {
 				return fmt.Errorf("input_json.rules item index:%d, fields item index:%d is not valid:%s", index, fieldIndex, err)
 			}
@@ -156,7 +156,7 @@ func getBoolConfig(mapData map[string]interface{}, key string) (bool, error) {
 	return boolValue, nil
 }
 
-func parseFiled(mapData map[string]interface{}) (*Field, error) {
+func parseField(mapData map[string]interface{}) (*Field, error) {
 	field := &Field{}
 	var err error
 	field.Key, err = getStringConfig(mapData, "key", "")
