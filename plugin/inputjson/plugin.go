@@ -621,7 +621,7 @@ func generateSql(records []*record, maxSqlLength int) ([]string, error) {
 			// flush current sql
 			if sqlBuilder.Len() == len(InsertSqlStatement) {
 				// value too large to fit in one sql
-				return nil, fmt.Errorf("single record sql length exceeds max sql length: %d, sql value: %s", maxSqlLength, sqlBuilder.String())
+				return nil, fmt.Errorf("single record sql length exceeds max sql length: %d, sql value: %s", maxSqlLength, tmpBuilder.String())
 			}
 			sqlArray = append(sqlArray, sqlBuilder.String())
 			sqlBuilder.Reset()
