@@ -537,7 +537,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
+        #       asan runs failed on 24.04, see: https://github.com/cockroachdb/pebble/issues/5342
+        os: [ 'ubuntu-22.04' , 'ubuntu-22.04-arm' ]
     needs: build
     steps:
       - name: get cache server by pr
