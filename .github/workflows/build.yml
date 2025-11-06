@@ -353,7 +353,8 @@ jobs:
     name: Build-asan${{ matrix.os }}
     strategy:
       matrix:
-        os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
+        #       asan runs failed on 24.04, see: https://github.com/cockroachdb/pebble/issues/5342
+        os: [ 'ubuntu-22.04' , 'ubuntu-22.04-arm' ]
     outputs:
       commit_id: ${{ steps.get_commit_id.outputs.commit_id }}
     steps:
@@ -471,7 +472,8 @@ jobs:
     strategy:
       matrix:
         go: [ 'stable' ]
-        os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
+        #       asan runs failed on 24.04, see: https://github.com/cockroachdb/pebble/issues/5342
+        os: [ 'ubuntu-22.04' , 'ubuntu-22.04-arm' ]
     name: test taosAdapter with asan ${{ matrix.os }}-${{ matrix.go }}
     steps:
       - name: get cache server by pr
@@ -537,8 +539,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        #       asan runs failed on 24.04, see: https://github.com/cockroachdb/pebble/issues/5342
-        os: [ 'ubuntu-22.04' , 'ubuntu-22.04-arm' ]
+        os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
     needs: build
     steps:
       - name: get cache server by pr
