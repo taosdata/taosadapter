@@ -35,7 +35,7 @@ db = "inputdb"
 superTable = "supertable1"
 subTable = "subtable1"
 timeKey = "ts"
-timeFormat = "iso8601nano"
+timeFormat = "datetime"
 timeTimezone = "Asia/Shanghai"
 timeFieldName = "_ts"
 fields = [
@@ -69,7 +69,7 @@ fields = [
 						SuperTable:    "supertable1",
 						SubTable:      "subtable1",
 						TimeKey:       "ts",
-						TimeFormat:    "iso8601nano",
+						TimeFormat:    "datetime",
 						TimeTimezone:  "Asia/Shanghai",
 						TimeFieldName: "_ts",
 						Fields: []*Field{

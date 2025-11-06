@@ -26,7 +26,7 @@ func TestIsPredefinedTimeFormat(t *testing.T) {
 		{"rfc3339nano format", "rfc3339nano", true},
 		{"stamp format", "stamp", true},
 		{"stampmilli format", "stampmilli", true},
-		{"iso8601nano format", "iso8601nano", true},
+		{"datetime format", "datetime", true},
 		{"custom format", "2006-01-02", false},
 		{"empty format", "", false},
 		{"unknown format", "unknown", false},
@@ -189,9 +189,9 @@ func TestParseTime_StringFormats(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "ISO8601Nano format",
+			name:    "datetime format",
 			strTime: "2025-10-05 12:30:45.123456789",
-			format:  "iso8601nano",
+			format:  "datetime",
 			want:    time.Date(2025, 10, 5, 12, 30, 45, 123456789, loc),
 			wantErr: false,
 		},
@@ -234,7 +234,7 @@ func TestParseTime_Location(t *testing.T) {
 		{
 			name:          "UTC location",
 			strTime:       "2025-10-05 12:30:45",
-			format:        "iso8601nano",
+			format:        "datetime",
 			loc:           time.UTC,
 			wantTimestamp: 1759667445,
 			wantErr:       false,
@@ -243,7 +243,7 @@ func TestParseTime_Location(t *testing.T) {
 			// London is UTC+1 in October due to DST
 			name:          "London location",
 			strTime:       "2025-10-05 12:30:45",
-			format:        "iso8601nano",
+			format:        "datetime",
 			loc:           londonLoc,
 			wantTimestamp: 1759663845,
 			wantErr:       false,
@@ -251,7 +251,7 @@ func TestParseTime_Location(t *testing.T) {
 		{
 			name:          "New York location",
 			strTime:       "2025-10-05 12:30:45",
-			format:        "iso8601nano",
+			format:        "datetime",
 			loc:           nyLoc,
 			wantTimestamp: 1759681845,
 			wantErr:       false,
@@ -259,7 +259,7 @@ func TestParseTime_Location(t *testing.T) {
 		{
 			name:          "Shanghai location",
 			strTime:       "2025-10-05 12:30:45",
-			format:        "iso8601nano",
+			format:        "datetime",
 			loc:           shanghaiLoc,
 			wantTimestamp: 1759638645,
 			wantErr:       false,

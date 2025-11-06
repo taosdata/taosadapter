@@ -216,7 +216,7 @@ dbKey = "db"
 superTableKey = "stb"
 subTableKey = "table"
 timeKey = "time"
-timeFormat = "iso8601nano"
+timeFormat = "datetime"
 timeTimeZone = "UTC"
 transformation = '''
 $sort(

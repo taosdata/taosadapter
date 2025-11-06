@@ -18,7 +18,7 @@ var predefinedTimeFormats = []string{
 	"rfc3339nano",
 	"stamp",
 	"stampmilli",
-	"iso8601nano",
+	"datetime",
 }
 
 func isPredefinedTimeFormat(format string) bool {
@@ -80,7 +80,7 @@ func parseTime(strTime string, format string, loc *time.Location) (time.Time, er
 	case "stampmilli":
 		layout := time.StampMilli
 		return time.ParseInLocation(layout, strTime, loc)
-	case "iso8601nano":
+	case "datetime":
 		layout := "2006-01-02 15:04:05.999999999"
 		return time.ParseInLocation(layout, strTime, loc)
 	default:
