@@ -231,6 +231,7 @@ func (p *Plugin) HandleRequest(c *gin.Context) {
 		reqID = generator.GetReqID()
 		logger.Tracef("request:%s, client_ip:%s, req_id not set, generate new QID:0x%x", c.Request.RequestURI, c.ClientIP(), reqID)
 	}
+	c.Set(config.ReqIDKey, reqID)
 	logger := logger.WithField(config.ReqIDKey, reqID)
 	isDebug := log.IsDebug()
 	dryRun := c.Query("dry_run") == "true"
