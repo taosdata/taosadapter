@@ -32,7 +32,7 @@ type Plugin struct {
 func (p *Plugin) Init(r gin.IRouter) error {
 	p.conf.setValue()
 	if !p.conf.Enable {
-		logger.Debug("opentsdb_telnet disabled")
+		logger.Debug("prometheus disabled")
 		return nil
 	}
 	r.Use(plugin.Auth(func(c *gin.Context, code int, err error) {
@@ -187,6 +187,7 @@ func (p *Plugin) Write(c *gin.Context) {
 	}
 	logger.Debug("protobuf unmarshal cost:", time.Since(start))
 	if len(req.Timeseries) == 0 {
+		logger.Warn("empty timeseries in request")
 		return
 	}
 	start = time.Now()
@@ -217,7 +218,7 @@ func (p *Plugin) Write(c *gin.Context) {
 		if is {
 			web.SetTaosErrorCode(c, int(taosError.Code))
 		}
-		logger.WithError(err).Error("connect server error")
+		logger.WithError(err).Error("process write error")
 		_ = c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
