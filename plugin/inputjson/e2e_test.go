@@ -217,7 +217,7 @@ superTableKey = "stb"
 subTableKey = "table"
 timeKey = "time"
 timeFormat = "datetime"
-timeTimeZone = "UTC"
+timeZone = "UTC"
 transformation = '''
 $sort(
     (

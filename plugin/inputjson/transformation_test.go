@@ -131,7 +131,7 @@ func BenchmarkRequest(b *testing.B) {
 		subTableKey = "table"
 		timeKey = "time"
 		timeFormat = "datetime"
-		timeTimeZone = "UTC"
+		timezone = "UTC"
 		transformation = '''
 		$sort(
 		    (

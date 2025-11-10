@@ -22,7 +22,7 @@ type Rule struct {
 	SubTableKey    string
 	TimeKey        string
 	TimeFormat     string
-	TimeTimezone   string
+	Timezone       string
 	TimeFieldName  string
 	Transformation string
 	Fields         []*Field
@@ -90,9 +90,9 @@ func (c *Config) setValue(v *viper.Viper) error {
 		if err != nil {
 			return fmt.Errorf("input_json.rules item index:%d timeFormat is not valid:%s", index, err)
 		}
-		rule.TimeTimezone, err = getStringConfig(r, "timeTimezone", "")
+		rule.Timezone, err = getStringConfig(r, "timezone", "")
 		if err != nil {
-			return fmt.Errorf("input_json.rules item index:%d timeTimezone is not valid:%s", index, err)
+			return fmt.Errorf("input_json.rules item index:%d timezone is not valid:%s", index, err)
 		}
 		rule.Transformation, err = getStringConfig(r, "transformation", "")
 		if err != nil {

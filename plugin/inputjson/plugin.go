@@ -50,7 +50,7 @@ type ParsedRule struct {
 	SubTableKey          string
 	TimeKey              string
 	TimeFormat           string
-	TimeTimezone         *time.Location
+	Timezone             *time.Location
 	TimeFieldName        string
 	SqlAllColumns        string
 	FieldKeys            []string
@@ -109,11 +109,11 @@ func (p *Plugin) ParseRulesFromConfig() error {
 			}
 		}
 		loc := time.Local
-		if rule.TimeTimezone != "" {
+		if rule.Timezone != "" {
 			// load location
-			loc, err = time.LoadLocation(rule.TimeTimezone)
+			loc, err = time.LoadLocation(rule.Timezone)
 			if err != nil {
-				return fmt.Errorf("error loading time location: %v, timezone: %s", err, rule.TimeTimezone)
+				return fmt.Errorf("error loading time location: %v, timezone: %s", err, rule.Timezone)
 			}
 		}
 		fieldKeys := make([]string, len(rule.Fields))
@@ -133,7 +133,7 @@ func (p *Plugin) ParseRulesFromConfig() error {
 			SubTableKey:          rule.SubTableKey,
 			TimeKey:              rule.TimeKey,
 			TimeFormat:           format,
-			TimeTimezone:         loc,
+			Timezone:             loc,
 			TimeFieldName:        rule.TimeFieldName,
 			FieldKeys:            fieldKeys,
 			FieldOptionals:       fieldOptionals,
@@ -451,7 +451,7 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 				logger.Errorf("cast time key %s to string error in item: %v, value: %v err:%s", rule.TimeKey, item, v, err)
 				return nil, fmt.Errorf("cast time key %s to string error in item: %v, value: %v err:%s", rule.TimeKey, item, v, err)
 			}
-			rec.ts, err = parseTime(timeStr, rule.TimeFormat, rule.TimeTimezone)
+			rec.ts, err = parseTime(timeStr, rule.TimeFormat, rule.Timezone)
 			if err != nil {
 				logger.Errorf("parse time error:%s, raw_time:%s format:%s", err, timeStr, rule.TimeFormat)
 				return nil, fmt.Errorf("parse time error:%s, raw_time:%s format:%s", err, timeStr, rule.TimeFormat)

@@ -36,7 +36,7 @@ superTable = "supertable1"
 subTable = "subtable1"
 timeKey = "ts"
 timeFormat = "datetime"
-timeTimezone = "Asia/Shanghai"
+timezone = "Asia/Shanghai"
 timeFieldName = "_ts"
 fields = [
     {key = "Key1", optional = false},
@@ -52,7 +52,7 @@ superTable = "supertable2"
 subTable = "subtable2"
 timeKey = "timestamp"
 timeFormat = "unix"
-TimeTimezone = "UTC"
+Timezone = "UTC"
 fields = [
     {key = "TagA", optional = false},
     {key = "TagB", optional = false},
@@ -70,7 +70,7 @@ fields = [
 						SubTable:      "subtable1",
 						TimeKey:       "ts",
 						TimeFormat:    "datetime",
-						TimeTimezone:  "Asia/Shanghai",
+						Timezone:      "Asia/Shanghai",
 						TimeFieldName: "_ts",
 						Fields: []*Field{
 							{Key: "Key1", Optional: false},
@@ -85,7 +85,7 @@ fields = [
 						SubTable:      "subtable2",
 						TimeKey:       "timestamp",
 						TimeFormat:    "unix",
-						TimeTimezone:  "UTC",
+						Timezone:      "UTC",
 						TimeFieldName: "ts",
 						Fields: []*Field{
 							{Key: "TagA", Optional: false},
@@ -281,13 +281,13 @@ timeFormat = 252627
 			wantErr: true,
 		},
 		{
-			name: "invalid timeTimezone type",
+			name: "invalid timezone type",
 			content: `
 [input_json]
 enable = true
 [[input_json.rules]]
 endpoint = "rule1"
-timeTimezone = 282930
+timezone = 282930
 `,
 			fields: fields{
 				Enable: true,
@@ -1391,7 +1391,7 @@ func TestConfig_validate(t *testing.T) {
 						SubTable:      "test_sub_table",
 						TimeKey:       "ts",
 						TimeFormat:    "unix",
-						TimeTimezone:  "utc",
+						Timezone:      "utc",
 						TimeFieldName: "ts",
 						Fields: []*Field{
 							{Key: "Field1", Optional: false},
