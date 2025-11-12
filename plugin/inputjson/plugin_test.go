@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1060,18 +1061,34 @@ func Test_parseRecord(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseRecord(tt.args.rule, tt.args.jsonData, logger)
-			if !tt.wantErr(t, err, fmt.Sprintf("parseRecord(%v, %v, %v)", tt.args.rule, tt.args.jsonData, logger)) {
-				return
+			var parseFuncs = []func(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*record, error){
+				parseRecord,
+				parseRecordGJson,
+				parseRecordJsoniter,
+				parseRecordSonic,
+				parseRecordSimdJson,
 			}
-			if tt.args.missingTime {
-				// replace time placeholder
-				for i := range got {
-					tt.want[i].ts = got[i].ts
-					tt.want[i].values = fmt.Sprintf(tt.want[i].values, got[i].ts.Format(time.RFC3339Nano))
+			for funcIndex, parseFunc := range parseFuncs {
+				got, err := parseFunc(tt.args.rule, tt.args.jsonData, logger)
+				if !tt.wantErr(t, err, fmt.Sprintf("parseRecord(%v, %v, %v)", tt.args.rule, tt.args.jsonData, logger)) {
+					return
+				}
+				var values []string
+				if tt.args.missingTime {
+					// replace time placeholder
+					for i := range got {
+						values = append(values, tt.want[i].values)
+						tt.want[i].ts = got[i].ts
+						tt.want[i].values = fmt.Sprintf(tt.want[i].values, got[i].ts.Format(time.RFC3339Nano))
+					}
+				}
+				assert.Equalf(t, tt.want, got, "parseRecord_%d(%v, %v, %v)", funcIndex, tt.args.rule, tt.args.jsonData, logger)
+				if len(values) > 0 {
+					for i := range got {
+						tt.want[i].values = values[i]
+					}
 				}
 			}
-			assert.Equalf(t, tt.want, got, "parseRecord(%v, %v, %v)", tt.args.rule, tt.args.jsonData, logger)
 		})
 	}
 }

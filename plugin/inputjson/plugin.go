@@ -349,10 +349,15 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 		logger.Errorf("error unmarshaling json data:%s, err:%s", jsonData, err)
 		return nil, fmt.Errorf("error unmarshaling json data: %s", err)
 	}
+	return doParseRecord(rule, result, logger)
+}
+
+func doParseRecord(rule *ParsedRule, result []map[string]interface{}, logger *logrus.Entry) ([]*record, error) {
 	records := make([]*record, len(result))
 	fieldBuilder := &strings.Builder{}
 	valueBuilder := &strings.Builder{}
 	timeBuf := make([]byte, 0, 35)
+	var err error
 	for i, item := range result {
 		rec := &record{}
 		// parse DB
@@ -385,21 +390,21 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 		if rule.SuperTableKey != "" {
 			v, ok := item[rule.SuperTableKey]
 			if !ok {
-				logger.Errorf("super_table key %s not found in item: %v", rule.SuperTableKey, item)
+				logger.Errorf("super table key %s not found in item: %v", rule.SuperTableKey, item)
 				return nil, fmt.Errorf("super table key %s not found in item", rule.SuperTableKey)
 			}
 			if v == nil {
-				logger.Errorf("super_table key %s has nil value in item: %v", rule.SuperTableKey, item)
+				logger.Errorf("super table key %s has nil value in item: %v", rule.SuperTableKey, item)
 				return nil, fmt.Errorf("super table key %s has nil value in item", rule.SuperTableKey)
 			}
 			stb, err = castToString(v)
 			if err != nil {
-				logger.Errorf("cast super_table key %s to string error in item: %v, value: %v err:%s", rule.SuperTableKey, item, v, err)
-				return nil, fmt.Errorf("cast super_table key %s to string error in item: %v, value: %v err:%s", rule.SuperTableKey, item, v, err)
+				logger.Errorf("cast super table key %s to string error in item: %v, value: %v err:%s", rule.SuperTableKey, item, v, err)
+				return nil, fmt.Errorf("cast super table key %s to string error in item: %v, value: %v err:%s", rule.SuperTableKey, item, v, err)
 			}
 			stb = escapeIdentifier(stb)
 			if stb == "" {
-				logger.Errorf("super_table key %s is empty in item: %v", rule.SuperTableKey, item)
+				logger.Errorf("super table key %s is empty in item: %v", rule.SuperTableKey, item)
 				return nil, fmt.Errorf("super table key %s is empty in item", rule.SuperTableKey)
 			}
 		} else {
@@ -410,20 +415,20 @@ func parseRecord(rule *ParsedRule, jsonData []byte, logger *logrus.Entry) ([]*re
 		if rule.SubTableKey != "" {
 			v, ok := item[rule.SubTableKey]
 			if !ok {
-				logger.Errorf("sub_table key %s not found in item: %v", rule.SubTableKey, item)
+				logger.Errorf("sub table key %s not found in item: %v", rule.SubTableKey, item)
 				return nil, fmt.Errorf("sub table key %s not found in item", rule.SubTableKey)
 			}
 			if v == nil {
-				logger.Errorf("sub_table key %s has nil value in item: %v", rule.SubTableKey, item)
+				logger.Errorf("sub table key %s has nil value in item: %v", rule.SubTableKey, item)
 				return nil, fmt.Errorf("sub table key %s has nil value in item", rule.SubTableKey)
 			}
 			rec.subTable, err = castToString(v)
 			if err != nil {
-				logger.Errorf("cast sub_table key %s to string error in item: %v, value: %v err:%s", rule.SubTableKey, item, v, err)
-				return nil, fmt.Errorf("cast sub_table key %s to string error in item: %v, value: %v err:%s", rule.SubTableKey, item, v, err)
+				logger.Errorf("cast sub table key %s to string error in item: %v, value: %v err:%s", rule.SubTableKey, item, v, err)
+				return nil, fmt.Errorf("cast sub table key %s to string error in item: %v, value: %v err:%s", rule.SubTableKey, item, v, err)
 			}
 			if rec.subTable == "" {
-				logger.Errorf("sub_table key %s is empty in item: %v", rule.SubTableKey, item)
+				logger.Errorf("sub table key %s is empty in item: %v", rule.SubTableKey, item)
 				return nil, fmt.Errorf("sub table key %s is empty in item", rule.SubTableKey)
 			}
 		} else {
