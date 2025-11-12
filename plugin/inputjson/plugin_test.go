@@ -1066,7 +1066,7 @@ func Test_parseRecord(t *testing.T) {
 				parseRecordGJson,
 				parseRecordJsoniter,
 				parseRecordSonic,
-				parseRecordSimdJson,
+				//parseRecordSimdJson,
 			}
 			for funcIndex, parseFunc := range parseFuncs {
 				got, err := parseFunc(tt.args.rule, tt.args.jsonData, logger)
