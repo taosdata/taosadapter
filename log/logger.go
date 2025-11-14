@@ -181,7 +181,17 @@ func GetLogger(model string) *logrus.Entry {
 func init() {
 	logrus.SetBufferPool(bufferPool)
 	logger.SetFormatter(globalLogFormatter)
-	logger.SetOutput(os.Stdout)
+	setLoggerOutPut(logger)
+}
+
+const DisableDisplayLogEnv = "GO_TEST_DISABLE_DISPLAY_LOG"
+
+func setLoggerOutPut(logger *logrus.Logger) {
+	if _, exists := os.LookupEnv(DisableDisplayLogEnv); exists {
+		logger.SetOutput(io.Discard)
+	} else {
+		logger.SetOutput(os.Stdout)
+	}
 }
 
 func randomID() string {
@@ -295,7 +305,7 @@ const MaxLogSqlLength = 1024
 
 func GetLogSql(sql string) string {
 	if len(sql) > MaxLogSqlLength {
-		return sql[:MaxLogSqlLength]
+		return sql[:MaxLogSqlLength] + "...(truncated)"
 	}
 	return sql
 }

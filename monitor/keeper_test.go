@@ -312,6 +312,13 @@ func TestGenerateExtraMetrics(t *testing.T) {
 			}
 		}
 	}()
+	inputJsonMetrics := NewInputJsonMetric("test_metrics")
+	require.NotNil(t, inputJsonMetrics)
+	inputJsonMetrics.TotalRows.Add(5)
+	inputJsonMetrics.SuccessRows.Add(1)
+	inputJsonMetrics.FailRows.Add(1)
+	inputJsonMetrics.AffectedRows.Add(10)
+	inputJsonMetrics.InflightRows.Add(4)
 	RecordWSQueryConn()
 	RecordWSSMLConn()
 	RecordWSStmtConn()
@@ -602,7 +609,7 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	metric := metrics[0]
 	assert.Equal(t, strconv.FormatInt(ts.UnixMilli(), 10), metric.Ts)
 	assert.Equal(t, 2, metric.Protocol)
-	assert.Equal(t, 3, len(metric.Tables))
+	assert.Equal(t, 4, len(metric.Tables))
 	statusTable := metric.Tables[0]
 	assert.Equal(t, "adapter_status", statusTable.Name)
 	assert.Equal(t, 1, len(statusTable.MetricGroups))
@@ -688,6 +695,38 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	assert.Equal(t, "conn_pool_in_use", connPoolTable.MetricGroups[0].Metrics[1].Name)
 	assert.Equal(t, float64(1), connPoolTable.MetricGroups[0].Metrics[1].Value)
 
+	inputJsonTable := metric.Tables[3]
+	assert.Equal(t, "adapter_input_json", inputJsonTable.Name)
+	assert.Equal(t, 1, len(inputJsonTable.MetricGroups))
+	assert.Equal(t, 2, len(inputJsonTable.MetricGroups[0].Tags))
+	assert.Equal(t, "url_endpoint", inputJsonTable.MetricGroups[0].Tags[0].Name)
+	assert.Equal(t, "test_metrics", inputJsonTable.MetricGroups[0].Tags[0].Value)
+	assert.Equal(t, "endpoint", inputJsonTable.MetricGroups[0].Tags[1].Name)
+	assert.Equal(t, identity, inputJsonTable.MetricGroups[0].Tags[1].Value)
+	assert.Equal(t, 5, len(inputJsonTable.MetricGroups[0].Metrics))
+	assert.Equal(t, "total_rows", inputJsonTable.MetricGroups[0].Metrics[0].Name)
+	assert.Equal(t, float64(5), inputJsonTable.MetricGroups[0].Metrics[0].Value)
+	assert.Equal(t, "success_rows", inputJsonTable.MetricGroups[0].Metrics[1].Name)
+	assert.Equal(t, float64(1), inputJsonTable.MetricGroups[0].Metrics[1].Value)
+	assert.Equal(t, "fail_rows", inputJsonTable.MetricGroups[0].Metrics[2].Name)
+	assert.Equal(t, float64(1), inputJsonTable.MetricGroups[0].Metrics[2].Value)
+	assert.Equal(t, "inflight_rows", inputJsonTable.MetricGroups[0].Metrics[3].Name)
+	assert.Equal(t, float64(4), inputJsonTable.MetricGroups[0].Metrics[3].Value)
+	assert.Equal(t, "affected_rows", inputJsonTable.MetricGroups[0].Metrics[4].Name)
+	assert.Equal(t, float64(10), inputJsonTable.MetricGroups[0].Metrics[4].Value)
+
+	assert.Equal(t, float64(0), inputJsonMetrics.TotalRows.Value())
+	assert.Equal(t, float64(0), inputJsonMetrics.SuccessRows.Value())
+	assert.Equal(t, float64(0), inputJsonMetrics.FailRows.Value())
+	assert.Equal(t, float64(0), inputJsonMetrics.AffectedRows.Value())
+	assert.Equal(t, float64(4), inputJsonMetrics.InflightRows.Value())
+
+	inputJsonMetrics.TotalRows.Add(20)
+	inputJsonMetrics.SuccessRows.Add(12)
+	inputJsonMetrics.FailRows.Add(1)
+	inputJsonMetrics.AffectedRows.Add(200)
+	inputJsonMetrics.InflightRows.Add(7)
+
 	config.Conf.Request.QueryLimitEnable = true
 	testUserName := "test_metrics"
 	l := limiter.GetLimiter(testUserName)
@@ -730,7 +769,7 @@ func TestGenerateExtraMetrics(t *testing.T) {
 	metric = metrics[0]
 	assert.Equal(t, strconv.FormatInt(ts.UnixMilli(), 10), metric.Ts)
 	assert.Equal(t, 2, metric.Protocol)
-	assert.Equal(t, 4, len(metric.Tables))
+	assert.Equal(t, 5, len(metric.Tables))
 	statusTable = metric.Tables[0]
 	assert.Equal(t, "adapter_status", statusTable.Name)
 	assert.Equal(t, 1, len(statusTable.MetricGroups))
@@ -861,6 +900,39 @@ func TestGenerateExtraMetrics(t *testing.T) {
 		assert.Equal(t, expectLimiterMetricNames[i], limiterMetric[i].Name)
 		assert.Equal(t, expectLimiterMetricValues[i], limiterMetric[i].Value)
 	}
+
+	inputJsonTable = metric.Tables[4]
+	assert.Equal(t, "adapter_input_json", inputJsonTable.Name)
+	assert.Equal(t, 1, len(inputJsonTable.MetricGroups))
+	assert.Equal(t, 2, len(inputJsonTable.MetricGroups[0].Tags))
+	assert.Equal(t, "url_endpoint", inputJsonTable.MetricGroups[0].Tags[0].Name)
+	assert.Equal(t, "test_metrics", inputJsonTable.MetricGroups[0].Tags[0].Value)
+	assert.Equal(t, "endpoint", inputJsonTable.MetricGroups[0].Tags[1].Name)
+	assert.Equal(t, identity, inputJsonTable.MetricGroups[0].Tags[1].Value)
+	assert.Equal(t, 5, len(inputJsonTable.MetricGroups[0].Metrics))
+	assert.Equal(t, "total_rows", inputJsonTable.MetricGroups[0].Metrics[0].Name)
+	assert.Equal(t, float64(20), inputJsonTable.MetricGroups[0].Metrics[0].Value)
+	assert.Equal(t, "success_rows", inputJsonTable.MetricGroups[0].Metrics[1].Name)
+	assert.Equal(t, float64(12), inputJsonTable.MetricGroups[0].Metrics[1].Value)
+	assert.Equal(t, "fail_rows", inputJsonTable.MetricGroups[0].Metrics[2].Name)
+	assert.Equal(t, float64(1), inputJsonTable.MetricGroups[0].Metrics[2].Value)
+	assert.Equal(t, "inflight_rows", inputJsonTable.MetricGroups[0].Metrics[3].Name)
+	assert.Equal(t, float64(11), inputJsonTable.MetricGroups[0].Metrics[3].Value)
+	assert.Equal(t, "affected_rows", inputJsonTable.MetricGroups[0].Metrics[4].Name)
+	assert.Equal(t, float64(200), inputJsonTable.MetricGroups[0].Metrics[4].Value)
+
+	assert.Equal(t, float64(0), inputJsonMetrics.TotalRows.Value())
+	assert.Equal(t, float64(0), inputJsonMetrics.SuccessRows.Value())
+	assert.Equal(t, float64(0), inputJsonMetrics.FailRows.Value())
+	assert.Equal(t, float64(0), inputJsonMetrics.AffectedRows.Value())
+	assert.Equal(t, float64(11), inputJsonMetrics.InflightRows.Value())
+
 	config.Conf.UploadKeeper.Enable = false
 	config.Conf.Request.QueryLimitEnable = false
+}
+
+func TestNewInputJsonMetric(t *testing.T) {
+	config.Conf.UploadKeeper.Enable = false
+	metrics := NewInputJsonMetric("disable_upload_keeper")
+	require.Nil(t, metrics)
 }
