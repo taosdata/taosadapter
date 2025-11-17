@@ -29,6 +29,7 @@ type Config struct {
 	Monitor             *Monitor
 	UploadKeeper        *UploadKeeper
 	Request             *Request
+	Reject              *Reject
 }
 
 var (
@@ -134,6 +135,11 @@ func Init() {
 	if Conf.Pool.MaxConnect == 0 {
 		Conf.Pool.MaxConnect = runtime.GOMAXPROCS(0) * 2
 	}
+	Conf.Reject = &Reject{}
+	err = Conf.Reject.SetValue(viper.GetViper())
+	if err != nil {
+		panic(err)
+	}
 }
 
 func init() {
@@ -185,7 +191,8 @@ func init() {
 	// query request limit
 	initRequest(viper.GetViper())
 	registerFlags()
-
+	// reject config
+	initRejectConfig(viper.GetViper())
 	err := viper.BindPFlags(pflag.CommandLine)
 	if err != nil {
 		panic(err)

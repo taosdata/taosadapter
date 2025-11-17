@@ -22,6 +22,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
 	"github.com/taosdata/taosadapter/v3/plugin"
+	"github.com/taosdata/taosadapter/v3/tools/watcher"
 	"github.com/taosdata/taosadapter/v3/version"
 )
 
@@ -86,7 +87,11 @@ func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin
 }
 
 func Start(router *gin.Engine, startHttpServer func(server *http.Server)) {
-	prg := newProgram(router, startHttpServer)
+	w, err := watcher.NewWatcher(logger, OnConfigChange, viper.ConfigFileUsed())
+	if err != nil {
+		logger.Fatal("watcher init failed: ", err)
+	}
+	prg := newProgram(router, startHttpServer, w)
 	svcConfig := &service.Config{
 		Name:        fmt.Sprintf("%sadapter", version.CUS_PROMPT),
 		DisplayName: fmt.Sprintf("%sadapter", version.CUS_PROMPT),
@@ -107,14 +112,15 @@ type program struct {
 	router          *gin.Engine
 	server          *http.Server
 	startHttpServer func(server *http.Server)
+	watcher         *watcher.Watcher
 }
 
-func newProgram(router *gin.Engine, startHttpServer func(server *http.Server)) *program {
+func newProgram(router *gin.Engine, startHttpServer func(server *http.Server), w *watcher.Watcher) *program {
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(config.Conf.Port),
 		Handler: router,
 	}
-	return &program{router: router, server: server, startHttpServer: startHttpServer}
+	return &program{router: router, server: server, startHttpServer: startHttpServer, watcher: w}
 }
 
 func (p *program) Start(s service.Service) error {
@@ -138,6 +144,11 @@ func (p *program) Stop(s service.Service) error {
 			logger.Println("WebServer Shutdown error:", err)
 		}
 	}()
+	logger.Println("Close Watcher ...")
+	err := p.watcher.Close()
+	if err != nil {
+		logger.Println("Watcher Close error:", err)
+	}
 	logger.Println("Stop Plugins ...")
 	plugin.StopWithCtx(ctx)
 	logger.Println("Server exiting")
