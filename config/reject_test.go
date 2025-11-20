@@ -92,10 +92,12 @@ func Test_initRejectConfig(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
+		want []string
 	}{
 		{
 			name: "default initialization",
 			args: args{v: viper.New()},
+			want: nil,
 		},
 		{
 			name: "custom regex initialization",
@@ -104,11 +106,18 @@ func Test_initRejectConfig(t *testing.T) {
 				v.Set("rejectQuerySqlRegex", []string{`^DROP TABLE`, `^DELETE FROM sensitive_data`})
 				return v
 			}()},
+			want: []string{`^DROP TABLE`, `^DELETE FROM sensitive_data`},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			initRejectConfig(tt.args.v)
+			got := tt.args.v.Get("rejectQuerySqlRegex")
+			if tt.want == nil {
+				assert.Nil(t, got, "Get rejectQuerySqlRegex")
+				return
+			}
+			assert.Equalf(t, tt.want, got, "Get rejectQuerySqlRegex")
 		})
 	}
 }
