@@ -9,10 +9,11 @@ import (
 )
 
 func OnConfigChange(file string, _ fsnotify.Op, logger *logrus.Entry) {
+	logger.Infof("ConfigChange %s", file)
 	v := viper.New()
-	viper.SetConfigType("toml")
-	viper.SetConfigFile(file)
-	err := viper.ReadInConfig()
+	v.SetConfigType("toml")
+	v.SetConfigFile(file)
+	err := v.ReadInConfig()
 	if err != nil {
 		logger.Errorf("read config failed: %s", err)
 		return

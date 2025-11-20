@@ -8,10 +8,12 @@ import (
 	"unsafe"
 
 	"github.com/sirupsen/logrus"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/async"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	taoserrors "github.com/taosdata/taosadapter/v3/driver/errors"
+	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
@@ -19,6 +21,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 	"github.com/taosdata/taosadapter/v3/tools/limiter"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
+	"github.com/taosdata/taosadapter/v3/tools/sqltype"
 )
 
 func handleConnectError(ctx context.Context, conn unsafe.Pointer, session *melody.Session, logger *logrus.Entry, isDebug bool, action string, reqID uint64, err error, errorExt string) {
@@ -91,13 +94,24 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 }
 
 func (h *messageHandler) doQuery(ctx context.Context, session *melody.Session, action string, reqID uint64, reqSql string, innerReqID uint64, logger *logrus.Entry, isDebug bool) {
+	sqlType := monitor.WSRecordRequest(reqSql)
+	rejectRegex := config.Conf.Reject.GetRejectQuerySqlRegex()
+	if sqlType != sqltype.InsertType && len(rejectRegex) > 0 {
+		for _, reject := range rejectRegex {
+			if reject.MatchString(reqSql) {
+				logger.Warnf("reject sql, client_ip:%s, port:%s, user:%s, app:%s, reject_regex:%s, sql:%s", h.ipStr, h.port, h.user, h.appName, reject.String(), reqSql)
+				monitor.WSRecordResult(sqlType, false)
+				commonErrorResponse(ctx, session, logger, action, reqID, httperror.SQLForbidden, "reject sql")
+				return
+			}
+		}
+	}
 	// csv record sql
 	record, recordSql := recordsql.GetSQLRecord()
 	var recordTime time.Time
 	if recordSql {
 		record.Init(reqSql, h.ipStr, h.port, h.appName, h.user, recordsql.WSType, innerReqID, time.Now())
 	}
-	sqlType := monitor.WSRecordRequest(reqSql)
 	// check if the sql need limit
 	var l *limiter.Limiter
 	releaseLimiter := false
@@ -116,7 +130,7 @@ func (h *messageHandler) doQuery(ctx context.Context, session *melody.Session, a
 			// monitor record failed
 			monitor.WSRecordResult(sqlType, false)
 			logger.Errorf("acquire limiter failed, user:%s, err:%s", h.user, err)
-			commonErrorResponse(ctx, session, logger, action, reqID, 0xfffe, err.Error())
+			commonErrorResponse(ctx, session, logger, action, reqID, httperror.RequestOverLimit, err.Error())
 			return
 		}
 		logger.Debug("sql limiter acquire success")

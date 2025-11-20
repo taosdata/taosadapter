@@ -169,6 +169,7 @@ func DoQuery(c *gin.Context, db string, location *time.Location, reqID int64, re
 		for _, reject := range rejectRegex {
 			if reject.MatchString(sql) {
 				logger.Warnf("reject sql, client_ip:%s, port:%s, user:%s, app:%s, reject_regex:%s, sql:%s", ip.String(), port, user, appName, reject.String(), sql)
+				monitor.RestRecordResult(sqlType, false)
 				ForbiddenResponse(c, logger, "sql rejected")
 				return
 			}
