@@ -32,7 +32,7 @@ func (r *Reject) SetValue(v *viper.Viper) error {
 }
 
 func (r *Reject) GetRejectQuerySqlRegex() []*regexp.Regexp {
-	r.RLocker()
+	r.RLock()
 	defer r.RUnlock()
 	return r.rejectQuerySqlRegex
 }

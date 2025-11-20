@@ -8,6 +8,7 @@ import (
 
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/driver/errors"
+	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/tools/sqltype"
 )
 
@@ -68,7 +69,7 @@ func (l *Limiter) Acquire() error {
 		old := l.curWait.Load()
 		if l.maxWait > 0 && old >= l.maxWait {
 			l.failCount.Add(1)
-			return errors.NewError(0xfffe, "request wait queue is full, please try again later")
+			return errors.NewError(httperror.RequestOverLimit, "request wait queue is full, please try again later")
 		}
 		if l.curWait.CompareAndSwap(old, old+1) {
 			break
@@ -84,7 +85,7 @@ func (l *Limiter) Acquire() error {
 		return nil
 	case <-timer.C:
 		l.failCount.Add(1)
-		return errors.NewError(0xfffe, "request wait timeout, please try again later")
+		return errors.NewError(httperror.RequestOverLimit, "request wait timeout, please try again later")
 	}
 }
 
