@@ -87,7 +87,7 @@ func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin
 }
 
 func Start(router *gin.Engine, startHttpServer func(server *http.Server)) {
-	w, err := watcher.NewWatcher(logger, OnConfigChange, viper.ConfigFileUsed())
+	w, err := watcher.NewWatcher(logger, OnConfigChange, config.Conf.ConfigFile)
 	if err != nil {
 		logger.Fatal("watcher init failed: ", err)
 	}

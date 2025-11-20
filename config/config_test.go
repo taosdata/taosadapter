@@ -1,6 +1,7 @@
 package config
 
 import (
+	"regexp"
 	"runtime"
 	"testing"
 	"time"
@@ -24,10 +25,16 @@ func TestInit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			Init()
 			logPath := "/var/log/taos"
+			configPath := "/etc/taos/taosadapter.toml"
 			if runtime.GOOS == "windows" {
 				logPath = "C:\\TDengine\\log"
+				configPath = "C:\\TDengine\\cfg\\taosadapter.toml"
 			}
 			assert.Equal(t, &Config{
+				ConfigFile: configPath,
+				Reject: &Reject{
+					rejectQuerySqlRegex: []*regexp.Regexp{},
+				},
 				InstanceID: 32,
 				Cors: &CorsConfig{
 					AllowAllOrigins:  true,
