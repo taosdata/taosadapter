@@ -590,7 +590,7 @@ jobs:
         run: govulncheck ./...
 
   test_change_config:
-    name: govulncheck
+    name: test_change_config
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -627,11 +627,13 @@ jobs:
           restore-keys: |
             ${{ matrix.os }}-build-${{ inputs.tbBranch }}-
 
-
       - name: install
         run: |
           tar -zxvf server.tar.gz
           cd release && sudo sh install.sh
+
+      - name: checkout
+        uses: actions/checkout@v4
 
       - name: copy taos cfg
         run: |
@@ -652,14 +654,13 @@ jobs:
       - name: start taosd
         run: nohup sudo sh ./start.sh & disown
 
-      - name: checkout
-        uses: actions/checkout@v4
-
       - name: build taosAdapter
         run: go build
 
-      - name: install taosAdapter
+      - name: start taosAdapter
         run: nohup sudo ./taosadapter & disown
 
       - name: run test
-        run: sudo tests/change_config/change_config_test.sh
+        run: |
+          sudo chmod +x ./tests/change_config_test.sh || true
+          sudo bash ./tests/change_config_test.sh

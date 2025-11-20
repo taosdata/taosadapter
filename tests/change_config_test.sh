@@ -1,11 +1,12 @@
 #!/bin/bash
-set -e
+set -xe
+
 cat >/etc/taos/taosadapter.toml << 'EOF'
 EOF
 
 sleep 2
 
-response_code=$(curl -u root:taosdata -s -o /dev/null -w "%{http_code}" localhost:6041/rest/sql -d "show databases")
+response_code=$(curl -u root:taosdata -s -o /dev/null -w "%{http_code}" 127.0.0.1:6041/rest/sql -d "show databases")
 if [ "$response_code" -ne 200 ]; then
     echo "Failed to connect to TDengine RESTful API. Response code: $response_code"
     exit 1
@@ -20,7 +21,7 @@ level = "debug"
 EOF
 
 sleep 2
-response_code=$(curl -u root:taosdata -s -o /dev/null -w "%{http_code}" localhost:6041/rest/sql -d "show databases")
+response_code=$(curl -u root:taosdata -s -o /dev/null -w "%{http_code}" 127.0.0.1:6041/rest/sql -d "show databases")
 if [ "$response_code" -ne 403 ]; then
     echo "Configuration change did not take effect as expected. Response code: $response_code"
     exit 1
