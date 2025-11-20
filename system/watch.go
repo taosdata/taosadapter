@@ -9,7 +9,7 @@ import (
 )
 
 func OnConfigChange(file string, _ fsnotify.Op, logger *logrus.Entry) {
-	logger.Infof("ConfigChange %s", file)
+	logger.Info("config file changed, reload config")
 	v := viper.New()
 	v.SetConfigType("toml")
 	v.SetConfigFile(file)
@@ -32,4 +32,5 @@ func OnConfigChange(file string, _ fsnotify.Op, logger *logrus.Entry) {
 			return
 		}
 	}
+	logger.Infof("reload config success")
 }

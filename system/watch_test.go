@@ -32,11 +32,11 @@ func TestOnConfigChange(t *testing.T) {
 	require.NoError(t, err)
 	OnConfigChange(file, fsnotify.Write, logger)
 	// log level change
-	err = os.WriteFile(file, []byte("[log]\nlevel = 'debug'\nrejectQuerySqlRegex = ['^SELECT * FROM .*']"), 0644)
+	err = os.WriteFile(file, []byte("rejectQuerySqlRegex = ['^SELECT * FROM .*']\n[log]\nlevel = 'debug'"), 0644)
 	require.NoError(t, err)
 	OnConfigChange(file, fsnotify.Write, logger)
 	// wrong log level
-	err = os.WriteFile(file, []byte("[log]\nlevel = 'dbg'\nrejectQuerySqlRegex = ['^SELECT * FROM .*']"), 0644)
+	err = os.WriteFile(file, []byte("rejectQuerySqlRegex = ['^SELECT * FROM .*']\n[log]\nlevel = 'dbg'"), 0644)
 	require.NoError(t, err)
 	OnConfigChange(file, fsnotify.Write, logger)
 }
