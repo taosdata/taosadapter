@@ -1,4 +1,4 @@
-package system
+package watch
 
 import (
 	"github.com/fsnotify/fsnotify"

@@ -1,4 +1,4 @@
-package system
+package watch
 
 import (
 	"os"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/config"
@@ -15,6 +16,7 @@ func TestOnConfigChange(t *testing.T) {
 	config.Init()
 	tmpDir := t.TempDir()
 	file := filepath.Join(tmpDir, "config.toml")
+	logger := logrus.New().WithField("test", "TestOnConfigChange")
 	// file not exists
 	OnConfigChange(file, fsnotify.Create, logger)
 	// create file, no content

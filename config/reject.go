@@ -16,14 +16,12 @@ type Reject struct {
 func (r *Reject) SetValue(v *viper.Viper) error {
 	regexpStringSlice := v.GetStringSlice("rejectQuerySqlRegex")
 	regexpSlice := make([]*regexp.Regexp, len(regexpStringSlice))
-	if len(regexpStringSlice) > 0 {
-		var err error
-		for i := 0; i < len(regexpStringSlice); i++ {
-			regexpSlice[i], err = regexp.Compile(regexpStringSlice[i])
-			if err != nil {
-				return fmt.Errorf("rejectQuerySqlRegex regexp compile error, string: %s, error: %s", regexpStringSlice[i], err)
-			}
+	for i, s := range regexpStringSlice {
+		re, err := regexp.Compile(s)
+		if err != nil {
+			return fmt.Errorf("rejectQuerySqlRegex regexp compile error, string: %s, error: %s", s, err)
 		}
+		regexpSlice[i] = re
 	}
 	r.Lock()
 	defer r.Unlock()

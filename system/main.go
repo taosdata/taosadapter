@@ -16,6 +16,7 @@ import (
 	"github.com/kardianos/service"
 	"github.com/spf13/viper"
 	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/config/watch"
 	"github.com/taosdata/taosadapter/v3/controller"
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/log"
@@ -87,7 +88,7 @@ func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin
 }
 
 func Start(router *gin.Engine, startHttpServer func(server *http.Server)) {
-	w, err := watcher.NewWatcher(logger, OnConfigChange, config.Conf.ConfigFile)
+	w, err := watcher.NewWatcher(logger, watch.OnConfigChange, config.Conf.ConfigFile)
 	if err != nil {
 		logger.Fatal("watcher init failed: ", err)
 	}
