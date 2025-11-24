@@ -124,6 +124,7 @@ jobs:
           (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true') ||
           (github.event_name == 'push' && steps.cache-server-push.outputs.cache-hit != 'true')
         run: |
+          tree ./TDengine/debug/build
           mkdir -p ./release
           cp ./TDengine/debug/build/bin/taos ./release/
           cp ./TDengine/debug/build/bin/taosd ./release/
@@ -266,7 +267,9 @@ jobs:
 
       - name: test
         id: test
-        run: sudo go test -coverpkg=./... -v --count=1 -coverprofile=coverage.txt -covermode=atomic ./...
+        env:
+          GO_TEST_DISABLE_DISPLAY_LOG: "true"
+        run: go test -coverpkg=./... -v --count=1 -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest'
@@ -350,7 +353,8 @@ jobs:
     name: Build-asan${{ matrix.os }}
     strategy:
       matrix:
-        os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
+        #       asan runs failed on 24.04, see: https://github.com/cockroachdb/pebble/issues/5342
+        os: [ 'ubuntu-22.04' , 'ubuntu-22.04-arm' ]
     outputs:
       commit_id: ${{ steps.get_commit_id.outputs.commit_id }}
     steps:
@@ -468,7 +472,8 @@ jobs:
     strategy:
       matrix:
         go: [ 'stable' ]
-        os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
+        #       asan runs failed on 24.04, see: https://github.com/cockroachdb/pebble/issues/5342
+        os: [ 'ubuntu-22.04' , 'ubuntu-22.04-arm' ]
     name: test taosAdapter with asan ${{ matrix.os }}-${{ matrix.go }}
     steps:
       - name: get cache server by pr
@@ -525,7 +530,9 @@ jobs:
 
       - name: test
         id: test
-        run: sudo go test -v --count=1 -asan ./...
+        env:
+          GO_TEST_DISABLE_DISPLAY_LOG: "true"
+        run: go test -v --count=1 -asan ./...
 
   govulncheck:
     name: govulncheck
