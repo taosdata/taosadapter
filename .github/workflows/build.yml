@@ -582,8 +582,8 @@ jobs:
       - name: Run vulnerability scan
         run: govulncheck ./...
 
-  test_change_config:
-    name: test_change_config
+  test_e2e:
+    name: test_e2e
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -635,7 +635,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go }}
+          go-version: stable
           cache-dependency-path: go.sum
 
       - name: start shell
@@ -648,12 +648,22 @@ jobs:
         run: nohup sudo sh ./start.sh & disown
 
       - name: build taosAdapter
-        run: go build
-
-      - name: start taosAdapter
-        run: nohup sudo ./taosadapter & disown
+        run: go build -cover
 
       - name: run test
         run: |
-          sudo chmod +x ./tests/change_config_test.sh || true
-          sudo bash ./tests/change_config_test.sh
+          sudo chmod +x ./tests/e2e.sh || true
+          sudo bash ./tests/e2e.sh
+
+      - name: merge coverage
+        run: |
+          sudo go tool covdata textfmt -i=coverage -o=cov.txt
+
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./cov.txt
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_ORG_TOKEN }}
+          OS: linux
