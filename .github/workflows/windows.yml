@@ -125,12 +125,12 @@ jobs:
           jom.exe install
 
   test_build:
+    name: test_build
     needs: build
     runs-on: windows-2022
     strategy:
       matrix:
         go: [ 'stable' ]
-    name: Go ${{ matrix.go }}
     steps:
       - name: get cache server by pr
         if: github.event_name == 'pull_request'
@@ -173,13 +173,13 @@ jobs:
       - name: build taosadapter
         run: go build
 
-#  test_go:
+#  test_e2e:
+#    name: test_e2e
 #    needs: build
 #    runs-on: windows-2022
 #    strategy:
 #      matrix:
-#        go: [ '1.19' ]
-#    name: Go ${{ matrix.go }}
+#        go: [ 'stable' ]
 #    steps:
 #      - name: get cache server by pr
 #        if: github.event_name == 'pull_request'
@@ -191,6 +191,16 @@ jobs:
 #          restore-keys: |
 #            ${{ runner.os }}-build-${{ github.base_ref }}-
 #
+#      - name: get cache server by push
+#        if: github.event_name == 'push'
+#        id: get-cache-server-push
+#        uses: actions/cache@v4
+#        with:
+#          path: C:/TDengine
+#          key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
+#          restore-keys: |
+#            ${{ runner.os }}-build-${{ github.ref_name }}-
+#
 #      - name: cache server manually
 #        if: github.event_name == 'workflow_dispatch'
 #        id: get-cache-server-manually
@@ -201,6 +211,12 @@ jobs:
 #          restore-keys: |
 #            ${{ runner.os }}-build-${{ inputs.tbBranch }}-
 #
+#      - name: upload artifact
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: cache-windows
+#          path: C:/TDengine
+#
 #      - name: checkout
 #        uses: actions/checkout@v4
 #
@@ -209,11 +225,34 @@ jobs:
 #          go-version: ${{ matrix.go }}
 #          cache-dependency-path: go.sum
 #
-#      - name: run TDengine and test
+#      - name: run TDengine
 #        shell: cmd
 #        env:
 #          TAOS_SUPPORT_VNODES: 256
 #        run: |
-#          set PATH=%PATH%;C:\TDengine\driver
+#          set PATH=%PATH%;C:\TDengine
 #          start /b C:/TDengine/taosd.exe > log.txt
-#          go test -v --count=1 ./...
+#
+#      - name: build taosadapter
+#        run: go build --cover
+#
+#      - name: copy lib to system32
+#        run: |
+#          copy C:\TDengine\taosnative.dll C:\Windows\System32\taosnative.dll
+#
+#      - name: run e2e test
+#        shell: bash
+#        run: |
+#          ./tests/e2e.sh
+#
+#      - name: merge coverage
+#        run: |
+#          go tool covdata textfmt -i="coverage" -o="cov.txt"
+#
+#      - name: Upload coverage to Codecov
+#        uses: codecov/codecov-action@v5
+#        with:
+#          files: cov.txt
+#        env:
+#          CODECOV_TOKEN: ${{ secrets.CODECOV_ORG_TOKEN }}
+#          OS: windows
