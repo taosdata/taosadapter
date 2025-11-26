@@ -56,7 +56,8 @@ stop_taosadapter() {
 test_connection() {
     local expected_code=$1
     local description=$2
-    local response_code=$(curl -u root:taosdata -s -o /dev/null -w "%{http_code}" 127.0.0.1:6041/rest/sql -d "show databases")
+    local sql=$3
+    local response_code=$(curl -u root:taosdata -s -o /dev/null -w "%{http_code}" 127.0.0.1:6041/rest/sql -d "$sql")
 
     if [ "$response_code" -ne "$expected_code" ]; then
         echo "FAILED: $description. Expected: $expected_code, Got: $response_code"
@@ -77,7 +78,7 @@ clear_config() {
 update_config() {
     local config_file=$1
     cat > "$config_file" << 'EOF'
-rejectQuerySqlRegex = ['(?i)^show\s+databases.*']
+rejectQuerySqlRegex = ['(?i)^show\s+databases.*','(?i)^select\s+.*from\s+testdb.*']
 [log]
 level = "debug"
 EOF
@@ -92,10 +93,12 @@ clear_config $taosadapter_config
 start_taosadapter  # No parameter, don't use -c
 
 # Test initial connection
-test_connection 200 "Initial connection to TDengine RESTful API" || exit 1
+test_connection 200 "Initial connection to TDengine RESTful API" "show databases" || exit 1
+test_connection 200 "Initial connection to TDengine RESTful API" "select * from testdb.testtb" || exit 1
 
 update_config $taosadapter_config
-test_connection 403 "Connection after adding rejectQuerySqlRegex" || exit 1
+test_connection 403 "Connection after adding rejectQuerySqlRegex" "show databases" || exit 1
+test_connection 403 "Connection after adding rejectQuerySqlRegex" "select * from testdb.testtb" || exit 1
 
 stop_taosadapter
 
@@ -106,10 +109,12 @@ echo -e "\n=== Testing temporary configuration ==="
 start_taosadapter $taosadapter_tmp_config  # With parameter, use -c
 
 # Test initial connection
-test_connection 200 "Initial connection with temp config" || exit 1
+test_connection 200 "Initial connection with temp config" "show databases" || exit 1
+test_connection 200 "Initial connection with temp config" "select * from testdb.testtb" || exit 1
 
 update_config $taosadapter_tmp_config
-test_connection 403 "Connection after updating temp config" || exit 1
+test_connection 403 "Connection after updating temp config" "show databases" || exit 1
+test_connection 403 "Connection after updating temp config" "select * from testdb.testtb" || exit 1
 
 stop_taosadapter
 

@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -26,6 +27,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
+	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 	"github.com/taosdata/taosadapter/v3/tools/limiter"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 )
@@ -1499,7 +1501,7 @@ func TestLimitQuery(t *testing.T) {
 
 func TestRejectSql(t *testing.T) {
 	v := viper.New()
-	v.Set("rejectQuerySqlRegex", []string{"(?i)^drop\\s+database\\s+.*", "(?i)^drop\\s+table\\s+.*", "(?i)^alter\\s+table\\s+.*"})
+	v.Set("rejectQuerySqlRegex", []string{"(?i)^drop\\s+database\\s+.*", "(?i)^drop\\s+table\\s+.*", "(?i)^alter\\s+table\\s+.*", `(?i)^select\s+.*from\s+testdb.*`})
 	err := config.Conf.Reject.SetValue(v)
 	require.NoError(t, err)
 	defer func() {
@@ -1541,6 +1543,9 @@ func TestRejectSql(t *testing.T) {
 	assert.Equal(t, 0, queryResp.Code, queryResp.Message)
 	err = freeResult(t, ws, 0x115, queryResp.ID)
 	require.NoError(t, err)
+
+	queryResp = binaryQuery(t, ws, 0x117, " select * from testdb.testtb ")
+	assert.Equal(t, httperror.SQLForbidden, queryResp.Code, queryResp.Message)
 }
 
 func binaryQuery(t *testing.T, ws *websocket.Conn, reqID uint64, sql string) queryResponse {
@@ -1624,4 +1629,25 @@ func fetchAllResultWithBinary(t *testing.T, ws *websocket.Conn, reqID uint64, id
 		assert.Equal(t, uint32(0), fetchRawBlockResp.Code, fetchRawBlockResp.Message)
 	}
 	return nil
+}
+
+type stringHeader struct {
+	data unsafe.Pointer
+	len  int
+}
+
+func TestUnsafeString(t *testing.T) {
+	bs := []byte(" hello world ")
+	bsDataP := unsafe.Pointer(&bs[0])
+	str := bytesutil.ToUnsafeString(bs)
+	strDataP := (*stringHeader)(unsafe.Pointer(&str)).data
+	trimStr := strings.TrimSpace(str)
+	trimStrDataP := (*stringHeader)(unsafe.Pointer(&trimStr)).data
+	assert.Equal(t, bsDataP, strDataP)
+	assert.Equal(t, unsafe.Add(strDataP, 1), trimStrDataP)
+	// force gc to check trimStr is valid
+	for i := 0; i < 1000; i++ {
+		runtime.GC()
+	}
+	assert.Equal(t, "hello world", trimStr)
 }
