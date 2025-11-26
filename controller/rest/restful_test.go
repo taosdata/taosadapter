@@ -21,6 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
@@ -1000,6 +1001,57 @@ func TestInfAndNan(t *testing.T) {
 	assert.Equal(t, 2.0, result.Data[0][1])
 	assert.Nil(t, result.Data[1][1])
 	assert.Nil(t, result.Data[2][1])
+}
+
+func TestRejectSQL(t *testing.T) {
+	v := viper.New()
+	v.Set("rejectQuerySqlRegex", []string{"(?i)^drop\\s+database\\s+.*", "(?i)^drop\\s+table\\s+.*", "(?i)^alter\\s+table\\s+.*", `(?i)^select\s+.*from\s+testdb.*`})
+	err := config.Conf.Reject.SetValue(v)
+	require.NoError(t, err)
+	defer func() {
+		err = config.Conf.Reject.SetValue(viper.New())
+		require.NoError(t, err)
+	}()
+	w := httptest.NewRecorder()
+	body := strings.NewReader("DROP DATABASE testdb")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("DROP taBle testdb.stb")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("Alter table testdb.stb add column c1 int")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader(" select * from testdb.testtb ")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("select * from information_schema.ins_databases")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
 }
 
 func executeSQL(sql string) *httptest.ResponseRecorder {

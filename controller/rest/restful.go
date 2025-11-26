@@ -160,18 +160,29 @@ func DoQuery(c *gin.Context, db string, location *time.Location, reqID int64, re
 	logger.Debugf("request sql:%s", log.GetLogSql(sql))
 	sqlType := monitor.RestRecordRequest(sql)
 	c.Set("sql", sql)
+	rejectRegex := config.Conf.Reject.GetRejectQuerySqlRegex()
+	ip := iptool.GetRealIP(c.Request)
+	port, _ := iptool.GetRealPort(c.Request)
 	user := c.MustGet(UserKey).(string)
+	appName := c.Query(AppNameQueryParamKey)
+	if sqlType != sqltype.InsertType && len(rejectRegex) > 0 {
+		for _, reject := range rejectRegex {
+			if reject.MatchString(sql) {
+				logger.Warnf("reject sql, client_ip:%s, port:%s, user:%s, app:%s, reject_regex:%s, sql:%s", ip.String(), port, user, appName, reject.String(), sql)
+				monitor.RestRecordResult(sqlType, false)
+				ForbiddenResponse(c, logger, "sql rejected")
+				return
+			}
+		}
+	}
 	password := c.MustGet(PasswordKey).(string)
 	logger.Tracef("connect server, user:%s, pass:%s", user, password)
-	ip := iptool.GetRealIP(c.Request)
 
 	// record sql to file
 	record, recordSql := recordsql.GetSQLRecord()
 	var recordTime time.Time
 	if recordSql {
 		defer recordsql.PutSQLRecord(record)
-		port, _ := iptool.GetRealPort(c.Request)
-		appName := c.Query(AppNameQueryParamKey)
 		record.Init(sql, ip.String(), port, appName, user, recordsql.HTTPType, uint64(reqID), c.MustGet(StartTimeKey).(time.Time))
 		recordTime = time.Now()
 	}
