@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -18,12 +19,15 @@ import (
 	"unsafe"
 
 	"github.com/gorilla/websocket"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
+	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
+	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 	"github.com/taosdata/taosadapter/v3/tools/limiter"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 )
@@ -1465,7 +1469,7 @@ func TestLimitQuery(t *testing.T) {
 			// second query will be limited
 			reqID++
 			queryResp = queryFunc(t, ws, uint64(reqID), "select 2")
-			assert.Equal(t, 0xfffe, queryResp.Code, queryResp.Message)
+			assert.Equal(t, httperror.RequestOverLimit, queryResp.Code, queryResp.Message)
 			// query with unlimited sql
 			reqID++
 			queryResp = queryFunc(t, ws, uint64(reqID), "select 1")
@@ -1493,6 +1497,55 @@ func TestLimitQuery(t *testing.T) {
 			require.NoError(t, err)
 		}
 	}
+}
+
+func TestRejectSql(t *testing.T) {
+	v := viper.New()
+	v.Set("rejectQuerySqlRegex", []string{"(?i)^drop\\s+database\\s+.*", "(?i)^drop\\s+table\\s+.*", "(?i)^alter\\s+table\\s+.*", `(?i)^select\s+.*from\s+testdb.*`})
+	err := config.Conf.Reject.SetValue(v)
+	require.NoError(t, err)
+	defer func() {
+		err = config.Conf.Reject.SetValue(viper.New())
+		require.NoError(t, err)
+	}()
+	s := httptest.NewServer(router)
+	defer s.Close()
+
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	// connect
+	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata"}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp connResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+	assert.Equal(t, Connect, connResp.Action)
+
+	queryResp := binaryQuery(t, ws, 0x111, "DROP DATABASE testdb")
+	assert.Equal(t, httperror.SQLForbidden, queryResp.Code, queryResp.Message)
+	queryResp = binaryQuery(t, ws, 0x112, "DROP taBle testdb.stb")
+	assert.Equal(t, httperror.SQLForbidden, queryResp.Code, queryResp.Message)
+	queryResp = binaryQuery(t, ws, 0x113, "ALTER TABLE testdb.stb ADD COLUMN c1 INT")
+	assert.Equal(t, httperror.SQLForbidden, queryResp.Code, queryResp.Message)
+
+	queryResp = binaryQuery(t, ws, 0x114, "select * from information_schema.ins_databases")
+	assert.Equal(t, 0, queryResp.Code, queryResp.Message)
+	err = freeResult(t, ws, 0x115, queryResp.ID)
+	require.NoError(t, err)
+
+	queryResp = binaryQuery(t, ws, 0x117, " select * from testdb.testtb ")
+	assert.Equal(t, httperror.SQLForbidden, queryResp.Code, queryResp.Message)
 }
 
 func binaryQuery(t *testing.T, ws *websocket.Conn, reqID uint64, sql string) queryResponse {
@@ -1576,4 +1629,25 @@ func fetchAllResultWithBinary(t *testing.T, ws *websocket.Conn, reqID uint64, id
 		assert.Equal(t, uint32(0), fetchRawBlockResp.Code, fetchRawBlockResp.Message)
 	}
 	return nil
+}
+
+type stringHeader struct {
+	data unsafe.Pointer
+	len  int
+}
+
+func TestUnsafeString(t *testing.T) {
+	bs := []byte(" hello world ")
+	bsDataP := unsafe.Pointer(&bs[0])
+	str := bytesutil.ToUnsafeString(bs)
+	strDataP := (*stringHeader)(unsafe.Pointer(&str)).data
+	trimStr := strings.TrimSpace(str)
+	trimStrDataP := (*stringHeader)(unsafe.Pointer(&trimStr)).data
+	assert.Equal(t, bsDataP, strDataP)
+	assert.Equal(t, unsafe.Add(strDataP, 1), trimStrDataP)
+	// force gc to check trimStr is valid
+	for i := 0; i < 1000; i++ {
+		runtime.GC()
+	}
+	assert.Equal(t, "hello world", trimStr)
 }

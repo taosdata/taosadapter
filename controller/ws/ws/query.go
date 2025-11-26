@@ -4,14 +4,17 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"strings"
 	"time"
 	"unsafe"
 
 	"github.com/sirupsen/logrus"
+	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/async"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	taoserrors "github.com/taosdata/taosadapter/v3/driver/errors"
+	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
@@ -19,6 +22,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 	"github.com/taosdata/taosadapter/v3/tools/limiter"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
+	"github.com/taosdata/taosadapter/v3/tools/sqltype"
 )
 
 func handleConnectError(ctx context.Context, conn unsafe.Pointer, session *melody.Session, logger *logrus.Entry, isDebug bool, action string, reqID uint64, err error, errorExt string) {
@@ -91,17 +95,29 @@ func (h *messageHandler) binaryQuery(ctx context.Context, session *melody.Sessio
 }
 
 func (h *messageHandler) doQuery(ctx context.Context, session *melody.Session, action string, reqID uint64, reqSql string, innerReqID uint64, logger *logrus.Entry, isDebug bool) {
+	trimSql := strings.TrimSpace(reqSql)
+	sqlType := monitor.WSRecordRequest(trimSql)
+	rejectRegex := config.Conf.Reject.GetRejectQuerySqlRegex()
+	if sqlType != sqltype.InsertType && len(rejectRegex) > 0 {
+		for _, reject := range rejectRegex {
+			if reject.MatchString(trimSql) {
+				logger.Warnf("reject sql, client_ip:%s, port:%s, user:%s, app:%s, reject_regex:%s, sql:%s", h.ipStr, h.port, h.user, h.appName, reject.String(), trimSql)
+				monitor.WSRecordResult(sqlType, false)
+				commonErrorResponse(ctx, session, logger, action, reqID, httperror.SQLForbidden, "reject sql")
+				return
+			}
+		}
+	}
 	// csv record sql
 	record, recordSql := recordsql.GetSQLRecord()
 	var recordTime time.Time
 	if recordSql {
-		record.Init(reqSql, h.ipStr, h.port, h.appName, h.user, recordsql.WSType, innerReqID, time.Now())
+		record.Init(trimSql, h.ipStr, h.port, h.appName, h.user, recordsql.WSType, innerReqID, time.Now())
 	}
-	sqlType := monitor.WSRecordRequest(reqSql)
 	// check if the sql need limit
 	var l *limiter.Limiter
 	releaseLimiter := false
-	if limiter.CheckShouldLimit(reqSql, sqlType) {
+	if limiter.CheckShouldLimit(trimSql, sqlType) {
 		// need limit
 		l = limiter.GetLimiter(h.user)
 		logger.Debug("sql limiter start acquire")
@@ -116,7 +132,7 @@ func (h *messageHandler) doQuery(ctx context.Context, session *melody.Session, a
 			// monitor record failed
 			monitor.WSRecordResult(sqlType, false)
 			logger.Errorf("acquire limiter failed, user:%s, err:%s", h.user, err)
-			commonErrorResponse(ctx, session, logger, action, reqID, 0xfffe, err.Error())
+			commonErrorResponse(ctx, session, logger, action, reqID, httperror.RequestOverLimit, err.Error())
 			return
 		}
 		logger.Debug("sql limiter acquire success")
@@ -142,7 +158,7 @@ func (h *messageHandler) doQuery(ctx context.Context, session *melody.Session, a
 		recordTime = time.Now()
 	}
 	// execute query
-	result := async.GlobalAsync.TaosQuery(h.conn, logger, isDebug, reqSql, handler, int64(innerReqID))
+	result := async.GlobalAsync.TaosQuery(h.conn, logger, isDebug, trimSql, handler, int64(innerReqID))
 	if recordSql {
 		record.SetQueryDuration(time.Since(recordTime))
 	}
@@ -159,7 +175,7 @@ func (h *messageHandler) doQuery(ctx context.Context, session *melody.Session, a
 		// monitor record failed
 		monitor.WSRecordResult(sqlType, false)
 		errStr := syncinterface.TaosErrorStr(result.Res, logger, isDebug)
-		logger.Errorf("taos query error, code:%d, msg:%s, sql:%s", code, errStr, log.GetLogSql(reqSql))
+		logger.Errorf("taos query error, code:%d, msg:%s, sql:%s", code, errStr, log.GetLogSql(trimSql))
 		async.FreeResultAsync(result.Res, logger, isDebug)
 		commonErrorResponse(ctx, session, logger, action, reqID, code, errStr)
 		return

@@ -173,7 +173,7 @@ func TestChangePassword(t *testing.T) {
 	errNo = syncinterface.TaosError(result3, logger, isDebug)
 	syncinterface.TaosSyncQueryFree(result3, logger, isDebug)
 	assert.Equal(t, 0, errNo)
-	err = conn3.Put()
+	err = conn4.Put()
 	assert.NoError(t, err)
 }
 
@@ -249,6 +249,6 @@ func TestChangePasswordConcurrent(t *testing.T) {
 	errNo = syncinterface.TaosError(result3, logger, isDebug)
 	syncinterface.TaosSyncQueryFree(result3, logger, isDebug)
 	assert.Equal(t, 0, errNo)
-	err = conn3.Put()
+	err = conn4.Put()
 	assert.NoError(t, err)
 }
