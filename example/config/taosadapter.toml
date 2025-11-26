@@ -23,7 +23,7 @@ instanceId = 32
 #maxAsyncConcurrentLimit = 0
 
 # List of SQL Reject patterns. If a SQL statement matches any of these patterns, it will be rejected.
-#rejectQuerySqlRegex = ['(?i)^drop\s+database\s+.*','(?i)^drop\s+table\s+.*','(?i)^alter\s+table\s+.*']
+#rejectQuerySqlRegex = ['(?i)^drop\s+database\s+.*','(?i)^alter\s+table\s+.*','(?i)^select\s+.*from\s+testdb.*']
 
 [request]
 # Enable query limiting. If set to true, query limiting is enabled.

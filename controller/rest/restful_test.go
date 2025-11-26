@@ -1005,7 +1005,7 @@ func TestInfAndNan(t *testing.T) {
 
 func TestRejectSQL(t *testing.T) {
 	v := viper.New()
-	v.Set("rejectQuerySqlRegex", []string{"(?i)^drop\\s+database\\s+.*", "(?i)^drop\\s+table\\s+.*", "(?i)^alter\\s+table\\s+.*"})
+	v.Set("rejectQuerySqlRegex", []string{"(?i)^drop\\s+database\\s+.*", "(?i)^drop\\s+table\\s+.*", "(?i)^alter\\s+table\\s+.*", `(?i)^select\s+.*from\s+testdb.*`})
 	err := config.Conf.Reject.SetValue(v)
 	require.NoError(t, err)
 	defer func() {
@@ -1030,6 +1030,14 @@ func TestRejectSQL(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	body = strings.NewReader("Alter table testdb.stb add column c1 int")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader(" select * from testdb.testtb ")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
