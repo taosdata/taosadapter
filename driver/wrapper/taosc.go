@@ -318,3 +318,38 @@ func TaosCheckServerStatus(fqdn *string, port int32) (status int32, details stri
 	details = C.GoString(cDetails)
 	return
 }
+
+// TaosRegisterInstance int32_t taos_register_instance(const char *id, const char *type, const char *desc,int32_t expire);
+func TaosRegisterInstance(id, registerType, desc string, expire int32) int32 {
+	idC := C.CString(id)
+	defer C.free(unsafe.Pointer(idC))
+	typeC := C.CString(registerType)
+	defer C.free(unsafe.Pointer(typeC))
+	descC := C.CString(desc)
+	defer C.free(unsafe.Pointer(descC))
+	ret := int32(C.taos_register_instance(idC, typeC, descC, C.int32_t(expire)))
+	return ret
+}
+
+// TaosListInstances int32_t taos_list_instances(const char *filter_type, char ***pList, int32_t *pCount);
+func TaosListInstances(filterType string) (instances []string, err error) {
+	typeC := C.CString(filterType)
+	defer C.free(unsafe.Pointer(typeC))
+	var pList **C.char
+	var pCount C.int32_t
+	ret := int32(C.taos_list_instances(typeC, &pList, &pCount))
+	if ret != 0 {
+		return nil, errors.NewError(int(ret), TaosErrorStr(nil))
+	}
+	defer func() {
+		C.taos_free_instances(&pList, pCount)
+	}()
+	count := int(pCount)
+	instances = make([]string, count)
+	ptrSize := unsafe.Sizeof(uintptr(0))
+	for i := 0; i < count; i++ {
+		cStr := *(**C.char)(unsafe.Pointer(uintptr(unsafe.Pointer(pList)) + uintptr(i)*ptrSize))
+		instances[i] = C.GoString(cStr)
+	}
+	return instances, nil
+}

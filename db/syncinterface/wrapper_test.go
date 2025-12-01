@@ -736,3 +736,24 @@ func TestTMQSubscription(t *testing.T) {
 	assert.Equal(t, 1, len(topics))
 	assert.Equal(t, "topic_syncinterface_subscription", topics[0])
 }
+
+func TestTaosRegisterInstance(t *testing.T) {
+	code := TaosRegisterInstance("id_1", "test_wrapper", "test_wrapper_desc", 1, logger, isDebug)
+	if code != 0 {
+		errStr := TaosErrorStr(nil, logger, isDebug)
+		t.Error(taoserrors.NewError(int(code), errStr))
+		return
+	}
+	conn, err := TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer TaosClose(conn, logger, isDebug)
+	result, err := query(conn, "select `id`,`type`,`desc`,`expire` from performance_schema.perf_instances where `type`='test_wrapper'")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result))
+	assert.Equal(t, "id_1", result[0][0])
+	assert.Equal(t, "test_wrapper", result[0][1])
+	assert.Equal(t, "test_wrapper_desc", result[0][2])
+	assert.Equal(t, int32(1), result[0][3])
+}

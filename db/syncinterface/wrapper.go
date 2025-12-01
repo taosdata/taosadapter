@@ -1166,3 +1166,14 @@ func TaosFetchWhitelistA(conn unsafe.Pointer, caller cgo.Handle, logger *logrus.
 	logger.Debugf("taos_fetch_whitelist_dual_stack_a finish, cost:%s", log.GetLogDuration(false, s))
 	monitor.TaosFetchWhitelistASuccessCounter.Inc()
 }
+
+// TaosRegisterInstance register an instance to TDengine server.
+// This function should not be blocked by semaphore.
+func TaosRegisterInstance(id, registerType, desc string, expire int32, logger *logrus.Entry, isDebug bool) int32 {
+	logger.Debugf("call taos_register_instance, id:%s, type:%s, desc:%s, expire:%d", id, registerType, desc, expire)
+	s := log.GetLogNow(isDebug)
+	code := wrapper.TaosRegisterInstance(id, registerType, desc, expire)
+	logger.Debugf("taos_register_instance finish, code:%d, cost:%s", code, log.GetLogDuration(isDebug, s))
+
+	return code
+}

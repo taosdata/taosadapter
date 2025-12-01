@@ -116,6 +116,25 @@ update_config $taosadapter_tmp_config
 test_connection 403 "Connection after updating temp config" "show databases" || exit 1
 test_connection 403 "Connection after updating temp config" "select * from testdb.testtb" || exit 1
 
+sleep 10
+
+response=$(curl -u root:taosdata -s -w "\n%{http_code}" 127.0.0.1:6041/rest/sql -d "select * from performance_schema.perf_instances where type = 'taosadapter'")
+http_code=$(echo "$response" | tail -n1)
+response_body=$(echo "$response" | head -n -1)
+
+if [ "$http_code" -eq 200 ]; then
+    rows=$(echo "$response_body" | jq -r '.rows // empty')
+
+    if [ "$rows" = "1" ]; then
+        echo "success: rows value is 1 as expected"
+    else
+        echo "failed: rows value is $rows"
+        exit 1
+    fi
+else
+    echo "failed to get performance schema info, HTTP code: $http_code"
+    exit 1
+fi
 stop_taosadapter
 
 echo -e "\n=== All tests passed successfully ==="
