@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+	"os"
 	"regexp"
 	"runtime"
 	"testing"
@@ -8,6 +10,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // @author: xftan
@@ -30,8 +33,16 @@ func TestInit(t *testing.T) {
 				logPath = "C:\\TDengine\\log"
 				configPath = "C:\\TDengine\\cfg\\taosadapter.toml"
 			}
+			host, err := os.Hostname()
+			require.NoError(t, err)
 			assert.Equal(t, &Config{
 				ConfigFile: configPath,
+				Register: &Register{
+					Instance:    fmt.Sprintf("%s:%s", host, "6041"),
+					Description: "",
+					Duration:    10,
+					Expire:      30,
+				},
 				Reject: &Reject{
 					rejectQuerySqlRegex: []*regexp.Regexp{},
 				},

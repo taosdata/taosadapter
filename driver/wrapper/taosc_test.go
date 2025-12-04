@@ -4,6 +4,8 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"io"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 	"unsafe"
@@ -793,5 +795,57 @@ func TestTaosCheckServerStatus(t *testing.T) {
 			assert.Equalf(t, tt.wantStatus, gotStatus, "TaosCheckServerStatus(%v, %v)", tt.args.fqdn, tt.args.port)
 			assert.Equalf(t, tt.wantDetails, gotDetails, "TaosCheckServerStatus(%v, %v)", tt.args.fqdn, tt.args.port)
 		})
+	}
+}
+
+func TestTaosRegisterInstance(t *testing.T) {
+	code := TaosRegisterInstance("test_instance_1", "test_type", "test_desc", 2)
+	if code != 0 {
+		t.Errorf("TaosRegisterInstance() error code= %d, msg: %s", code, TaosErrorStr(nil))
+	}
+	code = TaosRegisterInstance("test_instance_2", "test_type", "test_desc2", 2)
+	if code != 0 {
+		t.Errorf("TaosRegisterInstance() error code= %d, msg: %s", code, TaosErrorStr(nil))
+	}
+	instance, err := TaosListInstances("test_type")
+	assert.NoError(t, err)
+	sort.Strings(instance)
+	assert.Equal(t, []string{"test_instance_1", "test_instance_2"}, instance)
+	time.Sleep(time.Second)
+	instance, err = TaosListInstances("test_type")
+	assert.NoError(t, err)
+	sort.Strings(instance)
+	assert.Equal(t, []string{"test_instance_1", "test_instance_2"}, instance)
+	time.Sleep(time.Second * 1)
+	instance, err = TaosListInstances("test_type")
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(instance))
+	code = TaosRegisterInstance("test_instance_1", "test_type", "test_desc", 1)
+	if code != 0 {
+		t.Errorf("TaosRegisterInstance() error code= %d, msg: %s", code, TaosErrorStr(nil))
+	}
+	code = TaosRegisterInstance("test_instance_2", "test_type", "test_desc2", 1)
+	if code != 0 {
+		t.Errorf("TaosRegisterInstance() error code= %d, msg: %s", code, TaosErrorStr(nil))
+	}
+	instance, err = TaosListInstances("test_type")
+	assert.NoError(t, err)
+	sort.Strings(instance)
+	assert.Equal(t, []string{"test_instance_1", "test_instance_2"}, instance)
+
+	invalidID := strings.Repeat("0", 256)
+	code = TaosRegisterInstance(invalidID, "test_type", "test_desc", 1)
+	if code == 0 {
+		t.Errorf("TaosRegisterInstance() with invalid instance id should return error")
+	}
+	invalidType := strings.Repeat("0", 64)
+	code = TaosRegisterInstance("test_instance_3", invalidType, "test_desc", 1)
+	if code == 0 {
+		t.Errorf("TaosRegisterInstance() with invalid instance type should return error")
+	}
+	invalidDesc := strings.Repeat("0", 512)
+	code = TaosRegisterInstance("test_instance_3", "test_type", invalidDesc, 1)
+	if code == 0 {
+		t.Errorf("TaosRegisterInstance() with invalid instance desc should return error")
 	}
 }

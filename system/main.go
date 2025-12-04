@@ -19,6 +19,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/config/watch"
 	"github.com/taosdata/taosadapter/v3/controller"
 	"github.com/taosdata/taosadapter/v3/db"
+	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
@@ -114,6 +115,7 @@ type program struct {
 	server          *http.Server
 	startHttpServer func(server *http.Server)
 	watcher         *watcher.Watcher
+	exit            chan struct{}
 }
 
 func newProgram(router *gin.Engine, startHttpServer func(server *http.Server), w *watcher.Watcher) *program {
@@ -121,7 +123,13 @@ func newProgram(router *gin.Engine, startHttpServer func(server *http.Server), w
 		Addr:    ":" + strconv.Itoa(config.Conf.Port),
 		Handler: router,
 	}
-	return &program{router: router, server: server, startHttpServer: startHttpServer, watcher: w}
+	return &program{
+		router:          router,
+		server:          server,
+		startHttpServer: startHttpServer,
+		watcher:         w,
+		exit:            make(chan struct{}),
+	}
 }
 
 func (p *program) Start(s service.Service) error {
@@ -131,13 +139,46 @@ func (p *program) Start(s service.Service) error {
 		logger.Info("Running under service manager.")
 	}
 	monitor.StartMonitor()
-	logger.Printf("server on: %d", config.Conf.Port)
 	go p.startHttpServer(p.server)
+	go p.registerLoop()
+	logger.Infof("server on: %d", config.Conf.Port)
 	return nil
+}
+
+func (p *program) registerLoop() {
+	defer func() {
+		logger.Debug("registerLoop exited")
+	}()
+	duration := config.Conf.Register.Duration
+	registerType := fmt.Sprintf("%sadapter", version.CUS_PROMPT)
+	instance := config.Conf.Register.Instance
+	desc := config.Conf.Register.Description
+	expire := int32(config.Conf.Register.Expire)
+	doRegister(instance, registerType, desc, expire)
+	ticker := time.NewTicker(time.Duration(duration) * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			doRegister(instance, registerType, desc, expire)
+		case <-p.exit:
+			return
+		}
+	}
+}
+
+func doRegister(instance, registerType, desc string, expire int32) {
+	logger.Debugf("register instance: %s, type: %s, desc: %s, expire: %d", instance, registerType, desc, expire)
+	code := syncinterface.TaosRegisterInstance(instance, registerType, desc, expire, logger, log.IsDebug())
+	if code != 0 {
+		logger.Errorf("register instance failed, code: %d", code)
+	}
+	logger.Trace("register instance success")
 }
 
 func (p *program) Stop(s service.Service) error {
 	logger.Println("Shutdown WebServer ...")
+	close(p.exit)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	go func() {

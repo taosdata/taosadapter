@@ -25,6 +25,19 @@ instanceId = 32
 # List of SQL Reject patterns. If a SQL statement matches any of these patterns, it will be rejected.
 #rejectQuerySqlRegex = ['(?i)^drop\s+database\s+.*','(?i)^alter\s+table\s+.*','(?i)^select\s+.*from\s+testdb.*']
 
+[register]
+# The address of this taosAdapter instance. eg: "192.168.1.100:6041" or "https://192.168.1.100:6041" if SSL enabled.
+#instance = "localhost:6041"
+
+# The description of this taosAdapter instance.
+#description = ""
+
+# The registration duration (in seconds). After this duration, the instance will be re-register.
+#duration = 10
+
+# The expiration duration (in seconds). If the instance is not re-registered within this duration, it will be expired. Could not be less than duration.
+#expire = 30
+
 [request]
 # Enable query limiting. If set to true, query limiting is enabled.
 #queryLimitEnable = false

@@ -32,6 +32,7 @@ type Config struct {
 	UploadKeeper        *UploadKeeper
 	Request             *Request
 	Reject              *Reject
+	Register            *Register
 }
 
 var (
@@ -149,6 +150,11 @@ func Init() {
 	if err != nil {
 		panic(err)
 	}
+	Conf.Register = &Register{}
+	err = Conf.Register.setValue(viper.GetViper())
+	if err != nil {
+		panic(err)
+	}
 }
 
 func init() {
@@ -199,9 +205,12 @@ func init() {
 	initUploadKeeper()
 	// query request limit
 	initRequest(viper.GetViper())
-	registerFlags()
+	registerRequestFlags()
 	// reject config
 	initRejectConfig(viper.GetViper())
+	// register config
+	initRegister(viper.GetViper())
+	registerRegisterFlags()
 	err := viper.BindPFlags(pflag.CommandLine)
 	if err != nil {
 		panic(err)
