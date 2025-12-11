@@ -31,7 +31,7 @@ type messageHandler struct {
 	once         sync.Once
 	wait         sync.WaitGroup
 	dropUserChan chan struct{}
-	sync.RWMutex
+	mutex        sync.RWMutex
 
 	queryResults *QueryResultHolder // ws query
 	stmts        *StmtHolder        // stmt bind message
@@ -70,57 +70,7 @@ func newHandler(session *melody.Session) *messageHandler {
 	}
 }
 
-func (h *messageHandler) waitSignal(logger *logrus.Entry) {
-	defer func() {
-		logger.Trace("exit wait signal")
-		tool.PutRegisterChangeWhiteListHandle(h.whitelistChangeHandle)
-		tool.PutRegisterDropUserHandle(h.dropUserHandle)
-	}()
-	for {
-		select {
-		case <-h.dropUserChan:
-			logger.Trace("get drop user signal")
-			isDebug := log.IsDebug()
-			h.lock(logger, isDebug)
-			if h.isClosed() {
-				logger.Trace("server closed")
-				h.Unlock()
-				return
-			}
-			logger.Trace("user dropped, close connection")
-			h.signalExit(logger, isDebug)
-			return
-		case <-h.whitelistChangeChan:
-			logger.Trace("get whitelist change signal")
-			isDebug := log.IsDebug()
-			h.lock(logger, isDebug)
-			if h.isClosed() {
-				logger.Trace("server closed")
-				h.Unlock()
-				return
-			}
-			logger.Trace("get whitelist")
-			whitelist, err := tool.GetWhitelist(h.conn, logger, isDebug)
-			if err != nil {
-				logger.Errorf("get whitelist error, close connection, err:%s", err)
-				h.signalExit(logger, isDebug)
-				return
-			}
-			logger.Tracef("check whitelist, ip:%s, whitelist:%s", h.ipStr, tool.IpNetSliceToString(whitelist))
-			valid := tool.CheckWhitelist(whitelist, h.ip)
-			if !valid {
-				logger.Errorf("ip not in whitelist! close connection, ip:%s, whitelist:%s", h.ipStr, tool.IpNetSliceToString(whitelist))
-				h.signalExit(logger, isDebug)
-				return
-			}
-			h.Unlock()
-		case <-h.exit:
-			return
-		}
-	}
-}
-
-func (h *messageHandler) isClosed() bool {
+func (h *messageHandler) IsClosed() bool {
 	return atomic.LoadUint32(&h.closed) == 1
 }
 
@@ -128,7 +78,7 @@ func (h *messageHandler) setClosed() {
 	atomic.StoreUint32(&h.closed, 1)
 }
 
-func (h *messageHandler) signalExit(logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) UnlockAndExit(logger *logrus.Entry, isDebug bool) {
 	logger.Trace("close session")
 	s := log.GetLogNow(isDebug)
 	_ = h.session.Close()
@@ -140,18 +90,22 @@ func (h *messageHandler) signalExit(logger *logrus.Entry, isDebug bool) {
 	logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
 }
 
-func (h *messageHandler) lock(logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) Lock(logger *logrus.Entry, isDebug bool) {
 	logger.Trace("get handler lock")
 	s := log.GetLogNow(isDebug)
-	h.Lock()
+	h.mutex.Lock()
 	logger.Debugf("get handler lock cost:%s", log.GetLogDuration(isDebug, s))
 }
 
+func (h *messageHandler) Unlock() {
+	h.mutex.Unlock()
+}
+
 func (h *messageHandler) Close() {
-	h.Lock()
+	h.Lock(h.logger, log.IsDebug())
 	defer h.Unlock()
 
-	if h.isClosed() {
+	if h.IsClosed() {
 		h.logger.Trace("server closed")
 		return
 	}

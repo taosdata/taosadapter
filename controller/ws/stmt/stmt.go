@@ -52,13 +52,13 @@ func NewSTMTController() *STMTController {
 
 	stmtM.HandleMessage(func(session *melody.Session, data []byte) {
 		t := session.MustGet(TaosStmtKey).(*TaosStmt)
-		if t.closed {
+		if t.IsClosed() {
 			return
 		}
 		t.wg.Add(1)
 		go func() {
 			defer t.wg.Done()
-			if t.closed {
+			if t.IsClosed() {
 				return
 			}
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
@@ -175,13 +175,13 @@ func NewSTMTController() *STMTController {
 
 	stmtM.HandleMessageBinary(func(session *melody.Session, data []byte) {
 		t := session.MustGet(TaosStmtKey).(*TaosStmt)
-		if t.closed {
+		if t.IsClosed() {
 			return
 		}
 		t.wg.Add(1)
 		go func() {
 			defer t.wg.Done()
-			if t.closed {
+			if t.IsClosed() {
 				return
 			}
 			logger := wstool.GetLogger(session)
@@ -254,7 +254,7 @@ type TaosStmt struct {
 	StmtList              *list.List
 	logger                *logrus.Entry
 	stmtIndex             uint64
-	closed                bool
+	closed                uint32
 	exit                  chan struct{}
 	whitelistChangeChan   chan int64
 	dropUserChan          chan struct{}
@@ -264,7 +264,8 @@ type TaosStmt struct {
 	wg                    sync.WaitGroup
 	whitelistChangeHandle cgo.Handle
 	dropUserHandle        cgo.Handle
-	sync.Mutex
+	mutex                 sync.Mutex
+	once                  sync.Once
 }
 
 func NewTaosStmt(session *melody.Session, logger *logrus.Entry) *TaosStmt {
@@ -285,60 +286,7 @@ func NewTaosStmt(session *melody.Session, logger *logrus.Entry) *TaosStmt {
 	}
 }
 
-func (t *TaosStmt) waitSignal(logger *logrus.Entry) {
-	defer func() {
-		logger.Trace("exit wait signal")
-		tool.PutRegisterChangeWhiteListHandle(t.whitelistChangeHandle)
-		tool.PutRegisterDropUserHandle(t.dropUserHandle)
-	}()
-	for {
-		select {
-		case <-t.dropUserChan:
-			logger.Trace("get drop user signal")
-			isDebug := log.IsDebug()
-			t.lock(logger, isDebug)
-			if t.closed {
-				logger.Trace("server closed")
-				t.Unlock()
-				return
-			}
-			logger.Trace("user dropped! close connection!")
-			t.signalExit(logger, isDebug)
-			return
-		case <-t.whitelistChangeChan:
-			logger.Trace("get whitelist change signal")
-			isDebug := log.IsDebug()
-			t.lock(logger, isDebug)
-			if t.closed {
-				logger.Trace("server closed")
-				t.Unlock()
-				return
-			}
-			logger.Trace("get whitelist")
-			s := log.GetLogNow(isDebug)
-			whitelist, err := tool.GetWhitelist(t.conn, logger, isDebug)
-			logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
-			if err != nil {
-				logger.Errorf("get whitelist error, close connection, err:%s", err)
-				wstool.GetLogger(t.session).WithField("ip", t.ipStr).WithError(err).Errorln("get whitelist error! close connection!")
-				t.signalExit(logger, isDebug)
-				return
-			}
-			logger.Tracef("check whitelist, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
-			valid := tool.CheckWhitelist(whitelist, t.ip)
-			if !valid {
-				logger.Errorf("ip not in whitelist, close connection, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
-				t.signalExit(logger, isDebug)
-				return
-			}
-			t.Unlock()
-		case <-t.exit:
-			return
-		}
-	}
-}
-
-func (t *TaosStmt) signalExit(logger *logrus.Entry, isDebug bool) {
+func (t *TaosStmt) UnlockAndExit(logger *logrus.Entry, isDebug bool) {
 	logger.Trace("close session")
 	s := log.GetLogNow(isDebug)
 	_ = t.session.Close()
@@ -349,11 +297,23 @@ func (t *TaosStmt) signalExit(logger *logrus.Entry, isDebug bool) {
 	logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
 }
 
-func (t *TaosStmt) lock(logger *logrus.Entry, isDebug bool) {
+func (t *TaosStmt) Lock(logger *logrus.Entry, isDebug bool) {
 	s := log.GetLogNow(isDebug)
 	logger.Trace("get handler lock")
-	t.Lock()
+	t.mutex.Lock()
 	logger.Debugf("get handler lock cost:%s", log.GetLogDuration(isDebug, s))
+}
+
+func (t *TaosStmt) Unlock() {
+	t.mutex.Unlock()
+}
+
+func (t *TaosStmt) IsClosed() bool {
+	return atomic.LoadUint32(&t.closed) == 1
+}
+
+func (t *TaosStmt) setClosed() {
+	atomic.StoreUint32(&t.closed, 1)
 }
 
 type StmtItem struct {
@@ -429,9 +389,9 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
 	logger.Tracef("connect request:%+v", req)
 	isDebug := log.IsDebug()
-	t.lock(logger, isDebug)
+	t.Lock(logger, isDebug)
 	defer t.Unlock()
-	if t.closed {
+	if t.IsClosed() {
 		logger.Trace("server closed")
 		return
 	}
@@ -447,7 +407,7 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 		return
 	}
 	s := log.GetLogNow(isDebug)
-	whitelist, err := tool.GetWhitelist(conn, logger, isDebug)
+	allowlist, blocklist, err := tool.GetWhitelist(conn, logger, isDebug)
 	logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.Errorf("get whitelist error, close connection, err:%s", err)
@@ -455,10 +415,12 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 		wstool.WSError(ctx, session, logger, err, action, req.ReqID)
 		return
 	}
-	logger.Tracef("check whitelist, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
-	valid := tool.CheckWhitelist(whitelist, t.ip)
+	allowlistStr := tool.IpNetSliceToString(allowlist)
+	blocklistStr := tool.IpNetSliceToString(blocklist)
+	logger.Tracef("check whitelist, ip: %s, allowlist: %s, blocklist: %s", t.ipStr, allowlistStr, blocklistStr)
+	valid := tool.CheckWhitelist(allowlist, blocklist, t.ip)
 	if !valid {
-		logger.Errorf("ip not in whitelist, close connection, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
+		logger.Errorf("ip not in whitelist, ip: %s, allowlist: %s, blocklist: %s", t.ipStr, allowlistStr, blocklistStr)
 		syncinterface.TaosClose(conn, logger, isDebug)
 		wstool.WSErrorMsg(ctx, session, logger, 0xffff, "whitelist prohibits current IP access", action, req.ReqID)
 		return
@@ -480,7 +442,7 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 		return
 	}
 	t.conn = conn
-	go t.waitSignal(t.logger)
+	go wstool.WaitSignal(t, conn, t.ip, t.ipStr, t.whitelistChangeHandle, t.dropUserHandle, t.whitelistChangeChan, t.dropUserChan, t.exit, t.logger)
 	wstool.WSWriteJson(session, logger, &StmtConnectResp{
 		Action: action,
 		ReqID:  req.ReqID,
@@ -1167,32 +1129,40 @@ func (t *TaosStmt) bindBlock(ctx context.Context, session *melody.Session, reqID
 }
 
 func (t *TaosStmt) Close(logger *logrus.Entry) {
-	t.Lock()
+	t.Lock(t.logger, log.IsDebug())
 	defer t.Unlock()
-	if t.closed {
+	if t.IsClosed() {
 		return
 	}
 	logger.Trace("stmt connection close")
-	t.closed = true
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	done := make(chan struct{})
-	go func() {
-		t.wg.Wait()
-		close(done)
-	}()
-	select {
-	case <-ctx.Done():
-		logger.Error("wait for all goroutines to exit timeout")
-	case <-done:
-		logger.Debug("all goroutines exit")
-	}
-	t.cleanUp(logger)
-	if t.conn != nil {
-		syncinterface.TaosClose(t.conn, logger, log.IsDebug())
-		t.conn = nil
-	}
-	close(t.exit)
+	t.setClosed()
+	t.stop()
+}
+
+func (t *TaosStmt) stop() {
+	t.once.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		done := make(chan struct{})
+		go func() {
+			t.wg.Wait()
+			close(done)
+		}()
+		select {
+		case <-ctx.Done():
+			t.logger.Warn("wait stop over 1 minute")
+			<-done
+		case <-done:
+			t.logger.Debug("all goroutines exit")
+		}
+		t.logger.Debug("wait stop done")
+		t.cleanUp(t.logger)
+		if t.conn != nil {
+			syncinterface.TaosClose(t.conn, t.logger, log.IsDebug())
+			t.conn = nil
+		}
+		close(t.exit)
+	})
 }
 
 func (t *TaosStmt) cleanUp(logger *logrus.Entry) {

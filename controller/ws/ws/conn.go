@@ -39,9 +39,9 @@ type connResponse struct {
 }
 
 func (h *messageHandler) connect(ctx context.Context, session *melody.Session, action string, req connRequest, innerReqID uint64, logger *logrus.Entry, isDebug bool) {
-	h.lock(logger, isDebug)
+	h.Lock(logger, isDebug)
 	defer h.Unlock()
-	if h.isClosed() {
+	if h.IsClosed() {
 		logger.Trace("server closed")
 		return
 	}
@@ -59,14 +59,16 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	}
 	logger.Trace("get whitelist")
 	s := log.GetLogNow(isDebug)
-	whitelist, err := tool.GetWhitelist(conn, logger, isDebug)
+	allowlist, blocklist, err := tool.GetWhitelist(conn, logger, isDebug)
 	logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "get whitelist error")
 		return
 	}
-	logger.Tracef("check whitelist, ip:%s, whitelist:%s", h.ipStr, tool.IpNetSliceToString(whitelist))
-	valid := tool.CheckWhitelist(whitelist, h.ip)
+	allowlistStr := tool.IpNetSliceToString(allowlist)
+	blocklistStr := tool.IpNetSliceToString(blocklist)
+	logger.Tracef("check whitelist, ip:%s, allowlist:%s, blocklist:%s", h.ipStr, allowlistStr, blocklistStr)
+	valid := tool.CheckWhitelist(allowlist, blocklist, h.ip)
 	if !valid {
 		err = errors.New("ip not in whitelist")
 		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "ip not in whitelist")
@@ -177,17 +179,17 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 		}
 	}
 	h.conn = conn
+	// save user for record
+	h.user = req.User
+	h.appName = req.App
 	logger.Trace("start wait signal goroutine")
-	go h.waitSignal(h.logger)
+	go wstool.WaitSignal(h, conn, h.ip, h.ipStr, h.whitelistChangeHandle, h.dropUserHandle, h.whitelistChangeChan, h.dropUserChan, h.exit, h.logger)
 	resp := &connResponse{
 		Action:  action,
 		ReqID:   req.ReqID,
 		Timing:  wstool.GetDuration(ctx),
 		Version: version.TaosClientVersion,
 	}
-	// save user for record
-	h.user = req.User
-	h.appName = req.App
 	wstool.WSWriteJson(session, logger, resp)
 }
 

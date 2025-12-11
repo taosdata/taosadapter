@@ -37,7 +37,8 @@ type ConnectorPool struct {
 	ctx                   context.Context
 	cancel                context.CancelFunc
 	ipNetsLock            sync.RWMutex
-	ipNets                []*net.IPNet
+	allowNets             []*net.IPNet
+	blockNets             []*net.IPNet
 	changePassHandle      cgo.Handle
 	whitelistChangeHandle cgo.Handle
 	dropUserHandle        cgo.Handle
@@ -107,14 +108,15 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 		return nil, err
 	}
 	// whitelist
-	ipNets, err := tool.GetWhitelist(v, cp.logger, log.IsDebug())
+	allowlist, blocklist, err := tool.GetWhitelist(v, cp.logger, log.IsDebug())
 	if err != nil {
 		_ = p.Put(v)
 		p.Release()
 		cp.putHandle()
 		return nil, err
 	}
-	cp.ipNets = ipNets
+	cp.allowNets = allowlist
+	cp.blockNets = blocklist
 	// register whitelist modify callback
 	err = tool.RegisterChangeWhitelist(v, cp.whitelistChangeHandle, cp.logger, log.IsDebug())
 	if err != nil {
@@ -148,7 +150,7 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 			case <-cp.whitelistChan:
 				// whitelist changed
 				cp.logger.Trace("whitelist change")
-				ipNets, err = tool.GetWhitelist(v, cp.logger, log.IsDebug())
+				allowlist, blocklist, err = tool.GetWhitelist(v, cp.logger, log.IsDebug())
 				if err != nil {
 					// fetch whitelist error
 					cp.logger.WithError(err).Error("fetch whitelist error! release connection!")
@@ -159,9 +161,10 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 					return
 				}
 				cp.ipNetsLock.Lock()
-				cp.ipNets = ipNets
+				cp.allowNets = allowlist
+				cp.blockNets = blocklist
 
-				cp.logger.Debugf("whitelist change, whitelist:%s", tool.IpNetSliceToString(cp.ipNets))
+				cp.logger.Debugf("whitelist change, allowlist:%s, blocklist:%s", tool.IpNetSliceToString(cp.allowNets), tool.IpNetSliceToString(cp.blockNets))
 				cp.ipNetsLock.Unlock()
 			case <-cp.ctx.Done():
 				return
@@ -227,12 +230,7 @@ func (cp *ConnectorPool) verifyPassword(password string) bool {
 func (cp *ConnectorPool) verifyIP(ip net.IP) bool {
 	cp.ipNetsLock.RLock()
 	defer cp.ipNetsLock.RUnlock()
-	for _, ipNet := range cp.ipNets {
-		if ipNet.Contains(ip) {
-			return true
-		}
-	}
-	return false
+	return tool.CheckWhitelist(cp.allowNets, cp.blockNets, ip)
 }
 
 func (cp *ConnectorPool) Release() {

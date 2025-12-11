@@ -45,18 +45,19 @@ func putWhiteListHandle(handle cgo.Handle) {
 	}
 }
 
-func GetWhitelist(conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) ([]*net.IPNet, error) {
+func GetWhitelist(conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) ([]*net.IPNet, []*net.IPNet, error) {
 	c, handler := getWhiteListHandle()
 	defer putWhiteListHandle(handler)
 	taosFetchWhiteListA(conn, handler, logger, isDebug)
 	data := <-c
+	logger.Debug("get whitelist callback")
 	monitor.TaosFetchWhitelistACallBackCounter.Inc()
 	if data.Err != nil {
 		monitor.TaosFetchWhitelistACallBackFailCounter.Inc()
-		return nil, data.Err
+		return nil, nil, data.Err
 	}
 	monitor.TaosFetchWhitelistACallBackSuccessCounter.Inc()
-	return data.IPNets, nil
+	return data.AllowIPNets, data.BlockIPNets, nil
 }
 
 func taosFetchWhiteListA(conn unsafe.Pointer, handle cgo.Handle, logger *logrus.Entry, isDebug bool) {
@@ -67,8 +68,13 @@ func taosFetchWhiteListA(conn unsafe.Pointer, handle cgo.Handle, logger *logrus.
 	syncinterface.TaosFetchWhitelistA(conn, handle, logger, isDebug)
 }
 
-func CheckWhitelist(whitelist []*net.IPNet, ip net.IP) bool {
-	for _, ipNet := range whitelist {
+func CheckWhitelist(allowlist []*net.IPNet, blocklist []*net.IPNet, ip net.IP) bool {
+	for _, ipNet := range blocklist {
+		if ipNet.Contains(ip) {
+			return false
+		}
+	}
+	for _, ipNet := range allowlist {
 		if ipNet.Contains(ip) {
 			return true
 		}
