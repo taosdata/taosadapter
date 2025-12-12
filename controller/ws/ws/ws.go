@@ -95,5 +95,4 @@ func CloseWs(session *melody.Session) {
 	if exist && t != nil {
 		t.(*messageHandler).Close()
 	}
-	session.Set(TaosKey, nil)
 }

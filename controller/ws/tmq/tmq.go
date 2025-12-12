@@ -220,32 +220,29 @@ func NewTMQController() *TMQController {
 		//session.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
 		logger := wstool.GetLogger(session)
 		logger.Debugf("ws close, code:%d, msg %s", i, s)
-		t, exist := session.Get(TaosTMQKey)
-		if exist && t != nil {
-			t.(*TMQ).Close(logger)
-		}
+		CloseWs(session)
 		return nil
 	})
 
 	tmqM.HandleError(func(session *melody.Session, err error) {
 		wstool.LogWSError(session, err)
-		logger := wstool.GetLogger(session)
-		t, exist := session.Get(TaosTMQKey)
-		if exist && t != nil {
-			t.(*TMQ).Close(logger)
-		}
+		CloseWs(session)
 	})
 
 	tmqM.HandleDisconnect(func(session *melody.Session) {
 		monitor.RecordWSTMQDisconnect()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws disconnect")
-		t, exist := session.Get(TaosTMQKey)
-		if exist && t != nil {
-			t.(*TMQ).Close(logger)
-		}
+		CloseWs(session)
 	})
 	return &TMQController{tmqM: tmqM}
+}
+
+func CloseWs(session *melody.Session) {
+	t, exist := session.Get(TaosTMQKey)
+	if exist && t != nil {
+		t.(*TMQ).Close()
+	}
 }
 
 func (s *TMQController) Init(ctl gin.IRouter) {
@@ -268,7 +265,6 @@ type TMQ struct {
 	isAutoCommit          bool
 	unsubscribed          bool
 	closed                uint32
-	closedLock            sync.RWMutex
 	autocommitInterval    time.Duration
 	nextTime              time.Time
 	exit                  chan struct{}
@@ -369,7 +365,7 @@ func (t *TMQ) UnlockAndExit(logger *logrus.Entry, isDebug bool) {
 	logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
 	t.Unlock()
 	s = log.GetLogNow(isDebug)
-	t.Close(logger)
+	t.Close()
 	logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
 }
 
@@ -1479,8 +1475,8 @@ func (t *TMQ) offsetSeek(ctx context.Context, session *melody.Session, req *TMQO
 	})
 }
 
-func (t *TMQ) Close(logger *logrus.Entry) {
-	t.Lock(logger, log.IsDebug())
+func (t *TMQ) Close() {
+	t.Lock(t.logger, log.IsDebug())
 	defer t.Unlock()
 	if t.IsClosed() {
 		return

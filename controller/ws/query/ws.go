@@ -175,31 +175,29 @@ func NewQueryController() *QueryController {
 		//session.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
 		logger := wstool.GetLogger(session)
 		logger.Debugf("ws close, code:%d, msg %s", i, s)
-		t, exist := session.Get(TaosSessionKey)
-		if exist && t != nil {
-			t.(*Taos).Close()
-		}
+		CloseWs(session)
 		return nil
 	})
 
 	queryM.HandleError(func(session *melody.Session, err error) {
 		wstool.LogWSError(session, err)
-		t, exist := session.Get(TaosSessionKey)
-		if exist && t != nil {
-			t.(*Taos).Close()
-		}
+		CloseWs(session)
 	})
 
 	queryM.HandleDisconnect(func(session *melody.Session) {
 		monitor.RecordWSQueryDisconnect()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws disconnect")
-		t, exist := session.Get(TaosSessionKey)
-		if exist && t != nil {
-			t.(*Taos).Close()
-		}
+		CloseWs(session)
 	})
 	return &QueryController{queryM: queryM}
+}
+
+func CloseWs(session *melody.Session) {
+	t, exist := session.Get(TaosSessionKey)
+	if exist && t != nil {
+		t.(*Taos).Close()
+	}
 }
 
 func (s *QueryController) Init(ctl gin.IRouter) {

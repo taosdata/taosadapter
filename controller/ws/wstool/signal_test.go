@@ -115,7 +115,7 @@ func TestWaitSignalDropUser(t *testing.T) {
 		WaitSignal(h, conn, h.ip, h.ipStr, h.whitelistChangeHandle, h.dropUserHandle, h.whitelistChangeChan, h.dropUserChan, h.exit, logger)
 		exitSignal <- struct{}{}
 	}()
-	// change password
+	// drop user
 	err = exec(rootConn, "drop user test_signal", logger, isDebug)
 	assert.NoError(t, err)
 	// wait for drop user signal processed
@@ -127,8 +127,8 @@ func TestWaitSignalDropUser(t *testing.T) {
 	}
 	select {
 	case <-exitSignal:
-	default:
-		t.Fatal("wait signal goroutine not exited")
+	case <-time.NewTimer(time.Second * 5).C:
+		t.Fatal("wait drop user exit timeout")
 	}
 	assert.True(t, h.IsClosed())
 

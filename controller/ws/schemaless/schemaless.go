@@ -91,32 +91,29 @@ func NewSchemalessController() *SchemalessController {
 	schemaless.HandleClose(func(session *melody.Session, i int, s string) error {
 		logger := wstool.GetLogger(session)
 		logger.Debugf("ws close, code:%d, msg %s", i, s)
-		t, exist := session.Get(taosSchemalessKey)
-		if exist && t != nil {
-			t.(*TaosSchemaless).Close(logger)
-		}
+		CloseWs(session)
 		return nil
 	})
 
 	schemaless.HandleError(func(session *melody.Session, err error) {
 		wstool.LogWSError(session, err)
-		logger := wstool.GetLogger(session)
-		t, exist := session.Get(taosSchemalessKey)
-		if exist && t != nil {
-			t.(*TaosSchemaless).Close(logger)
-		}
+		CloseWs(session)
 	})
 
 	schemaless.HandleDisconnect(func(session *melody.Session) {
 		monitor.RecordWSSMLDisconnect()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws disconnect")
-		t, exist := session.Get(taosSchemalessKey)
-		if exist && t != nil {
-			t.(*TaosSchemaless).Close(logger)
-		}
+		CloseWs(session)
 	})
 	return &SchemalessController{schemaless: schemaless}
+}
+
+func CloseWs(session *melody.Session) {
+	t, exist := session.Get(taosSchemalessKey)
+	if exist && t != nil {
+		t.(*TaosSchemaless).Close()
+	}
 }
 
 func (s *SchemalessController) Init(ctl gin.IRouter) {
@@ -170,7 +167,7 @@ func (t *TaosSchemaless) UnlockAndExit(logger *logrus.Entry, isDebug bool) {
 	logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
 	t.Unlock()
 	s = log.GetLogNow(isDebug)
-	t.Close(logger)
+	t.Close()
 	logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
 }
 
@@ -193,13 +190,13 @@ func (t *TaosSchemaless) setClosed() {
 	atomic.StoreUint32(&t.closed, 1)
 }
 
-func (t *TaosSchemaless) Close(logger *logrus.Entry) {
-	t.Lock(logger, log.IsDebug())
+func (t *TaosSchemaless) Close() {
+	t.Lock(t.logger, log.IsDebug())
 	defer t.Unlock()
 	if t.IsClosed() {
 		return
 	}
-	logger.Trace("schemaless close")
+	t.logger.Trace("schemaless close")
 	t.setClosed()
 	t.stop()
 }

@@ -211,32 +211,29 @@ func NewSTMTController() *STMTController {
 	stmtM.HandleClose(func(session *melody.Session, i int, s string) error {
 		logger := wstool.GetLogger(session)
 		logger.Debugf("ws close, code:%d, msg %s", i, s)
-		t, exist := session.Get(TaosStmtKey)
-		if exist && t != nil {
-			t.(*TaosStmt).Close(logger)
-		}
+		CloseWs(session)
 		return nil
 	})
 
 	stmtM.HandleError(func(session *melody.Session, err error) {
 		wstool.LogWSError(session, err)
-		logger := wstool.GetLogger(session)
-		t, exist := session.Get(TaosStmtKey)
-		if exist && t != nil {
-			t.(*TaosStmt).Close(logger)
-		}
+		CloseWs(session)
 	})
 
 	stmtM.HandleDisconnect(func(session *melody.Session) {
 		monitor.RecordWSStmtDisconnect()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws disconnect")
-		t, exist := session.Get(TaosStmtKey)
-		if exist && t != nil {
-			t.(*TaosStmt).Close(logger)
-		}
+		CloseWs(session)
 	})
 	return &STMTController{stmtM: stmtM}
+}
+
+func CloseWs(session *melody.Session) {
+	t, exist := session.Get(TaosStmtKey)
+	if exist && t != nil {
+		t.(*TaosStmt).Close()
+	}
 }
 
 func (s *STMTController) Init(ctl gin.IRouter) {
@@ -293,7 +290,7 @@ func (t *TaosStmt) UnlockAndExit(logger *logrus.Entry, isDebug bool) {
 	logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
 	t.Unlock()
 	s = log.GetLogNow(isDebug)
-	t.Close(logger)
+	t.Close()
 	logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
 }
 
@@ -1128,13 +1125,13 @@ func (t *TaosStmt) bindBlock(ctx context.Context, session *melody.Session, reqID
 	wstool.WSWriteJson(session, logger, resp)
 }
 
-func (t *TaosStmt) Close(logger *logrus.Entry) {
+func (t *TaosStmt) Close() {
 	t.Lock(t.logger, log.IsDebug())
 	defer t.Unlock()
 	if t.IsClosed() {
 		return
 	}
-	logger.Trace("stmt connection close")
+	t.logger.Trace("stmt connection close")
 	t.setClosed()
 	t.stop()
 }
