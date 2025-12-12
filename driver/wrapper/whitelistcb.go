@@ -49,5 +49,5 @@ func WhitelistCallback(param unsafe.Pointer, code int, taosConnect unsafe.Pointe
 			return
 		}
 	}
-	c <- &WhitelistResult{AllowIPNets: blocklist, BlockIPNets: blocklist}
+	c <- &WhitelistResult{AllowIPNets: allowlist, BlockIPNets: blocklist}
 }

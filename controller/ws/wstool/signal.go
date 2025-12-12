@@ -17,37 +17,54 @@ type WSHandler interface {
 	IsClosed() bool
 }
 
-func WaitSignal(h WSHandler, conn unsafe.Pointer, ip net.IP, ipStr string, whitelistChangeHandle cgo.Handle, dropUserHandle cgo.Handle, whitelistChangeChan chan int64, dropUserChan chan struct{}, exit chan struct{}, logger *logrus.Entry) {
+type getWhitelistFunc func(conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) ([]*net.IPNet, []*net.IPNet, error)
+
+func WaitSignal(
+	h WSHandler,
+	conn unsafe.Pointer,
+	ip net.IP,
+	ipStr string,
+	whitelistChangeHandle cgo.Handle,
+	dropUserHandle cgo.Handle,
+	whitelistChangeChan chan int64,
+	dropUserChan chan struct{},
+	exit chan struct{},
+	logger *logrus.Entry,
+) {
+	doWaitSignal(h, conn, ip, ipStr, whitelistChangeHandle, dropUserHandle, whitelistChangeChan, dropUserChan, exit, logger, tool.GetWhitelist)
+}
+
+func doWaitSignal(h WSHandler, conn unsafe.Pointer, ip net.IP, ipStr string, whitelistChangeHandle cgo.Handle, dropUserHandle cgo.Handle, whitelistChangeChan chan int64, dropUserChan chan struct{}, exit chan struct{}, logger *logrus.Entry, whitelist getWhitelistFunc) {
 	defer func() {
-		logger.Trace("exit wait signal")
+		logger.Debug("exit wait signal")
 		tool.PutRegisterChangeWhiteListHandle(whitelistChangeHandle)
 		tool.PutRegisterDropUserHandle(dropUserHandle)
 	}()
 	for {
 		select {
 		case <-dropUserChan:
-			logger.Trace("get drop user signal")
+			logger.Debug("get drop user signal")
 			isDebug := log.IsDebug()
 			h.Lock(logger, isDebug)
 			if h.IsClosed() {
-				logger.Trace("server closed")
+				logger.Debug("server closed")
 				h.Unlock()
 				return
 			}
-			logger.Trace("user dropped, close connection")
+			logger.Debug("user dropped, close connection")
 			h.UnlockAndExit(logger, isDebug)
 			return
 		case <-whitelistChangeChan:
-			logger.Trace("get whitelist change signal")
+			logger.Debug("get whitelist change signal")
 			isDebug := log.IsDebug()
 			h.Lock(logger, isDebug)
 			if h.IsClosed() {
-				logger.Trace("server closed")
+				logger.Debug("server closed")
 				h.Unlock()
 				return
 			}
-			logger.Trace("get whitelist")
-			allowlist, blocklist, err := tool.GetWhitelist(conn, logger, isDebug)
+			logger.Debug("get whitelist")
+			allowlist, blocklist, err := whitelist(conn, logger, isDebug)
 			if err != nil {
 				logger.Errorf("get whitelist error, close connection, err:%s", err)
 				h.UnlockAndExit(logger, isDebug)
