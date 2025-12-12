@@ -450,6 +450,7 @@ type TMQSubscribeReq struct {
 	TZ                   string            `json:"tz"`
 	App                  string            `json:"app"`
 	IP                   string            `json:"ip"`
+	Connector            string            `json:"connector"`
 	MsgConsumeRawdata    string            `json:"msg_consume_rawdata"`
 	Config               map[string]string `json:"config"`
 }
@@ -721,30 +722,72 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	if req.IP != "" {
 		clientIP = req.IP
 	}
-	logger.Debugf("set connection ip, ip:%s", clientIP)
-	code := syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_IP, &clientIP, logger, isDebug)
-	logger.Debug("set connection ip done")
-	if code != 0 {
-		t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set connection ip error")
+	if !t.setConnectOption(
+		ctx,
+		cPointer,
+		conn,
+		session,
+		logger,
+		isDebug,
+		action,
+		req.ReqID,
+		common.TSDB_OPTION_CONNECTION_USER_IP,
+		clientIP,
+		"connection ip",
+	) {
 		return
 	}
 	// set timezone
 	if req.TZ != "" {
-		logger.Debugf("set timezone, tz:%s", req.TZ)
-		code = syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_TIMEZONE, &req.TZ, logger, isDebug)
-		logger.Debug("set timezone done")
-		if code != 0 {
-			t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set timezone error")
+		if !t.setConnectOption(
+			ctx,
+			cPointer,
+			conn,
+			session,
+			logger,
+			isDebug,
+			action,
+			req.ReqID,
+			common.TSDB_OPTION_CONNECTION_TIMEZONE,
+			req.TZ,
+			"connection timezone",
+		) {
 			return
 		}
 	}
 	// set connection app
 	if req.App != "" {
-		logger.Debugf("set app, app:%s", req.App)
-		code = syncinterface.TaosOptionsConnection(conn, common.TSDB_OPTION_CONNECTION_USER_APP, &req.App, logger, isDebug)
-		logger.Debug("set app done")
-		if code != 0 {
-			t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), "set app error")
+		if !t.setConnectOption(
+			ctx,
+			cPointer,
+			conn,
+			session,
+			logger,
+			isDebug,
+			action,
+			req.ReqID,
+			common.TSDB_OPTION_CONNECTION_USER_APP,
+			req.App,
+			"app",
+		) {
+			return
+		}
+	}
+	// set connector info
+	if req.Connector != "" {
+		if !t.setConnectOption(
+			ctx,
+			cPointer,
+			conn,
+			session,
+			logger,
+			isDebug,
+			action,
+			req.ReqID,
+			common.TSDB_OPTION_CONNECTION_CONNECTOR_INFO,
+			req.Connector,
+			"connector info",
+		) {
 			return
 		}
 	}
@@ -760,6 +803,17 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		Timing:  wstool.GetDuration(ctx),
 		Version: version.TaosClientVersion,
 	})
+}
+
+func (t *TMQ) setConnectOption(ctx context.Context, cPointer, conn unsafe.Pointer, session *melody.Session, logger *logrus.Entry, isDebug bool, action string, reqID uint64, option int, value string, optionName string) bool {
+	logger.Debugf("set %s, value: %s", optionName, value)
+	code := syncinterface.TaosOptionsConnection(conn, option, &value, logger, isDebug)
+	logger.Debugf("set %s done", optionName)
+	if code != 0 {
+		t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, reqID, taoserrors.NewError(code, syncinterface.TaosErrorStr(nil, logger, isDebug)), fmt.Sprintf("set %s error", optionName))
+		return false
+	}
+	return true
 }
 
 func (t *TMQ) closeConsumerWithErrLog(
