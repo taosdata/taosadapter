@@ -152,20 +152,16 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 				cp.logger.Trace("whitelist change")
 				allowlist, blocklist, err = tool.GetWhitelist(v, cp.logger, log.IsDebug())
 				if err != nil {
-					// fetch whitelist error
-					cp.logger.WithError(err).Error("fetch whitelist error! release connection!")
-					connectionLocker.Lock()
-					// release connection pool
-					cp.Release()
-					connectionLocker.Unlock()
-					return
-				}
-				cp.ipNetsLock.Lock()
-				cp.allowNets = allowlist
-				cp.blockNets = blocklist
+					// fetch whitelist error, keep the old one
+					cp.logger.WithError(err).Error("fetch whitelist error!")
+				} else {
+					cp.ipNetsLock.Lock()
+					cp.allowNets = allowlist
+					cp.blockNets = blocklist
 
-				cp.logger.Debugf("whitelist change, allowlist:%s, blocklist:%s", tool.IpNetSliceToString(cp.allowNets), tool.IpNetSliceToString(cp.blockNets))
-				cp.ipNetsLock.Unlock()
+					cp.logger.Debugf("whitelist change, allowlist:%s, blocklist:%s", tool.IpNetSliceToString(cp.allowNets), tool.IpNetSliceToString(cp.blockNets))
+					cp.ipNetsLock.Unlock()
+				}
 			case <-cp.ctx.Done():
 				return
 			}

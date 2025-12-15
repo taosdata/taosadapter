@@ -66,18 +66,18 @@ func doWaitSignal(h WSHandler, conn unsafe.Pointer, ip net.IP, ipStr string, whi
 			logger.Debug("get whitelist")
 			allowlist, blocklist, err := whitelist(conn, logger, isDebug)
 			if err != nil {
-				logger.Errorf("get whitelist error, close connection, err:%s", err)
-				h.UnlockAndExit(logger, isDebug)
-				return
-			}
-			allowlistStr := tool.IpNetSliceToString(allowlist)
-			blocklistStr := tool.IpNetSliceToString(blocklist)
-			logger.Tracef("check whitelist, ip:%s, allowlist:%s, blocklist:%s", ipStr, allowlistStr, blocklistStr)
-			valid := tool.CheckWhitelist(allowlist, blocklist, ip)
-			if !valid {
-				logger.Errorf("ip not in whitelist! close connection, ip:%s, allowlist:%s, blocklist:%s", ipStr, allowlistStr, blocklistStr)
-				h.UnlockAndExit(logger, isDebug)
-				return
+				// don't exit, just unlock and continue
+				logger.Errorf("get whitelist error, err:%s", err)
+			} else {
+				allowlistStr := tool.IpNetSliceToString(allowlist)
+				blocklistStr := tool.IpNetSliceToString(blocklist)
+				logger.Tracef("check whitelist, ip:%s, allowlist:%s, blocklist:%s", ipStr, allowlistStr, blocklistStr)
+				valid := tool.CheckWhitelist(allowlist, blocklist, ip)
+				if !valid {
+					logger.Errorf("ip not in whitelist! close connection, ip:%s, allowlist:%s, blocklist:%s", ipStr, allowlistStr, blocklistStr)
+					h.UnlockAndExit(logger, isDebug)
+					return
+				}
 			}
 			h.Unlock()
 		case <-exit:

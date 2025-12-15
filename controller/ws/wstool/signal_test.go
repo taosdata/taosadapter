@@ -188,11 +188,17 @@ func TestWaitSignalChangeWhitelist(t *testing.T) {
 		doWaitSignal(h, conn, h.ip, h.ipStr, h.whitelistChangeHandle, h.dropUserHandle, h.whitelistChangeChan, h.dropUserChan, h.exit, logger, mockGetWhitelist)
 		signalExit <- struct{}{}
 	}()
-	timeout = time.NewTimer(time.Second * 5)
+	timeout = time.NewTimer(time.Second)
 	select {
 	case <-signalExit:
+		t.Fatal("should not exit")
 	case <-timeout.C:
-		t.Fatal("wait signal timeout")
+	}
+	close(h.exit)
+	select {
+	case <-signalExit:
+	case <-time.NewTimer(time.Second * 1).C:
+		t.Fatal("wait signal exit timeout")
 	}
 
 	mockGetWhitelist = func(conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) ([]*net.IPNet, []*net.IPNet, error) {
