@@ -13,10 +13,11 @@ func TestGetWhiteList(t *testing.T) {
 	defer TaosClose(conn)
 	c := make(chan *WhitelistResult, 1)
 	handler := cgo.NewHandle(c)
-	TaosFetchWhitelistDualStackA(conn, handler)
+	TaosFetchIPWhitelistA(conn, handler)
 	data := <-c
 	assert.Nil(t, data.Err)
-	assert.Equal(t, 2, len(data.IPNets))
-	assert.Equal(t, "0.0.0.0/0", data.IPNets[0].String())
-	assert.Equal(t, "::/0", data.IPNets[1].String())
+	assert.Equal(t, 2, len(data.AllowIPNets))
+	assert.Equal(t, "0.0.0.0/0", data.AllowIPNets[0].String())
+	assert.Equal(t, "::/0", data.AllowIPNets[1].String())
+	assert.Empty(t, data.BlockIPNets)
 }
