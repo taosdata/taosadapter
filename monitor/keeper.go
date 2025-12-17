@@ -131,6 +131,14 @@ var (
 	TaosConnectSuccessCounter = metrics.NewGauge("taos_connect_success")
 	TaosConnectFailCounter    = metrics.NewGauge("taos_connect_fail")
 
+	TaosConnectTOTPCounter        = metrics.NewGauge("taos_connect_totp_total")
+	TaosConnectTOTPSuccessCounter = metrics.NewGauge("taos_connect_totp_success")
+	TaosConnectTOTPFailCounter    = metrics.NewGauge("taos_connect_totp_fail")
+
+	TaosConnectTokenCounter        = metrics.NewGauge("taos_connect_token_total")
+	TaosConnectTokenSuccessCounter = metrics.NewGauge("taos_connect_token_success")
+	TaosConnectTokenFailCounter    = metrics.NewGauge("taos_connect_token_fail")
+
 	TaosCloseCounter        = metrics.NewGauge("taos_close_total")
 	TaosCloseSuccessCounter = metrics.NewGauge("taos_close_success")
 
@@ -504,6 +512,12 @@ var (
 
 	TMQCommitOffsetCounter        = metrics.NewGauge("tmq_commit_offset_sync_total")
 	TMQCommitOffsetSuccessCounter = metrics.NewGauge("tmq_commit_offset_sync_success")
+
+	// 3.4.0.0
+
+	TaosGetConnectionInfoCounter        = metrics.NewGauge("taos_get_connection_info_total")
+	TaosGetConnectionInfoSuccessCounter = metrics.NewGauge("taos_get_connection_info_success")
+	TaosGetConnectInfoFailCounter       = metrics.NewGauge("taos_get_connection_info_fail")
 )
 
 func InitKeeper() {
@@ -881,6 +895,20 @@ var cInterfaceCountMetrics = []*metrics.Gauge{
 	TMQPositionSuccessCounter,
 	TMQCommitOffsetCounter,
 	TMQCommitOffsetSuccessCounter,
+
+	// 3.4.0.0
+	TaosConnectTOTPCounter,
+	TaosConnectTOTPCounter,
+	TaosConnectTOTPSuccessCounter,
+	TaosConnectTOTPFailCounter,
+
+	TaosConnectTokenCounter,
+	TaosConnectTokenSuccessCounter,
+	TaosConnectTokenFailCounter,
+
+	TaosGetConnectionInfoCounter,
+	TaosGetConnectionInfoSuccessCounter,
+	TaosGetConnectInfoFailCounter,
 }
 
 // RestRecordRequest records a REST request and returns the SQL type.

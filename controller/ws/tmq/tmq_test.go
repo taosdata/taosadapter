@@ -3602,7 +3602,7 @@ func TestPollError(t *testing.T) {
 		AutoCommit:        "false",
 		OffsetReset:       "earliest",
 		SessionTimeoutMS:  "10000",
-		MaxPollIntervalMS: "1000",
+		MaxPollIntervalMS: "3000", // from 3.4.0.0 rebalance time will be added to poll interval to calculate expiration time, so must be greater than 2 seconds
 	})
 	msg, err := doWebSocket(ws, TMQSubscribe, b)
 	assert.NoError(t, err)
@@ -3634,9 +3634,9 @@ func TestPollError(t *testing.T) {
 			break
 		}
 	}
-	t.Log("sleep 5s to wait for timeout")
+	t.Log("sleep 6s to wait for timeout")
 	// sleep
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 6)
 	// poll
 	b, _ = json.Marshal(TMQPollReq{ReqID: 102, BlockingTime: 500})
 	msg, err = doWebSocket(ws, TMQPoll, b)

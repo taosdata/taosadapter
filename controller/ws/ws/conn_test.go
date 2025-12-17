@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"github.com/taosdata/taosadapter/v3/tools/otp"
 	"github.com/taosdata/taosadapter/v3/version"
 )
 
@@ -133,4 +135,48 @@ func TestConnectionOptions(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 	assert.True(t, got)
+}
+
+func TestWSConnectTotp(t *testing.T) {
+	user := "ws_test_totp_user"
+	totpSeed := "iomwzmh6iRQ86jGq"
+	pass := "k163MxPDrhHCqoNC"
+	code, message := doRestful(fmt.Sprintf("create user %s pass '%s' TOTPSEED '%s'", user, pass, totpSeed), "")
+	assert.Equal(t, 0, code, message)
+	defer func() {
+		code, message = doRestful("drop user ws_test_totp_user", "")
+		assert.Equal(t, 0, code, message)
+	}()
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+	totpSecret := otp.GenerateTOTPSecret([]byte(totpSeed))
+	totpCode := otp.GenerateTOTPCode(totpSecret, uint64(time.Now().Unix())/30, 6)
+	totpCodeStr := strconv.Itoa(totpCode)
+	// connect
+	connReq := connRequest{ReqID: 1, User: user, Password: pass, TOTPCode: totpCodeStr}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp connResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+	//duplicate connections
+	resp, err = doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0xffff, connResp.Code)
+	assert.Equal(t, "duplicate connections", connResp.Message)
+	assert.Equal(t, version.TaosClientVersion, connResp.Version)
 }

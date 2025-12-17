@@ -4,7 +4,9 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"io"
+	"math/rand"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +18,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
+	"github.com/taosdata/taosadapter/v3/tools/otp"
 )
 
 // @author: xftan
@@ -848,4 +851,72 @@ func TestTaosRegisterInstance(t *testing.T) {
 	if code == 0 {
 		t.Errorf("TaosRegisterInstance() with invalid instance desc should return error")
 	}
+}
+
+func TestTaosConnectTOTP(t *testing.T) {
+	rootConn, err := TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer TaosClose(rootConn)
+	totpSeed := MustRandomSecret(255)
+	err = exec(rootConn, fmt.Sprintf("create user totp_user pass 'totp_pass_1' TOTPSEED '%s'", totpSeed))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		err = exec(rootConn, "drop user totp_user")
+		assert.NoError(t, err)
+	}()
+	res, err := query(rootConn, fmt.Sprintf("SELECT GENERATE_TOTP_SECRET('%s')", totpSeed))
+	require.NoError(t, err)
+	require.Equal(t, 1, len(res))
+	secret := otp.GenerateTOTPSecret([]byte(totpSeed))
+	secretStr := otp.TOTPSecretStr(secret)
+	assert.Equal(t, secretStr, res[0][0])
+	totpCode := otp.GenerateTOTPCode(secret, uint64(time.Now().Unix())/30, 6)
+	totpCodeStr := strconv.Itoa(totpCode)
+	t.Logf("generated totp code: %s", totpCodeStr)
+	conn, err := TaosConnectTOTP("", "totp_user", "totp_pass_1", totpCodeStr, "", 0)
+	require.NoError(t, err)
+	defer TaosClose(conn)
+	res, err = query(conn, "select 1")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(res))
+	assert.Equal(t, int64(1), res[0][0])
+
+	conn2, err := TaosConnectTOTP("", "totp_user", "totp_pass_1", "abcd1234", "", 0)
+	assert.Error(t, err)
+	assert.Nil(t, conn2)
+
+	conn3, err := TaosConnectTOTP("", "totp_user", "wrong_pass", "", "", 0)
+	assert.Error(t, err)
+	assert.Nil(t, conn3)
+}
+
+const (
+	lowercase = "abcdefghijklmnopqrstuvwxyz"
+	uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	digits    = "0123456789"
+	allChars  = lowercase + uppercase + digits
+)
+
+var seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+func MustRandomSecret(length int) string {
+	if length < 3 {
+		panic("length must be at least 3")
+	}
+	b := make([]byte, length)
+	b[0] = lowercase[seededRand.Intn(len(lowercase))]
+	b[1] = uppercase[seededRand.Intn(len(uppercase))]
+	b[2] = digits[seededRand.Intn(len(digits))]
+	for i := 3; i < length; i++ {
+		b[i] = allChars[seededRand.Intn(len(allChars))]
+	}
+	seededRand.Shuffle(len(b), func(i, j int) {
+		b[i], b[j] = b[j], b[i]
+	})
+
+	return string(b)
 }

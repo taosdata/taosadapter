@@ -6,6 +6,7 @@ import (
 	"unsafe"
 
 	"github.com/sirupsen/logrus"
+	"github.com/taosdata/taosadapter/v3/driver/common"
 	"github.com/taosdata/taosadapter/v3/driver/types"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
@@ -1176,4 +1177,64 @@ func TaosRegisterInstance(id, registerType, desc string, expire int32, logger *l
 	logger.Debugf("taos_register_instance finish, code:%d, cost:%s", code, log.GetLogDuration(isDebug, s))
 
 	return code
+}
+
+func TaosConnectTOTP(host, user, pass, totp, db string, port int, logger *logrus.Entry, isDebug bool) (unsafe.Pointer, error) {
+	logger.Trace("sync semaphore acquire for taos_connect_totp")
+	thread.SyncSemaphore.Acquire()
+	defer func() {
+		thread.SyncSemaphore.Release()
+		logger.Trace("sync semaphore release for taos_connect_totp")
+	}()
+	logger.Debugf("call taos_connect_totp, host:%s, user:%s, pass:%s, totp:%s, db:%s, port:%d", host, user, pass, totp, db, port)
+	monitor.TaosConnectTOTPCounter.Inc()
+	s := log.GetLogNow(isDebug)
+	conn, err := wrapper.TaosConnectTOTP(host, user, pass, totp, db, port)
+	logger.Debugf("taos_connect finish, conn:%p, err:%v, cost:%s", conn, err, log.GetLogDuration(isDebug, s))
+	if err != nil {
+		monitor.TaosConnectTOTPFailCounter.Inc()
+	} else {
+		monitor.TaosConnectTOTPSuccessCounter.Inc()
+	}
+	return conn, err
+}
+
+func TaosConnectToken(host, token, db string, port int, logger *logrus.Entry, isDebug bool) (unsafe.Pointer, error) {
+	logger.Trace("sync semaphore acquire for taos_connect_token")
+	thread.SyncSemaphore.Acquire()
+	defer func() {
+		thread.SyncSemaphore.Release()
+		logger.Trace("sync semaphore release for taos_connect_token")
+	}()
+	logger.Debugf("call taos_connect_token, host:%s, token:%s, db:%s, port:%d", host, token, db, port)
+	monitor.TaosConnectTokenCounter.Inc()
+	s := log.GetLogNow(isDebug)
+	conn, err := wrapper.TaosConnectToken(host, token, db, port)
+	logger.Debugf("taos_connect_token finish, conn:%p, err:%v, cost:%s", conn, err, log.GetLogDuration(isDebug, s))
+	if err != nil {
+		monitor.TaosConnectTokenFailCounter.Inc()
+	} else {
+		monitor.TaosConnectTokenSuccessCounter.Inc()
+	}
+	return conn, err
+}
+
+func TaosGetConnectionUserName(conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) (string, int) {
+	logger.Trace("sync semaphore acquire for taos_get_connection_info")
+	thread.SyncSemaphore.Acquire()
+	defer func() {
+		thread.SyncSemaphore.Release()
+		logger.Trace("sync semaphore release for taos_get_connection_info")
+	}()
+	logger.Debugf("call taos_get_connection_info, conn:%p", conn)
+	monitor.TaosGetConnectionInfoCounter.Inc()
+	s := log.GetLogNow(isDebug)
+	user, codeCode := wrapper.TaosGetConnectionInfo(conn, common.TAOS_CONNECTION_INFO_USER)
+	logger.Debugf("taos_get_connection_info finish, user:%s, cost:%s", user, log.GetLogDuration(isDebug, s))
+	if codeCode != 0 {
+		monitor.TaosGetConnectInfoFailCounter.Inc()
+	} else {
+		monitor.TaosGetConnectionInfoSuccessCounter.Inc()
+	}
+	return user, codeCode
 }

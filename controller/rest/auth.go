@@ -109,6 +109,7 @@ func nearestMultipleOfEight(n int) int {
 const (
 	UserKey     = "user"
 	PasswordKey = "password"
+	TokenKey    = "bearer_token"
 )
 
 func CheckAuth(c *gin.Context) {
@@ -158,10 +159,31 @@ func CheckAuth(c *gin.Context) {
 		})
 		c.Set(UserKey, user)
 		c.Set(PasswordKey, password)
+	} else if strings.HasPrefix(auth, "Bearer") && len(auth) > 7 {
+		token := strings.TrimSpace(auth[7:])
+		c.Set(UserKey, "")
+		c.Set(PasswordKey, "")
+		c.Set(TokenKey, token)
 	} else {
 		UnAuthResponse(c, logger, httperror.HTTP_INVALID_AUTH_TYPE)
 		return
 	}
+}
+
+func getAuthInfo(c *gin.Context) (user, password, token string) {
+	u, exist := c.Get(UserKey)
+	if exist {
+		user = u.(string)
+	}
+	p, exist := c.Get(PasswordKey)
+	if exist {
+		password = p.(string)
+	}
+	t, exist := c.Get(TokenKey)
+	if exist {
+		token = t.(string)
+	}
+	return user, password, token
 }
 
 type Message struct {

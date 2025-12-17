@@ -33,9 +33,10 @@ func (ctl *Restful) tableVgID(c *gin.Context) {
 
 	user := c.MustGet(UserKey).(string)
 	password := c.MustGet(PasswordKey).(string)
+	user, password, token := getAuthInfo(c)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)
-	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
+	taosConn, err := commonpool.GetConnection(user, password, token, iptool.GetRealIP(c.Request))
 	logger.Debugf("get connect cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.Errorf("connect server error, err:%s", err)

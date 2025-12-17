@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -160,59 +161,32 @@ func DoQuery(c *gin.Context, db string, location *time.Location, reqID int64, re
 	logger.Debugf("request sql:%s", log.GetLogSql(sql))
 	sqlType := monitor.RestRecordRequest(sql)
 	c.Set("sql", sql)
-	rejectRegex := config.Conf.Reject.GetRejectQuerySqlRegex()
 	ip := iptool.GetRealIP(c.Request)
 	port, _ := iptool.GetRealPort(c.Request)
-	user := c.MustGet(UserKey).(string)
+	user, password, token := getAuthInfo(c)
 	appName := c.Query(AppNameQueryParamKey)
-	if sqlType != sqltype.InsertType && len(rejectRegex) > 0 {
-		for _, reject := range rejectRegex {
-			if reject.MatchString(sql) {
-				logger.Warnf("reject sql, client_ip:%s, port:%s, user:%s, app:%s, reject_regex:%s, sql:%s", ip.String(), port, user, appName, reject.String(), sql)
-				monitor.RestRecordResult(sqlType, false)
-				ForbiddenResponse(c, logger, "sql rejected")
-				return
-			}
-		}
+	hook := NewRestfulContext(c, sql, user, password, token, ip, port, appName, sqlType, reqID, logger, isDebug)
+	defer hook.cleanup()
+	// before connect
+	if hook.beforeConnect() {
+		monitor.RestRecordResult(sqlType, false)
+		return
 	}
-	password := c.MustGet(PasswordKey).(string)
-	logger.Tracef("connect server, user:%s, pass:%s", user, password)
 
-	// record sql to file
-	record, recordSql := recordsql.GetSQLRecord()
-	var recordTime time.Time
-	if recordSql {
-		defer recordsql.PutSQLRecord(record)
-		record.Init(sql, ip.String(), port, appName, user, recordsql.HTTPType, uint64(reqID), c.MustGet(StartTimeKey).(time.Time))
-		recordTime = time.Now()
-	}
 	s = log.GetLogNow(isDebug)
-	taosConnect, err := commonpool.GetConnection(user, password, ip)
+	taosConnect, err := commonpool.GetConnection(user, password, token, ip)
+	logger.Debugf("get connect, conn:%p, err:%v, cost:%s", taosConnect, err, log.GetLogDuration(isDebug, s))
 
-	// record get connection duration
-	if recordSql {
-		record.SetGetConnDuration(time.Since(recordTime))
+	// after connect
+	if hook.afterConnect() {
+		monitor.RestRecordResult(sqlType, false)
+		return
 	}
 
-	logger.Debugf("get connect, conn:%p, err:%v, cost:%s", taosConnect, err, log.GetLogDuration(isDebug, s))
 	if err != nil {
 		monitor.RestRecordResult(sqlType, false)
-		logger.Errorf("connect server error,ip:%s, err:%s", ip, err)
-		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
-			logger.Errorf("whitelist forbidden, ip:%s", ip)
-			ForbiddenResponse(c, logger, commonpool.ErrWhitelistForbidden.Error())
-			return
-		}
-		if errors.Is(err, connectpool.ErrTimeout) || errors.Is(err, connectpool.ErrMaxWait) {
-			ServiceUnavailable(c, logger, err.Error())
-			return
-		}
-		var tError *tErrors.TaosError
-		if errors.As(err, &tError) {
-			TaosErrorResponse(c, logger, int(tError.Code), tError.ErrStr)
-			return
-		}
-		CommonErrorResponse(c, logger, err.Error())
+		// on connect error
+		hook.onConnectError(err)
 		return
 	}
 	defer func() {
@@ -224,40 +198,210 @@ func DoQuery(c *gin.Context, db string, location *time.Location, reqID int64, re
 		}
 		logger.Debugf("put connection finish, cost:%s", log.GetLogDuration(isDebug, s))
 	}()
-	// set connection options
-	success := trySetConnectionOptions(c, taosConnect.TaosConnection, logger, isDebug)
-	if !success {
+
+	// on connect success
+	if hook.onConnectSuccess(taosConnect.TaosConnection) {
 		monitor.RestRecordResult(sqlType, false)
 		return
 	}
+
 	if len(db) > 0 {
 		// Attempt to select the database does not return even if there is an error
 		// To avoid error reporting in the `create database` statement
 		logger.Tracef("select db %s", db)
 		_ = async.GlobalAsync.TaosExecWithoutResult(taosConnect.TaosConnection, logger, isDebug, fmt.Sprintf("use `%s`", db), reqID)
 	}
-	// check if the sql should be limited
-	if limiter.CheckShouldLimit(sql, sqlType) {
-		l := limiter.GetLimiter(user)
-		logger.Debug("sql limiter start acquire")
-		err = l.Acquire()
-		if err != nil {
-			logger.Errorf("acquire limiter failed, user:%s, err:%s", user, err)
-			monitor.RestRecordResult(sqlType, false)
-			if recordSql {
-				// no query executed, set free time directly
-				record.SetFreeTime(time.Now())
-			}
-			ServiceUnavailable(c, logger, err.Error())
-			return
-		}
-		logger.Debug("sql limiter acquire success")
-		defer func() {
-			l.Release()
-			logger.Debug("sql limiter release success")
-		}()
+
+	execute(c, logger, isDebug, taosConnect.TaosConnection, sql, reqID, sqlType, returnObj, location, hook)
+}
+
+type SQLQueryHook struct {
+	c          *gin.Context
+	sql        string
+	user       string
+	password   string
+	token      string
+	clientIP   net.IP
+	clientPort string
+	appName    string
+	sqlType    sqltype.SqlType
+	reqID      int64
+	logger     *logrus.Entry
+	isDebug    bool
+	// set in beforeConnect
+	record          *recordsql.Record
+	startRecordTime time.Time
+	limiter         *limiter.Limiter
+
+	// set in beforeQuery
+	startQueryTime time.Time
+	// set in beforeFetch
+	startFetchTime time.Time
+}
+
+func NewRestfulContext(
+	c *gin.Context,
+	sql string,
+	user string,
+	password string,
+	token string,
+	clientIP net.IP,
+	clientPort string,
+	appName string,
+	sqlType sqltype.SqlType,
+	reqID int64,
+	logger *logrus.Entry,
+	isDebug bool,
+) *SQLQueryHook {
+	return &SQLQueryHook{
+		c:          c,
+		sql:        sql,
+		user:       user,
+		password:   password,
+		token:      token,
+		clientIP:   clientIP,
+		clientPort: clientPort,
+		appName:    appName,
+		sqlType:    sqlType,
+		reqID:      reqID,
+		logger:     logger,
+		isDebug:    isDebug,
 	}
-	execute(c, logger, isDebug, taosConnect.TaosConnection, sql, reqID, sqlType, returnObj, location, recordSql, record)
+}
+
+func (h *SQLQueryHook) beforeConnect() (abort bool) {
+	// reject sql by regex
+	rejectRegex := config.Conf.Reject.GetRejectQuerySqlRegex()
+	if h.sqlType != sqltype.InsertType && len(rejectRegex) > 0 {
+		for _, reject := range rejectRegex {
+			if reject.MatchString(h.sql) {
+				h.logger.Warnf("reject sql, client_ip:%s, port:%s, user:%s, app:%s, reject_regex:%s, sql:%s", h.clientIP.String(), h.clientPort, h.user, h.appName, reject.String(), h.sql)
+				ForbiddenResponse(h.c, h.logger, "sql rejected")
+				return true
+			}
+		}
+	}
+
+	// record sql to file
+	record, recordSql := recordsql.GetSQLRecord()
+	if recordSql {
+		record.Init(h.sql, h.clientIP.String(), h.clientPort, h.appName, h.user, recordsql.HTTPType, uint64(h.reqID), h.c.MustGet(StartTimeKey).(time.Time))
+		h.startRecordTime = time.Now()
+	}
+
+	return false
+}
+
+func (h *SQLQueryHook) afterConnect() (abort bool) {
+	// record get connection duration
+	if h.record != nil {
+		h.record.SetGetConnDuration(time.Since(h.startRecordTime))
+	}
+	return false
+}
+
+func (h *SQLQueryHook) onConnectError(err error) {
+	h.logger.Errorf("connect server error, ip:%s, err:%s", h.clientIP, err)
+	if errors.Is(err, commonpool.ErrWhitelistForbidden) {
+		h.logger.Errorf("whitelist forbidden, ip:%s", h.clientIP)
+		ForbiddenResponse(h.c, h.logger, commonpool.ErrWhitelistForbidden.Error())
+		return
+	}
+	if errors.Is(err, connectpool.ErrTimeout) || errors.Is(err, connectpool.ErrMaxWait) {
+		ServiceUnavailable(h.c, h.logger, err.Error())
+		return
+	}
+	var tError *tErrors.TaosError
+	if errors.As(err, &tError) {
+		TaosErrorResponse(h.c, h.logger, int(tError.Code), tError.ErrStr)
+		return
+	}
+	CommonErrorResponse(h.c, h.logger, err.Error())
+	return
+}
+
+func (h *SQLQueryHook) onConnectSuccess(conn unsafe.Pointer) bool {
+	if h.token != "" {
+		user, code := syncinterface.TaosGetConnectionUserName(conn, h.logger, h.isDebug)
+		if code != 0 {
+			errStr := syncinterface.TaosErrorStr(nil, h.logger, h.isDebug)
+			h.logger.Errorf("get user from connect failed, conn:%p, code:%d, message:%s", conn, code, errStr)
+			TaosErrorResponse(h.c, h.logger, code, errStr)
+			return true
+		}
+		h.user = user
+		if h.record != nil {
+			h.record.SetUser(user)
+		}
+	}
+	// set connection options
+	success := trySetConnectionOptions(h.c, conn, h.logger, h.isDebug)
+	if !success {
+		return true
+	}
+
+	// check if the sql should be limited
+	if limiter.CheckShouldLimit(h.sql, h.sqlType) {
+		l := limiter.GetLimiter(h.user)
+		h.logger.Debug("sql limiter start acquire")
+		err := l.Acquire()
+		if err != nil {
+			h.logger.Errorf("acquire limiter failed, user:%s, err:%s", h.user, err)
+			if h.record != nil {
+				// no query executed, set free time directly
+				h.record.SetFreeTime(time.Now())
+			}
+			ServiceUnavailable(h.c, logger, err.Error())
+			return true
+		}
+		h.logger.Debug("sql limiter acquire success")
+	}
+
+	return false
+}
+
+func (h *SQLQueryHook) beforeQuery() bool {
+	if h.record != nil {
+		h.startQueryTime = time.Now()
+	}
+	return false
+}
+
+func (h *SQLQueryHook) afterQuery() bool {
+	if h.record != nil {
+		h.record.SetQueryDuration(time.Since(h.startQueryTime))
+	}
+	return false
+}
+
+func (h *SQLQueryHook) beforeFetch() {
+	if h.record != nil {
+		h.startFetchTime = time.Now()
+	}
+}
+
+func (h *SQLQueryHook) afterFetch() {
+	if h.record != nil {
+		h.record.AddFetchDuration(time.Since(h.startFetchTime))
+	}
+}
+
+func (h *SQLQueryHook) beforeFree() {
+	if h.record != nil {
+		h.record.SetFreeTime(time.Now())
+	}
+}
+
+func (h *SQLQueryHook) afterFree() {}
+
+func (h *SQLQueryHook) cleanup() {
+	if h.record != nil {
+		recordsql.PutSQLRecord(h.record)
+	}
+	if h.limiter != nil {
+		h.limiter.Release()
+		h.logger.Debug("sql limiter release success")
+	}
 }
 
 func trySetConnectionOptions(c *gin.Context, conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) bool {
@@ -301,8 +445,7 @@ func execute(
 	sqlType sqltype.SqlType,
 	returnObj bool,
 	location *time.Location,
-	recordSql bool,
-	record *recordsql.Record,
+	hook *SQLQueryHook,
 ) {
 	_, calculateTiming := c.Get(RequireTiming)
 	st := c.MustGet(StartTimeKey).(time.Time)
@@ -310,26 +453,25 @@ func execute(
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 
-	var recordTime time.Time
-	if recordSql {
-		recordTime = time.Now()
+	if !hook.beforeQuery() {
+		monitor.RestRecordResult(sqlType, false)
+		return
 	}
 
 	result := async.GlobalAsync.TaosQuery(taosConnect, logger, isDebug, sql, handler, reqID)
 
-	// record query duration
-	if recordSql {
-		record.SetQueryDuration(time.Since(recordTime))
+	if !hook.afterQuery() {
+		monitor.RestRecordResult(sqlType, false)
+		return
 	}
 
 	defer func() {
 		// record free time
-		if recordSql {
-			record.SetFreeTime(time.Now())
-		}
+		hook.beforeFree()
 		if result != nil && result.Res != nil {
 			async.FreeResultAsync(result.Res, logger, isDebug)
 		}
+		hook.afterFree()
 	}()
 	res := result.Res
 	code := syncinterface.TaosError(res, logger, isDebug)
@@ -449,13 +591,11 @@ func execute(
 	pStartList := make([]unsafe.Pointer, fieldsCount)
 	timeBuffer := make([]byte, 0, 35)
 	for config.Conf.RestfulRowLimit < 0 || total != config.Conf.RestfulRowLimit {
-		if recordSql {
-			recordTime = time.Now()
-		}
+		// before fetch
+		hook.beforeFetch()
 		result = async.GlobalAsync.TaosFetchRawBlockA(res, logger, isDebug, handler)
-		if recordSql {
-			record.AddFetchDuration(time.Since(recordTime))
-		}
+		// after fetch
+		hook.afterFetch()
 		if result.N == 0 {
 			logger.Trace("fetch finished")
 			break
@@ -610,12 +750,11 @@ func (ctl *Restful) upload(c *gin.Context) {
 	buffer.WriteString(tableName)
 	sql := buffer.String()
 	buffer.Reset()
-	user := c.MustGet(UserKey).(string)
-	password := c.MustGet(PasswordKey).(string)
+	user, password, token := getAuthInfo(c)
 	ip := iptool.GetRealIP(c.Request)
 	logger.Trace("connect server")
 	s := log.GetLogNow(isDebug)
-	taosConnect, err := commonpool.GetConnection(user, password, ip)
+	taosConnect, err := commonpool.GetConnection(user, password, token, ip)
 	logger.Debugf("get connect, conn:%p, err:%v, cost:%s", taosConnect, err, log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.Errorf("connect server error, ip:%s, err: %s", ip, err)
@@ -805,7 +944,7 @@ func (ctl *Restful) des(c *gin.Context) {
 	logger.Tracef("get connection")
 	ip := iptool.GetRealIP(c.Request)
 	s := log.GetLogNow(log.IsDebug())
-	conn, err := commonpool.GetConnection(user, password, ip)
+	conn, err := commonpool.GetConnection(user, password, "", ip)
 	logger.Debugf("get connect, conn:%p, err:%v, cost:%s", conn, err, log.GetLogDuration(log.IsDebug(), s))
 	if err != nil {
 		logger.Errorf("get connection error, ip:%s, err:%s", ip, err)

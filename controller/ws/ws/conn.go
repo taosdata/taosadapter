@@ -18,15 +18,17 @@ import (
 )
 
 type connRequest struct {
-	ReqID     uint64 `json:"req_id"`
-	User      string `json:"user"`
-	Password  string `json:"password"`
-	DB        string `json:"db"`
-	Mode      *int   `json:"mode"`
-	TZ        string `json:"tz"`
-	App       string `json:"app"`
-	IP        string `json:"ip"`
-	Connector string `json:"connector"`
+	ReqID       uint64 `json:"req_id"`
+	User        string `json:"user"`
+	Password    string `json:"password"`
+	DB          string `json:"db"`
+	Mode        *int   `json:"mode"`
+	TZ          string `json:"tz"`
+	App         string `json:"app"`
+	IP          string `json:"ip"`
+	Connector   string `json:"connector"`
+	TOTPCode    string `json:"totp_code"`
+	BearerToken string `json:"bearer_token"`
 }
 
 type connResponse struct {
@@ -51,7 +53,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 		return
 	}
 
-	conn, err := syncinterface.TaosConnect("", req.User, req.Password, req.DB, 0, logger, isDebug)
+	conn, err := connect(&req, logger, isDebug)
 
 	if err != nil {
 		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "connect to TDengine error")
@@ -191,6 +193,19 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 		Version: version.TaosClientVersion,
 	}
 	wstool.WSWriteJson(session, logger, resp)
+}
+
+func connect(req *connRequest, logger *logrus.Entry, isDebug bool) (unsafe.Pointer, error) {
+	if req.BearerToken != "" {
+		logger.Debugf("use bearer token to connect")
+		return syncinterface.TaosConnectToken("", req.BearerToken, req.DB, 0, logger, isDebug)
+	}
+	if req.TOTPCode != "" {
+		logger.Debugf("use TOTP code to connect")
+		return syncinterface.TaosConnectTOTP("", req.User, req.Password, req.TOTPCode, req.DB, 0, logger, isDebug)
+	}
+	logger.Debugf("use password to connect")
+	return syncinterface.TaosConnect("", req.User, req.Password, req.DB, 0, logger, isDebug)
 }
 
 func setConnectOption(ctx context.Context, conn unsafe.Pointer, session *melody.Session, logger *logrus.Entry, isDebug bool, action string, reqID uint64, option int, value string, optionName string) bool {

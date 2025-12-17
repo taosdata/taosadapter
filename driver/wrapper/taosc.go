@@ -59,7 +59,7 @@ func TaosConnect(host, user, pass, db string, port int) (taos unsafe.Pointer, er
 	}
 	var taosObj unsafe.Pointer
 	if len(host) == 0 {
-		taosObj = C.taos_connect(nil, cUser, cPass, cdb, (C.ushort)(0))
+		taosObj = C.taos_connect(nil, cUser, cPass, cdb, (C.ushort)(port))
 	} else {
 		cHost := C.CString(host)
 		defer C.free(unsafe.Pointer(cHost))
@@ -352,4 +352,71 @@ func TaosListInstances(filterType string) (instances []string, err error) {
 		instances[i] = C.GoString(cStr)
 	}
 	return instances, nil
+}
+
+// TaosConnectTOTP TAOS *taos_connect_totp(const char *ip, const char *user, const char *pass, const char* totp, const char *db, uint16_t port);
+func TaosConnectTOTP(host, user, pass, totp, db string, port int) (taos unsafe.Pointer, err error) {
+	cUser := C.CString(user)
+	defer C.free(unsafe.Pointer(cUser))
+	cPass := C.CString(pass)
+	defer C.free(unsafe.Pointer(cPass))
+	cTotp := C.CString(totp)
+	defer C.free(unsafe.Pointer(cTotp))
+	cdb := (*C.char)(nil)
+	if len(db) > 0 {
+		cdb = C.CString(db)
+		defer C.free(unsafe.Pointer(cdb))
+	}
+	var taosObj unsafe.Pointer
+	if len(host) == 0 {
+		taosObj = C.taos_connect_totp(nil, cUser, cPass, cTotp, cdb, (C.ushort)(port))
+	} else {
+		cHost := C.CString(host)
+		defer C.free(unsafe.Pointer(cHost))
+		taosObj = C.taos_connect_totp(cHost, cUser, cPass, cTotp, cdb, (C.ushort)(port))
+	}
+
+	if taosObj == nil {
+		errCode := TaosError(nil)
+		return nil, errors.NewError(errCode, TaosErrorStr(nil))
+	}
+	return taosObj, nil
+}
+
+// TaosConnectToken TAOS *taos_connect_token(const char *ip, const char *token, const char *db, uint16_t port);
+func TaosConnectToken(host, token, db string, port int) (taos unsafe.Pointer, err error) {
+	cToken := C.CString(token)
+	defer C.free(unsafe.Pointer(cToken))
+	cdb := (*C.char)(nil)
+	if len(db) > 0 {
+		cdb = C.CString(db)
+		defer C.free(unsafe.Pointer(cdb))
+	}
+	var taosObj unsafe.Pointer
+	if len(host) == 0 {
+		taosObj = C.taos_connect_token(nil, cToken, cdb, (C.ushort)(port))
+	} else {
+		cHost := C.CString(host)
+		defer C.free(unsafe.Pointer(cHost))
+		taosObj = C.taos_connect_token(cHost, cToken, cdb, (C.ushort)(port))
+	}
+
+	if taosObj == nil {
+		errCode := TaosError(nil)
+		return nil, errors.NewError(errCode, TaosErrorStr(nil))
+	}
+	return taosObj, nil
+}
+
+// TaosGetConnectionInfo int taos_get_connection_info(TAOS* taos, TAOS_CONNECTION_INFO info, char* buffer, int* len)
+func TaosGetConnectionInfo(taos unsafe.Pointer, info int) (string, int) {
+	cBuffer := (*C.char)(C.malloc(256))
+	defer C.free(unsafe.Pointer(cBuffer))
+	var cLen C.int = 256
+	code := C.taos_get_connection_info(taos, (C.TAOS_CONNECTION_INFO)(info), cBuffer, (*C.int)(unsafe.Pointer(&cLen)))
+	if code != 0 {
+		return "", int(code)
+	}
+	value := C.GoStringN(cBuffer, cLen)
+	return value, 0
 }

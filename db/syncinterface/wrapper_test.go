@@ -2,6 +2,8 @@ package syncinterface
 
 import (
 	"database/sql/driver"
+	"fmt"
+	"strconv"
 	"testing"
 	"time"
 	"unsafe"
@@ -17,6 +19,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
+	"github.com/taosdata/taosadapter/v3/tools/otp"
 )
 
 var logger = log.GetLogger("test")
@@ -756,4 +759,62 @@ func TestTaosRegisterInstance(t *testing.T) {
 	assert.Equal(t, "test_wrapper", result[0][1])
 	assert.Equal(t, "test_wrapper_desc", result[0][2])
 	assert.Equal(t, int32(1), result[0][3])
+}
+
+func TestTaosConnectTOTP(t *testing.T) {
+	reqID := generator.GetReqID()
+	var logger = logger.WithField("test", "TestTaosConnectTOTP").WithField(config.ReqIDKey, reqID)
+	conn, err := TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer TaosClose(conn, logger, isDebug)
+	user := "sync_test_totp_user"
+	totpSeed := "aNmLs6lz81qqmqxE"
+	pass := "CqsC7QprLq1sJuhc"
+	err = exec(conn, fmt.Sprintf("create user %s pass '%s' TOTPSEED '%s'", user, pass, totpSeed))
+	assert.NoError(t, err)
+	defer func() {
+		err = exec(conn, fmt.Sprintf("drop user %s", user))
+		assert.NoError(t, err)
+	}()
+	totpSecret := otp.GenerateTOTPSecret([]byte(totpSeed))
+	totpCode := strconv.Itoa(otp.GenerateTOTPCode(totpSecret, uint64(time.Now().Unix())/30, 6))
+	assert.NoError(t, err)
+	totpConn, err := TaosConnectTOTP("", user, pass, totpCode, "", 0, logger, isDebug)
+	assert.NoError(t, err)
+	defer TaosClose(totpConn, logger, isDebug)
+	res, err := query(totpConn, "select 1")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), res[0][0])
+}
+
+func TestTaosConnectToken(t *testing.T) {
+	reqID := generator.GetReqID()
+	var logger = logger.WithField("test", "TestTaosConnectTOTP").WithField(config.ReqIDKey, reqID)
+	conn, err := TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer TaosClose(conn, logger, isDebug)
+	user := "sync_test_token_user"
+	pass := "1oOnD8ythDkZc5Sk"
+	err = exec(conn, fmt.Sprintf("create user %s pass '%s'", user, pass))
+	assert.NoError(t, err)
+	defer func() {
+		err = exec(conn, fmt.Sprintf("drop user %s", user))
+		assert.NoError(t, err)
+	}()
+	err = exec(conn, fmt.Sprintf("create token sync_test_token from user %s", user))
+	assert.NoError(t, err)
+	defer func() {
+		err = exec(conn, "drop token sync_test_token")
+		assert.NoError(t, err)
+	}()
+	tokenConn, err := TaosConnectToken("", "sync_test_token", "", 0, logger, isDebug)
+	assert.NoError(t, err)
+	defer TaosClose(tokenConn, logger, isDebug)
+	res, err := query(tokenConn, "select 1")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), res[0][0])
 }

@@ -25,12 +25,19 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+type AuthInfo struct {
+	User     string
+	Password string
+	Token    string
+}
+
 type ConnectorPool struct {
 	changePassChan        chan int32
 	whitelistChan         chan int64
 	dropUserChan          chan struct{}
 	user                  string
 	password              string
+	token                 string
 	pool                  *connectpool.ConnectPool
 	logger                *logrus.Entry
 	once                  sync.Once
@@ -45,20 +52,27 @@ type ConnectorPool struct {
 	gauge                 *metrics.Gauge
 }
 
-func NewConnectorPool(user, password string) (*ConnectorPool, error) {
+func NewConnectorPool(user, password, token string) (*ConnectorPool, error) {
 	changePassChan, changePassHandle := tool.GetRegisterChangePassHandle()
 	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
 	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
+	var logger *logrus.Entry
+	if token != "" {
+		logger = log.GetLogger("CNP").WithField("conn_type", "token")
+	} else {
+		logger = log.GetLogger("CNP").WithFields(logrus.Fields{"conn_type": "password", "user": user})
+	}
 	cp := &ConnectorPool{
 		user:                  user,
 		password:              password,
+		token:                 token,
 		changePassChan:        changePassChan,
 		changePassHandle:      changePassHandle,
 		whitelistChan:         whitelistChangeChan,
 		whitelistChangeHandle: whitelistChangeHandle,
 		dropUserChan:          dropUserChan,
 		dropUserHandle:        dropUserHandle,
-		logger:                log.GetLogger("CNP").WithField("user", user),
+		logger:                logger,
 	}
 	maxConnect := config.Conf.Pool.MaxConnect
 	if maxConnect == 0 {
@@ -88,41 +102,54 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 		cp.putHandle()
 		return nil, err
 	}
+	isDebug := log.IsDebug()
 	cp.pool = p
 	v, _ := p.Get()
-	// notify modify
-	cp.ctx, cp.cancel = context.WithCancel(context.Background())
-	err = tool.RegisterChangePass(v, cp.changePassHandle, cp.logger, log.IsDebug())
-	if err != nil {
+	cleanWhenError := func() {
 		_ = p.Put(v)
 		p.Release()
 		cp.putHandle()
+	}
+	// get user info from connection
+	if token != "" {
+		userName, code := syncinterface.TaosGetConnectionUserName(v, logger, isDebug)
+		if code != 0 {
+			logger.Errorf("get connection user name failed, code: %d", code)
+			cleanWhenError()
+			return nil, err
+		}
+		cp.user = userName
+		cp.logger = cp.logger.WithField("user", userName)
+	}
+	// notify modify
+	cp.ctx, cp.cancel = context.WithCancel(context.Background())
+	err = tool.RegisterChangePass(v, cp.changePassHandle, cp.logger, isDebug)
+	if err != nil {
+		logger.Errorf("register change pass failed, %s", err)
+		cleanWhenError()
 		return nil, err
 	}
 	// notify drop
-	err = tool.RegisterDropUser(v, cp.dropUserHandle, cp.logger, log.IsDebug())
+	err = tool.RegisterDropUser(v, cp.dropUserHandle, cp.logger, isDebug)
 	if err != nil {
-		_ = p.Put(v)
-		p.Release()
-		cp.putHandle()
+		logger.Errorf("register drop user failed, %s", err)
+		cleanWhenError()
 		return nil, err
 	}
 	// whitelist
-	allowlist, blocklist, err := tool.GetWhitelist(v, cp.logger, log.IsDebug())
+	allowlist, blocklist, err := tool.GetWhitelist(v, cp.logger, isDebug)
 	if err != nil {
-		_ = p.Put(v)
-		p.Release()
-		cp.putHandle()
+		logger.Errorf("get whitelist failed, %s", err)
+		cleanWhenError()
 		return nil, err
 	}
 	cp.allowNets = allowlist
 	cp.blockNets = blocklist
 	// register whitelist modify callback
-	err = tool.RegisterChangeWhitelist(v, cp.whitelistChangeHandle, cp.logger, log.IsDebug())
+	err = tool.RegisterChangeWhitelist(v, cp.whitelistChangeHandle, cp.logger, isDebug)
 	if err != nil {
-		_ = p.Put(v)
-		p.Release()
-		cp.putHandle()
+		logger.Errorf("register change whitelist failed, %s", err)
+		cleanWhenError()
 		return nil, err
 	}
 	_ = p.Put(v)
@@ -136,16 +163,12 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 			case <-cp.changePassChan:
 				// password changed
 				cp.logger.Trace("password changed")
-				connectionLocker.Lock()
 				cp.Release()
-				connectionLocker.Unlock()
 				return
 			case <-cp.dropUserChan:
 				// user dropped
 				cp.logger.Trace("user dropped")
-				connectionLocker.Lock()
 				cp.Release()
-				connectionLocker.Unlock()
 				return
 			case <-cp.whitelistChan:
 				// whitelist changed
@@ -173,7 +196,13 @@ func NewConnectorPool(user, password string) (*ConnectorPool, error) {
 }
 
 func (cp *ConnectorPool) factory() (unsafe.Pointer, error) {
-	conn, err := syncinterface.TaosConnect("", cp.user, cp.password, "", 0, cp.logger, log.IsDebug())
+	var conn unsafe.Pointer
+	var err error
+	if cp.token != "" {
+		conn, err = syncinterface.TaosConnectToken("", cp.token, "", 0, cp.logger, log.IsDebug())
+	} else {
+		conn, err = syncinterface.TaosConnect("", cp.user, cp.password, "", 0, cp.logger, log.IsDebug())
+	}
 	if err != nil {
 		cp.logger.Errorf("connect to taos failed: %s", err.Error())
 	}
@@ -219,7 +248,10 @@ func (cp *ConnectorPool) Close(c unsafe.Pointer) error {
 	return cp.pool.Close(c)
 }
 
-func (cp *ConnectorPool) verifyPassword(password string) bool {
+func (cp *ConnectorPool) verifyAuth(password string, token string) bool {
+	if cp.token != "" {
+		return token == cp.token
+	}
 	return password == cp.password
 }
 
@@ -232,9 +264,10 @@ func (cp *ConnectorPool) verifyIP(ip net.IP) bool {
 func (cp *ConnectorPool) Release() {
 	cp.once.Do(func() {
 		cp.cancel()
-		v, exist := connectionMap.Load(cp.user)
-		if exist && v == cp {
-			connectionMap.Delete(cp.user)
+		if cp.token != "" {
+			connectionMap.CompareAndDelete(cp.token, cp)
+		} else {
+			connectionMap.CompareAndDelete(cp.user, cp)
 		}
 		cp.pool.Release()
 		cp.logger.Warn("connector released")
@@ -248,7 +281,6 @@ func (cp *ConnectorPool) putHandle() {
 }
 
 var connectionMap = sync.Map{}
-var connectionLocker sync.Mutex
 
 type Conn struct {
 	TaosConnection unsafe.Pointer
@@ -262,31 +294,31 @@ func (c *Conn) Put() error {
 var singleGroup singleflight.Group
 var ErrWhitelistForbidden = errors.New("whitelist prohibits current IP access")
 
-func GetConnection(user, password string, clientIp net.IP) (*Conn, error) {
-	cp, err := getConnectionPool(user, password)
+func GetConnection(user, password, token string, clientIp net.IP) (*Conn, error) {
+	cp, err := getConnectionPool(user, password, token)
 	if err != nil {
 		return nil, err
 	}
 	return getConnectDirect(cp, clientIp)
 }
 
-func getConnectionPool(user, password string) (*ConnectorPool, error) {
+func getConnectionPool(user, password, token string) (*ConnectorPool, error) {
 	p, exist := connectionMap.Load(user)
 	if exist {
 		connectionPool := p.(*ConnectorPool)
-		if connectionPool.verifyPassword(password) {
+		if connectionPool.verifyAuth(password, token) {
 			return connectionPool, nil
 		}
 		cp, err, _ := singleGroup.Do(fmt.Sprintf("%s:%s", user, password), func() (interface{}, error) {
-			return getConnectorPoolSafe(user, password)
+			return getConnectorPoolSafe(user, password, token)
 		})
 		if err != nil {
 			return nil, err
 		}
 		return cp.(*ConnectorPool), nil
 	}
-	cp, err, _ := singleGroup.Do(fmt.Sprintf("%s:%s", user, password), func() (interface{}, error) {
-		return getConnectorPoolSafe(user, password)
+	cp, err, _ := singleGroup.Do(fmt.Sprintf("%s:%s:%s", user, password, token), func() (interface{}, error) {
+		return getConnectorPoolSafe(user, password, token)
 	})
 	if err != nil {
 		return nil, err
@@ -294,13 +326,13 @@ func getConnectionPool(user, password string) (*ConnectorPool, error) {
 	return cp.(*ConnectorPool), nil
 }
 
-func VerifyClientIP(user, password string, clientIP net.IP) (authed bool, valid bool, connectionPoolExits bool) {
+func VerifyClientIP(user, password, token string, clientIP net.IP) (authed bool, valid bool, connectionPoolExits bool) {
 	p, exist := connectionMap.Load(user)
 	if !exist {
 		return
 	}
 	connectionPoolExits = true
-	if !p.(*ConnectorPool).verifyPassword(password) {
+	if !p.(*ConnectorPool).verifyAuth(password, token) {
 		return
 	}
 	authed = true
@@ -328,24 +360,23 @@ func getConnectDirect(connectionPool *ConnectorPool, clientIP net.IP) (*Conn, er
 	}, nil
 }
 
-func getConnectorPoolSafe(user, password string) (*ConnectorPool, error) {
-	connectionLocker.Lock()
-	defer connectionLocker.Unlock()
+func getConnectorPoolSafe(user, password, token string) (*ConnectorPool, error) {
 	p, exist := connectionMap.Load(user)
 	if exist {
 		connectionPool := p.(*ConnectorPool)
-		if connectionPool.verifyPassword(password) {
+		if connectionPool.verifyAuth(password, token) {
 			return connectionPool, nil
 		}
-		newPool, err := NewConnectorPool(user, password)
+		newPool, err := NewConnectorPool(user, password, token)
 		if err != nil {
 			return nil, err
 		}
 		connectionPool.Release()
+		connectionMap.LoadOrStore(user, newPool)
 		connectionMap.Store(user, newPool)
 		return newPool, nil
 	}
-	newPool, err := NewConnectorPool(user, password)
+	newPool, err := NewConnectorPool(user, password, "")
 	if err != nil {
 		return nil, err
 	}

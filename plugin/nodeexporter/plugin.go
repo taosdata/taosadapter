@@ -193,7 +193,7 @@ func (p *NodeExporter) prepareUrls() error {
 var localhost = net.IPv4(127, 0, 0, 1)
 
 func (p *NodeExporter) Gather() {
-	conn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, localhost)
+	conn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, p.conf.Token, localhost)
 	if err != nil {
 		logger.WithError(err).Errorln("commonpool.GetConnection error")
 		return
