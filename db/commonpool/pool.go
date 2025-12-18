@@ -233,11 +233,14 @@ func (cp *ConnectorPool) Get() (unsafe.Pointer, error) {
 }
 
 func (cp *ConnectorPool) Put(c unsafe.Pointer) error {
-	syncinterface.TaosResetCurrentDB(c, cp.logger, log.IsDebug())
-	syncinterface.TaosOptionsConnection(c, common.TSDB_OPTION_CONNECTION_CLEAR, nil, cp.logger, log.IsDebug())
+	isDebug := log.IsDebug()
+	syncinterface.TaosResetCurrentDB(c, cp.logger, isDebug)
+	syncinterface.TaosOptionsConnection(c, common.TSDB_OPTION_CONNECTION_CLEAR, nil, cp.logger, isDebug)
+	s := log.GetLogNow(isDebug)
 	if err := cp.pool.Put(c); err != nil {
 		return err
 	}
+	cp.logger.Debugf("put connection back to pool, cost:%s", log.GetLogDuration(isDebug, s))
 	if cp.gauge != nil {
 		cp.gauge.Dec()
 	}
@@ -309,7 +312,7 @@ func getConnectionPool(user, password, token string) (*ConnectorPool, error) {
 		if connectionPool.verifyAuth(password, token) {
 			return connectionPool, nil
 		}
-		cp, err, _ := singleGroup.Do(fmt.Sprintf("%s:%s", user, password), func() (interface{}, error) {
+		cp, err, _ := singleGroup.Do(fmt.Sprintf("%s:%s:%s", user, password, token), func() (interface{}, error) {
 			return getConnectorPoolSafe(user, password, token)
 		})
 		if err != nil {

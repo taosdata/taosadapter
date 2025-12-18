@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -63,13 +64,15 @@ func NewSTMTController() *STMTController {
 			}
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
 			logger := wstool.GetLogger(session)
-			logger.Debugf("get ws message data:%s", data)
 			var action wstool.WSAction
 			err := json.Unmarshal(data, &action)
 			if err != nil {
 				logger.Errorf("unmarshal ws request error, err:%s", err)
 				logger.WithError(err).Errorln("unmarshal ws request")
 				return
+			}
+			if action.Action != STMTConnect {
+				logger.Debugf("get ws message data:%s", data)
 			}
 			switch action.Action {
 			case wstool.ClientVersion:
@@ -82,6 +85,7 @@ func NewSTMTController() *STMTController {
 					logger.WithField(config.ReqIDKey, req.ReqID).WithError(err).Errorln("unmarshal connect request args")
 					return
 				}
+				logger.Debugf("get ws message, connect action:%s", &req)
 				t.connect(ctx, session, &req)
 			case STMTInit:
 				var req StmtInitReq
@@ -371,6 +375,19 @@ type StmtConnectReq struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	DB       string `json:"db"`
+}
+
+func (r *StmtConnectReq) String() string {
+	builder := &strings.Builder{}
+
+	builder.WriteString("{")
+	_, _ = fmt.Fprintf(builder, "req_id: %d,", r.ReqID)
+	_, _ = fmt.Fprintf(builder, "user: %q,", r.User)
+	builder.WriteString("password: \"[HIDDEN]\",")
+	_, _ = fmt.Fprintf(builder, "db: %q,", r.DB)
+	builder.WriteString("}")
+
+	return builder.String()
 }
 
 type StmtConnectResp struct {

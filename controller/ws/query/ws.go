@@ -5,7 +5,9 @@ import (
 	"container/list"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -63,12 +65,14 @@ func NewQueryController() *QueryController {
 			}
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
 			logger := wstool.GetLogger(session)
-			logger.Debugf("get ws message data: %s", data)
 			var action WSAction
 			err := json.Unmarshal(data, &action)
 			if err != nil {
 				logger.WithError(err).Errorln("unmarshal ws request")
 				return
+			}
+			if action.Action != WSConnect {
+				logger.Debugf("get ws message data: %s", data)
 			}
 			switch action.Action {
 			case wstool.ClientVersion:
@@ -80,6 +84,7 @@ func NewQueryController() *QueryController {
 					logger.WithError(err).Errorln("unmarshal connect request args")
 					return
 				}
+				logger.Debugf("get ws message, connect action:%s", &wsConnect)
 				t.connect(ctx, session, &wsConnect)
 			case WSQuery:
 				var wsQuery WSQueryReq
@@ -139,6 +144,7 @@ func NewQueryController() *QueryController {
 			reqID := *(*uint64)(p0)
 			messageID := *(*uint64)(tools.AddPointer(p0, uintptr(8)))
 			action := *(*uint64)(tools.AddPointer(p0, uintptr(16)))
+			logger.Tracef("get ws message binary QID:0x%x, messageID:%d, action:%d", reqID, messageID, action)
 			switch action {
 			case TMQRawMessage:
 				length := *(*uint32)(tools.AddPointer(p0, uintptr(24)))
@@ -361,6 +367,19 @@ type WSConnectReq struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	DB       string `json:"db"`
+}
+
+func (r *WSConnectReq) String() string {
+	builder := &strings.Builder{}
+
+	builder.WriteString("{")
+	_, _ = fmt.Fprintf(builder, "req_id: %d,", r.ReqID)
+	_, _ = fmt.Fprintf(builder, "user: %q,", r.User)
+	builder.WriteString("password: \"[HIDDEN]\",")
+	_, _ = fmt.Fprintf(builder, "db: %q,", r.DB)
+	builder.WriteString("}")
+
+	return builder.String()
 }
 
 type WSConnectResp struct {

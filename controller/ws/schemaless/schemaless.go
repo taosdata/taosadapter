@@ -3,7 +3,9 @@ package schemaless
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -54,13 +56,15 @@ func NewSchemalessController() *SchemalessController {
 			}
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
 			logger := wstool.GetLogger(session)
-			logger.Debugf("get ws message data:%s", bytes)
 			var action wstool.WSAction
 			err := json.Unmarshal(bytes, &action)
 			if err != nil {
 				logger.Errorf("unmarshal ws request error, err:%s", err)
 				wstool.WSError(ctx, session, logger, err, action.Action, 0)
 				return
+			}
+			if action.Action != SchemalessConn {
+				logger.Debugf("get ws message data:%s", bytes)
 			}
 			switch action.Action {
 			case wstool.ClientVersion:
@@ -72,6 +76,7 @@ func NewSchemalessController() *SchemalessController {
 					wstool.WSError(ctx, session, logger, err, SchemalessConn, req.ReqID)
 					return
 				}
+				logger.Debugf("get ws message, connect action:%s", &req)
 				t.connect(ctx, session, req)
 			case SchemalessWrite:
 				var req schemalessWriteReq
@@ -231,6 +236,19 @@ type schemalessConnReq struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	DB       string `json:"db"`
+}
+
+func (r *schemalessConnReq) String() string {
+	builder := &strings.Builder{}
+
+	builder.WriteString("{")
+	_, _ = fmt.Fprintf(builder, "req_id: %d,", r.ReqID)
+	_, _ = fmt.Fprintf(builder, "user: %q,", r.User)
+	builder.WriteString("password: \"[HIDDEN]\",")
+	_, _ = fmt.Fprintf(builder, "db: %q,", r.DB)
+	builder.WriteString("}")
+
+	return builder.String()
 }
 
 type schemalessConnResp struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"unsafe"
 
 	"github.com/sirupsen/logrus"
@@ -29,6 +30,31 @@ type connRequest struct {
 	Connector   string `json:"connector"`
 	TOTPCode    string `json:"totp_code"`
 	BearerToken string `json:"bearer_token"`
+}
+
+func (r *connRequest) String() string {
+	builder := &strings.Builder{}
+
+	builder.WriteString("{")
+	_, _ = fmt.Fprintf(builder, "req_id: %d,", r.ReqID)
+	_, _ = fmt.Fprintf(builder, "user: %q,", r.User)
+	builder.WriteString("password: \"[HIDDEN]\",")
+	_, _ = fmt.Fprintf(builder, "db: %q,", r.DB)
+	if r.Mode != nil {
+		_, _ = fmt.Fprintf(builder, "mode: %d,", *r.Mode)
+	} else {
+		builder.WriteString("mode: nil,")
+	}
+
+	_, _ = fmt.Fprintf(builder, "tz: %q,", r.TZ)
+	_, _ = fmt.Fprintf(builder, "app: %q,", r.App)
+	_, _ = fmt.Fprintf(builder, "ip: %q,", r.IP)
+	_, _ = fmt.Fprintf(builder, "connector: %q,", r.Connector)
+
+	builder.WriteString("totp_code: \"[HIDDEN]\",")
+	builder.WriteString("bearer_token: \"[HIDDEN]\"")
+	builder.WriteString("}")
+	return builder.String()
 }
 
 type connResponse struct {

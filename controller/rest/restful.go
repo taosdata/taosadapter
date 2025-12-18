@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -142,8 +143,10 @@ func DoQuery(c *gin.Context, db string, location *time.Location, reqID int64, re
 	var s time.Time
 	isDebug := log.IsDebug()
 	b, err := c.GetRawData()
+	ip := iptool.GetRealIP(c.Request)
+	port, _ := iptool.GetRealPort(c.Request)
 	if err != nil {
-		logger.Errorf("get request body error, err:%s", err)
+		logger.Errorf("get request body error, client ip:%s, port:%s, err:%s", ip, port, err)
 		BadRequestResponse(c, logger, httperror.HTTP_INVALID_CONTENT_LENGTH)
 		return
 	}
@@ -161,8 +164,6 @@ func DoQuery(c *gin.Context, db string, location *time.Location, reqID int64, re
 	logger.Debugf("request sql:%s", log.GetLogSql(sql))
 	sqlType := monitor.RestRecordRequest(sql)
 	c.Set("sql", sql)
-	ip := iptool.GetRealIP(c.Request)
-	port, _ := iptool.GetRealPort(c.Request)
 	user, password, token := getAuthInfo(c)
 	appName := c.Query(AppNameQueryParamKey)
 	hook := NewRestfulContext(c, sql, user, password, token, ip, port, appName, sqlType, reqID, logger, isDebug)
@@ -190,8 +191,8 @@ func DoQuery(c *gin.Context, db string, location *time.Location, reqID int64, re
 		return
 	}
 	defer func() {
-		s = log.GetLogNow(isDebug)
 		logger.Trace("put connection")
+		s = log.GetLogNow(isDebug)
 		err := taosConnect.Put()
 		if err != nil {
 			panic(err)
@@ -213,6 +214,21 @@ func DoQuery(c *gin.Context, db string, location *time.Location, reqID int64, re
 	}
 
 	execute(c, logger, isDebug, taosConnect.TaosConnection, sql, reqID, sqlType, returnObj, location, hook)
+}
+
+var hookPool = sync.Pool{}
+
+func getHookFromPool() *SQLQueryHook {
+	v := hookPool.Get()
+	if v == nil {
+		return &SQLQueryHook{}
+	}
+	return v.(*SQLQueryHook)
+}
+
+func putHookToPool(hook *SQLQueryHook) {
+	hook.reset()
+	hookPool.Put(hook)
 }
 
 type SQLQueryHook struct {
@@ -239,6 +255,28 @@ type SQLQueryHook struct {
 	startFetchTime time.Time
 }
 
+var timeZero = time.Time{}
+
+func (h *SQLQueryHook) reset() {
+	h.c = nil
+	h.sql = ""
+	h.user = ""
+	h.password = ""
+	h.token = ""
+	h.clientIP = nil
+	h.clientPort = ""
+	h.appName = ""
+	h.sqlType = 0
+	h.reqID = 0
+	h.logger = nil
+	h.isDebug = false
+	h.record = nil
+	h.limiter = nil
+	h.startRecordTime = timeZero
+	h.startQueryTime = timeZero
+	h.startFetchTime = timeZero
+}
+
 func NewRestfulContext(
 	c *gin.Context,
 	sql string,
@@ -253,20 +291,20 @@ func NewRestfulContext(
 	logger *logrus.Entry,
 	isDebug bool,
 ) *SQLQueryHook {
-	return &SQLQueryHook{
-		c:          c,
-		sql:        sql,
-		user:       user,
-		password:   password,
-		token:      token,
-		clientIP:   clientIP,
-		clientPort: clientPort,
-		appName:    appName,
-		sqlType:    sqlType,
-		reqID:      reqID,
-		logger:     logger,
-		isDebug:    isDebug,
-	}
+	hook := getHookFromPool()
+	hook.c = c
+	hook.sql = sql
+	hook.user = user
+	hook.password = password
+	hook.token = token
+	hook.clientIP = clientIP
+	hook.clientPort = clientPort
+	hook.appName = appName
+	hook.sqlType = sqlType
+	hook.reqID = reqID
+	hook.logger = logger
+	hook.isDebug = isDebug
+	return hook
 }
 
 func (h *SQLQueryHook) beforeConnect() (abort bool) {
@@ -402,6 +440,7 @@ func (h *SQLQueryHook) cleanup() {
 		h.limiter.Release()
 		h.logger.Debug("sql limiter release success")
 	}
+	putHookToPool(h)
 }
 
 func trySetConnectionOptions(c *gin.Context, conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) bool {
@@ -453,14 +492,14 @@ func execute(
 	handler := async.GlobalAsync.HandlerPool.Get()
 	defer async.GlobalAsync.HandlerPool.Put(handler)
 
-	if !hook.beforeQuery() {
+	if hook.beforeQuery() {
 		monitor.RestRecordResult(sqlType, false)
 		return
 	}
 
 	result := async.GlobalAsync.TaosQuery(taosConnect, logger, isDebug, sql, handler, reqID)
 
-	if !hook.afterQuery() {
+	if hook.afterQuery() {
 		monitor.RestRecordResult(sqlType, false)
 		return
 	}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -60,12 +61,14 @@ func NewTMQController() *TMQController {
 		}
 		ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
 		logger := wstool.GetLogger(session)
-		logger.Debugf("get ws message data:%s", data)
 		var action wstool.WSAction
 		err := json.Unmarshal(data, &action)
 		if err != nil {
 			logger.Errorf("unmarshal ws request error, err:%s", err)
 			return
+		}
+		if action.Action != TMQSubscribe {
+			logger.Debugf("get ws message data:%s", data)
 		}
 		if action.Action == TMQPoll {
 			var req TMQPollReq
@@ -104,6 +107,7 @@ func NewTMQController() *TMQController {
 					logger.Errorf("unmarshal subscribe args, err:%s, args:%s", err.Error(), action.Args)
 					return
 				}
+				logger.Debugf("get ws message, subscribe action:%s", &req)
 				t.subscribe(ctx, session, &req)
 			case TMQFetch:
 				var req TMQFetchReq
@@ -406,6 +410,53 @@ type TMQSubscribeReq struct {
 	Config               map[string]string `json:"config"`
 }
 
+func (r *TMQSubscribeReq) String() string {
+	builder := &strings.Builder{}
+
+	builder.WriteString("{")
+	_, _ = fmt.Fprintf(builder, "req_id: %d,", r.ReqID)
+	_, _ = fmt.Fprintf(builder, "user: %q,", r.User)
+	builder.WriteString("password: \"[HIDDEN]\",")
+	_, _ = fmt.Fprintf(builder, "db: %q,", r.DB)
+	_, _ = fmt.Fprintf(builder, "group_id: %q,", r.GroupID)
+	_, _ = fmt.Fprintf(builder, "client_id: %q,", r.ClientID)
+	_, _ = fmt.Fprintf(builder, "offset_rest: %q,", r.OffsetRest)
+	_, _ = fmt.Fprintf(builder, "offset_reset: %q,", r.OffsetReset)
+	_, _ = fmt.Fprintf(builder, "topics: %v,", r.Topics)
+	_, _ = fmt.Fprintf(builder, "auto_commit: %q,", r.AutoCommit)
+	_, _ = fmt.Fprintf(builder, "auto_commit_interval_ms: %q,", r.AutoCommitIntervalMS)
+	_, _ = fmt.Fprintf(builder, "snapshot_enable: %q,", r.SnapshotEnable)
+	_, _ = fmt.Fprintf(builder, "with_table_name: %q,", r.WithTableName)
+	_, _ = fmt.Fprintf(builder, "enable_batch_meta: %q,", r.EnableBatchMeta)
+	_, _ = fmt.Fprintf(builder, "msg_consume_excluded: %q,", r.MsgConsumeExcluded)
+	_, _ = fmt.Fprintf(builder, "session_timeout_ms: %q,", r.SessionTimeoutMS)
+	_, _ = fmt.Fprintf(builder, "max_poll_interval_ms: %q,", r.MaxPollIntervalMS)
+	_, _ = fmt.Fprintf(builder, "tz: %q,", r.TZ)
+	_, _ = fmt.Fprintf(builder, "app: %q,", r.App)
+	_, _ = fmt.Fprintf(builder, "ip: %q,", r.IP)
+	_, _ = fmt.Fprintf(builder, "connector: %q,", r.Connector)
+	_, _ = fmt.Fprintf(builder, "msg_consume_rawdata: %q,", r.MsgConsumeRawdata)
+
+	builder.WriteString(" config: {")
+	if r.Config != nil && len(r.Config) > 0 {
+		first := true
+		for k, v := range r.Config {
+			if k == "td.connect.pass" {
+				continue
+			}
+			if !first {
+				builder.WriteString(", ")
+			}
+			_, _ = fmt.Fprintf(builder, "%q: %q", k, v)
+			first = false
+		}
+	}
+	builder.WriteString("},")
+	builder.WriteString("}")
+
+	return builder.String()
+}
+
 type TMQSubscribeResp struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -449,7 +500,6 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	action := TMQSubscribe
 	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
-	logger.Tracef("subscribe request:%+v", req)
 	// lock for consumer and unsubscribed
 	// used for subscribe and unsubscribe
 	t.Lock(logger, isDebug)

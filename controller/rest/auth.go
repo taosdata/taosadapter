@@ -119,6 +119,7 @@ func CheckAuth(c *gin.Context) {
 		UnAuthResponse(c, logger, httperror.HTTP_NO_AUTH_INFO)
 		return
 	}
+	_, cloudTokenExists := c.Params.Get("token")
 	auth = strings.TrimSpace(auth)
 	v, exist := authCache.Get(auth)
 	if exist {
@@ -159,7 +160,7 @@ func CheckAuth(c *gin.Context) {
 		})
 		c.Set(UserKey, user)
 		c.Set(PasswordKey, password)
-	} else if strings.HasPrefix(auth, "Bearer") && len(auth) > 7 {
+	} else if !cloudTokenExists && strings.HasPrefix(auth, "Bearer") && len(auth) > 7 {
 		token := strings.TrimSpace(auth[7:])
 		c.Set(UserKey, "")
 		c.Set(PasswordKey, "")

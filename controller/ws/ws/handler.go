@@ -150,7 +150,6 @@ func (h *messageHandler) stop() {
 
 func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
-	h.logger.Debugf("get ws message data:%s", data)
 	var request Request
 	err := json.Unmarshal(data, &request)
 	if err != nil {
@@ -161,8 +160,12 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	action := request.Action
 	if request.Action == "" {
 		reqID := getReqID(request.Args)
+		h.logger.Errorf("get reqID:%x, req:%s, err:%s", reqID, data, err)
 		commonErrorResponse(ctx, session, h.logger, "", reqID, 0xffff, "request no action")
 		return
+	}
+	if request.Action != Connect {
+		h.logger.Debugf("get ws message data:%s", data)
 	}
 
 	// no need connection actions
@@ -198,6 +201,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, Connect, reqID, 0xffff, "unmarshal connect request error")
 			return
 		}
+		h.logger.Debugf("get ws message, connect action:%s", &req)
 		innerReqID, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.connect(ctx, session, action, req, innerReqID, logger, log.IsDebug())
 		return
