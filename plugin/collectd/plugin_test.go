@@ -16,9 +16,9 @@ import (
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
-	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 // @author: xftan
@@ -121,48 +121,12 @@ func TestCollectd(t *testing.T) {
 
 func exec(conn unsafe.Pointer, sql string) error {
 	logger := log.GetLogger("test")
-	isDebug := log.IsDebug()
-	res := syncinterface.TaosQuery(conn, sql, logger, isDebug)
-	defer syncinterface.TaosSyncQueryFree(res, logger, isDebug)
-	code := syncinterface.TaosError(res, logger, isDebug)
-	if code != 0 {
-		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
-		return errors.NewError(code, errStr)
-	}
-	return nil
+	logger.Debugf("exec sql %s", sql)
+	return testtools.Exec(conn, sql)
 }
 
 func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
 	logger := log.GetLogger("test")
-	isDebug := log.IsDebug()
-	res := syncinterface.TaosQuery(conn, sql, logger, isDebug)
-	defer syncinterface.TaosSyncQueryFree(res, logger, isDebug)
-	code := syncinterface.TaosError(res, logger, isDebug)
-	if code != 0 {
-		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
-		return nil, errors.NewError(code, errStr)
-	}
-	fileCount := syncinterface.TaosNumFields(res, logger, isDebug)
-	rh, err := syncinterface.ReadColumn(res, fileCount, logger, isDebug)
-	if err != nil {
-		return nil, err
-	}
-	precision := syncinterface.TaosResultPrecision(res, logger, isDebug)
-	var result [][]driver.Value
-	for {
-		columns, errCode, block := syncinterface.TaosFetchRawBlock(res, logger, isDebug)
-		if errCode != 0 {
-			errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
-			return nil, errors.NewError(errCode, errStr)
-		}
-		if columns == 0 {
-			break
-		}
-		r, err := parser.ReadBlock(block, columns, rh.ColTypes, precision)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, r...)
-	}
-	return result, nil
+	logger.Debugf("query sql %s", sql)
+	return testtools.Query(conn, sql)
 }

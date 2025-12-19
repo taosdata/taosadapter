@@ -180,3 +180,67 @@ func TestWSConnectTotp(t *testing.T) {
 	assert.Equal(t, "duplicate connections", connResp.Message)
 	assert.Equal(t, version.TaosClientVersion, connResp.Version)
 }
+
+func TestWSConnectToken(t *testing.T) {
+	user := "ws_test_token_user"
+	pass := "N@6W$KOMF#2N7dMh"
+	code, message := doRestful(fmt.Sprintf("create user %s pass '%s'", user, pass), "")
+	assert.Equal(t, 0, code, message)
+	defer func() {
+		code, message = doRestful("drop user ws_test_totp_user", "")
+		assert.Equal(t, 0, code, message)
+	}()
+	createTokenResp := restQuery(fmt.Sprintf("create token test_token_ws_conn from user %s", user), "")
+	if createTokenResp.Code != 0 {
+		t.Errorf("create token failed: %d,%s", createTokenResp.Code, createTokenResp.Desc)
+		return
+	}
+	token := createTokenResp.Data[0][0].(string)
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+	// connect
+	connReq := connRequest{ReqID: 1, BearerToken: token}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp connResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+	//duplicate connections
+	resp, err = doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0xffff, connResp.Code)
+	assert.Equal(t, "duplicate connections", connResp.Message)
+	assert.Equal(t, version.TaosClientVersion, connResp.Version)
+
+	// with token query param
+	ws2, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws?token="+token, nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws2.Close()
+		assert.NoError(t, err)
+	}()
+	resp, err = doWebSocket(ws2, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp2 connResponse
+	err = json.Unmarshal(resp, &connResp2)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp2.ReqID)
+	assert.NotEqual(t, uint64(0), connResp2.Code)
+}

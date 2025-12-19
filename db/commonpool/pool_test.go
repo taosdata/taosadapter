@@ -11,6 +11,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 func TestMain(m *testing.M) {
@@ -37,9 +38,24 @@ func BenchmarkGetConnection(b *testing.B) {
 // @date: 2021/12/14 15:03
 // @description: test connection get connection
 func TestGetConnection(t *testing.T) {
+	c, err := GetConnection("root", "taosdata", "", net.ParseIP("127.0.0.1"))
+	assert.NoError(t, err)
+	defer func() {
+		err = c.Put()
+		assert.NoError(t, err)
+	}()
+	res, err := testtools.Query(c.TaosConnection, "create token test_token_pool from user root enable 1")
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+	token := res[0][0].(string)
+	defer func() {
+		err = testtools.Exec(c.TaosConnection, "drop token test_token_pool")
+		assert.NoError(t, err)
+	}()
 	type args struct {
 		user     string
 		password string
+		token    string
 	}
 	tests := []struct {
 		name    string
@@ -53,7 +69,8 @@ func TestGetConnection(t *testing.T) {
 				password: "taosdata",
 			},
 			wantErr: false,
-		}, {
+		},
+		{
 			name: "wrong",
 			args: args{
 				user:     "root",
@@ -61,10 +78,28 @@ func TestGetConnection(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "wrong token",
+			args: args{
+				user:     "root",
+				password: "taosdata",
+				token:    "wrong_token",
+			},
+			wantErr: true,
+		},
+		{
+			name: "correct token",
+			args: args{
+				user:     "root",
+				password: "wrong",
+				token:    token,
+			},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetConnection(tt.args.user, tt.args.password, "", net.ParseIP("127.0.0.1"))
+			got, err := GetConnection(tt.args.user, tt.args.password, tt.args.token, net.ParseIP("127.0.0.1"))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetConnection() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -114,6 +149,10 @@ func TestChangePassword(t *testing.T) {
 	c, err := GetConnection("root", "taosdata", "", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
 
+	defer func() {
+		err = c.Put()
+		assert.NoError(t, err)
+	}()
 	result := syncinterface.TaosQuery(c.TaosConnection, "drop user test_change_pass_pool", logger, isDebug)
 	assert.NotNil(t, result)
 	syncinterface.TaosSyncQueryFree(result, logger, isDebug)
@@ -182,6 +221,10 @@ func TestChangePasswordConcurrent(t *testing.T) {
 	isDebug := log.IsDebug()
 	c, err := GetConnection("root", "taosdata", "", net.ParseIP("127.0.0.1"))
 	assert.NoError(t, err)
+	defer func() {
+		err = c.Put()
+		assert.NoError(t, err)
+	}()
 
 	result := syncinterface.TaosQuery(c.TaosConnection, "drop user test_change_pass_con", logger, isDebug)
 	assert.NotNil(t, result)

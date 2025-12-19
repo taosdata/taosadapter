@@ -131,14 +131,6 @@ var (
 	TaosConnectSuccessCounter = metrics.NewGauge("taos_connect_success")
 	TaosConnectFailCounter    = metrics.NewGauge("taos_connect_fail")
 
-	TaosConnectTOTPCounter        = metrics.NewGauge("taos_connect_totp_total")
-	TaosConnectTOTPSuccessCounter = metrics.NewGauge("taos_connect_totp_success")
-	TaosConnectTOTPFailCounter    = metrics.NewGauge("taos_connect_totp_fail")
-
-	TaosConnectTokenCounter        = metrics.NewGauge("taos_connect_token_total")
-	TaosConnectTokenSuccessCounter = metrics.NewGauge("taos_connect_token_success")
-	TaosConnectTokenFailCounter    = metrics.NewGauge("taos_connect_token_fail")
-
 	TaosCloseCounter        = metrics.NewGauge("taos_close_total")
 	TaosCloseSuccessCounter = metrics.NewGauge("taos_close_success")
 
@@ -514,6 +506,13 @@ var (
 	TMQCommitOffsetSuccessCounter = metrics.NewGauge("tmq_commit_offset_sync_success")
 
 	// 3.4.0.0
+	TaosConnectTOTPCounter        = metrics.NewGauge("taos_connect_totp_total")
+	TaosConnectTOTPSuccessCounter = metrics.NewGauge("taos_connect_totp_success")
+	TaosConnectTOTPFailCounter    = metrics.NewGauge("taos_connect_totp_fail")
+
+	TaosConnectTokenCounter        = metrics.NewGauge("taos_connect_token_total")
+	TaosConnectTokenSuccessCounter = metrics.NewGauge("taos_connect_token_success")
+	TaosConnectTokenFailCounter    = metrics.NewGauge("taos_connect_token_fail")
 
 	TaosGetConnectionInfoCounter        = metrics.NewGauge("taos_get_connection_info_total")
 	TaosGetConnectionInfoSuccessCounter = metrics.NewGauge("taos_get_connection_info_success")
@@ -897,7 +896,6 @@ var cInterfaceCountMetrics = []*metrics.Gauge{
 	TMQCommitOffsetSuccessCounter,
 
 	// 3.4.0.0
-	TaosConnectTOTPCounter,
 	TaosConnectTOTPCounter,
 	TaosConnectTOTPSuccessCounter,
 	TaosConnectTOTPFailCounter,

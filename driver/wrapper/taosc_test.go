@@ -920,3 +920,31 @@ func MustRandomSecret(length int) string {
 
 	return string(b)
 }
+
+func TestTaosConnectToken(t *testing.T) {
+	rootConn, err := TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer TaosClose(rootConn)
+	val, err := query(rootConn, "create token test_token_wrapper from user root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		err = exec(rootConn, "drop token test_token_wrapper")
+		assert.NoError(t, err)
+	}()
+	token := val[0][0].(string)
+	conn, err := TaosConnectToken("", token, "", 0)
+	require.NoError(t, err)
+	defer TaosClose(conn)
+	res, err := query(conn, "select 1")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(res))
+	assert.Equal(t, int64(1), res[0][0])
+
+	conn2, err := TaosConnectToken("", "wrong token", "", 0)
+	assert.Error(t, err)
+	assert.Nil(t, conn2)
+}

@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/driver/common"
-	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	stmtCommon "github.com/taosdata/taosadapter/v3/driver/common/stmt"
 	taoserrors "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/types"
@@ -20,6 +19,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/otp"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 var logger = log.GetLogger("test")
@@ -598,46 +598,15 @@ func TestTaosStmt2(t *testing.T) {
 }
 
 func exec(conn unsafe.Pointer, sql string) error {
-	result := TaosQuery(conn, sql, logger, isDebug)
-	defer TaosSyncQueryFree(result, logger, isDebug)
-	code := TaosError(result, logger, isDebug)
-	if code != 0 {
-		return taoserrors.NewError(code, TaosErrorStr(result, logger, isDebug))
-	}
-	return nil
+	logger := log.GetLogger("test")
+	logger.Debugf("exec sql %s", sql)
+	return testtools.Exec(conn, sql)
 }
 
 func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
-	res := TaosQuery(conn, sql, logger, isDebug)
-	defer TaosSyncQueryFree(res, logger, isDebug)
-	code := TaosError(res, logger, isDebug)
-	if code != 0 {
-		errStr := TaosErrorStr(res, logger, isDebug)
-		return nil, taoserrors.NewError(code, errStr)
-	}
-	fileCount := TaosNumFields(res, logger, isDebug)
-	rh, err := ReadColumn(res, fileCount, logger, isDebug)
-	if err != nil {
-		return nil, err
-	}
-	precision := TaosResultPrecision(res, logger, isDebug)
-	var result [][]driver.Value
-	for {
-		columns, errCode, block := TaosFetchRawBlock(res, logger, isDebug)
-		if errCode != 0 {
-			errStr := TaosErrorStr(res, logger, isDebug)
-			return nil, taoserrors.NewError(errCode, errStr)
-		}
-		if columns == 0 {
-			break
-		}
-		r, err := parser.ReadBlock(block, columns, rh.ColTypes, precision)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, r...)
-	}
-	return result, nil
+	logger := log.GetLogger("test")
+	logger.Debugf("query sql %s", sql)
+	return testtools.Query(conn, sql)
 }
 
 func TestTaosOptionsConnection(t *testing.T) {

@@ -24,10 +24,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
-	"github.com/taosdata/taosadapter/v3/driver/common/parser"
-	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -470,45 +469,13 @@ func TestOpenMetricsDisabled(t *testing.T) {
 }
 
 func exec(conn unsafe.Pointer, sql string) error {
-	res := wrapper.TaosQuery(conn, sql)
-	defer wrapper.TaosFreeResult(res)
-	code := wrapper.TaosError(res)
-	if code != 0 {
-		errStr := wrapper.TaosErrorStr(res)
-		return errors.NewError(code, errStr)
-	}
-	return nil
+	logger := log.GetLogger("test")
+	logger.Debugf("exec sql %s", sql)
+	return testtools.Exec(conn, sql)
 }
 
 func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
-	res := wrapper.TaosQuery(conn, sql)
-	defer wrapper.TaosFreeResult(res)
-	code := wrapper.TaosError(res)
-	if code != 0 {
-		errStr := wrapper.TaosErrorStr(res)
-		return nil, errors.NewError(code, errStr)
-	}
-	fileCount := wrapper.TaosNumFields(res)
-	rh, err := wrapper.ReadColumn(res, fileCount)
-	if err != nil {
-		return nil, err
-	}
-	precision := wrapper.TaosResultPrecision(res)
-	var result [][]driver.Value
-	for {
-		columns, errCode, block := wrapper.TaosFetchRawBlock(res)
-		if errCode != 0 {
-			errStr := wrapper.TaosErrorStr(res)
-			return nil, errors.NewError(errCode, errStr)
-		}
-		if columns == 0 {
-			break
-		}
-		r, err := parser.ReadBlock(block, columns, rh.ColTypes, precision)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, r...)
-	}
-	return result, nil
+	logger := log.GetLogger("test")
+	logger.Debugf("query sql %s", sql)
+	return testtools.Query(conn, sql)
 }

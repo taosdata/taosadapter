@@ -364,7 +364,11 @@ func getConnectDirect(connectionPool *ConnectorPool, clientIP net.IP) (*Conn, er
 }
 
 func getConnectorPoolSafe(user, password, token string) (*ConnectorPool, error) {
-	p, exist := connectionMap.Load(user)
+	authKey := user
+	if token != "" {
+		authKey = token
+	}
+	p, exist := connectionMap.Load(authKey)
 	if exist {
 		connectionPool := p.(*ConnectorPool)
 		if connectionPool.verifyAuth(password, token) {
@@ -375,14 +379,14 @@ func getConnectorPoolSafe(user, password, token string) (*ConnectorPool, error) 
 			return nil, err
 		}
 		connectionPool.Release()
-		connectionMap.LoadOrStore(user, newPool)
-		connectionMap.Store(user, newPool)
+		connectionMap.LoadOrStore(authKey, newPool)
+		connectionMap.Store(authKey, newPool)
 		return newPool, nil
 	}
-	newPool, err := NewConnectorPool(user, password, "")
+	newPool, err := NewConnectorPool(user, password, token)
 	if err != nil {
 		return nil, err
 	}
-	connectionMap.Store(user, newPool)
+	connectionMap.Store(authKey, newPool)
 	return newPool, nil
 }

@@ -46,9 +46,11 @@ type messageHandler struct {
 	appName               string
 	whitelistChangeHandle cgo.Handle
 	dropUserHandle        cgo.Handle
+	cloudTokenExists      bool
 }
 
 func newHandler(session *melody.Session) *messageHandler {
+	cloudTokenExists := session.Request.URL.Query().Has("token")
 	logger := wstool.GetLogger(session)
 	ipAddr := iptool.GetRealIP(session.Request)
 	port, _ := iptool.GetRealPort(session.Request) // ignore error, this port is for sql recording
@@ -67,6 +69,7 @@ func newHandler(session *melody.Session) *messageHandler {
 		ipStr:                 ipAddr.String(),
 		logger:                logger,
 		port:                  port,
+		cloudTokenExists:      cloudTokenExists,
 	}
 }
 

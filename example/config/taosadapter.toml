@@ -186,10 +186,13 @@ port = 6044
 db = "statsd"
 
 # The username used to connect to the TDengine database.
-user = "root"
+#user = ""
 
 # The password used to connect to the TDengine database.
-password = "taosdata"
+#password = ""
+
+# The token used to connect to the TDengine database. Not the cloud token.
+#token = ""
 
 # The number of worker threads for processing StatsD data.
 worker = 10
@@ -232,10 +235,13 @@ port = 6045
 db = "collectd"
 
 # The username used to connect to the TDengine database.
-user = "root"
+#user = ""
 
 # The password used to connect to the TDengine database.
-password = "taosdata"
+#password = ""
+
+# The token used to connect to the TDengine database. Not the cloud token.
+#token = ""
 
 # Number of worker threads for processing Collectd data.
 worker = 10
@@ -256,11 +262,14 @@ dbs = ["opentsdb_telnet", "collectd", "icinga2", "tcollector"]
 # The ports on which the OpenTSDB Telnet plugin listens, corresponding to each database.
 ports = [6046, 6047, 6048, 6049]
 
-# The username used to connect to the TDengine database for OpenTSDB Telnet.
-user = "root"
+# The username used to connect to the TDengine database.
+#user = ""
 
-# The password used to connect to the TDengine database for OpenTSDB Telnet.
-password = "taosdata"
+# The password used to connect to the TDengine database.
+#password = ""
+
+# The token used to connect to the TDengine database. Not the cloud token.
+#token = ""
 
 # Batch size for processing OpenTSDB Telnet data.
 batchSize = 1
@@ -276,10 +285,13 @@ enable = false
 db = "node_exporter"
 
 # The username used to connect to the TDengine database.
-user = "root"
+#user = ""
 
 # The password used to connect to the TDengine database.
-password = "taosdata"
+#password = ""
+
+# The token used to connect to the TDengine database. Not the cloud token.
+#token = ""
 
 # List of URLs to gather Node Exporter metrics from.
 urls = ["http://localhost:9100"]
@@ -320,8 +332,14 @@ enable = true
 enable = false  # Enable OpenMetrics data collection
 
 ## TDengine connection credentials
-user = "root"  # TDengine username for OpenMetrics connection
-password = "taosdata"  # TDengine password for OpenMetrics connection
+# The username used to connect to the TDengine database.
+#user = ""
+
+# The password used to connect to the TDengine database.
+#password = ""
+
+# The token used to connect to the TDengine database. Not the cloud token.
+#token = ""
 
 ## Database configuration
 dbs = ["open_metrics"]  # Target database names for OpenMetrics data

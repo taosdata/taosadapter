@@ -1054,6 +1054,44 @@ func TestRejectSQL(t *testing.T) {
 
 }
 
+func TestTokenConnect(t *testing.T) {
+	w := httptest.NewRecorder()
+	body := strings.NewReader("show databases")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Bearer wrong")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	w = executeSQL("create token test_token_restful from user root")
+	var result TDEngineRestfulRespDoc
+	err := json.Unmarshal(w.Body.Bytes(), &result)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, result.Code)
+	assert.Equal(t, 1, len(result.Data))
+	token := result.Data[0][0].(string)
+
+	w = httptest.NewRecorder()
+	body = strings.NewReader("show databases")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	err = json.Unmarshal(w.Body.Bytes(), &result)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, result.Code)
+
+	// with token param in url
+	w = httptest.NewRecorder()
+	body = strings.NewReader("show databases")
+	req, _ = http.NewRequest(http.MethodPost, "/rest/?token=xxx", body)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
 func executeSQL(sql string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
 	body := strings.NewReader(sql)

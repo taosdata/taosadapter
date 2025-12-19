@@ -79,7 +79,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 		return
 	}
 
-	conn, err := connect(&req, logger, isDebug)
+	conn, err := connect(&req, h.cloudTokenExists, logger, isDebug)
 
 	if err != nil {
 		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "connect to TDengine error")
@@ -221,8 +221,8 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	wstool.WSWriteJson(session, logger, resp)
 }
 
-func connect(req *connRequest, logger *logrus.Entry, isDebug bool) (unsafe.Pointer, error) {
-	if req.BearerToken != "" {
+func connect(req *connRequest, cloudTokenExists bool, logger *logrus.Entry, isDebug bool) (unsafe.Pointer, error) {
+	if !cloudTokenExists && req.BearerToken != "" {
 		logger.Debugf("use bearer token to connect")
 		return syncinterface.TaosConnectToken("", req.BearerToken, req.DB, 0, logger, isDebug)
 	}

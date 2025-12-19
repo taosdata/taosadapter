@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -33,6 +34,7 @@ func Auth(errHandler func(c *gin.Context, code int, err error)) func(c *gin.Cont
 			c.Abort()
 			return
 		}
+		_, cloudTokenExists := c.Params.Get("token")
 		auth = strings.TrimSpace(auth)
 		v, exist := authCache.Get(auth)
 		if exist {
@@ -41,7 +43,7 @@ func Auth(errHandler func(c *gin.Context, code int, err error)) func(c *gin.Cont
 			c.Set(PasswordKey, info.Password)
 			return
 		}
-		if strings.HasPrefix(auth, "Basic") && len(auth) > 6 {
+		if strings.HasPrefix(auth, "Basic ") && len(auth) > 6 {
 			user, password, err := tools.DecodeBasic(auth[6:])
 			if err != nil {
 				errHandler(c, http.StatusUnauthorized, err)
@@ -54,9 +56,13 @@ func Auth(errHandler func(c *gin.Context, code int, err error)) func(c *gin.Cont
 			})
 			c.Set(UserKey, user)
 			c.Set(PasswordKey, password)
-		} else if strings.HasPrefix(auth, "Bearer") && len(auth) > 7 {
+		} else if !cloudTokenExists && strings.HasPrefix(auth, "Bearer ") && len(auth) > 7 {
 			token := strings.TrimSpace(auth[7:])
 			c.Set(TokenKey, token)
+		} else {
+			errHandler(c, http.StatusUnauthorized, fmt.Errorf("unsupported auth type"))
+			c.Abort()
+			return
 		}
 	}
 }
@@ -93,7 +99,7 @@ func GetAuth(c *gin.Context) (user, password, token string, err error) {
 		token = t.(string)
 	}
 	if token == "" && (len(user) == 0 || len(password) == 0) {
-		err = errors.New("auth needed")
+		err = errors.New("no auth info found")
 	}
 	return user, password, token, err
 }
