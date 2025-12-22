@@ -2,6 +2,7 @@ package capi_test
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 	"unsafe"
@@ -21,7 +22,7 @@ func TestMain(m *testing.M) {
 	config.Init()
 	log.ConfigLog()
 	db.PrepareConnection()
-	m.Run()
+	os.Exit(m.Run())
 }
 
 // @author: xftan

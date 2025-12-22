@@ -2,6 +2,7 @@ package tool
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"unsafe"
 
@@ -20,8 +21,9 @@ func TestMain(m *testing.M) {
 	config.Init()
 	log.ConfigLog()
 	db.PrepareConnection()
-	m.Run()
+	code := m.Run()
 	viper.Set("smlAutoCreateDB", false)
+	os.Exit(code)
 }
 
 // @author: xftan

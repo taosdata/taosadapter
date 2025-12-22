@@ -835,20 +835,6 @@ func TaosGetRawBlock(res unsafe.Pointer, logger *logrus.Entry, isDebug bool) uns
 	return rawBlock
 }
 
-func TaosFetchRawBlock(res unsafe.Pointer, logger *logrus.Entry, isDebug bool) (int, int, unsafe.Pointer) {
-	logger.Tracef("call taos_fetch_raw_block, res:%p", res)
-	monitor.TaosFetchRawBlockCounter.Inc()
-	s := log.GetLogNow(isDebug)
-	code, num, block := wrapper.TaosFetchRawBlock(res)
-	logger.Debugf("taos_fetch_raw_block finish, code:%d, num:%d, block:%p, cost:%s", code, num, block, log.GetLogDuration(isDebug, s))
-	if code != 0 {
-		monitor.TaosFetchRawBlockFailCounter.Inc()
-	} else {
-		monitor.TaosFetchRawBlockSuccessCounter.Inc()
-	}
-	return code, num, block
-}
-
 func TaosQuery(taosConnect unsafe.Pointer, sql string, logger *logrus.Entry, isDebug bool) unsafe.Pointer {
 	logger.Trace("sync semaphore acquire for taos_query")
 	thread.SyncSemaphore.Acquire()
@@ -1229,7 +1215,7 @@ func TaosGetConnectionUserName(conn unsafe.Pointer, logger *logrus.Entry, isDebu
 	logger.Debugf("call taos_get_connection_info, conn:%p", conn)
 	monitor.TaosGetConnectionInfoCounter.Inc()
 	s := log.GetLogNow(isDebug)
-	user, codeCode := wrapper.TaosGetConnectionInfo(conn, common.TAOS_CONNECTION_INFO_USER)
+	user, codeCode := wrapper.TaosGetConnectionInfo(conn, common.TSDB_CONNECTION_INFO_USER)
 	logger.Debugf("taos_get_connection_info finish, user:%s, cost:%s", user, log.GetLogDuration(isDebug, s))
 	if codeCode != 0 {
 		monitor.TaosGetConnectInfoFailCounter.Inc()

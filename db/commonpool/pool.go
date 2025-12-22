@@ -267,11 +267,11 @@ func (cp *ConnectorPool) verifyIP(ip net.IP) bool {
 func (cp *ConnectorPool) Release() {
 	cp.once.Do(func() {
 		cp.cancel()
+		authKey := cp.user
 		if cp.token != "" {
-			connectionMap.CompareAndDelete(cp.token, cp)
-		} else {
-			connectionMap.CompareAndDelete(cp.user, cp)
+			authKey = cp.token
 		}
+		connectionMap.CompareAndDelete(authKey, cp)
 		cp.pool.Release()
 		cp.logger.Warn("connector released")
 	})
@@ -306,7 +306,11 @@ func GetConnection(user, password, token string, clientIp net.IP) (*Conn, error)
 }
 
 func getConnectionPool(user, password, token string) (*ConnectorPool, error) {
-	p, exist := connectionMap.Load(user)
+	authKey := user
+	if token != "" {
+		authKey = token
+	}
+	p, exist := connectionMap.Load(authKey)
 	if exist {
 		connectionPool := p.(*ConnectorPool)
 		if connectionPool.verifyAuth(password, token) {
@@ -330,7 +334,11 @@ func getConnectionPool(user, password, token string) (*ConnectorPool, error) {
 }
 
 func VerifyClientIP(user, password, token string, clientIP net.IP) (authed bool, valid bool, connectionPoolExits bool) {
-	p, exist := connectionMap.Load(user)
+	authKey := user
+	if token != "" {
+		authKey = token
+	}
+	p, exist := connectionMap.Load(authKey)
 	if !exist {
 		return
 	}

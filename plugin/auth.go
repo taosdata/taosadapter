@@ -34,7 +34,7 @@ func Auth(errHandler func(c *gin.Context, code int, err error)) func(c *gin.Cont
 			c.Abort()
 			return
 		}
-		_, cloudTokenExists := c.Params.Get("token")
+		_, cloudTokenExists := c.GetQuery("token")
 		auth = strings.TrimSpace(auth)
 		v, exist := authCache.Get(auth)
 		if exist {

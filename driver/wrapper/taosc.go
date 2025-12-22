@@ -408,12 +408,12 @@ func TaosConnectToken(host, token, db string, port int) (taos unsafe.Pointer, er
 	return taosObj, nil
 }
 
-// TaosGetConnectionInfo int taos_get_connection_info(TAOS* taos, TAOS_CONNECTION_INFO info, char* buffer, int* len)
+// TaosGetConnectionInfo int taos_get_connection_info(TAOS* taos, TSDB_CONNECTION_INFO info, char* buffer, int* len)
 func TaosGetConnectionInfo(taos unsafe.Pointer, info int) (string, int) {
 	cBuffer := (*C.char)(C.malloc(256))
 	defer C.free(unsafe.Pointer(cBuffer))
 	var cLen C.int = 256
-	code := C.taos_get_connection_info(taos, (C.TAOS_CONNECTION_INFO)(info), cBuffer, (*C.int)(unsafe.Pointer(&cLen)))
+	code := C.taos_get_connection_info(taos, (C.TSDB_CONNECTION_INFO)(info), cBuffer, (*C.int)(unsafe.Pointer(&cLen)))
 	if code != 0 {
 		return "", int(code)
 	}

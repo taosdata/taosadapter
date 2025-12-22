@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ import (
 	_ "github.com/taosdata/taosadapter/v3/controller/rest"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db"
+	taoserrors "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/layout"
 	"github.com/taosdata/taosadapter/v3/tools/testtools"
@@ -43,49 +45,41 @@ func TestMain(m *testing.M) {
 	for _, webController := range controllers {
 		webController.Init(router)
 	}
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func TestSTMT(t *testing.T) {
 	now := time.Now()
-	w := httptest.NewRecorder()
-	body := strings.NewReader("drop database if exists test_ws_stmt")
-	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader("create database if not exists test_ws_stmt precision 'ns'")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader("create table if not exists st(ts timestamp," +
-		"c1 bool," +
-		"c2 tinyint," +
-		"c3 smallint," +
-		"c4 int," +
-		"c5 bigint," +
-		"c6 tinyint unsigned," +
-		"c7 smallint unsigned," +
-		"c8 int unsigned," +
-		"c9 bigint unsigned," +
-		"c10 float," +
-		"c11 double," +
-		"c12 binary(20)," +
-		"c13 nchar(20)," +
-		"c14 varchar(20)," +
-		"c15 geometry(100)" +
-		") tags (info json)")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_stmt", body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-
+	code, message := doRestful("drop database if exists test_ws_stmt", "")
+	assert.Equal(t, 0, code, message)
+	initSqls := []string{
+		"create database if not exists test_ws_stmt precision 'ns'",
+		"create table if not exists st(ts timestamp," +
+			"c1 bool," +
+			"c2 tinyint," +
+			"c3 smallint," +
+			"c4 int," +
+			"c5 bigint," +
+			"c6 tinyint unsigned," +
+			"c7 smallint unsigned," +
+			"c8 int unsigned," +
+			"c9 bigint unsigned," +
+			"c10 float," +
+			"c11 double," +
+			"c12 binary(20)," +
+			"c13 nchar(20)," +
+			"c14 varchar(20)," +
+			"c15 geometry(100)" +
+			") tags (info json)",
+	}
+	for _, sql := range initSqls {
+		code, message = doRestful(sql, "test_ws_stmt")
+		assert.Equal(t, 0, code, message)
+	}
+	defer func() {
+		code, message = doRestful("drop database if exists test_ws_stmt", "")
+		assert.Equal(t, 0, code, message)
+	}()
 	s := httptest.NewServer(router)
 	defer s.Close()
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/stmt", nil)
@@ -93,490 +87,213 @@ func TestSTMT(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	const (
-		AfterConnect = iota + 1
-		AfterInit
-		AfterPrepare
-		AfterSetTableName
-		AfterSetTags
-		AfterBind
-		AfterAddBatch
-		AfterExec
-		AfterGetTagFields
-		AfterGetColFields
-	)
-	status := 0
-	finish := make(chan struct{})
-	stmtID := uint64(0)
-	testMessageHandler := func(messageType int, message []byte) error {
-		t.Log(messageType, string(message))
-		switch status {
-		case AfterConnect:
-			var d StmtConnectResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTConnect, d.Code, d.Message)
-			}
-			//init
-			status = AfterInit
-			b, _ := json.Marshal(&StmtInitReq{
-				ReqID: 2,
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTInit,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-		case AfterInit:
-			var d StmtInitResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTInit, d.Code, d.Message)
-			}
-			stmtID = d.StmtID
-			status = AfterPrepare
-			//prepare
-			b, _ := json.Marshal(&StmtPrepareReq{
-				ReqID:  3,
-				StmtID: stmtID,
-				SQL:    "insert into ? using test_ws_stmt.st tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTPrepare,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-		case AfterPrepare:
-			var d StmtPrepareResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTPrepare, d.Code, d.Message)
-			}
-			status = AfterSetTableName
-			b, _ := json.Marshal(&StmtSetTableNameReq{
-				ReqID:  4,
-				StmtID: stmtID,
-				Name:   "test_ws_stmt.ct1",
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTSetTableName,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-		case AfterSetTableName:
-			var d StmtSetTableNameResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTSetTableName, d.Code, d.Message)
-			}
-			status = AfterGetTagFields
-			b, _ := json.Marshal(&StmtGetTagFieldsReq{
-				ReqID:  5,
-				StmtID: stmtID,
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTGetTagFields,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-		case AfterGetTagFields:
-			var d StmtGetTagFieldsResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTGetTagFields, d.Code, d.Message)
-			}
-			status = AfterGetColFields
-			b, _ := json.Marshal(&StmtGetColFieldsReq{
-				ReqID:  5,
-				StmtID: stmtID,
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTGetColFields,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-		case AfterGetColFields:
-			var d StmtGetColFieldsResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTGetColFields, d.Code, d.Message)
-			}
-			status = AfterSetTags
-
-			b, _ := json.Marshal(&StmtSetTagsReq{
-				ReqID:  5,
-				StmtID: stmtID,
-				// {"a":"b"}
-				Tags: json.RawMessage(`["{\"a\":\"b\"}"]`),
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTSetTags,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-
-		case AfterSetTags:
-			var d StmtSetTagsResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTSetTags, d.Code, d.Message)
-			}
-			status = AfterBind
-			c, err := json.Marshal([][]driver.Value{
-				{
-					now,
-					now.Add(time.Second),
-					now.Add(time.Second * 2),
-				},
-				{
-					true,
-					false,
-					nil,
-				},
-				{
-					2,
-					22,
-					nil,
-				},
-				{
-					3,
-					33,
-					nil,
-				},
-				{
-					4,
-					44,
-					nil,
-				},
-				{
-					5,
-					55,
-					nil,
-				},
-				{
-					6,
-					66,
-					nil,
-				},
-				{
-					7,
-					77,
-					nil,
-				},
-				{
-					8,
-					88,
-					nil,
-				},
-				{
-					9,
-					99,
-					nil,
-				},
-				{
-					10,
-					1010,
-					nil,
-				},
-				{
-					11,
-					1111,
-					nil,
-				},
-				{
-					"binary",
-					"binary2",
-					nil,
-				},
-				{
-					"nchar",
-					"nchar2",
-					nil,
-				},
-				{
-					"varbinary",
-					"varbinary2",
-					nil,
-				},
-				{
-					"010100000000000000000059400000000000005940",
-					"010100000000000000000059400000000000005940",
-					nil,
-				},
-			})
-			assert.NoError(t, err)
-			b, _ := json.Marshal(&StmtBindReq{
-				ReqID:   5,
-				StmtID:  stmtID,
-				Columns: c,
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTBind,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-		case AfterBind:
-			var d StmtSetTableNameResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTBind, d.Code, d.Message)
-			}
-			status = AfterAddBatch
-			b, _ := json.Marshal(&StmtAddBatchReq{
-				ReqID:  6,
-				StmtID: stmtID,
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTAddBatch,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-		case AfterAddBatch:
-			var d StmtSetTableNameResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTAddBatch, d.Code, d.Message)
-			}
-			status = AfterExec
-			b, _ := json.Marshal(&StmtExecReq{
-				ReqID:  7,
-				StmtID: stmtID,
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTExec,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-		case AfterExec:
-			var d StmtSetTableNameResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTExec, d.Code, d.Message)
-			}
-			b, _ := json.Marshal(&StmtClose{
-				ReqID:  8,
-				StmtID: stmtID,
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTClose,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-			time.Sleep(time.Second)
-			finish <- struct{}{}
-		}
-		return nil
-	}
-	go func() {
-		for {
-			mt, message, err := ws.ReadMessage()
-			t.Log(string(message))
-			if err != nil {
-				if strings.Contains(err.Error(), "use of closed network connection") {
-					return
-				}
-				t.Error(err)
-				finish <- struct{}{}
-				return
-			}
-			err = testMessageHandler(mt, message)
-			if err != nil {
-				if mt == websocket.BinaryMessage {
-					t.Error(err, message)
-				} else {
-					t.Error(err, string(message))
-				}
-				finish <- struct{}{}
-				return
-			}
-		}
-	}()
-
 	connect := &StmtConnectReq{
 		ReqID:    0,
 		User:     "root",
 		Password: "taosdata",
 	}
+	_, err = conn(t, ws, connect)
+	assert.NoError(t, err)
+	initReq := &StmtInitReq{
+		ReqID: 2,
+	}
+	initResp, err := stmtInit(t, ws, initReq)
+	assert.NoError(t, err)
+	prepareReq := &StmtPrepareReq{
+		ReqID:  3,
+		StmtID: initResp.StmtID,
+		SQL:    "insert into ? using test_ws_stmt.st tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+	}
+	_, err = stmtPrepare(t, ws, prepareReq)
+	assert.NoError(t, err)
+	stmtSetTableNameReq := &StmtSetTableNameReq{
+		ReqID:  4,
+		StmtID: initResp.StmtID,
+		Name:   "test_ws_stmt.ct1",
+	}
+	_, err = stmtSetTableName(t, ws, stmtSetTableNameReq)
+	assert.NoError(t, err)
+	stmtGetTagFieldsReq := &StmtGetTagFieldsReq{
+		ReqID:  5,
+		StmtID: initResp.StmtID,
+	}
+	_, err = stmtGetTagFields(t, ws, stmtGetTagFieldsReq)
+	assert.NoError(t, err)
+	stmtGetColFieldsReq := &StmtGetColFieldsReq{
+		ReqID:  5,
+		StmtID: initResp.StmtID,
+	}
+	_, err = stmtGetColFields(t, ws, stmtGetColFieldsReq)
+	assert.NoError(t, err)
+	stmtSetTagsReq := &StmtSetTagsReq{
+		ReqID:  5,
+		StmtID: initResp.StmtID,
+		// {"a":"b"}
+		Tags: json.RawMessage(`["{\"a\":\"b\"}"]`),
+	}
+	_, err = stmtSetTags(t, ws, stmtSetTagsReq)
+	assert.NoError(t, err)
 
-	b, _ := json.Marshal(connect)
+	c, err := json.Marshal([][]driver.Value{
+		{
+			now,
+			now.Add(time.Second),
+			now.Add(time.Second * 2),
+		},
+		{
+			true,
+			false,
+			nil,
+		},
+		{
+			2,
+			22,
+			nil,
+		},
+		{
+			3,
+			33,
+			nil,
+		},
+		{
+			4,
+			44,
+			nil,
+		},
+		{
+			5,
+			55,
+			nil,
+		},
+		{
+			6,
+			66,
+			nil,
+		},
+		{
+			7,
+			77,
+			nil,
+		},
+		{
+			8,
+			88,
+			nil,
+		},
+		{
+			9,
+			99,
+			nil,
+		},
+		{
+			10,
+			1010,
+			nil,
+		},
+		{
+			11,
+			1111,
+			nil,
+		},
+		{
+			"binary",
+			"binary2",
+			nil,
+		},
+		{
+			"nchar",
+			"nchar2",
+			nil,
+		},
+		{
+			"varbinary",
+			"varbinary2",
+			nil,
+		},
+		{
+			"010100000000000000000059400000000000005940",
+			"010100000000000000000059400000000000005940",
+			nil,
+		},
+	})
+	assert.NoError(t, err)
+	stmtBindReq := &StmtBindReq{
+		ReqID:   5,
+		StmtID:  initResp.StmtID,
+		Columns: c,
+	}
+	_, err = stmtBind(t, ws, stmtBindReq)
+	assert.NoError(t, err)
+	stmtAddBatchReq := &StmtAddBatchReq{
+		ReqID:  6,
+		StmtID: initResp.StmtID,
+	}
+	_, err = stmtAddBatch(t, ws, stmtAddBatchReq)
+	assert.NoError(t, err)
+	stmtExecReq := &StmtExecReq{
+		ReqID:  7,
+		StmtID: initResp.StmtID,
+	}
+	_, err = stmtExec(t, ws, stmtExecReq)
+	assert.NoError(t, err)
+	b, _ := json.Marshal(&StmtClose{
+		ReqID:  8,
+		StmtID: initResp.StmtID,
+	})
 	action, _ := json.Marshal(&wstool.WSAction{
-		Action: STMTConnect,
+		Action: STMTClose,
 		Args:   b,
 	})
-	status = AfterConnect
-	t.Log(string(action))
 	err = ws.WriteMessage(
 		websocket.TextMessage,
 		action,
 	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	<-finish
 	err = ws.Close()
 	assert.NoError(t, err)
 	time.Sleep(time.Second)
-	w = httptest.NewRecorder()
-	body = strings.NewReader("select * from st")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_stmt", body)
+	w := httptest.NewRecorder()
+	body := strings.NewReader("select * from st")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql/test_ws_stmt", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	resultBody := fmt.Sprintf(`{"code":0,"column_meta":[["ts","TIMESTAMP",8],["c1","BOOL",1],["c2","TINYINT",1],["c3","SMALLINT",2],["c4","INT",4],["c5","BIGINT",8],["c6","TINYINT UNSIGNED",1],["c7","SMALLINT UNSIGNED",2],["c8","INT UNSIGNED",4],["c9","BIGINT UNSIGNED",8],["c10","FLOAT",4],["c11","DOUBLE",8],["c12","VARCHAR",20],["c13","NCHAR",20],["c14","VARCHAR",20],["c15","GEOMETRY",100],["info","JSON",4095]],"data":[["%s",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar","varbinary","010100000000000000000059400000000000005940",{"a":"b"}],["%s",false,22,33,44,55,66,77,88,99,1010,1111,"binary2","nchar2","varbinary2","010100000000000000000059400000000000005940",{"a":"b"}],["%s",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":"b"}]],"rows":3}`, now.UTC().Format(layout.LayoutNanoSecond), now.Add(time.Second).UTC().Format(layout.LayoutNanoSecond), now.Add(time.Second*2).UTC().Format(layout.LayoutNanoSecond))
 	assert.Equal(t, resultBody, w.Body.String())
-	w = httptest.NewRecorder()
-	body = strings.NewReader("drop database if exists test_ws_stmt")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
 }
 
 func TestBlock(t *testing.T) {
 	w := httptest.NewRecorder()
-	body := strings.NewReader("drop database if exists test_ws_stmt_block")
-	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader("create database if not exists test_ws_stmt_block precision 'ns'")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader("create table if not exists stb(ts timestamp," +
-		"c1 bool," +
-		"c2 tinyint," +
-		"c3 smallint," +
-		"c4 int," +
-		"c5 bigint," +
-		"c6 tinyint unsigned," +
-		"c7 smallint unsigned," +
-		"c8 int unsigned," +
-		"c9 bigint unsigned," +
-		"c10 float," +
-		"c11 double," +
-		"c12 binary(20)," +
-		"c13 nchar(20)," +
-		"c14 varchar(20)," +
-		"c15 geometry(100)" +
-		") tags(info json)")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_stmt_block", body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	//p0 uin64 代表 req_id
-	//p0+8 uint64 代表 stmt_id
-	//p0+16 uint64 代表 类型(1 set tag 2 bind)
-	//p0+24 raw block
+	code, message := doRestful("drop database if exists test_ws_stmt_block", "")
+	assert.Equal(t, 0, code, message)
+	initSqls := []string{
+		"create database if not exists test_ws_stmt_block precision 'ns'",
+		"create table if not exists stb(ts timestamp," +
+			"c1 bool," +
+			"c2 tinyint," +
+			"c3 smallint," +
+			"c4 int," +
+			"c5 bigint," +
+			"c6 tinyint unsigned," +
+			"c7 smallint unsigned," +
+			"c8 int unsigned," +
+			"c9 bigint unsigned," +
+			"c10 float," +
+			"c11 double," +
+			"c12 binary(20)," +
+			"c13 nchar(20)," +
+			"c14 varchar(20)," +
+			"c15 geometry(100)" +
+			") tags(info json)",
+	}
+	for _, sql := range initSqls {
+		code, message = doRestful(sql, "test_ws_stmt_block")
+		assert.Equal(t, 0, code, message)
+	}
+	defer func() {
+		code, message = doRestful("drop database if exists test_ws_stmt_block", "")
+		assert.Equal(t, 0, code, message)
+	}()
 	rawBlock := []byte{
 		0x01, 0x00, 0x00, 0x00,
 		0x11, 0x02, 0x00, 0x00,
@@ -724,330 +441,92 @@ func TestBlock(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	const (
-		AfterConnect = iota + 1
-		AfterInit
-		AfterPrepare
-		AfterSetTableName
-		AfterSetTags
-		AfterBind
-		AfterAddBatch
-		AfterExec
-		AfterVersion
-	)
-	status := 0
-	finish := make(chan struct{})
-	stmtID := uint64(0)
-	testMessageHandler := func(messageType int, message []byte) error {
-		//json
-		switch status {
-		case AfterConnect:
-			var d StmtConnectResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTConnect, d.Code, d.Message)
-			}
-			//init
-			status = AfterInit
-			b, _ := json.Marshal(&StmtInitReq{
-				ReqID: 2,
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTInit,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-		case AfterInit:
-			var d StmtInitResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTInit, d.Code, d.Message)
-			}
-			stmtID = d.StmtID
-			status = AfterPrepare
-			//prepare
-			b, _ := json.Marshal(&StmtPrepareReq{
-				ReqID:  3,
-				StmtID: stmtID,
-				SQL:    "insert into ? using test_ws_stmt_block.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTPrepare,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-		case AfterPrepare:
-			var d StmtPrepareResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTPrepare, d.Code, d.Message)
-			}
-			status = AfterSetTableName
-			b, _ := json.Marshal(&StmtSetTableNameReq{
-				ReqID:  4,
-				StmtID: stmtID,
-				Name:   "test_ws_stmt_block.ctb",
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTSetTableName,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-		case AfterSetTableName:
-			var d StmtSetTableNameResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTSetTableName, d.Code, d.Message)
-			}
-			status = AfterSetTags
-			b, _ := json.Marshal(&StmtSetTagsReq{
-				ReqID:  5,
-				StmtID: stmtID,
-				Tags:   json.RawMessage(`["{\"a\":\"b\"}"]`),
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTSetTags,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-		case AfterSetTags:
-			var d StmtSetTagsResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTSetTags, d.Code, d.Message)
-			}
-			status = AfterBind
-			reqID := uint64(10)
-			action := uint64(2)
-
-			block := &bytes.Buffer{}
-			wstool.WriteUint64(block, reqID)
-			wstool.WriteUint64(block, stmtID)
-			wstool.WriteUint64(block, action)
-			block.Write(rawBlock)
-			blockData := block.Bytes()
-			t.Log(blockData)
-			err = ws.WriteMessage(
-				websocket.BinaryMessage,
-				block.Bytes(),
-			)
-			if err != nil {
-				return err
-			}
-		case AfterBind:
-			var d StmtSetTableNameResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTBind, d.Code, d.Message)
-			}
-			status = AfterAddBatch
-			b, _ := json.Marshal(&StmtAddBatchReq{
-				ReqID:  6,
-				StmtID: stmtID,
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTAddBatch,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-		case AfterAddBatch:
-			var d StmtSetTableNameResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTAddBatch, d.Code, d.Message)
-			}
-			status = AfterExec
-			b, _ := json.Marshal(&StmtExecReq{
-				ReqID:  7,
-				StmtID: stmtID,
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTExec,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-		case AfterExec:
-			var d StmtSetTableNameResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", STMTExec, d.Code, d.Message)
-			}
-			status = AfterVersion
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: wstool.ClientVersion,
-				Args:   nil,
-			})
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			return nil
-		case AfterVersion:
-			var d wstool.WSVersionResp
-			err = json.Unmarshal(message, &d)
-			if err != nil {
-				return err
-			}
-			if d.Code != 0 {
-				return fmt.Errorf("%s %d,%s", wstool.ClientVersion, d.Code, d.Message)
-			}
-			assert.NotEmpty(t, d.Version)
-			t.Log("client version", d.Version)
-
-			b, _ := json.Marshal(&StmtClose{
-				ReqID:  8,
-				StmtID: stmtID,
-			})
-			action, _ := json.Marshal(&wstool.WSAction{
-				Action: STMTClose,
-				Args:   b,
-			})
-			t.Log(string(action))
-			err = ws.WriteMessage(
-				websocket.TextMessage,
-				action,
-			)
-			if err != nil {
-				return err
-			}
-			time.Sleep(time.Second)
-			finish <- struct{}{}
-			return nil
-		}
-		return nil
-	}
-	go func() {
-		for {
-			mt, message, err := ws.ReadMessage()
-			t.Log(string(message))
-			if err != nil {
-				if strings.Contains(err.Error(), "use of closed network connection") {
-					return
-				}
-				t.Error(err)
-				finish <- struct{}{}
-				return
-			}
-			err = testMessageHandler(mt, message)
-			if err != nil {
-				if mt == websocket.BinaryMessage {
-					t.Error(err, message)
-				} else {
-					t.Error(err, string(message))
-				}
-				finish <- struct{}{}
-				return
-			}
-		}
-	}()
-
 	connect := &StmtConnectReq{
 		ReqID:    0,
 		User:     "root",
 		Password: "taosdata",
 	}
-
-	b, _ := json.Marshal(connect)
-	action, _ := json.Marshal(&wstool.WSAction{
-		Action: STMTConnect,
-		Args:   b,
-	})
-	status = AfterConnect
-	t.Log(string(action))
-	err = ws.WriteMessage(
-		websocket.TextMessage,
-		action,
-	)
-	if err != nil {
-		t.Error(err)
-		return
+	_, err = conn(t, ws, connect)
+	assert.NoError(t, err)
+	initReq := &StmtInitReq{
+		ReqID: 2,
 	}
-	<-finish
+	initResp, err := stmtInit(t, ws, initReq)
+	assert.NoError(t, err)
+	prepareReq := &StmtPrepareReq{
+		ReqID:  3,
+		StmtID: initResp.StmtID,
+		SQL:    "insert into ? using test_ws_stmt_block.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+	}
+	_, err = stmtPrepare(t, ws, prepareReq)
+	assert.NoError(t, err)
+	stmtSetTableNameReq := &StmtSetTableNameReq{
+		ReqID:  4,
+		StmtID: initResp.StmtID,
+		Name:   "test_ws_stmt_block.ctb",
+	}
+	_, err = stmtSetTableName(t, ws, stmtSetTableNameReq)
+	assert.NoError(t, err)
+	stmtSetTagsReq := &StmtSetTagsReq{
+		ReqID:  5,
+		StmtID: initResp.StmtID,
+		// {"a":"b"}
+		Tags: json.RawMessage(`["{\"a\":\"b\"}"]`),
+	}
+	_, err = stmtSetTags(t, ws, stmtSetTagsReq)
+	assert.NoError(t, err)
+
+	reqID := uint64(10)
+	action := uint64(2)
+
+	block := &bytes.Buffer{}
+	wstool.WriteUint64(block, reqID)
+	wstool.WriteUint64(block, initResp.StmtID)
+	wstool.WriteUint64(block, action)
+	block.Write(rawBlock)
+	blockData := block.Bytes()
+	t.Log(blockData)
+	err = ws.WriteMessage(
+		websocket.BinaryMessage,
+		block.Bytes(),
+	)
+	assert.NoError(t, err)
+	// read response
+	_, wsMessage, err := ws.ReadMessage()
+	assert.NoError(t, err)
+	var baseResp BaseResp
+	err = json.Unmarshal(wsMessage, &baseResp)
+	assert.NoError(t, err, message)
+	assert.Equal(t, uint64(10), baseResp.ReqID)
+	assert.Equal(t, 0, baseResp.Code)
+
+	stmtAddBatchReq := &StmtAddBatchReq{
+		ReqID:  6,
+		StmtID: initResp.StmtID,
+	}
+	_, err = stmtAddBatch(t, ws, stmtAddBatchReq)
+	assert.NoError(t, err)
+	stmtExecReq := &StmtExecReq{
+		ReqID:  7,
+		StmtID: initResp.StmtID,
+	}
+	_, err = stmtExec(t, ws, stmtExecReq)
+	assert.NoError(t, err)
+
+	versionResp, err := getVersion(t, ws)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, versionResp.Version)
 	err = ws.Close()
 	assert.NoError(t, err)
 	w = httptest.NewRecorder()
-	body = strings.NewReader("select * from stb")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_stmt_block", body)
+	body := strings.NewReader("select * from stb")
+	req, _ := http.NewRequest(http.MethodPost, "/rest/sql/test_ws_stmt_block", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	resultBody := fmt.Sprintf(`{"code":0,"column_meta":[["ts","TIMESTAMP",8],["c1","BOOL",1],["c2","TINYINT",1],["c3","SMALLINT",2],["c4","INT",4],["c5","BIGINT",8],["c6","TINYINT UNSIGNED",1],["c7","SMALLINT UNSIGNED",2],["c8","INT UNSIGNED",4],["c9","BIGINT UNSIGNED",8],["c10","FLOAT",4],["c11","DOUBLE",8],["c12","VARCHAR",20],["c13","NCHAR",20],["c14","VARCHAR",20],["c15","GEOMETRY",100],["info","JSON",4095]],"data":[["%s",true,2,3,4,5,6,7,8,9,10,11,"binary","nchar","test_varbinary","010100000000000000000059400000000000005940",{"a":"b"}],["%s",false,22,33,44,55,66,77,88,99,1010,1111,"binary2","nchar2","test_varbinary2","010100000000000000000059400000000000005940",{"a":"b"}],["%s",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"a":"b"}]],"rows":3}`, now.UTC().Format(layout.LayoutNanoSecond), now.Add(time.Second).UTC().Format(layout.LayoutNanoSecond), now.Add(time.Second*2).UTC().Format(layout.LayoutNanoSecond))
 	assert.Equal(t, resultBody, w.Body.String())
-	w = httptest.NewRecorder()
-	body = strings.NewReader("drop database if exists test_ws_stmt_block")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-
 }
 
 type restResp struct {
@@ -1075,18 +554,117 @@ func doRestful(sql string, db string) (code int, message string) {
 	return res.Code, res.Desc
 }
 
-func doWebSocket(ws *websocket.Conn, action string, arg interface{}) (resp []byte, err error) {
-	var b []byte
-	if arg != nil {
-		b, _ = json.Marshal(arg)
-	}
-	a, _ := json.Marshal(wstool.WSAction{Action: action, Args: b})
-	err = ws.WriteMessage(websocket.TextMessage, a)
+func doWebSocket(ws *websocket.Conn, action string, arg []byte) (resp []byte, err error) {
+	a, _ := json.Marshal(&wstool.WSAction{Action: action, Args: arg})
+	message, err := sendWSMessage(ws, websocket.TextMessage, a)
+	return message, err
+}
+
+func sendWSMessage(ws *websocket.Conn, messageType int, data []byte) (resp []byte, err error) {
+	err = ws.WriteMessage(messageType, data)
 	if err != nil {
 		return nil, err
 	}
 	_, message, err := ws.ReadMessage()
 	return message, err
+}
+
+type BaseResp struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Action  string `json:"action"`
+	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
+}
+
+func sendJsonBackJson(t *testing.T, ws *websocket.Conn, action string, req interface{}, resp interface{}) error {
+	bs, err := json.Marshal(req)
+	assert.NoError(t, err)
+	message, err := doWebSocket(ws, action, bs)
+	assert.NoError(t, err)
+	var baseResp BaseResp
+	err = json.Unmarshal(message, &baseResp)
+	assert.NoError(t, err, message)
+	if baseResp.Code != 0 {
+		return taoserrors.NewError(baseResp.Code, baseResp.Message)
+	}
+	err = json.Unmarshal(message, &resp)
+	assert.NoError(t, err)
+	return nil
+}
+
+func sendJsonBackBinary(t *testing.T, ws *websocket.Conn, action string, req interface{}) []byte {
+	bs, err := json.Marshal(req)
+	assert.NoError(t, err)
+	message, err := doWebSocket(ws, action, bs)
+	assert.NoError(t, err)
+	return message
+}
+
+func conn(t *testing.T, ws *websocket.Conn, req *StmtConnectReq) (*StmtConnectResp, error) {
+	var resp StmtConnectResp
+	err := sendJsonBackJson(t, ws, STMTConnect, req, &resp)
+	return &resp, err
+}
+
+func stmtInit(t *testing.T, ws *websocket.Conn, req *StmtInitReq) (*StmtInitResp, error) {
+	var resp StmtInitResp
+	err := sendJsonBackJson(t, ws, STMTInit, req, &resp)
+	return &resp, err
+}
+
+func stmtPrepare(t *testing.T, ws *websocket.Conn, req *StmtPrepareReq) (*StmtPrepareResp, error) {
+	var resp StmtPrepareResp
+	err := sendJsonBackJson(t, ws, STMTPrepare, req, &resp)
+	return &resp, err
+}
+
+func stmtSetTableName(t *testing.T, ws *websocket.Conn, req *StmtSetTableNameReq) (*StmtSetTableNameResp, error) {
+	var resp StmtSetTableNameResp
+	err := sendJsonBackJson(t, ws, STMTSetTableName, req, &resp)
+	return &resp, err
+}
+
+func stmtSetTags(t *testing.T, ws *websocket.Conn, req *StmtSetTagsReq) (*StmtSetTagsResp, error) {
+	var resp StmtSetTagsResp
+	err := sendJsonBackJson(t, ws, STMTSetTags, req, &resp)
+	return &resp, err
+}
+
+func stmtGetTagFields(t *testing.T, ws *websocket.Conn, req *StmtGetTagFieldsReq) (*StmtGetTagFieldsResp, error) {
+	var resp StmtGetTagFieldsResp
+	err := sendJsonBackJson(t, ws, STMTGetTagFields, req, &resp)
+	return &resp, err
+}
+
+func stmtGetColFields(t *testing.T, ws *websocket.Conn, req *StmtGetColFieldsReq) (*StmtGetColFieldsResp, error) {
+	var resp StmtGetColFieldsResp
+	err := sendJsonBackJson(t, ws, STMTGetColFields, req, &resp)
+	return &resp, err
+}
+
+func stmtAddBatch(t *testing.T, ws *websocket.Conn, req *StmtAddBatchReq) (*StmtAddBatchResp, error) {
+	var resp StmtAddBatchResp
+	err := sendJsonBackJson(t, ws, STMTAddBatch, req, &resp)
+	return &resp, err
+}
+
+func stmtExec(t *testing.T, ws *websocket.Conn, req *StmtExecReq) (*StmtExecResp, error) {
+	var resp StmtExecResp
+	err := sendJsonBackJson(t, ws, STMTExec, req, &resp)
+	return &resp, err
+}
+
+func stmtBind(t *testing.T, ws *websocket.Conn, req *StmtBindReq) (*StmtBindResp, error) {
+	var resp StmtBindResp
+	err := sendJsonBackJson(t, ws, STMTBind, req, &resp)
+	return &resp, err
+}
+
+func getVersion(t *testing.T, ws *websocket.Conn) (*wstool.WSVersionResp, error) {
+	var resp wstool.WSVersionResp
+	err := sendJsonBackJson(t, ws, wstool.ClientVersion, nil, &resp)
+	return &resp, err
 }
 
 func TestDropUser(t *testing.T) {
@@ -1106,10 +684,7 @@ func TestDropUser(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	// connect
 	connReq := &StmtConnectReq{ReqID: 1, User: "test_ws_stmt_drop_user", Password: "pass_123"}
-	resp, err := doWebSocket(ws, STMTConnect, &connReq)
-	assert.NoError(t, err)
-	var connResp StmtConnectResp
-	err = json.Unmarshal(resp, &connResp)
+	connResp, err := conn(t, ws, connReq)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), connResp.ReqID)
 	assert.Equal(t, 0, connResp.Code, connResp.Message)
@@ -1117,6 +692,6 @@ func TestDropUser(t *testing.T) {
 	code, message = doRestful("drop user test_ws_stmt_drop_user", "")
 	assert.Equal(t, 0, code, message)
 	time.Sleep(time.Second * 3)
-	resp, err = doWebSocket(ws, wstool.ClientVersion, nil)
+	resp, err := doWebSocket(ws, wstool.ClientVersion, nil)
 	assert.Error(t, err, resp)
 }

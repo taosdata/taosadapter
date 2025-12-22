@@ -119,7 +119,7 @@ func CheckAuth(c *gin.Context) {
 		UnAuthResponse(c, logger, httperror.HTTP_NO_AUTH_INFO)
 		return
 	}
-	_, cloudTokenExists := c.Params.Get("token")
+	_, cloudTokenExists := c.GetQuery("token")
 	auth = strings.TrimSpace(auth)
 	v, exist := authCache.Get(auth)
 	if exist {

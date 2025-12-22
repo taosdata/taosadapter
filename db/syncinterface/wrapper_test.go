@@ -3,6 +3,7 @@ package syncinterface
 import (
 	"database/sql/driver"
 	"fmt"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -30,7 +31,7 @@ func TestMain(m *testing.M) {
 	config.Init()
 	log.ConfigLog()
 	_ = log.SetLevel("trace")
-	m.Run()
+	os.Exit(m.Run())
 }
 func TestTaosConnect(t *testing.T) {
 	reqID := generator.GetReqID()
@@ -774,13 +775,14 @@ func TestTaosConnectToken(t *testing.T) {
 		err = exec(conn, fmt.Sprintf("drop user %s", user))
 		assert.NoError(t, err)
 	}()
-	err = exec(conn, fmt.Sprintf("create token sync_test_token from user %s", user))
+	values, err := query(conn, fmt.Sprintf("create token sync_test_token from user %s", user))
 	assert.NoError(t, err)
 	defer func() {
 		err = exec(conn, "drop token sync_test_token")
 		assert.NoError(t, err)
 	}()
-	tokenConn, err := TaosConnectToken("", "sync_test_token", "", 0, logger, isDebug)
+	token := values[0][0].(string)
+	tokenConn, err := TaosConnectToken("", token, "", 0, logger, isDebug)
 	assert.NoError(t, err)
 	defer TaosClose(tokenConn, logger, isDebug)
 	res, err := query(tokenConn, "select 1")

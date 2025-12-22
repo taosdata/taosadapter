@@ -187,7 +187,7 @@ func TestWSConnectToken(t *testing.T) {
 	code, message := doRestful(fmt.Sprintf("create user %s pass '%s'", user, pass), "")
 	assert.Equal(t, 0, code, message)
 	defer func() {
-		code, message = doRestful("drop user ws_test_totp_user", "")
+		code, message = doRestful(fmt.Sprintf("drop user %s", user), "")
 		assert.Equal(t, 0, code, message)
 	}()
 	createTokenResp := restQuery(fmt.Sprintf("create token test_token_ws_conn from user %s", user), "")

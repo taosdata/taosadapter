@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -60,7 +61,7 @@ func TestMain(m *testing.M) {
 	ctl.Init(router)
 	var configCtl = &ConfigController{}
 	configCtl.Init(router)
-	m.Run()
+	os.Exit(m.Run())
 }
 
 type TDEngineRestfulObjectResp struct {
@@ -1061,11 +1062,13 @@ func TestTokenConnect(t *testing.T) {
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", "Bearer wrong")
 	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-
-	w = executeSQL("create token test_token_restful from user root")
+	assert.Equal(t, http.StatusOK, w.Code)
 	var result TDEngineRestfulRespDoc
 	err := json.Unmarshal(w.Body.Bytes(), &result)
+	assert.NotEqual(t, 0, result.Code)
+
+	w = executeSQL("create token test_token_restful from user root")
+	err = json.Unmarshal(w.Body.Bytes(), &result)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, result.Code)
 	assert.Equal(t, 1, len(result.Data))
@@ -1085,7 +1088,7 @@ func TestTokenConnect(t *testing.T) {
 	// with token param in url
 	w = httptest.NewRecorder()
 	body = strings.NewReader("show databases")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/?token=xxx", body)
+	req, _ = http.NewRequest(http.MethodPost, "/rest/sql?token=xxx", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	router.ServeHTTP(w, req)

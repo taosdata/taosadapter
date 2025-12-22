@@ -2,6 +2,7 @@ package commonpool
 
 import (
 	"net"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -16,7 +17,7 @@ import (
 
 func TestMain(m *testing.M) {
 	config.Init()
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func BenchmarkGetConnection(b *testing.B) {
@@ -44,7 +45,7 @@ func TestGetConnection(t *testing.T) {
 		err = c.Put()
 		assert.NoError(t, err)
 	}()
-	res, err := testtools.Query(c.TaosConnection, "create token test_token_pool from user root enable 1")
+	res, err := testtools.Query(c.TaosConnection, "create token test_token_pool from user root")
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 	token := res[0][0].(string)

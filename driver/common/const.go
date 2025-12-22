@@ -83,5 +83,5 @@ const (
 )
 
 const (
-	TAOS_CONNECTION_INFO_USER = 0
+	TSDB_CONNECTION_INFO_USER = 0
 )

@@ -947,4 +947,54 @@ func TestTaosConnectToken(t *testing.T) {
 	conn2, err := TaosConnectToken("", "wrong token", "", 0)
 	assert.Error(t, err)
 	assert.Nil(t, conn2)
+
+	err = exec(rootConn, "create user test_token_wrapper_user pass 'test_pass_1'")
+	assert.NoError(t, err)
+	defer func() {
+		err = exec(rootConn, "drop user test_token_wrapper_user")
+		assert.NoError(t, err)
+	}()
+	val, err = query(rootConn, "create token test_token_wrapper_user_token from user test_token_wrapper_user")
+	assert.NoError(t, err)
+	token = val[0][0].(string)
+	conn3, err := TaosConnectToken("", token, "", 0)
+	require.NoError(t, err)
+	defer TaosClose(conn3)
+	res, err = query(conn3, "select 1")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(res))
+	assert.Equal(t, int64(1), res[0][0])
+	assert.NoError(t, err)
+}
+
+func TestTaosGetConnectionInfo(t *testing.T) {
+	rootConn, err := TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer TaosClose(rootConn)
+	user, code := TaosGetConnectionInfo(rootConn, common.TSDB_CONNECTION_INFO_USER)
+	if code != 0 {
+		errMessage := TaosErrorStr(nil)
+		t.Fatalf("TaosGetConnectionInfo() error code= %d, msg: %s", code, errMessage)
+	}
+	assert.Equal(t, "root", user)
+	val, err := query(rootConn, "create token test_client_info_wrapper from user root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		err = exec(rootConn, "drop token test_client_info_wrapper")
+		assert.NoError(t, err)
+	}()
+	token := val[0][0].(string)
+	conn, err := TaosConnectToken("", token, "", 0)
+	require.NoError(t, err)
+	defer TaosClose(conn)
+	user, code = TaosGetConnectionInfo(conn, common.TSDB_CONNECTION_INFO_USER)
+	if code != 0 {
+		errMessage := TaosErrorStr(nil)
+		t.Fatalf("TaosGetConnectionInfo() error code= %d, msg: %s", code, errMessage)
+	}
+	assert.Equal(t, "root", user)
 }

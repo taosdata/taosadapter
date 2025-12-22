@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func TestMain(m *testing.M) {
 	for _, webController := range controllers {
 		webController.Init(router)
 	}
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func TestRestful_InitSchemaless(t *testing.T) {

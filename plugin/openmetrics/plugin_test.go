@@ -153,7 +153,7 @@ func TestMain(m *testing.M) {
 	config.Init()
 	log.ConfigLog()
 	db.PrepareConnection()
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func TestOpenMetrics(t *testing.T) {
