@@ -1074,6 +1074,13 @@ func TestTokenConnect(t *testing.T) {
 	assert.Equal(t, 1, len(result.Data))
 	token := result.Data[0][0].(string)
 
+	defer func() {
+		w = executeSQL("drop token test_token_restful")
+		err = json.Unmarshal(w.Body.Bytes(), &result)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, result.Code)
+	}()
+
 	w = httptest.NewRecorder()
 	body = strings.NewReader("show databases")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
