@@ -152,6 +152,7 @@ var testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 func TestMain(m *testing.M) {
 	config.Init()
 	log.ConfigLog()
+	_ = log.SetLevel("debug")
 	db.PrepareConnection()
 	os.Exit(m.Run())
 }
