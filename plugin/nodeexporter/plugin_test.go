@@ -42,7 +42,6 @@ func TestNodeExporter_Gather(t *testing.T) {
 	config.Init()
 	log.ConfigLog()
 	db.PrepareConnection()
-	_ = log.SetLevel("debug")
 	logger := log.GetLogger("test")
 	isDebug := log.IsDebug()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
