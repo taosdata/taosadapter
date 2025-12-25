@@ -1206,21 +1206,25 @@ func TaosConnectToken(host, token, db string, port int, logger *logrus.Entry, is
 }
 
 func TaosGetConnectionUserName(conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) (string, int) {
+	return TaosGetConnectionInfo(conn, common.TSDB_CONNECTION_INFO_USER, logger, isDebug)
+}
+
+func TaosGetConnectionInfo(conn unsafe.Pointer, infoType int, logger *logrus.Entry, isDebug bool) (string, int) {
 	logger.Trace("sync semaphore acquire for taos_get_connection_info")
 	thread.SyncSemaphore.Acquire()
 	defer func() {
 		thread.SyncSemaphore.Release()
 		logger.Trace("sync semaphore release for taos_get_connection_info")
 	}()
-	logger.Debugf("call taos_get_connection_info, conn:%p", conn)
+	logger.Debugf("call taos_get_connection_info, conn:%p, infoType:%d", conn, infoType)
 	monitor.TaosGetConnectionInfoCounter.Inc()
 	s := log.GetLogNow(isDebug)
-	user, codeCode := wrapper.TaosGetConnectionInfo(conn, common.TSDB_CONNECTION_INFO_USER)
-	logger.Debugf("taos_get_connection_info finish, user:%s, cost:%s", user, log.GetLogDuration(isDebug, s))
+	info, codeCode := wrapper.TaosGetConnectionInfo(conn, infoType)
+	logger.Debugf("taos_get_connection_info finish, info:%s, cost:%s", info, log.GetLogDuration(isDebug, s))
 	if codeCode != 0 {
 		monitor.TaosGetConnectInfoFailCounter.Inc()
 	} else {
 		monitor.TaosGetConnectionInfoSuccessCounter.Inc()
 	}
-	return user, codeCode
+	return info, codeCode
 }

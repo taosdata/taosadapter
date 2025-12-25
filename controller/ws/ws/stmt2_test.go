@@ -542,7 +542,10 @@ func TestStmt2BindWithStbFields(t *testing.T) {
 	code, message = doRestful("create database if not exists test_ws_stmt2_getstbfields_ws precision 'ns'", "")
 	assert.Equal(t, 0, code, message)
 
-	//defer doRestful("drop database if exists test_ws_stmt2_getstbfields_ws", "")
+	defer func() {
+		code, message = doRestful("drop database if exists test_ws_stmt2_getstbfields_ws", "")
+		assert.Equal(t, 0, code, message)
+	}()
 
 	code, message = doRestful(
 		"create table if not exists stb (ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100)) tags (info json)",

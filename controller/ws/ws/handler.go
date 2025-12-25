@@ -534,6 +534,18 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 		}
 		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.optionsConnection(ctx, session, action, req, logger, log.IsDebug())
+	case GetConnectionInfo:
+		action = GetConnectionInfo
+		var req getConnectionInfoRequest
+		if err := json.Unmarshal(request.Args, &req); err != nil {
+			h.logger.Errorf("unmarshal get connection info request error, request:%s, err:%s", request.Args, err)
+			reqID := getReqID(request.Args)
+			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal get connection info request error")
+			return
+		}
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
+		h.getConnectionInfo(ctx, session, action, req, logger, log.IsDebug())
+		return
 	default:
 		h.logger.Errorf("unknown action %s", action)
 		reqID := getReqID(request.Args)

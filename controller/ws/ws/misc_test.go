@@ -341,3 +341,52 @@ func TestCheckServerStatus(t *testing.T) {
 	assert.Equal(t, int32(2), checkServerStatusResp.Status)
 	assert.Equal(t, "", checkServerStatusResp.Details)
 }
+
+func TestGetConnectionInfo(t *testing.T) {
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+	// connect
+	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata"}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp connResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+	assert.Equal(t, Connect, connResp.Action)
+	// get connection info
+	getConnectionInfoReq := getConnectionInfoRequest{
+		ReqID: 2,
+		Info:  common.TSDB_CONNECTION_INFO_USER,
+	}
+	resp, err = doWebSocket(ws, GetConnectionInfo, &getConnectionInfoReq)
+	assert.NoError(t, err)
+	var getConnectionInfoResp getConnectionInfoResponse
+	err = json.Unmarshal(resp, &getConnectionInfoResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(2), getConnectionInfoResp.ReqID)
+	assert.Equal(t, 0, getConnectionInfoResp.Code, getConnectionInfoResp.Message)
+	assert.Equal(t, "root", getConnectionInfoResp.Info)
+
+	// get invalid connection info
+	getConnectionInfoReq = getConnectionInfoRequest{
+		ReqID: 3,
+		Info:  -10000,
+	}
+	resp, err = doWebSocket(ws, GetConnectionInfo, &getConnectionInfoReq)
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &getConnectionInfoResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(3), getConnectionInfoResp.ReqID)
+	assert.NotEqual(t, 0, getConnectionInfoResp.Code)
+}

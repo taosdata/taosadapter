@@ -194,3 +194,35 @@ func (h *messageHandler) checkServerStatus(ctx context.Context, session *melody.
 	}
 	wstool.WSWriteJson(session, logger, resp)
 }
+
+type getConnectionInfoRequest struct {
+	ReqID uint64 `json:"req_id"`
+	Info  int    `json:"info"`
+}
+
+type getConnectionInfoResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Action  string `json:"action"`
+	ReqID   uint64 `json:"req_id"`
+	Timing  int64  `json:"timing"`
+	Info    string `json:"info"`
+}
+
+func (h *messageHandler) getConnectionInfo(ctx context.Context, session *melody.Session, action string, req getConnectionInfoRequest, logger *logrus.Entry, isDebug bool) {
+	logger.Trace("get connection info")
+	info, code := syncinterface.TaosGetConnectionInfo(h.conn, req.Info, logger, isDebug)
+	if code != 0 {
+		errStr := syncinterface.TaosErrorStr(nil, logger, isDebug)
+		logger.Errorf("get connection info error, info:%d, code:%d, err:%s", req.Info, code, errStr)
+		commonErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr)
+		return
+	}
+	resp := &getConnectionInfoResponse{
+		Action: action,
+		ReqID:  req.ReqID,
+		Timing: wstool.GetDuration(ctx),
+		Info:   info,
+	}
+	wstool.WSWriteJson(session, logger, resp)
+}

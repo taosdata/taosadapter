@@ -66,8 +66,12 @@ func TestInfluxdb(t *testing.T) {
 	}()
 	err = exec(conn, "drop database if exists test_plugin_influxdb")
 	assert.NoError(t, err)
+	err = exec(conn, "drop database if exists test_plugin_influxdb_ttl")
+	assert.NoError(t, err)
 	defer func() {
 		err = exec(conn, "drop database if exists test_plugin_influxdb")
+		assert.NoError(t, err)
+		err = exec(conn, "drop database if exists test_plugin_influxdb_ttl")
 		assert.NoError(t, err)
 	}()
 	number := rand.Int31()
