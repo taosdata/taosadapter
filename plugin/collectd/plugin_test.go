@@ -90,7 +90,12 @@ func TestCollectd(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	time.Sleep(3 * time.Second)
+
+	var values [][]driver.Value
+	assert.Eventually(t, func() bool {
+		values, err = query(conn, "select * from information_schema.ins_tables where db_name='collectd' and stable_name='cpu_value'")
+		return err == nil && len(values) == 1
+	}, 10*time.Second, 500*time.Millisecond)
 
 	defer func() {
 		r := syncinterface.TaosQuery(conn, "drop database if exists collectd", logger, isDebug)
@@ -101,7 +106,7 @@ func TestCollectd(t *testing.T) {
 		}
 		syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	}()
-	values, err := query(conn, "select last(`value`) from collectd.`cpu_value`")
+	values, err = query(conn, "select last(`value`) from collectd.`cpu_value`")
 	assert.NoError(t, err)
 	if int32(values[0][0].(float64)) != number {
 		t.Errorf("got %f expect %d", values[0], number)

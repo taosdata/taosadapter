@@ -10,7 +10,6 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
@@ -79,16 +78,10 @@ func TestNodeExporter_Gather(t *testing.T) {
 	err = n.Start()
 	assert.NoError(t, err)
 	var values [][]driver.Value
-	for i := 0; i < 100; i++ {
-		checkSql := "select * from information_schema.ins_tables where db_name='node_exporter' and stable_name='test_metric'"
-		values, err = query(conn, checkSql)
-		require.NoError(t, err)
-		if len(values) > 0 {
-			break
-		}
-		time.Sleep(time.Millisecond * 500)
-	}
-	require.Equal(t, 1, len(values))
+	assert.Eventually(t, func() bool {
+		values, err = query(conn, "select * from information_schema.ins_tables where db_name='node_exporter' and stable_name='test_metric'")
+		return err == nil && len(values) == 1
+	}, 10*time.Second, 500*time.Millisecond)
 	values, err = query(conn, "select last(`value`) as `value` from node_exporter.test_metric;")
 	assert.NoError(t, err)
 	assert.Equal(t, float64(1), values[0][0])

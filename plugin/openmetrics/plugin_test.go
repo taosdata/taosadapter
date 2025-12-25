@@ -216,15 +216,10 @@ func TestOpenMetrics(t *testing.T) {
 	err = openMetrics.Start()
 	assert.NoError(t, err)
 	var values [][]driver.Value
-	for i := 0; i < 100; i++ {
-		checkSql := "select * from information_schema.ins_tables where db_name = 'open_metrics' and stable_name = 'test_metric'"
-		values, err = query(conn, checkSql)
-		require.NoError(t, err)
-		if len(values) > 0 {
-			break
-		}
-		time.Sleep(time.Millisecond * 500)
-	}
+	assert.Eventually(t, func() bool {
+		values, err = query(conn, "select * from information_schema.ins_tables where db_name='open_metrics' and stable_name='test_metric'")
+		return err == nil && len(values) == 1
+	}, 10*time.Second, 500*time.Millisecond)
 	require.Equal(t, 1, len(values))
 	// open_metrics
 	testMetricsDBs := []string{
@@ -379,15 +374,10 @@ func TestOpenMetricsMTls(t *testing.T) {
 	err = openMetrics.Start()
 	assert.NoError(t, err)
 	var values [][]driver.Value
-	for i := 0; i < 100; i++ {
-		checkSql := "select * from information_schema.ins_tables where db_name='open_metrics_mtls_basicauth' and stable_name='test_metric'"
-		values, err = query(conn, checkSql)
-		require.NoError(t, err)
-		if len(values) > 0 {
-			break
-		}
-		time.Sleep(time.Millisecond * 500)
-	}
+	assert.Eventually(t, func() bool {
+		values, err = query(conn, "select * from information_schema.ins_tables where db_name='open_metrics_mtls_basicauth' and stable_name='test_metric'")
+		return err == nil && len(values) == 1
+	}, 10*time.Second, 500*time.Millisecond)
 	require.Equal(t, 1, len(values))
 	values, err = query(conn, "select last(`gauge`) as `gauge` from open_metrics_mtls_basicauth.test_metric;")
 	assert.NoError(t, err)

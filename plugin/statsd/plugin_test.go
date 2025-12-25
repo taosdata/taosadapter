@@ -59,12 +59,16 @@ func TestStatsd(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = fmt.Fprintf(c, "foo:%d|c", number)
 	assert.NoError(t, err)
-	time.Sleep(time.Second)
 	defer func() {
 		err = exec(conn, "drop database if exists statsd")
 		assert.NoError(t, err)
 	}()
-	values, err := query(conn, "select last(`value`) from statsd.`foo`")
+	var values [][]driver.Value
+	assert.Eventually(t, func() bool {
+		values, err = query(conn, "select * from information_schema.ins_tables where db_name='statsd' and stable_name='foo'")
+		return err == nil && len(values) == 1
+	}, 10*time.Second, 500*time.Millisecond)
+	values, err = query(conn, "select last(`value`) from statsd.`foo`")
 	assert.NoError(t, err)
 	if int32(values[0][0].(int64)) != number {
 		t.Errorf("got %f expect %d", values[0], number)

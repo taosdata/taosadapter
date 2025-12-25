@@ -94,7 +94,14 @@ func TestInfluxdb(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 400, w.Code)
 	time.Sleep(time.Second)
-	values, err := query(conn, "select * from test_plugin_influxdb.`measurement`")
+
+	var values [][]driver.Value
+	assert.Eventually(t, func() bool {
+		values, err = query(conn, "select * from information_schema.ins_tables where db_name='test_plugin_influxdb' and stable_name='measurement'")
+		return err == nil && len(values) == 1
+	}, 10*time.Second, 500*time.Millisecond)
+
+	values, err = query(conn, "select * from test_plugin_influxdb.`measurement`")
 	assert.NoError(t, err)
 	if values[0][3].(string) != "Launch 🚀" {
 		t.Errorf("got %s expect %s", values[0][3], "Launch 🚀")
