@@ -438,7 +438,7 @@ func (r *TMQSubscribeReq) String() string {
 	_, _ = fmt.Fprintf(builder, "msg_consume_rawdata: %q,", r.MsgConsumeRawdata)
 
 	builder.WriteString(" config: {")
-	if r.Config != nil && len(r.Config) > 0 {
+	if len(r.Config) > 0 {
 		first := true
 		for k, v := range r.Config {
 			if k == "td.connect.pass" {

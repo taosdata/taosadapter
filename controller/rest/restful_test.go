@@ -1078,6 +1078,7 @@ func TestTokenConnect(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var result TDEngineRestfulRespDoc
 	err := json.Unmarshal(w.Body.Bytes(), &result)
+	assert.NoError(t, err)
 	assert.NotEqual(t, 0, result.Code)
 
 	w = executeSQL("create token test_token_restful from user root")

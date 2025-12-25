@@ -31,8 +31,6 @@ func (ctl *Restful) tableVgID(c *gin.Context) {
 		return
 	}
 
-	user := c.MustGet(UserKey).(string)
-	password := c.MustGet(PasswordKey).(string)
 	user, password, token := getAuthInfo(c)
 	isDebug := log.IsDebug()
 	s := log.GetLogNow(isDebug)

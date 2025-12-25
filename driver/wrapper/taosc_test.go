@@ -192,6 +192,7 @@ func TestAffectedRows(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists affected_rows_test")
 	require.NoError(t, err)
+	assert.NoError(t, ensureDBCreated(conn, "affected_rows_test"))
 	err = exec(conn, "create table if not exists affected_rows_test.t0(ts timestamp,v int)")
 	require.NoError(t, err)
 	res := TaosQuery(conn, "insert into affected_rows_test.t0 values(now,1)")
@@ -237,6 +238,7 @@ func TestTaosResetCurrentDB(t *testing.T) {
 				t.Error(err)
 				return
 			}
+			assert.NoError(t, ensureDBCreated(conn, "log"))
 			TaosSelectDB(tt.args.taosConnect, "log")
 			result := TaosQuery(tt.args.taosConnect, "select database()")
 			code := TaosError(result)
@@ -456,6 +458,7 @@ func TestTaosLoadTableInfo(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "info1"))
 	err = exec(conn, "create table info1.t(ts timestamp,v int)")
 	if err != nil {
 		t.Error(err)
@@ -488,6 +491,7 @@ func TestTaosGetTableVgID(t *testing.T) {
 	if err = exec(conn, fmt.Sprintf("create database %s", dbName)); err != nil {
 		t.Fatal(err)
 	}
+	assert.NoError(t, ensureDBCreated(conn, dbName))
 	if err = exec(conn, fmt.Sprintf("create stable %s.meters (ts timestamp, current float, voltage int, phase float) "+
 		"tags (location binary(64), groupId int)", dbName)); err != nil {
 		t.Fatal(err)
@@ -538,6 +542,7 @@ func TestTaosGetTablesVgID(t *testing.T) {
 	if err = exec(conn, fmt.Sprintf("create database %s", dbName)); err != nil {
 		t.Fatal(err)
 	}
+	assert.NoError(t, ensureDBCreated(conn, dbName))
 	if err = exec(conn, fmt.Sprintf("create stable %s.meters (ts timestamp, current float, voltage int, phase float) "+
 		"tags (location binary(64), groupId int)", dbName)); err != nil {
 		t.Fatal(err)
@@ -584,6 +589,7 @@ func TestTaosGetCurrentDB(t *testing.T) {
 	_ = exec(conn, fmt.Sprintf("drop database if exists %s", dbName))
 	err = exec(conn, fmt.Sprintf("create database %s", dbName))
 	assert.NoError(t, err)
+	assert.NoError(t, ensureDBCreated(conn, dbName))
 	defer func() {
 		_ = exec(conn, fmt.Sprintf("drop database if exists %s", dbName))
 	}()

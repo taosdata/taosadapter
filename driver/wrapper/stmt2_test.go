@@ -57,6 +57,7 @@ func TestStmt2BindData(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt2"))
 	err = exec(conn, "use test_stmt2")
 	if err != nil {
 		t.Error(err)
@@ -1262,6 +1263,8 @@ func TestStmt2BindBinary(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt2_binary"))
+
 	err = exec(conn, "use test_stmt2_binary")
 	if err != nil {
 		t.Error(err)
@@ -2440,6 +2443,8 @@ func TestStmt2AllType(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt2_all"))
+
 	err = exec(conn, "use test_stmt2_all")
 	if err != nil {
 		t.Error(err)
@@ -3159,6 +3164,7 @@ func TestStmt2AllTypeBytes(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt2_all_bytes"))
 	err = exec(conn, "use test_stmt2_all_bytes")
 	if err != nil {
 		t.Error(err)
@@ -3426,6 +3432,7 @@ func TestStmt2Query(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt2_query"))
 	err = exec(conn, "use test_stmt2_query")
 	if err != nil {
 		t.Error(err)
@@ -3623,6 +3630,8 @@ func TestStmt2QueryBytes(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt2_query_bytes"))
+
 	err = exec(conn, "use test_stmt2_query_bytes")
 	if err != nil {
 		t.Error(err)
@@ -3829,6 +3838,8 @@ func TestStmt2QueryAllType(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt2_query_all"))
+
 	err = exec(conn, "use test_stmt2_query_all")
 	if err != nil {
 		t.Error(err)
@@ -4113,6 +4124,8 @@ func TestStmt2QueryAllTypeBytes(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt2_query_all_bytes"))
+
 	err = exec(conn, "use test_stmt2_query_all_bytes")
 	if err != nil {
 		t.Error(err)
@@ -4407,6 +4420,8 @@ func TestStmt2Json(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt2_json"))
+
 	err = exec(conn, "use test_stmt2_json")
 	if err != nil {
 		t.Error(err)
@@ -4544,6 +4559,8 @@ func TestStmt2BindMultiTables(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt2_multi"))
+
 	err = exec(conn, "use test_stmt2_multi")
 	if err != nil {
 		t.Error(err)
@@ -4679,6 +4696,8 @@ func TestTaosStmt2BindBinaryParse(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt2_binary_parse"))
+
 	err = exec(conn, "use test_stmt2_binary_parse")
 	if err != nil {
 		t.Error(err)
@@ -5493,6 +5512,8 @@ func TestTaosStmt2GetStbFields(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt2_stb_fields"))
+
 	err = exec(conn, "use test_stmt2_stb_fields")
 	if err != nil {
 		t.Error(err)
@@ -5872,6 +5893,8 @@ func TestStmt2BindTbnameAsValue(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt2_bind_tbname_as_value"))
+
 	err = exec(conn, "use test_stmt2_bind_tbname_as_value")
 	if err != nil {
 		t.Error(err)

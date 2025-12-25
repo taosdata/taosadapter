@@ -250,6 +250,7 @@ func TestSTMT(t *testing.T) {
 		websocket.TextMessage,
 		action,
 	)
+	assert.NoError(t, err)
 	err = ws.Close()
 	assert.NoError(t, err)
 	time.Sleep(time.Second)
@@ -265,7 +266,6 @@ func TestSTMT(t *testing.T) {
 }
 
 func TestBlock(t *testing.T) {
-	w := httptest.NewRecorder()
 	code, message := doRestful("drop database if exists test_ws_stmt_block", "")
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful("create database if not exists test_ws_stmt_block precision 'ns'", "")
@@ -523,7 +523,7 @@ func TestBlock(t *testing.T) {
 	assert.NotEmpty(t, versionResp.Version)
 	err = ws.Close()
 	assert.NoError(t, err)
-	w = httptest.NewRecorder()
+	w := httptest.NewRecorder()
 	body := strings.NewReader("select * from stb")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql/test_ws_stmt_block", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
@@ -596,14 +596,6 @@ func sendJsonBackJson(t *testing.T, ws *websocket.Conn, action string, req inter
 	err = json.Unmarshal(message, &resp)
 	assert.NoError(t, err)
 	return nil
-}
-
-func sendJsonBackBinary(t *testing.T, ws *websocket.Conn, action string, req interface{}) []byte {
-	bs, err := json.Marshal(req)
-	assert.NoError(t, err)
-	message, err := doWebSocket(ws, action, bs)
-	assert.NoError(t, err)
-	return message
 }
 
 func conn(t *testing.T, ws *websocket.Conn, req *StmtConnectReq) (*StmtConnectResp, error) {

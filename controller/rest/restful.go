@@ -355,7 +355,6 @@ func (h *SQLQueryHook) onConnectError(err error) {
 		return
 	}
 	CommonErrorResponse(h.c, h.logger, err.Error())
-	return
 }
 
 func (h *SQLQueryHook) onConnectSuccess(conn unsafe.Pointer) bool {
