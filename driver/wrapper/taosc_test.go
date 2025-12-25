@@ -1004,3 +1004,14 @@ func TestTaosGetConnectionInfo(t *testing.T) {
 	}
 	assert.Equal(t, "root", user)
 }
+
+func BenchmarkTaosConnect(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		conn, err := TaosConnect("", "root", "taosdata", "", 0)
+		if err != nil {
+			b.Error(err)
+			return
+		}
+		TaosClose(conn)
+	}
+}

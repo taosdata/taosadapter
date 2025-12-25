@@ -391,6 +391,7 @@ func (h *SQLQueryHook) onConnectSuccess(conn unsafe.Pointer) bool {
 			ServiceUnavailable(h.c, logger, err.Error())
 			return true
 		}
+		h.limiter = l
 		h.logger.Debug("sql limiter acquire success")
 	}
 
