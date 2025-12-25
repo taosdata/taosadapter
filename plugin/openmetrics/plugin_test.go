@@ -22,6 +22,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/parsers/openmetrics"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
@@ -214,8 +215,17 @@ func TestOpenMetrics(t *testing.T) {
 	assert.NoError(t, err)
 	err = openMetrics.Start()
 	assert.NoError(t, err)
-	time.Sleep(time.Second * 3)
-
+	var values [][]driver.Value
+	for i := 0; i < 100; i++ {
+		checkSql := "select * from information_schema.ins_tables where db_name = 'open_metrics' and stable_name = 'test_metric'"
+		values, err = query(conn, checkSql)
+		require.NoError(t, err)
+		if len(values) > 0 {
+			break
+		}
+		time.Sleep(time.Millisecond * 500)
+	}
+	require.Equal(t, 1, len(values))
 	// open_metrics
 	testMetricsDBs := []string{
 		"open_metrics",
@@ -275,7 +285,7 @@ func TestOpenMetrics(t *testing.T) {
 	}
 
 	// protobuf
-	values, err := query(conn, "select last(`gauge`) as `gauge` from open_metrics_proto.test_gauge;")
+	values, err = query(conn, "select last(`gauge`) as `gauge` from open_metrics_proto.test_gauge;")
 	assert.NoError(t, err)
 	assert.Equal(t, float64(1234567), values[0][0])
 
