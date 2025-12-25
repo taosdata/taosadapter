@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/tools/otp"
+	"github.com/taosdata/taosadapter/v3/tools/testtools/testenv"
 	"github.com/taosdata/taosadapter/v3/version"
 )
 
@@ -138,6 +139,10 @@ func TestConnectionOptions(t *testing.T) {
 }
 
 func TestWSConnectTotp(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("totp test only for enterprise edition")
+		return
+	}
 	user := "ws_test_totp_user"
 	totpSeed := "iomwzmh6iRQ86jGq"
 	pass := "k163MxPDrhHCqoNC"
@@ -182,6 +187,10 @@ func TestWSConnectTotp(t *testing.T) {
 }
 
 func TestWSConnectToken(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("token test only for enterprise edition")
+		return
+	}
 	user := "ws_test_token_user"
 	pass := "N@6W$KOMF#2N7dMh"
 	code, message := doRestful(fmt.Sprintf("create user %s pass '%s'", user, pass), "")

@@ -21,6 +21,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/otp"
 	"github.com/taosdata/taosadapter/v3/tools/testtools"
+	"github.com/taosdata/taosadapter/v3/tools/testtools/testenv"
 )
 
 var logger = log.GetLogger("test")
@@ -745,6 +746,10 @@ func TestTaosRegisterInstance(t *testing.T) {
 }
 
 func TestTaosConnectTOTP(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("totp test only for enterprise edition")
+		return
+	}
 	reqID := generator.GetReqID()
 	var logger = logger.WithField("test", "TestTaosConnectTOTP").WithField(config.ReqIDKey, reqID)
 	conn, err := TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
@@ -773,6 +778,10 @@ func TestTaosConnectTOTP(t *testing.T) {
 }
 
 func TestTaosConnectToken(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("token test only for enterprise edition")
+		return
+	}
 	reqID := generator.GetReqID()
 	var logger = logger.WithField("test", "TestTaosConnectTOTP").WithField(config.ReqIDKey, reqID)
 	conn, err := TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)

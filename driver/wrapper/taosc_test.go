@@ -19,6 +19,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/tools/otp"
+	"github.com/taosdata/taosadapter/v3/tools/testtools/testenv"
 )
 
 // @author: xftan
@@ -860,6 +861,10 @@ func TestTaosRegisterInstance(t *testing.T) {
 }
 
 func TestTaosConnectTOTP(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("totp test only for enterprise edition")
+		return
+	}
 	rootConn, err := TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Fatal(err)
@@ -928,6 +933,10 @@ func MustRandomSecret(length int) string {
 }
 
 func TestTaosConnectToken(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("token test only for enterprise edition")
+		return
+	}
 	rootConn, err := TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Fatal(err)
@@ -974,6 +983,10 @@ func TestTaosConnectToken(t *testing.T) {
 }
 
 func TestTaosGetConnectionInfo(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("token test only for enterprise edition")
+		return
+	}
 	rootConn, err := TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Fatal(err)

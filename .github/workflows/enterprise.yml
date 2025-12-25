@@ -1,0 +1,64 @@
+name: enterprise.yml
+on:
+  pull_request:
+    branches:
+      - '3.0'
+  push:
+    branches:
+      - '3.0'
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ 'ubuntu-latest' ]
+        go: [ 'stable' ]
+    name: enterprise-${{ matrix.os }}-${{ matrix.go }}
+    steps:
+      - name: get TDengine
+        run: |
+          wget ${{ secrets.NIGHTLY_TDENGINE_ENTERPRISE_URL }}
+
+      - name: install
+        run: |
+          tar -zxf tsdb-nightly-3.0.tar.gz
+          cd tsdb-nightly-3.0
+          sudo ./install.sh
+
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: copy taos cfg
+        run: |
+          sudo mkdir -p /etc/taos
+          sudo cp ./.github/workflows/taos.cfg /etc/taos/taos.cfg
+
+      - name: shell
+        run: |
+          cat >start.sh<<EOF 
+          ulimit -n 65535 && TAOS_SUPPORT_VNODES=256 taosd
+          EOF
+
+      - name: taosd
+        run: nohup sudo sh ./start.sh &
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache-dependency-path: go.sum
+
+      - name: Test
+        env:
+          GO_TEST_DISABLE_DISPLAY_LOG: "true"
+          GO_TEST_ENTERPRISE: "true"
+        run: go test -coverpkg=./... -v --count=1 -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.txt
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_ORG_TOKEN }}
+          OS: linux
