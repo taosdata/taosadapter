@@ -247,7 +247,7 @@ func (p *NodeExporter) requestSingle(conn unsafe.Pointer, req *Req) error {
 		execLogger := logger.WithField(config.ReqIDKey, reqID)
 		err = inserter.InsertInfluxdb(conn, data, p.conf.DB, "ns", p.conf.TTL, uint64(reqID), "", execLogger)
 		if err != nil {
-			logger.WithError(err).Error("insert influxdb error", string(data))
+			logger.Errorf("insert influxdb error, err: %s, data: %s", err, data)
 			return err
 		}
 	}
