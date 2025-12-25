@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 func TestWsSchemaless(t *testing.T) {
@@ -18,7 +19,7 @@ func TestWsSchemaless(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful("create database if not exists test_ws_schemaless", "")
 	assert.Equal(t, 0, code, message)
-
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_schemaless"))
 	defer doRestful("drop database if exists test_ws_schemaless", "")
 
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
@@ -173,6 +174,7 @@ func TestWsSchemalessError(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful("create database if not exists test_ws_schemaless_error", "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_schemaless_error"))
 
 	defer doRestful("drop database if exists test_ws_schemaless_error", "")
 

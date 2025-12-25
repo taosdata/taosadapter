@@ -145,6 +145,7 @@ func TestWebsocket(t *testing.T) {
 	now := time.Now().Local().UnixNano() / 1e6
 	code, message := doRestful("create database if not exists test_ws WAL_RETENTION_PERIOD 86400", "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws"))
 	initSqls := []string{
 		"drop table if exists test_ws",
 		"create table if not exists test_ws(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20)) tags (info json)",
@@ -233,6 +234,8 @@ func TestWriteBlock(t *testing.T) {
 	now := time.Now().Local().UnixNano() / 1e6
 	code, message := doRestful("create database if not exists test_ws_write_block WAL_RETENTION_PERIOD 86400", "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_write_block"))
+
 	initSqls := []string{
 		"drop table if exists test_ws_write_block",
 		"create table if not exists test_ws_write_block(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20)) tags (info json)",
@@ -356,6 +359,7 @@ func TestWriteBlockWithFields(t *testing.T) {
 	now := time.Now().Local().UnixNano() / 1e6
 	code, message := doRestful("create database if not exists test_ws_write_block_with_fields WAL_RETENTION_PERIOD 86400", "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_write_block_with_fields"))
 	initSqls := []string{
 		"drop table if exists test_ws_write_block_with_fields",
 		"create table if not exists test_ws_write_block_with_fields(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20)) tags (info json)",
@@ -481,6 +485,7 @@ func TestQueryAllType(t *testing.T) {
 	now := time.Now().Local().UnixNano() / 1e6
 	code, message := doRestful("create database if not exists test_ws_all_query WAL_RETENTION_PERIOD 86400", "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_all_query"))
 	initSqls := []string{
 		"drop table if exists test_ws_all_query",
 		"create table if not exists test_ws_all_query(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100))",

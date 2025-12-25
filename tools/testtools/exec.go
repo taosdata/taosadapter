@@ -2,6 +2,8 @@ package testtools
 
 import (
 	"database/sql/driver"
+	"fmt"
+	"time"
 	"unsafe"
 
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
@@ -51,4 +53,23 @@ func Query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
 		result = append(result, r...)
 	}
 	return result, nil
+}
+
+func EnsureDBCreated(dbName string) error {
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		return err
+	}
+	defer wrapper.TaosClose(conn)
+	for i := 0; i < 100; i++ {
+		value, err := Query(conn, fmt.Sprintf(`select * from performance_schema.perf_trans where db = '%s'`, dbName))
+		if err != nil {
+			return err
+		}
+		if len(value) == 0 {
+			return nil
+		}
+		time.Sleep(time.Millisecond * 500)
+	}
+	return fmt.Errorf("db %s not created after waiting", dbName)
 }

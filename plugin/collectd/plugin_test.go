@@ -41,6 +41,7 @@ func TestCollectd(t *testing.T) {
 	assert.NoError(t, err)
 	err = exec(conn, "create database if not exists collectd")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("collectd"))
 	//nolint:staticcheck
 	rand.Seed(time.Now().UnixNano())
 	p := &Plugin{}

@@ -44,6 +44,7 @@ func TestPlugin(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists opentsdb_telnet")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("opentsdb_telnet"))
 	err = p.Init(nil)
 	assert.NoError(t, err)
 	err = p.Start()

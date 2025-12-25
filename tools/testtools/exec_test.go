@@ -99,3 +99,19 @@ func TestQuery(t *testing.T) {
 		})
 	}
 }
+
+func TestEnsureDBCreated(t *testing.T) {
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	require.NoError(t, err)
+	defer func() {
+		wrapper.TaosClose(conn)
+	}()
+	dbName := "test_ensure_db_created"
+	err = Exec(conn, "create database if not exists "+dbName)
+	require.NoError(t, err)
+	err = EnsureDBCreated(dbName)
+	require.NoError(t, err)
+	// clean up
+	err = Exec(conn, "DROP DATABASE IF EXISTS "+dbName)
+	require.NoError(t, err)
+}

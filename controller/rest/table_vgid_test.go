@@ -21,6 +21,8 @@ func TestVgID(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
+	assert.NoError(t, testtools.EnsureDBCreated("test_vgid"))
+
 	w = httptest.NewRecorder()
 	buffer := &bytes.Buffer{}
 	encoder := json.NewEncoder(buffer)

@@ -44,6 +44,7 @@ func TestStatsd(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists statsd")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("statsd"))
 	err = p.Init(nil)
 	assert.NoError(t, err)
 	err = p.Start()

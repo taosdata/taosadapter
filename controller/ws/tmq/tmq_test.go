@@ -63,6 +63,7 @@ func TestTMQ(t *testing.T) {
 	ts3 := ts2.Add(time.Second)
 	code, message := doHttpSql("create database if not exists test_ws_tmq WAL_RETENTION_PERIOD 86400")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_tmq"))
 	defer func() {
 		code, message := doHttpSql("drop database if exists test_ws_tmq")
 		assert.Equal(t, 0, code, message)
@@ -338,6 +339,7 @@ type MultiMeta struct {
 func TestMeta(t *testing.T) {
 	code, message := doHttpSql("create database if not exists test_ws_tmq_meta WAL_RETENTION_PERIOD 86400")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_tmq_meta"))
 
 	code, message = doHttpSql("create topic if not exists test_tmq_meta_ws_topic with meta as DATABASE test_ws_tmq_meta")
 	assert.Equal(t, 0, code, message)
@@ -519,6 +521,7 @@ func TestMeta(t *testing.T) {
 func writeRaw(t *testing.T, rawData []byte, db string) {
 	code, message := doHttpSql(fmt.Sprintf("create database if not exists %s WAL_RETENTION_PERIOD 86400", db))
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated(db))
 	s := httptest.NewServer(router)
 	defer s.Close()
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
@@ -554,6 +557,7 @@ func TestTMQAutoCommit(t *testing.T) {
 	ts3 := ts2.Add(time.Second)
 	code, message := doHttpSql("create database if not exists test_ws_tmq_auto_commit WAL_RETENTION_PERIOD 86400")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_tmq_auto_commit"))
 	initSqls := []string{
 		"create table if not exists ct0 (ts timestamp, c1 int)",
 		"create table if not exists ct1 (ts timestamp, c1 int, c2 float)",
@@ -673,7 +677,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 	ts3 := ts2.Add(time.Second)
 	code, message := doHttpSql("create database if not exists test_ws_tmq_unsubscribe WAL_RETENTION_PERIOD 86400")
 	assert.Equal(t, 0, code, message)
-
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_tmq_unsubscribe"))
 	initSqls := []string{
 		"create table if not exists ct0 (ts timestamp, c1 int)",
 		"create table if not exists ct1 (ts timestamp, c1 int, c2 float)",
@@ -838,6 +842,7 @@ func TestTMQSeek(t *testing.T) {
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
+	assert.NoError(t, testtools.EnsureDBCreated(dbName))
 
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists ct0 (ts timestamp, c1 int)")
@@ -1362,6 +1367,7 @@ func before(t *testing.T, dbName string, topic string) {
 	doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
 	code, message := doHttpSql(fmt.Sprintf("create database if not exists %s WAL_RETENTION_PERIOD 86400", dbName))
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated(dbName))
 
 	code, message = doHttpSql(fmt.Sprintf("create table if not exists %s.ct0 (ts timestamp, c1 int)", dbName))
 	assert.Equal(t, 0, code, message)
@@ -1872,7 +1878,7 @@ func prepareAllType(t *testing.T, dbName string, topic string) {
 	doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
 	code, message := doHttpSql(fmt.Sprintf("create database if not exists %s WAL_RETENTION_PERIOD 86400", dbName))
 	assert.Equal(t, 0, code, message)
-
+	assert.NoError(t, testtools.EnsureDBCreated(dbName))
 	code, message = doHttpSql(fmt.Sprintf("create table %s.stb (ts timestamp,"+
 		"c1 bool,"+
 		"c2 tinyint,"+
@@ -2409,6 +2415,7 @@ func TestConsumeRawdata(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("create database failed: %s", message)
 	}
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_rawdata"))
 	code, message = doHttpSql("create topic if not exists test_tmq_rawdata_ws_topic with meta as DATABASE test_ws_rawdata")
 	if code != 0 {
 		t.Fatalf("create topic failed: %s", message)
@@ -2704,6 +2711,7 @@ func TestSetConfig(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("create database failed: %s", message)
 	}
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_tmq_set_conf"))
 	code, message = doHttpSql("create topic if not exists test_ws_tmq_set_conf_topic with meta as DATABASE test_ws_tmq_set_conf")
 	if code != 0 {
 		t.Fatalf("create topic failed: %s", message)

@@ -174,6 +174,7 @@ func TestAllType(t *testing.T) {
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
+	assert.NoError(t, testtools.EnsureDBCreated("test_alltype"))
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists alltype(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100),v16 decimal(20,4),v17 blob) tags (info json)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_alltype", body)
@@ -317,6 +318,7 @@ func TestRowLimit(t *testing.T) {
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
+	assert.NoError(t, testtools.EnsureDBCreated("test_rowlimit"))
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists test_rowlimit(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20)) tags (info json)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_rowlimit", body)
@@ -458,6 +460,8 @@ func TestUpload(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
+	assert.NoError(t, testtools.EnsureDBCreated("test_Upload"))
+
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists `test_Upload`.`T2`(ts timestamp,n1 int,n2 double,n3 binary(30))")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
@@ -531,6 +535,9 @@ func TestPrecision(t *testing.T) {
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
+
+		assert.NoError(t, testtools.EnsureDBCreated("test_pc_ms"))
+
 		w = httptest.NewRecorder()
 		body = strings.NewReader("create table if not exists t1(ts timestamp,v1 bool)")
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_pc_ms", body)
@@ -574,6 +581,7 @@ func TestPrecision(t *testing.T) {
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
+		assert.NoError(t, testtools.EnsureDBCreated("test_pc_us"))
 		w = httptest.NewRecorder()
 		body = strings.NewReader("create table if not exists t1(ts timestamp,v1 bool)")
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_pc_us", body)
@@ -617,6 +625,8 @@ func TestPrecision(t *testing.T) {
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
+		assert.NoError(t, testtools.EnsureDBCreated("test_pc_ns"))
+
 		w = httptest.NewRecorder()
 		body = strings.NewReader("create table if not exists t1(ts timestamp,v1 bool)")
 		req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_pc_ns", body)
@@ -665,6 +675,8 @@ func TestTimeZone(t *testing.T) {
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
+
+	assert.NoError(t, testtools.EnsureDBCreated("test_tz"))
 	w = httptest.NewRecorder()
 	body = strings.NewReader("create table if not exists t1(ts timestamp,v1 bool)")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_tz", body)
@@ -764,7 +776,7 @@ func TestSetConnectionOptions(t *testing.T) {
 	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	checkResp(t, w)
-
+	assert.NoError(t, testtools.EnsureDBCreated("rest_test_options"))
 	defer func() {
 		body := strings.NewReader("drop database if exists rest_test_options")
 		req, _ := http.NewRequest(http.MethodPost, url, body)
@@ -960,6 +972,7 @@ func TestLimitQuery(t *testing.T) {
 
 func TestInfAndNan(t *testing.T) {
 	checkResp(t, executeSQL("create database if not exists rest_test_inf_nan"))
+	assert.NoError(t, testtools.EnsureDBCreated("rest_test_inf_nan"))
 	defer func() {
 		checkResp(t, executeSQL("drop database if exists rest_test_inf_nan"))
 	}()

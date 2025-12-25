@@ -198,6 +198,7 @@ func TestOpenMetrics(t *testing.T) {
 	for _, s := range dbs {
 		err = exec(conn, fmt.Sprintf("create database if not exists %s precision 'ns'", s))
 		assert.NoError(t, err)
+		assert.NoError(t, testtools.EnsureDBCreated(s))
 	}
 	defer func() {
 		for _, s := range dbs {
@@ -355,8 +356,10 @@ func TestOpenMetricsMTls(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists open_metrics_mtls_basicauth precision 'ns'")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("open_metrics_mtls_basicauth"))
 	err = exec(conn, "create database if not exists open_metrics_mtls_bearertoken precision 'ns'")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("open_metrics_mtls_bearertoken"))
 	openMetrics := &OpenMetrics{}
 	assert.Equal(t, "openmetrics", openMetrics.String())
 	assert.Equal(t, "v1", openMetrics.Version())

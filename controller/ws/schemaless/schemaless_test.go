@@ -49,6 +49,8 @@ func TestRestful_InitSchemaless(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful("create database if not exists test_schemaless_ws", "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_schemaless_ws"))
+
 	defer func() {
 		code, message = doRestful("drop database if exists test_schemaless_ws", "")
 		assert.Equal(t, 0, code, message)

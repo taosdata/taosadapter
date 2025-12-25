@@ -61,8 +61,14 @@ func TestNodeExporter_Gather(t *testing.T) {
 	defer func() {
 		syncinterface.TaosClose(conn, logger, isDebug)
 	}()
+	defer func() {
+		err = exec(conn, "drop database if exists node_exporter")
+		assert.NoError(t, err)
+	}()
 	err = exec(conn, "create database if not exists node_exporter precision 'ns'")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("node_exporter"))
+
 	err = exec(conn, "use node_exporter")
 	assert.NoError(t, err)
 	n := NodeExporter{}
@@ -88,8 +94,6 @@ func TestNodeExporter_Gather(t *testing.T) {
 	if values[0][0].(int32) != 1000 {
 		t.Fatal("ttl miss")
 	}
-	err = exec(conn, "drop database if exists node_exporter")
-	assert.NoError(t, err)
 }
 
 func exec(conn unsafe.Pointer, sql string) error {

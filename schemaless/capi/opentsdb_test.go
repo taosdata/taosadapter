@@ -8,12 +8,14 @@ import (
 	"unsafe"
 
 	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/schemaless/capi"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 func TestMain(m *testing.M) {
@@ -53,6 +55,8 @@ func TestInsertOpentsdbTelnet(t *testing.T) {
 		t.Error(errors.NewError(code, errStr))
 	}
 	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
+	assert.NoError(t, testtools.EnsureDBCreated("test_capi_opentsdb"))
+
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        string
@@ -168,6 +172,7 @@ func TestInsertOpentsdbJson(t *testing.T) {
 		t.Error(errors.NewError(code, errStr))
 	}
 	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
+	assert.NoError(t, testtools.EnsureDBCreated("test_capi_opentsdb_json"))
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        []byte
@@ -277,6 +282,7 @@ func TestInsertOpentsdbTelnetBatch(t *testing.T) {
 		t.Error(errors.NewError(code, errStr))
 	}
 	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
+	assert.NoError(t, testtools.EnsureDBCreated("test_capi_opentsdb_batch"))
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        []string

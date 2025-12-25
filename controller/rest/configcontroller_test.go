@@ -293,6 +293,8 @@ func TestRecordSql(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
+	assert.NoError(t, testtools.EnsureDBCreated("test_record_sql"))
+
 	defer func() {
 		w = httptest.NewRecorder()
 		body = strings.NewReader("drop database if exists test_record_sql")

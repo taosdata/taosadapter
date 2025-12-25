@@ -14,6 +14,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 func TestGetCurrentDB(t *testing.T) {
@@ -24,7 +25,7 @@ func TestGetCurrentDB(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful(fmt.Sprintf("create database if not exists %s", db), "")
 	assert.Equal(t, 0, code, message)
-
+	assert.NoError(t, testtools.EnsureDBCreated(db))
 	defer doRestful(fmt.Sprintf("drop database if exists %s", db), "")
 
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)

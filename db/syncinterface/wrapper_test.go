@@ -70,6 +70,7 @@ func TestTaosSchemalessInsertRawTTLWithReqIDTBNameKey(t *testing.T) {
 	defer TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create database if not exists `syncinterface_test_sml`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_sml"))
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_sml`")
 		assert.NoError(t, err)
@@ -92,6 +93,8 @@ func TestTaosGetTablesVgID(t *testing.T) {
 	defer TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create database if not exists `syncinterface_test_vgid`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_vgid"))
+
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_vgid`")
 		assert.NoError(t, err)
@@ -113,6 +116,7 @@ func TestTaosStmt(t *testing.T) {
 	defer TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create database if not exists `syncinterface_test_stmt`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_stmt"))
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_stmt`")
 		assert.NoError(t, err)
@@ -221,6 +225,7 @@ func TestTaosGetCurrentDB(t *testing.T) {
 	assert.Equal(t, "", currentDb)
 	err = exec(conn, "create database if not exists `syncinterface_test_current_db`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_current_db"))
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_current_db`")
 		assert.NoError(t, err)
@@ -281,6 +286,7 @@ func TestTMQWriteRaw(t *testing.T) {
 	defer TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create database if not exists `syncinterface_test_write_raw`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_write_raw"))
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_write_raw`")
 		assert.NoError(t, err)
@@ -362,6 +368,8 @@ func TestTaosWriteRawBlockWithReqID(t *testing.T) {
 	defer TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create database if not exists `syncinterface_test_write_raw_block`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_write_raw_block"))
+
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_write_raw_block`")
 		assert.NoError(t, err)
@@ -403,6 +411,8 @@ func TestTaosWriteRawBlockWithFieldsWithReqID(t *testing.T) {
 	defer TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create database if not exists `syncinterface_test_write_raw_block_with_fields`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_write_raw_block_with_fields"))
+
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_write_raw_block_with_fields`")
 		assert.NoError(t, err)
@@ -481,6 +491,7 @@ func TestTaosStmt2(t *testing.T) {
 	defer TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create database if not exists `syncinterface_test_stmt2`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_stmt2"))
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_stmt2`")
 		assert.NoError(t, err)
@@ -669,6 +680,8 @@ func TestTMQSubscription(t *testing.T) {
 	defer TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create database if not exists `syncinterface_test_subscription`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_subscription"))
+
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_subscription`")
 		assert.NoError(t, err)

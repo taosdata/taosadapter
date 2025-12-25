@@ -52,8 +52,10 @@ func TestSTMT(t *testing.T) {
 	now := time.Now()
 	code, message := doRestful("drop database if exists test_ws_stmt", "")
 	assert.Equal(t, 0, code, message)
+	code, message = doRestful("create database if not exists test_ws_stmt precision 'ns'", "")
+	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_stmt"))
 	initSqls := []string{
-		"create database if not exists test_ws_stmt precision 'ns'",
 		"create table if not exists st(ts timestamp," +
 			"c1 bool," +
 			"c2 tinyint," +
@@ -266,8 +268,11 @@ func TestBlock(t *testing.T) {
 	w := httptest.NewRecorder()
 	code, message := doRestful("drop database if exists test_ws_stmt_block", "")
 	assert.Equal(t, 0, code, message)
+	code, message = doRestful("create database if not exists test_ws_stmt_block precision 'ns'", "")
+	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_stmt_block"))
+
 	initSqls := []string{
-		"create database if not exists test_ws_stmt_block precision 'ns'",
 		"create table if not exists stb(ts timestamp," +
 			"c1 bool," +
 			"c2 tinyint," +

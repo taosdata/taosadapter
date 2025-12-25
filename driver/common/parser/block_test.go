@@ -11,6 +11,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 // @author: xftan
@@ -53,6 +54,7 @@ func TestParseBlock(t *testing.T) {
 		return
 	}
 	wrapper.TaosFreeResult(res)
+	assert.NoError(t, testtools.EnsureDBCreated("parse_block"))
 
 	res = wrapper.TaosQuery(conn, "create table if not exists parse_block.all_type (ts timestamp,"+
 		"c1 bool,"+
