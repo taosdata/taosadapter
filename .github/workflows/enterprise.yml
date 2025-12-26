@@ -3,10 +3,11 @@ on:
   pull_request:
     branches:
       - '3.0'
+      - 'main'
   push:
     branches:
       - '3.0'
-
+      - 'main'
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -16,14 +17,26 @@ jobs:
         go: [ 'stable' ]
     name: enterprise-${{ matrix.os }}-${{ matrix.go }}
     steps:
+      - name: get branch push
+        id: get-branch
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "branch=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "branch=${{ github.base_ref }}" >> $GITHUB_OUTPUT
+          else
+            echo "branch=main" >> $GITHUB_OUTPUT
+          fi
+
       - name: get TDengine
         run: |
-          wget ${{ secrets.NIGHTLY_TDENGINE_ENTERPRISE_URL }}
+          wget ${{ secrets.NIGHTLY_TDENGINE_ENTERPRISE_BASE_URL }}/tsdb-nightly-${{ steps.get-branch.outputs.branch }}.tar.gz
 
       - name: install
         run: |
-          tar -zxf tsdb-nightly-3.0.tar.gz
-          cd tsdb-nightly-3.0
+          tar -zxf tsdb-nightly-${{ steps.get-branch.outputs.branch }}.tar.gz
+          cd tsdb-nightly-${{ steps.get-branch.outputs.branch }}
+          ls -al
           sudo ./install.sh
 
       - name: checkout
@@ -37,7 +50,7 @@ jobs:
       - name: shell
         run: |
           cat >start.sh<<EOF 
-          ulimit -n 65535 && TAOS_SUPPORT_VNODES=256 taosd
+          ulimit -n 65535 && taosd
           EOF
 
       - name: taosd
