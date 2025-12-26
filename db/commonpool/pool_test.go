@@ -47,15 +47,19 @@ func TestGetConnection(t *testing.T) {
 		err = c.Put()
 		assert.NoError(t, err)
 	}()
-	res, err := testtools.Query(c.TaosConnection, "create token test_token_pool from user root")
-	assert.NoError(t, err)
-	assert.NotNil(t, res)
-	token := res[0][0].(string)
-	t.Log("got token:", token)
-	defer func() {
-		err = testtools.Exec(c.TaosConnection, "drop token test_token_pool")
+	var token string
+	if testenv.IsEnterpriseTest() {
+		res, err := testtools.Query(c.TaosConnection, "create token test_token_pool from user root")
 		assert.NoError(t, err)
-	}()
+		assert.NotNil(t, res)
+		token = res[0][0].(string)
+		t.Log("got token:", token)
+		defer func() {
+			err = testtools.Exec(c.TaosConnection, "drop token test_token_pool")
+			assert.NoError(t, err)
+		}()
+		assert.NotEmpty(t, token)
+	}
 	type args struct {
 		user     string
 		password string
