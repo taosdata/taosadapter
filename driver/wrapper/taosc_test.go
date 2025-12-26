@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unsafe"
@@ -971,6 +972,10 @@ func TestTaosConnectToken(t *testing.T) {
 	}()
 	val, err = query(rootConn, "create token test_token_wrapper_user_token from user test_token_wrapper_user")
 	assert.NoError(t, err)
+	defer func() {
+		err = exec(rootConn, "drop token test_token_wrapper_user_token")
+		assert.NoError(t, err)
+	}()
 	token = val[0][0].(string)
 	conn3, err := TaosConnectToken("", token, "", 0)
 	require.NoError(t, err)
@@ -1027,4 +1032,33 @@ func BenchmarkTaosConnect(b *testing.B) {
 		}
 		TaosClose(conn)
 	}
+}
+
+func TestConcurrentToken(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("token test only for enterprise edition")
+		return
+	}
+	rootConn, err := TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer TaosClose(rootConn)
+	wg := sync.WaitGroup{}
+	wg.Add(100)
+	for i := 0; i < 100; i++ {
+		go func(i int) {
+			defer wg.Done()
+			tokenName := fmt.Sprintf("test_token_wrapper_%d", i)
+			val, err := query(rootConn, fmt.Sprintf("create token %s from user root", tokenName))
+			assert.NoError(t, err)
+			token := val[0][0].(string)
+			conn, err := TaosConnectToken("", token, "", 0)
+			require.NoError(t, err)
+			TaosClose(conn)
+			err = exec(rootConn, fmt.Sprintf("drop token %s", tokenName))
+			assert.NoError(t, err)
+		}(i)
+	}
+	wg.Wait()
 }

@@ -31,6 +31,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/layout"
 	"github.com/taosdata/taosadapter/v3/tools/limiter"
 	"github.com/taosdata/taosadapter/v3/tools/testtools"
+	"github.com/taosdata/taosadapter/v3/tools/testtools/testenv"
 )
 
 var router *gin.Engine
@@ -1069,6 +1070,10 @@ func TestRejectSQL(t *testing.T) {
 }
 
 func TestTokenConnect(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("token test only for enterprise edition")
+		return
+	}
 	w := httptest.NewRecorder()
 	body := strings.NewReader("show databases")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
