@@ -17,7 +17,7 @@ func TestVgID(t *testing.T) {
 	body := strings.NewReader("create database if not exists test_vgid")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
@@ -30,7 +30,7 @@ func TestVgID(t *testing.T) {
 	assert.NoError(t, err)
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_vgid/vgid", buffer)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatal("get vgID fail ", w.Code, w.Body)
@@ -43,7 +43,7 @@ func TestVgID(t *testing.T) {
 	body = strings.NewReader("drop database if exists test_vgid")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 }

@@ -731,7 +731,7 @@ func TestBadRequest(t *testing.T) {
 	body := strings.NewReader("wrong sql")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
@@ -740,7 +740,7 @@ func TestBadRequest(t *testing.T) {
 	body = strings.NewReader("wrong sql")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 }
@@ -752,7 +752,7 @@ func TestInternalError(t *testing.T) {
 	body := strings.NewReader("CREATE MNODE ON DNODE 1")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 
@@ -761,7 +761,7 @@ func TestInternalError(t *testing.T) {
 	body = strings.NewReader("CREATE MNODE ON DNODE 1")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 }
@@ -773,7 +773,7 @@ func TestSetConnectionOptions(t *testing.T) {
 	url := "/rest/sql?app=rest_test_options&ip=192.168.100.1&conn_tz=Europe/Moscow&tz=Asia/Shanghai"
 	req, _ := http.NewRequest(http.MethodPost, url, body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	checkResp(t, w)
 	assert.NoError(t, testtools.EnsureDBCreated("rest_test_options"))
@@ -781,7 +781,7 @@ func TestSetConnectionOptions(t *testing.T) {
 		body := strings.NewReader("drop database if exists rest_test_options")
 		req, _ := http.NewRequest(http.MethodPost, url, body)
 		req.RemoteAddr = testtools.GetRandomRemoteAddr()
-		req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+		req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 		checkResp(t, w)
@@ -824,7 +824,7 @@ func TestSetConnectionOptions(t *testing.T) {
 	body = strings.NewReader(`select * from rest_test_options.t1 where ts = '2024-12-04 12:34:56.789'`)
 	req, _ = http.NewRequest(http.MethodPost, wrongTZUrl, body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 400, w.Code)
@@ -834,7 +834,7 @@ func TestSetConnectionOptions(t *testing.T) {
 	body = strings.NewReader(`select * from rest_test_options.t1 where ts = '2024-12-04 12:34:56.789'`)
 	req, _ = http.NewRequest(http.MethodPost, wrongConnTZUrl, body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 400, w.Code)
@@ -842,7 +842,7 @@ func TestSetConnectionOptions(t *testing.T) {
 	wrongIPUrl := "/rest/sql?app=rest_test_options&ip=xxx.xxx.xxx.xxx&conn_tz=Europe/Moscow&tz=Asia/Shanghai"
 	req, _ = http.NewRequest(http.MethodPost, wrongIPUrl, body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	w = httptest.NewRecorder()
 	body = strings.NewReader(`select * from rest_test_options.t1 where ts = '2024-12-04 12:34:56.789'`)
 	req.Body = io.NopCloser(body)
@@ -1030,7 +1030,7 @@ func TestRejectSQL(t *testing.T) {
 	body := strings.NewReader("DROP DATABASE testdb")
 	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusForbidden, w.Code)
 
@@ -1038,7 +1038,7 @@ func TestRejectSQL(t *testing.T) {
 	body = strings.NewReader("DROP taBle testdb.stb")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusForbidden, w.Code)
 
@@ -1046,7 +1046,7 @@ func TestRejectSQL(t *testing.T) {
 	body = strings.NewReader("Alter table testdb.stb add column c1 int")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusForbidden, w.Code)
 
@@ -1054,7 +1054,7 @@ func TestRejectSQL(t *testing.T) {
 	body = strings.NewReader(" select * from testdb.testtb ")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusForbidden, w.Code)
 
@@ -1062,7 +1062,7 @@ func TestRejectSQL(t *testing.T) {
 	body = strings.NewReader("select * from information_schema.ins_databases")
 	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Basic:cm9vdDp0YW9zZGF0YQ==")
+	req.Header.Set("Authorization", "Basic cm9vdDp0YW9zZGF0YQ==")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
