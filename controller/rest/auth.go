@@ -128,7 +128,7 @@ func CheckAuth(c *gin.Context) {
 		c.Set(PasswordKey, info.Password)
 		return
 	}
-	if strings.HasPrefix(auth, "Basic") && len(auth) > 6 {
+	if strings.HasPrefix(auth, "Basic ") && len(auth) > 6 {
 		user, password, err := tools.DecodeBasic(auth[6:])
 		if err != nil {
 			UnAuthResponse(c, logger, httperror.HTTP_INVALID_BASIC_AUTH)
@@ -144,7 +144,7 @@ func CheckAuth(c *gin.Context) {
 		})
 		c.Set(UserKey, user)
 		c.Set(PasswordKey, password)
-	} else if strings.HasPrefix(auth, "Taosd") && len(auth) > 6 {
+	} else if strings.HasPrefix(auth, "Taosd ") && len(auth) > 6 {
 		user, password, err := DecodeDes(auth[6:])
 		if err != nil {
 			UnAuthResponse(c, logger, httperror.HTTP_INVALID_TAOSD_AUTH)
@@ -160,7 +160,7 @@ func CheckAuth(c *gin.Context) {
 		})
 		c.Set(UserKey, user)
 		c.Set(PasswordKey, password)
-	} else if !cloudTokenExists && strings.HasPrefix(auth, "Bearer") && len(auth) > 7 {
+	} else if !cloudTokenExists && strings.HasPrefix(auth, "Bearer ") && len(auth) > 7 {
 		token := strings.TrimSpace(auth[7:])
 		c.Set(UserKey, "")
 		c.Set(PasswordKey, "")

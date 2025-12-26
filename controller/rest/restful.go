@@ -388,7 +388,7 @@ func (h *SQLQueryHook) onConnectSuccess(conn unsafe.Pointer) bool {
 				// no query executed, set free time directly
 				h.record.SetFreeTime(time.Now())
 			}
-			ServiceUnavailable(h.c, logger, err.Error())
+			ServiceUnavailable(h.c, h.logger, err.Error())
 			return true
 		}
 		h.limiter = l

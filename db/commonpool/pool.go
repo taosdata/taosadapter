@@ -7,6 +7,7 @@ import (
 	"net"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -371,11 +372,41 @@ func getConnectDirect(connectionPool *ConnectorPool, clientIP net.IP) (*Conn, er
 	}, nil
 }
 
+type keyLock struct {
+	mu   sync.Mutex
+	refs int32
+}
+
+var poolLocks sync.Map // map[string]*keyLock
+
+// acquireLock returns the lock for the given key and increments its reference count.
+func acquireLock(key string) *keyLock {
+	v, _ := poolLocks.LoadOrStore(key, &keyLock{})
+	kl := v.(*keyLock)
+	atomic.AddInt32(&kl.refs, 1)
+	return kl
+}
+
+// releaseLock decrements the reference count for the given keyLock and removes it from the map if the count reaches zero.
+func releaseLock(key string, kl *keyLock) {
+	if atomic.AddInt32(&kl.refs, -1) == 0 {
+		poolLocks.CompareAndDelete(key, kl)
+	}
+}
+
 func getConnectorPoolSafe(user, password, token string) (*ConnectorPool, error) {
 	authKey := user
 	if token != "" {
 		authKey = token
 	}
+
+	kl := acquireLock(authKey)
+	kl.mu.Lock()
+	defer func() {
+		kl.mu.Unlock()
+		releaseLock(authKey, kl)
+	}()
+
 	p, exist := connectionMap.Load(authKey)
 	if exist {
 		connectionPool := p.(*ConnectorPool)
@@ -387,7 +418,6 @@ func getConnectorPoolSafe(user, password, token string) (*ConnectorPool, error) 
 			return nil, err
 		}
 		connectionPool.Release()
-		connectionMap.LoadOrStore(authKey, newPool)
 		connectionMap.Store(authKey, newPool)
 		return newPool, nil
 	}
