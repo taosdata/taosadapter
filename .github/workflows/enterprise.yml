@@ -63,6 +63,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Test
+        id: test
         env:
           GO_TEST_DISABLE_DISPLAY_LOG: "true"
           GO_TEST_ENTERPRISE: "true"
@@ -75,3 +76,9 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_ORG_TOKEN }}
           OS: linux
+
+      - uses: actions/upload-artifact@v4
+        if: always() && (steps.test.outcome == 'failure' || steps.test.outcome == 'cancelled')
+        with:
+          name: enterprise-${{ matrix.os }}-${{ matrix.go }}-log
+          path: /var/log/taos/
