@@ -308,8 +308,10 @@ func GetConnection(user, password, token string, clientIp net.IP) (*Conn, error)
 
 func getConnectionPool(user, password, token string) (*ConnectorPool, error) {
 	authKey := user
+	singleflightKey := fmt.Sprintf("%s:%s", user, password)
 	if token != "" {
 		authKey = token
+		singleflightKey = token
 	}
 	p, exist := connectionMap.Load(authKey)
 	if exist {
@@ -317,7 +319,7 @@ func getConnectionPool(user, password, token string) (*ConnectorPool, error) {
 		if connectionPool.verifyAuth(password, token) {
 			return connectionPool, nil
 		}
-		cp, err, _ := singleGroup.Do(fmt.Sprintf("%s:%s:%s", user, password, token), func() (interface{}, error) {
+		cp, err, _ := singleGroup.Do(singleflightKey, func() (interface{}, error) {
 			return getConnectorPoolSafe(user, password, token)
 		})
 		if err != nil {
@@ -325,7 +327,7 @@ func getConnectionPool(user, password, token string) (*ConnectorPool, error) {
 		}
 		return cp.(*ConnectorPool), nil
 	}
-	cp, err, _ := singleGroup.Do(fmt.Sprintf("%s:%s:%s", user, password, token), func() (interface{}, error) {
+	cp, err, _ := singleGroup.Do(singleflightKey, func() (interface{}, error) {
 		return getConnectorPoolSafe(user, password, token)
 	})
 	if err != nil {

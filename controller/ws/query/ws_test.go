@@ -17,6 +17,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller"
 	_ "github.com/taosdata/taosadapter/v3/controller/rest"
@@ -108,7 +109,7 @@ func getVersion(t *testing.T, ws *websocket.Conn) (*WSVersionResp, error) {
 	return &resp, err
 }
 
-func wsQuery(t *testing.T, ws *websocket.Conn, sql string, onFetchBlock func(*WSQueryResult, *WSFetchResp, []byte)) (resultID uint64, blockResult [][]driver.Value) {
+func wsQuery(t *testing.T, ws *websocket.Conn, sql string, onFetchBlock func(*WSQueryResult, *WSFetchResp, []byte) error) (resultID uint64, blockResult [][]driver.Value, err error) {
 	queryReq := &WSQueryReq{
 		ReqID: 2,
 		SQL:   sql,
@@ -127,15 +128,20 @@ func wsQuery(t *testing.T, ws *websocket.Conn, sql string, onFetchBlock func(*WS
 				ID:    queryResp.ID,
 			})
 			if onFetchBlock != nil {
-				onFetchBlock(queryResp, fetchResp, blockMessage)
+				err = onFetchBlock(queryResp, fetchResp, blockMessage)
+				assert.NoError(t, err)
+				return 0, nil, err
 			}
 			resultID, blockResult, err = parseblock.ParseBlock(blockMessage[8:], queryResp.FieldsTypes, fetchResp.Rows, queryResp.Precision)
 			assert.NoError(t, err)
+			if err != nil {
+				return 0, nil, err
+			}
 		} else {
 			break
 		}
 	}
-	return resultID, blockResult
+	return resultID, blockResult, nil
 }
 
 // @author: xftan
@@ -179,7 +185,8 @@ func TestWebsocket(t *testing.T) {
 	}
 	_, err = conn(t, ws, connect)
 	assert.NoError(t, err)
-	resultID, blockResult := wsQuery(t, ws, "select test_ws.*,info->'table' from test_ws", nil)
+	resultID, blockResult, err := wsQuery(t, ws, "select test_ws.*,info->'table' from test_ws", nil)
+	require.NoError(t, err)
 	versionResp, err := getVersion(t, ws)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, versionResp.Version)
@@ -268,7 +275,7 @@ func TestWriteBlock(t *testing.T) {
 
 	_, err = conn(t, ws, connect)
 	assert.NoError(t, err)
-	_, _ = wsQuery(t, ws, "select * from t1", func(queryResp *WSQueryResult, fetchResp *WSFetchResp, blockMessage []byte) {
+	_, _, err = wsQuery(t, ws, "select * from t1", func(queryResp *WSQueryResult, fetchResp *WSFetchResp, blockMessage []byte) error {
 		//block
 		buffer := &bytes.Buffer{}
 		// req id
@@ -287,7 +294,9 @@ func TestWriteBlock(t *testing.T) {
 		buffer.Write(blockMessage[16:])
 		err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
 		assert.NoError(t, err)
+		return err
 	})
+	require.NoError(t, err)
 	versionResp, err := getVersion(t, ws)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, versionResp.Version)
@@ -309,7 +318,8 @@ func TestWriteBlock(t *testing.T) {
 	}
 	_, err = conn(t, ws, connect)
 	assert.NoError(t, err)
-	_, blockResult := wsQuery(t, ws, "select * from t2", nil)
+	_, blockResult, err := wsQuery(t, ws, "select * from t2", nil)
+	require.NoError(t, err)
 	err = ws.Close()
 	assert.NoError(t, err)
 	assert.Equal(t, 3, len(blockResult))
@@ -391,7 +401,7 @@ func TestWriteBlockWithFields(t *testing.T) {
 	}
 	_, err = conn(t, ws, connect)
 	assert.NoError(t, err)
-	wsQuery(t, ws, "select ts,v1 from t1", func(queryResp *WSQueryResult, fetchResponse *WSFetchResp, blockMessage []byte) {
+	_, _, err = wsQuery(t, ws, "select ts,v1 from t1", func(queryResp *WSQueryResult, fetchResponse *WSFetchResp, blockMessage []byte) error {
 		//block
 		buffer := &bytes.Buffer{}
 		// req id
@@ -438,7 +448,9 @@ func TestWriteBlockWithFields(t *testing.T) {
 		buffer.Write(fields)
 		err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
 		assert.NoError(t, err)
+		return err
 	})
+	require.NoError(t, err)
 	versionResp, err := getVersion(t, ws)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, versionResp.Version)
@@ -459,7 +471,8 @@ func TestWriteBlockWithFields(t *testing.T) {
 	}
 	_, err = conn(t, ws, connect)
 	assert.NoError(t, err)
-	_, blockResult := wsQuery(t, ws, "select * from t2", nil)
+	_, blockResult, err := wsQuery(t, ws, "select * from t2", nil)
+	require.NoError(t, err)
 
 	err = ws.Close()
 	assert.NoError(t, err)
@@ -519,7 +532,8 @@ func TestQueryAllType(t *testing.T) {
 	}
 	_, err = conn(t, ws, connect)
 	assert.NoError(t, err)
-	resultID, blockResult := wsQuery(t, ws, "select * from test_ws_all_query order by ts asc ", nil)
+	resultID, blockResult, err := wsQuery(t, ws, "select * from test_ws_all_query order by ts asc ", nil)
+	require.NoError(t, err)
 	assert.Equal(t, uint64(1), resultID)
 	assert.Equal(t, 3, len(blockResult))
 	assert.Equal(t, true, blockResult[0][1])

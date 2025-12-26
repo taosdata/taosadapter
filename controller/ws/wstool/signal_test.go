@@ -95,6 +95,9 @@ func TestWaitSignalDropUser(t *testing.T) {
 	assert.NoError(t, err)
 	conn, err := syncinterface.TaosConnect("", "test_signal", "signal_pass1", "", 0, logger, isDebug)
 	assert.NoError(t, err)
+	defer func() {
+		syncinterface.TaosClose(conn, logger, isDebug)
+	}()
 	h := NewMockWSHandler(conn, "192.168.3.100", logger, isDebug)
 	h.exited = true
 	exitSignal := make(chan struct{})
@@ -155,6 +158,9 @@ func TestWaitSignalChangeWhitelist(t *testing.T) {
 	}
 	conn, err := syncinterface.TaosConnect("", "test_signal_w", "signal_pass1", "", 0, logger, isDebug)
 	assert.NoError(t, err)
+	defer func() {
+		syncinterface.TaosClose(conn, logger, isDebug)
+	}()
 	h := NewMockWSHandler(conn, "192.168.3.100", logger, isDebug)
 	go doWaitSignal(h, conn, h.ip, h.ipStr, h.whitelistChangeHandle, h.dropUserHandle, h.whitelistChangeChan, h.dropUserChan, h.exit, logger, mockGetWhitelist)
 	timeout := time.NewTimer(time.Second * 5)
