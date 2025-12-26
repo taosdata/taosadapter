@@ -3,6 +3,7 @@ package commonpool
 import (
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/testtools"
+	"github.com/taosdata/taosadapter/v3/tools/testtools/testenv"
 )
 
 func TestMain(m *testing.M) {
@@ -49,6 +51,7 @@ func TestGetConnection(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 	token := res[0][0].(string)
+	t.Log("got token:", token)
 	defer func() {
 		err = testtools.Exec(c.TaosConnection, "drop token test_token_pool")
 		assert.NoError(t, err)
@@ -100,9 +103,13 @@ func TestGetConnection(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if strings.Contains(tt.name, "token") && !testenv.IsEnterpriseTest() {
+				t.Skip("token test only for enterprise edition")
+				return
+			}
 			got, err := GetConnection(tt.args.user, tt.args.password, tt.args.token, net.ParseIP("127.0.0.1"))
 			if (err != nil) != tt.wantErr {
-				t.Errorf("GetConnection() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetConnection() error = %v, token: %s, wantErr %v", err, tt.args.token, tt.wantErr)
 				return
 			}
 			if err != nil {
