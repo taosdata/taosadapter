@@ -3,7 +3,6 @@ package commonpool
 import (
 	"net"
 	"os"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -47,23 +46,9 @@ func TestGetConnection(t *testing.T) {
 		err = c.Put()
 		assert.NoError(t, err)
 	}()
-	var token string
-	if testenv.IsEnterpriseTest() {
-		res, err := testtools.Query(c.TaosConnection, "create token test_token_pool from user root")
-		assert.NoError(t, err)
-		assert.NotNil(t, res)
-		token = res[0][0].(string)
-		t.Log("got token:", token)
-		defer func() {
-			err = testtools.Exec(c.TaosConnection, "drop token test_token_pool")
-			assert.NoError(t, err)
-		}()
-		assert.NotEmpty(t, token)
-	}
 	type args struct {
 		user     string
 		password string
-		token    string
 	}
 	tests := []struct {
 		name    string
@@ -86,34 +71,12 @@ func TestGetConnection(t *testing.T) {
 			},
 			wantErr: true,
 		},
-		{
-			name: "wrong token",
-			args: args{
-				user:     "root",
-				password: "taosdata",
-				token:    "wrong_token",
-			},
-			wantErr: true,
-		},
-		{
-			name: "correct token",
-			args: args{
-				user:     "root",
-				password: "wrong",
-				token:    token,
-			},
-			wantErr: false,
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if strings.Contains(tt.name, "token") && !testenv.IsEnterpriseTest() {
-				t.Skip("token test only for enterprise edition")
-				return
-			}
-			got, err := GetConnection(tt.args.user, tt.args.password, tt.args.token, net.ParseIP("127.0.0.1"))
+			got, err := GetConnection(tt.args.user, tt.args.password, "", net.ParseIP("127.0.0.1"))
 			if (err != nil) != tt.wantErr {
-				t.Errorf("GetConnection() error = %v, token: %s, wantErr %v", err, tt.args.token, tt.wantErr)
+				t.Errorf("GetConnection() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if err != nil {
@@ -123,6 +86,36 @@ func TestGetConnection(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
+}
+
+func TestGetConnectionToken(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("token test only for enterprise edition")
+		return
+	}
+	c, err := GetConnection("root", "taosdata", "", net.ParseIP("127.0.0.1"))
+	assert.NoError(t, err)
+	defer func() {
+		err = c.Put()
+		assert.NoError(t, err)
+	}()
+	res, err := testtools.Query(c.TaosConnection, "create token test_token_pool from user root")
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+	token := res[0][0].(string)
+	t.Log("got token:", token)
+	defer func() {
+		err = testtools.Exec(c.TaosConnection, "drop token test_token_pool")
+		assert.NoError(t, err)
+	}()
+	assert.NotEmpty(t, token)
+	got, err := GetConnection("root", "taosdata", "wrong_token", net.ParseIP("127.0.0.1"))
+	assert.Error(t, err)
+	assert.Nil(t, got)
+	got, err = GetConnection("root", "taosdata", token, net.ParseIP("127.0.0.1"))
+	assert.NoError(t, err)
+	err = got.Put()
+	assert.NoError(t, err)
 }
 
 // @author: xftan
