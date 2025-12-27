@@ -1048,7 +1048,7 @@ func EnsureTokenCreated(token string) error {
 			return err
 		}
 		if len(value) == 0 {
-			value, err := query(conn, fmt.Sprintf(`select * from information_schema.ins_token where name = '%s'`, token))
+			value, err := query(conn, fmt.Sprintf(`select * from information_schema.ins_tokens where name = '%s'`, token))
 			if err != nil {
 				return err
 			}
