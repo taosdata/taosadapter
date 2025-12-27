@@ -1,6 +1,7 @@
 package wstool
 
 import (
+	"os"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -13,5 +14,5 @@ func TestMain(m *testing.M) {
 	viper.Set("uploadKeeper.enable", false)
 	config.Init()
 	log.ConfigLog()
-	m.Run()
+	os.Exit(m.Run())
 }

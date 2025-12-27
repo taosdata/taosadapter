@@ -1,6 +1,7 @@
 package monitor_test
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -31,5 +32,5 @@ func TestMain(m *testing.M) {
 	ctl.Init(router)
 	var pingCtl ping.Controller
 	pingCtl.Init(router)
-	m.Run()
+	os.Exit(m.Run())
 }

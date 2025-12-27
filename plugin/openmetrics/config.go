@@ -25,6 +25,7 @@ type Config struct {
 	TTL                    []int
 	IgnoreTimestamp        bool
 	InsecureSkipVerify     bool
+	Token                  string
 }
 
 func (c *Config) setValue(viper *viper.Viper) {
@@ -44,6 +45,7 @@ func (c *Config) setValue(viper *viper.Viper) {
 	c.GatherDurationSeconds = viper.GetIntSlice("open_metrics.gatherDurationSeconds")
 	c.TTL = viper.GetIntSlice("open_metrics.ttl")
 	c.IgnoreTimestamp = viper.GetBool("open_metrics.ignoreTimestamp")
+	c.Token = viper.GetString("open_metrics.token")
 }
 
 func (c *Config) CheckConfig() error {
@@ -166,4 +168,9 @@ func init() {
 	_ = viper.BindEnv("open_metrics.ignoreTimestamp", "TAOS_ADAPTER_OPEN_METRICS_IGNORE_TIMESTAMP")
 	pflag.Bool("open_metrics.ignoreTimestamp", false, `Use server timestamp instead of metrics timestamps. Env var: "TAOS_ADAPTER_OPEN_METRICS_IGNORE_TIMESTAMP"`)
 	viper.SetDefault("open_metrics.ignoreTimestamp", false)
+
+	// token for TDengine
+	_ = viper.BindEnv("open_metrics.token", "TAOS_ADAPTER_OPEN_METRICS_TOKEN")
+	pflag.String("open_metrics.token", "", `TDengine token for OpenMetrics connection. Env var: "TAOS_ADAPTER_OPEN_METRICS_TOKEN"`)
+	viper.SetDefault("open_metrics.token", "")
 }

@@ -82,6 +82,12 @@ func (r *Record) SetFreeTime(freeTime time.Time) {
 	r.FreeTime = freeTime
 }
 
+func (r *Record) SetUser(user string) {
+	r.Lock()
+	defer r.Unlock()
+	r.User = user
+}
+
 func (r *Record) toRow() []string {
 	now := time.Now()
 	row := make([]string, FiledCount)

@@ -108,7 +108,7 @@ func (p *Influxdb) write(c *gin.Context) {
 		precision = "ns"
 	}
 	logger.Debugf("request precision:%s", precision)
-	user, password, err := plugin.GetAuth(c)
+	user, password, token, err := plugin.GetAuth(c)
 	if err != nil {
 		logger.Errorf("get user and password error:%s", err.Error())
 		p.commonResponse(c, http.StatusUnauthorized, &message{
@@ -161,7 +161,7 @@ func (p *Influxdb) write(c *gin.Context) {
 	}
 	logger.Debugf("request data:%s", data)
 	s := log.GetLogNow(isDebug)
-	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
+	taosConn, err := commonpool.GetConnection(user, password, token, iptool.GetRealIP(c.Request))
 	logger.Debugf("get connection finish, cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.Errorf("connect server error, err:%s", err)
@@ -244,6 +244,9 @@ func getAuth(c *gin.Context) {
 				c.Set(plugin.UserKey, user)
 				c.Set(plugin.PasswordKey, password)
 			}
+		} else if strings.HasPrefix(auth, "Bearer") && len(auth) > 7 {
+			token := strings.TrimSpace(auth[7:])
+			c.Set(plugin.TokenKey, token)
 		}
 	}
 

@@ -2,6 +2,7 @@ package tool
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"unsafe"
 
@@ -20,8 +21,9 @@ func TestMain(m *testing.M) {
 	config.Init()
 	log.ConfigLog()
 	db.PrepareConnection()
-	m.Run()
+	code := m.Run()
 	viper.Set("smlAutoCreateDB", false)
+	os.Exit(code)
 }
 
 // @author: xftan
@@ -63,7 +65,7 @@ func TestCreateDBWithConnection(t *testing.T) {
 			}
 			code := syncinterface.TaosSelectDB(tt.args.connection, tt.args.db, logger, isDebug)
 			assert.Equal(t, 0, code)
-			r := syncinterface.TaosQuery(conn, "drop database if exists collectd", logger, isDebug)
+			r := syncinterface.TaosQuery(conn, "drop database if exists test_auto_create_db", logger, isDebug)
 			code = syncinterface.TaosError(r, logger, isDebug)
 			if code != 0 {
 				errStr := syncinterface.TaosErrorStr(r, logger, isDebug)

@@ -39,6 +39,8 @@ func TestStmt(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_wrapper"))
+
 	err = exec(conn, "use test_wrapper")
 	if err != nil {
 		t.Error(err)
@@ -281,6 +283,7 @@ func TestStmtExec(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_wrapper"))
 	err = exec(conn, "use test_wrapper")
 	if err != nil {
 		t.Error(err)
@@ -477,6 +480,8 @@ func TestStmtQuery(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_wrapper"))
+
 	err = exec(conn, "use test_wrapper")
 	if err != nil {
 		t.Error(err)
@@ -755,6 +760,8 @@ func TestGetFields(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt_field"))
+
 	err = exec(conn, "create table if not exists test_stmt_field.all_type(ts timestamp,"+
 		"c1 bool,"+
 		"c2 tinyint,"+
@@ -879,6 +886,8 @@ func TestGetFieldsCommonTable(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt_field"))
+
 	TaosSelectDB(conn, "test_stmt_field")
 	err = exec(conn, "create table if not exists ct(ts timestamp,"+
 		"c1 bool,"+
@@ -973,6 +982,8 @@ func TestTaosStmtSetTags(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_wrapper"))
+
 	defer func() {
 		err = exec(conn, "drop database if exists test_wrapper")
 		if err != nil {
@@ -1207,6 +1218,8 @@ func TestTaosStmtGetParam(t *testing.T) {
 	require.NoError(t, err)
 	err = exec(conn, "create database if not exists test_stmt_get_param")
 	require.NoError(t, err)
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt_get_param"))
+
 	defer func() {
 		err = exec(conn, "drop database if exists test_stmt_get_param")
 		assert.NoError(t, err)
@@ -1266,6 +1279,7 @@ func TestStmtJson(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_stmt_json"))
 	err = exec(conn, "use test_stmt_json")
 	if err != nil {
 		t.Error(err)
@@ -1383,4 +1397,25 @@ func TestStmtJson(t *testing.T) {
 		result = append(result, r...)
 	}
 	t.Log(result)
+}
+
+func ensureDBCreated(conn unsafe.Pointer, dbName string) error {
+	for i := 0; i < 100; i++ {
+		value, err := query(conn, fmt.Sprintf(`select * from performance_schema.perf_trans where db = '%s'`, dbName))
+		if err != nil {
+			return err
+		}
+		if len(value) == 0 {
+			value, err = query(conn, fmt.Sprintf(`select * from information_schema.ins_databases where name = '%s'`, dbName))
+			if err != nil {
+				return err
+			}
+			if len(value) > 0 {
+				return nil
+			}
+			return fmt.Errorf("database %s not created", dbName)
+		}
+		time.Sleep(time.Millisecond * 500)
+	}
+	return fmt.Errorf("db %s not created after waiting", dbName)
 }

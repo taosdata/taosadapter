@@ -25,6 +25,7 @@ type Config struct {
 	GatherDuration        time.Duration
 	TTL                   int
 	IgnoreTimestamp       bool
+	Token                 string
 }
 
 func (c *Config) setValue() {
@@ -44,6 +45,7 @@ func (c *Config) setValue() {
 	c.GatherDuration = viper.GetDuration("node_exporter.gatherDuration")
 	c.TTL = viper.GetInt("node_exporter.ttl")
 	c.IgnoreTimestamp = viper.GetBool("node_exporter.ignoreTimestamp")
+	c.Token = viper.GetString("node_exporter.token")
 }
 
 func init() {
@@ -110,4 +112,8 @@ func init() {
 	_ = viper.BindEnv("node_exporter.ignoreTimestamp", "TAOS_ADAPTER_NODE_EXPORTER_IGNORE_TIMESTAMP")
 	pflag.Bool("node_exporter.ignoreTimestamp", false, `ignore timestamp when inserting data. Env "TAOS_ADAPTER_NODE_EXPORTER_IGNORE_TIMESTAMP"`)
 	viper.SetDefault("node_exporter.ignoreTimestamp", false)
+
+	_ = viper.BindEnv("node_exporter.token", "TAOS_ADAPTER_NODE_EXPORTER_TOKEN")
+	pflag.String("node_exporter.token", "", `node_exporter token. Env "TAOS_ADAPTER_NODE_EXPORTER_TOKEN"`)
+	viper.SetDefault("node_exporter.token", "")
 }

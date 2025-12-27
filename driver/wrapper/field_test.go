@@ -25,6 +25,7 @@ func TestFetchLengths(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists test_fetch_lengths")
 	require.NoError(t, err)
+	assert.NoError(t, ensureDBCreated(conn, "test_fetch_lengths"))
 	defer func() {
 		err = exec(conn, "drop database if exists test_fetch_lengths")
 		require.NoError(t, err)
@@ -298,6 +299,7 @@ func TestReadColumn(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists test_read_column")
 	assert.NoError(t, err)
+	assert.NoError(t, ensureDBCreated(conn, "test_read_column"))
 	err = exec(conn, "use test_read_column")
 	assert.NoError(t, err)
 	err = exec(conn, "create table if not exists alltype(ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100),v16 decimal(20,4),v17 blob) tags (info json)")

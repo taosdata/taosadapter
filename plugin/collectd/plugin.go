@@ -115,7 +115,7 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, clientIP net.IP, m
 		logger.Errorf("serialize collectd error, err:%s", err)
 		return
 	}
-	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, clientIP)
+	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, p.conf.Token, clientIP)
 	if err != nil {
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 			logger.Errorf("whitelist forbidden, user:%s, clientIP:%s", p.conf.User, clientIP.String())

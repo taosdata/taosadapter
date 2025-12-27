@@ -2,7 +2,7 @@ package ws
 
 import (
 	"container/list"
-	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -230,26 +230,33 @@ func (h *StmtHolder) GetStmt2(index uint64) *StmtItem {
 }
 
 func (h *StmtHolder) FreeStmtByID(index uint64, isStmt2 bool, logger *logrus.Entry) error {
-	h.Lock()
-	defer h.Unlock()
-
-	if h.results.Len() == 0 {
+	// free may cost some time, release lock first
+	item, err := h.removeFromList(index, isStmt2)
+	if err != nil {
+		return err
+	}
+	if item == nil {
 		return nil
 	}
+	item.free(logger)
+	return nil
+}
 
+func (h *StmtHolder) removeFromList(index uint64, isStmt2 bool) (*StmtItem, error) {
+	h.Lock()
+	defer h.Unlock()
 	node := h.results.Front()
 	for {
 		if node == nil || node.Value == nil {
-			return nil
+			return nil, nil
 		}
 		result := node.Value.(*StmtItem)
 		if result.index == index {
 			if result.isStmt2 != isStmt2 {
-				return errors.New("stmt type not match")
+				return nil, fmt.Errorf("stmtID:%d, isStmt2:%t not match", index, isStmt2)
 			}
-			result.free(logger)
 			h.results.Remove(node)
-			return nil
+			return result, nil
 		}
 		node = node.Next()
 	}

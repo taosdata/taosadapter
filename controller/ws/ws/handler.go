@@ -31,7 +31,7 @@ type messageHandler struct {
 	once         sync.Once
 	wait         sync.WaitGroup
 	dropUserChan chan struct{}
-	sync.RWMutex
+	mutex        sync.RWMutex
 
 	queryResults *QueryResultHolder // ws query
 	stmts        *StmtHolder        // stmt bind message
@@ -46,9 +46,11 @@ type messageHandler struct {
 	appName               string
 	whitelistChangeHandle cgo.Handle
 	dropUserHandle        cgo.Handle
+	cloudTokenExists      bool
 }
 
 func newHandler(session *melody.Session) *messageHandler {
+	cloudTokenExists := session.Request.URL.Query().Has("token")
 	logger := wstool.GetLogger(session)
 	ipAddr := iptool.GetRealIP(session.Request)
 	port, _ := iptool.GetRealPort(session.Request) // ignore error, this port is for sql recording
@@ -67,60 +69,11 @@ func newHandler(session *melody.Session) *messageHandler {
 		ipStr:                 ipAddr.String(),
 		logger:                logger,
 		port:                  port,
+		cloudTokenExists:      cloudTokenExists,
 	}
 }
 
-func (h *messageHandler) waitSignal(logger *logrus.Entry) {
-	defer func() {
-		logger.Trace("exit wait signal")
-		tool.PutRegisterChangeWhiteListHandle(h.whitelistChangeHandle)
-		tool.PutRegisterDropUserHandle(h.dropUserHandle)
-	}()
-	for {
-		select {
-		case <-h.dropUserChan:
-			logger.Trace("get drop user signal")
-			isDebug := log.IsDebug()
-			h.lock(logger, isDebug)
-			if h.isClosed() {
-				logger.Trace("server closed")
-				h.Unlock()
-				return
-			}
-			logger.Trace("user dropped, close connection")
-			h.signalExit(logger, isDebug)
-			return
-		case <-h.whitelistChangeChan:
-			logger.Trace("get whitelist change signal")
-			isDebug := log.IsDebug()
-			h.lock(logger, isDebug)
-			if h.isClosed() {
-				logger.Trace("server closed")
-				h.Unlock()
-				return
-			}
-			logger.Trace("get whitelist")
-			whitelist, err := tool.GetWhitelist(h.conn, logger, isDebug)
-			if err != nil {
-				logger.Errorf("get whitelist error, close connection, err:%s", err)
-				h.signalExit(logger, isDebug)
-				return
-			}
-			logger.Tracef("check whitelist, ip:%s, whitelist:%s", h.ipStr, tool.IpNetSliceToString(whitelist))
-			valid := tool.CheckWhitelist(whitelist, h.ip)
-			if !valid {
-				logger.Errorf("ip not in whitelist! close connection, ip:%s, whitelist:%s", h.ipStr, tool.IpNetSliceToString(whitelist))
-				h.signalExit(logger, isDebug)
-				return
-			}
-			h.Unlock()
-		case <-h.exit:
-			return
-		}
-	}
-}
-
-func (h *messageHandler) isClosed() bool {
+func (h *messageHandler) IsClosed() bool {
 	return atomic.LoadUint32(&h.closed) == 1
 }
 
@@ -128,7 +81,7 @@ func (h *messageHandler) setClosed() {
 	atomic.StoreUint32(&h.closed, 1)
 }
 
-func (h *messageHandler) signalExit(logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) UnlockAndExit(logger *logrus.Entry, isDebug bool) {
 	logger.Trace("close session")
 	s := log.GetLogNow(isDebug)
 	_ = h.session.Close()
@@ -140,18 +93,22 @@ func (h *messageHandler) signalExit(logger *logrus.Entry, isDebug bool) {
 	logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
 }
 
-func (h *messageHandler) lock(logger *logrus.Entry, isDebug bool) {
+func (h *messageHandler) Lock(logger *logrus.Entry, isDebug bool) {
 	logger.Trace("get handler lock")
 	s := log.GetLogNow(isDebug)
-	h.Lock()
+	h.mutex.Lock()
 	logger.Debugf("get handler lock cost:%s", log.GetLogDuration(isDebug, s))
 }
 
+func (h *messageHandler) Unlock() {
+	h.mutex.Unlock()
+}
+
 func (h *messageHandler) Close() {
-	h.Lock()
+	h.Lock(h.logger, log.IsDebug())
 	defer h.Unlock()
 
-	if h.isClosed() {
+	if h.IsClosed() {
 		h.logger.Trace("server closed")
 		return
 	}
@@ -196,7 +153,6 @@ func (h *messageHandler) stop() {
 
 func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
-	h.logger.Debugf("get ws message data:%s", data)
 	var request Request
 	err := json.Unmarshal(data, &request)
 	if err != nil {
@@ -207,8 +163,12 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 	action := request.Action
 	if request.Action == "" {
 		reqID := getReqID(request.Args)
+		h.logger.Errorf("get reqID:%x, req:%s, err:%s", reqID, data, err)
 		commonErrorResponse(ctx, session, h.logger, "", reqID, 0xffff, "request no action")
 		return
+	}
+	if request.Action != Connect {
+		h.logger.Debugf("get ws message data:%s", data)
 	}
 
 	// no need connection actions
@@ -244,6 +204,7 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 			commonErrorResponse(ctx, session, h.logger, Connect, reqID, 0xffff, "unmarshal connect request error")
 			return
 		}
+		h.logger.Debugf("get ws message, connect action:%s", &req)
 		innerReqID, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.connect(ctx, session, action, req, innerReqID, logger, log.IsDebug())
 		return
@@ -573,6 +534,18 @@ func (h *messageHandler) handleMessage(session *melody.Session, data []byte) {
 		}
 		_, logger := h.getOrGenerateReqID(req.ReqID, action)
 		h.optionsConnection(ctx, session, action, req, logger, log.IsDebug())
+	case GetConnectionInfo:
+		action = GetConnectionInfo
+		var req getConnectionInfoRequest
+		if err := json.Unmarshal(request.Args, &req); err != nil {
+			h.logger.Errorf("unmarshal get connection info request error, request:%s, err:%s", request.Args, err)
+			reqID := getReqID(request.Args)
+			commonErrorResponse(ctx, session, h.logger, action, reqID, 0xffff, "unmarshal get connection info request error")
+			return
+		}
+		_, logger := h.getOrGenerateReqID(req.ReqID, action)
+		h.getConnectionInfo(ctx, session, action, req, logger, log.IsDebug())
+		return
 	default:
 		h.logger.Errorf("unknown action %s", action)
 		reqID := getReqID(request.Args)

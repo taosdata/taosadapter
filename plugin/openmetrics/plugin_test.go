@@ -22,12 +22,12 @@ import (
 	"github.com/influxdata/telegraf/plugins/parsers/openmetrics"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
-	"github.com/taosdata/taosadapter/v3/driver/common/parser"
-	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -154,7 +154,7 @@ func TestMain(m *testing.M) {
 	config.Init()
 	log.ConfigLog()
 	db.PrepareConnection()
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func TestOpenMetrics(t *testing.T) {
@@ -199,6 +199,7 @@ func TestOpenMetrics(t *testing.T) {
 	for _, s := range dbs {
 		err = exec(conn, fmt.Sprintf("create database if not exists %s precision 'ns'", s))
 		assert.NoError(t, err)
+		assert.NoError(t, testtools.EnsureDBCreated(s))
 	}
 	defer func() {
 		for _, s := range dbs {
@@ -213,12 +214,17 @@ func TestOpenMetrics(t *testing.T) {
 	assert.NoError(t, err)
 	err = openMetrics.Start()
 	assert.NoError(t, err)
-	time.Sleep(time.Second * 3)
-
+	var values [][]driver.Value
 	// open_metrics
 	testMetricsDBs := []string{
 		"open_metrics",
 		"open_metrics_tls",
+	}
+	for _, metricsDB := range testMetricsDBs {
+		assert.Eventually(t, func() bool {
+			values, err = query(conn, fmt.Sprintf("select * from information_schema.ins_tables where db_name='%s' and stable_name='test_metric'", metricsDB))
+			return err == nil && len(values) == 1
+		}, 10*time.Second, 500*time.Millisecond)
 	}
 	for i := 0; i < len(testMetricsDBs); i++ {
 		dbName := testMetricsDBs[i]
@@ -249,6 +255,12 @@ func TestOpenMetrics(t *testing.T) {
 		"open_metrics_prometheus",
 		"open_metrics_tls_prometheus",
 	}
+	for _, prometheusDB := range testPrometheusDBs {
+		assert.Eventually(t, func() bool {
+			values, err = query(conn, fmt.Sprintf("select * from information_schema.ins_tables where db_name='%s' and stable_name='test_metric'", prometheusDB))
+			return err == nil && len(values) == 1
+		}, 10*time.Second, 500*time.Millisecond)
+	}
 	for i := 0; i < len(testPrometheusDBs); i++ {
 		dbName := testPrometheusDBs[i]
 		sql := fmt.Sprintf("select last(`value`) as `value` from %s.test_metric", dbName)
@@ -272,9 +284,12 @@ func TestOpenMetrics(t *testing.T) {
 		assert.Equal(t, float64(7), values[0][5])
 		assert.Equal(t, float64(0.0018183950000000002), values[0][6])
 	}
-
+	assert.Eventually(t, func() bool {
+		values, err = query(conn, "select * from information_schema.ins_tables where db_name='open_metrics_proto' and stable_name='test_gauge'")
+		return err == nil && len(values) == 1
+	}, 10*time.Second, 500*time.Millisecond)
 	// protobuf
-	values, err := query(conn, "select last(`gauge`) as `gauge` from open_metrics_proto.test_gauge;")
+	values, err = query(conn, "select last(`gauge`) as `gauge` from open_metrics_proto.test_gauge;")
 	assert.NoError(t, err)
 	assert.Equal(t, float64(1234567), values[0][0])
 
@@ -356,8 +371,10 @@ func TestOpenMetricsMTls(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists open_metrics_mtls_basicauth precision 'ns'")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("open_metrics_mtls_basicauth"))
 	err = exec(conn, "create database if not exists open_metrics_mtls_bearertoken precision 'ns'")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("open_metrics_mtls_bearertoken"))
 	openMetrics := &OpenMetrics{}
 	assert.Equal(t, "openmetrics", openMetrics.String())
 	assert.Equal(t, "v1", openMetrics.Version())
@@ -365,8 +382,17 @@ func TestOpenMetricsMTls(t *testing.T) {
 	assert.NoError(t, err)
 	err = openMetrics.Start()
 	assert.NoError(t, err)
-	time.Sleep(time.Second * 3)
-	values, err := query(conn, "select last(`gauge`) as `gauge` from open_metrics_mtls_basicauth.test_metric;")
+	var values [][]driver.Value
+	assert.Eventually(t, func() bool {
+		values, err = query(conn, "select * from information_schema.ins_tables where db_name='open_metrics_mtls_basicauth' and stable_name='test_metric'")
+		return err == nil && len(values) == 1
+	}, 10*time.Second, 500*time.Millisecond)
+	assert.Eventually(t, func() bool {
+		values, err = query(conn, "select * from information_schema.ins_tables where db_name='open_metrics_mtls_bearertoken' and stable_name='test_metric'")
+		return err == nil && len(values) == 1
+	}, 10*time.Second, 500*time.Millisecond)
+	require.Equal(t, 1, len(values))
+	values, err = query(conn, "select last(`gauge`) as `gauge` from open_metrics_mtls_basicauth.test_metric;")
 	assert.NoError(t, err)
 	assert.Equal(t, float64(1), values[0][0])
 	values, err = query(conn, "select last(`gauge`) as `gauge` from open_metrics_mtls_bearertoken.test_metric;")
@@ -470,45 +496,13 @@ func TestOpenMetricsDisabled(t *testing.T) {
 }
 
 func exec(conn unsafe.Pointer, sql string) error {
-	res := wrapper.TaosQuery(conn, sql)
-	defer wrapper.TaosFreeResult(res)
-	code := wrapper.TaosError(res)
-	if code != 0 {
-		errStr := wrapper.TaosErrorStr(res)
-		return errors.NewError(code, errStr)
-	}
-	return nil
+	logger := log.GetLogger("test")
+	logger.Debugf("exec sql %s", sql)
+	return testtools.Exec(conn, sql)
 }
 
 func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
-	res := wrapper.TaosQuery(conn, sql)
-	defer wrapper.TaosFreeResult(res)
-	code := wrapper.TaosError(res)
-	if code != 0 {
-		errStr := wrapper.TaosErrorStr(res)
-		return nil, errors.NewError(code, errStr)
-	}
-	fileCount := wrapper.TaosNumFields(res)
-	rh, err := wrapper.ReadColumn(res, fileCount)
-	if err != nil {
-		return nil, err
-	}
-	precision := wrapper.TaosResultPrecision(res)
-	var result [][]driver.Value
-	for {
-		columns, errCode, block := wrapper.TaosFetchRawBlock(res)
-		if errCode != 0 {
-			errStr := wrapper.TaosErrorStr(res)
-			return nil, errors.NewError(errCode, errStr)
-		}
-		if columns == 0 {
-			break
-		}
-		r, err := parser.ReadBlock(block, columns, rh.ColTypes, precision)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, r...)
-	}
-	return result, nil
+	logger := log.GetLogger("test")
+	logger.Debugf("query sql %s", sql)
+	return testtools.Query(conn, sql)
 }

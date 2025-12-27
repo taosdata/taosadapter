@@ -53,16 +53,16 @@ func checkTDengineConnection(c *gin.Context) {
 	defer func() {
 		syncinterface.TaosClose(conn, logger, log.IsDebug())
 	}()
-	whitelist, err := tool.GetWhitelist(conn, logger, log.IsDebug())
+	allowlist, blocklist, err := tool.GetWhitelist(conn, logger, log.IsDebug())
 	if err != nil {
 		logger.Errorf("get whitelist failed, err: %s", err)
 		taosErr := err.(*taoserrors.TaosError)
 		InternalErrorResponse(c, logger, int(taosErr.Code), taosErr.ErrStr)
 		return
 	}
-	valid := tool.CheckWhitelist(whitelist, iptool.GetRealIP(c.Request))
+	valid := tool.CheckWhitelist(allowlist, blocklist, iptool.GetRealIP(c.Request))
 	if !valid {
-		logger.Errorf("whitelist prohibits current IP access, ip:%s, whitelist:%s", iptool.GetRealIP(c.Request), tool.IpNetSliceToString(whitelist))
+		logger.Errorf("whitelist prohibits current IP access, ip:%s, allowlist:%s, blocklist:%s", iptool.GetRealIP(c.Request), tool.IpNetSliceToString(allowlist), tool.IpNetSliceToString(blocklist))
 		ForbiddenResponse(c, logger, commonpool.ErrWhitelistForbidden.Error())
 		return
 	}

@@ -30,6 +30,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 	"github.com/taosdata/taosadapter/v3/tools/limiter"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 func TestWsQuery(t *testing.T) {
@@ -39,6 +40,7 @@ func TestWsQuery(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful("create database if not exists test_ws_query", "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_query"))
 	code, message = doRestful(
 		"create table if not exists stb1 (ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100),v16 decimal(20,4)) tags (info json)",
 		"test_ws_query")
@@ -530,6 +532,7 @@ func TestWsBinaryQuery(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful(fmt.Sprintf("create database if not exists %s", dbName), "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated(dbName))
 	code, message = doRestful(
 		"create table if not exists stb1 (ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100),v16 decimal(20,4)) tags (info json)",
 		dbName)

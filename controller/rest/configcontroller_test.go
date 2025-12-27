@@ -293,6 +293,18 @@ func TestRecordSql(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 
+	assert.NoError(t, testtools.EnsureDBCreated("test_record_sql"))
+
+	defer func() {
+		w = httptest.NewRecorder()
+		body = strings.NewReader("drop database if exists test_record_sql")
+		req, _ = http.NewRequest(http.MethodPost, "/rest/sql?app=testapp", body)
+		req.RemoteAddr = sqlRequestAddr
+		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+		router.ServeHTTP(w, req)
+		assert.Equal(t, 200, w.Code)
+	}()
+
 	// wrong sql
 	w = httptest.NewRecorder()
 	body = strings.NewReader("xxxx")

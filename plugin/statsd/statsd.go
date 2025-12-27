@@ -51,6 +51,7 @@ func (n *Number) UnmarshalTOML(b []byte) error {
 type Statsd struct {
 	User     string
 	Password string
+	Token    string
 	// Protocol used on listener - udp or tcp
 	Protocol string `toml:"protocol"`
 
@@ -387,9 +388,9 @@ func (s *Statsd) tcpListen(listener *net.TCPListener) error {
 			if conn.RemoteAddr() == nil {
 				s.Log.Errorf("RemoteAddr is nil")
 			}
-			authed, valid, poolExists := commonpool.VerifyClientIP(s.User, s.Password, conn.RemoteAddr().(*net.TCPAddr).IP)
+			authed, valid, poolExists := commonpool.VerifyClientIP(s.User, s.Password, s.Token, conn.RemoteAddr().(*net.TCPAddr).IP)
 			if !poolExists {
-				taosConn, err := commonpool.GetConnection(s.User, s.Password, conn.RemoteAddr().(*net.TCPAddr).IP)
+				taosConn, err := commonpool.GetConnection(s.User, s.Password, s.Token, conn.RemoteAddr().(*net.TCPAddr).IP)
 				if err != nil {
 					s.Log.Errorf("GetConnection error: %v", err)
 					_ = conn.Close()
@@ -468,9 +469,9 @@ func (s *Statsd) udpListen(conn *net.UDPConn) error {
 				s.Log.Errorf("RemoteAddr is nil")
 				continue
 			}
-			authed, valid, poolExists := commonpool.VerifyClientIP(s.User, s.Password, addr.IP)
+			authed, valid, poolExists := commonpool.VerifyClientIP(s.User, s.Password, s.Token, addr.IP)
 			if !poolExists {
-				taosConn, err := commonpool.GetConnection(s.User, s.Password, addr.IP)
+				taosConn, err := commonpool.GetConnection(s.User, s.Password, s.Token, addr.IP)
 				if err != nil {
 					s.Log.Errorf("GetConnection error: %v", err)
 					_ = conn.Close()
@@ -926,7 +927,7 @@ func (s *Statsd) handler(conn *net.TCPConn, id string) {
 			b.Write(scanner.Bytes())
 			//nolint:errcheck,revive
 			b.WriteByte('\n')
-			taosConn, err := commonpool.GetConnection(s.User, s.Password, ip)
+			taosConn, err := commonpool.GetConnection(s.User, s.Password, s.Token, ip)
 			if err != nil {
 				if errors.Is(err, commonpool.ErrWhitelistForbidden) {
 					s.Log.Errorf("Whitelist forbidden for %s", ip)

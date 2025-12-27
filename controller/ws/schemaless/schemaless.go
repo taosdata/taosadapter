@@ -3,8 +3,11 @@ package schemaless
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -42,24 +45,26 @@ func NewSchemalessController() *SchemalessController {
 
 	schemaless.HandleMessage(func(session *melody.Session, bytes []byte) {
 		t := session.MustGet(taosSchemalessKey).(*TaosSchemaless)
-		if t.closed {
+		if t.IsClosed() {
 			return
 		}
 		t.wg.Add(1)
 		go func() {
 			defer t.wg.Done()
-			if t.closed {
+			if t.IsClosed() {
 				return
 			}
 			ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
 			logger := wstool.GetLogger(session)
-			logger.Debugf("get ws message data:%s", bytes)
 			var action wstool.WSAction
 			err := json.Unmarshal(bytes, &action)
 			if err != nil {
 				logger.Errorf("unmarshal ws request error, err:%s", err)
 				wstool.WSError(ctx, session, logger, err, action.Action, 0)
 				return
+			}
+			if action.Action != SchemalessConn {
+				logger.Debugf("get ws message data:%s", bytes)
 			}
 			switch action.Action {
 			case wstool.ClientVersion:
@@ -71,6 +76,7 @@ func NewSchemalessController() *SchemalessController {
 					wstool.WSError(ctx, session, logger, err, SchemalessConn, req.ReqID)
 					return
 				}
+				logger.Debugf("get ws message, connect action:%s", &req)
 				t.connect(ctx, session, req)
 			case SchemalessWrite:
 				var req schemalessWriteReq
@@ -90,32 +96,29 @@ func NewSchemalessController() *SchemalessController {
 	schemaless.HandleClose(func(session *melody.Session, i int, s string) error {
 		logger := wstool.GetLogger(session)
 		logger.Debugf("ws close, code:%d, msg %s", i, s)
-		t, exist := session.Get(taosSchemalessKey)
-		if exist && t != nil {
-			t.(*TaosSchemaless).Close(logger)
-		}
+		CloseWs(session)
 		return nil
 	})
 
 	schemaless.HandleError(func(session *melody.Session, err error) {
 		wstool.LogWSError(session, err)
-		logger := wstool.GetLogger(session)
-		t, exist := session.Get(taosSchemalessKey)
-		if exist && t != nil {
-			t.(*TaosSchemaless).Close(logger)
-		}
+		CloseWs(session)
 	})
 
 	schemaless.HandleDisconnect(func(session *melody.Session) {
 		monitor.RecordWSSMLDisconnect()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws disconnect")
-		t, exist := session.Get(taosSchemalessKey)
-		if exist && t != nil {
-			t.(*TaosSchemaless).Close(logger)
-		}
+		CloseWs(session)
 	})
 	return &SchemalessController{schemaless: schemaless}
+}
+
+func CloseWs(session *melody.Session) {
+	t, exist := session.Get(taosSchemalessKey)
+	if exist && t != nil {
+		t.(*TaosSchemaless).Close()
+	}
 }
 
 func (s *SchemalessController) Init(ctl gin.IRouter) {
@@ -130,7 +133,7 @@ func (s *SchemalessController) Init(ctl gin.IRouter) {
 type TaosSchemaless struct {
 	conn                  unsafe.Pointer
 	logger                *logrus.Entry
-	closed                bool
+	closed                uint32
 	exit                  chan struct{}
 	whitelistChangeChan   chan int64
 	dropUserChan          chan struct{}
@@ -140,7 +143,8 @@ type TaosSchemaless struct {
 	wg                    sync.WaitGroup
 	whitelistChangeHandle cgo.Handle
 	dropUserHandle        cgo.Handle
-	sync.Mutex
+	mutex                 sync.Mutex
+	once                  sync.Once
 }
 
 func NewTaosSchemaless(session *melody.Session) *TaosSchemaless {
@@ -161,103 +165,70 @@ func NewTaosSchemaless(session *melody.Session) *TaosSchemaless {
 	}
 }
 
-func (t *TaosSchemaless) waitSignal(logger *logrus.Entry) {
-	defer func() {
-		logger.Trace("exit wait signal")
-		tool.PutRegisterChangeWhiteListHandle(t.whitelistChangeHandle)
-		tool.PutRegisterDropUserHandle(t.dropUserHandle)
-	}()
-	for {
-		select {
-		case <-t.dropUserChan:
-			logger.Trace("get drop user signal")
-			isDebug := log.IsDebug()
-			t.lock(logger, isDebug)
-			if t.closed {
-				logger.Trace("server closed")
-				t.Unlock()
-				return
-			}
-			logger.Trace("user dropped! close connection!")
-			t.signalExit(logger, isDebug)
-			return
-		case <-t.whitelistChangeChan:
-			logger.Trace("get whitelist change signal")
-			isDebug := log.IsDebug()
-			t.lock(logger, isDebug)
-			if t.closed {
-				logger.Trace("server closed")
-				t.Unlock()
-				return
-			}
-			logger.Trace("get whitelist")
-			s := log.GetLogNow(isDebug)
-			whitelist, err := tool.GetWhitelist(t.conn, logger, isDebug)
-			logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
-			if err != nil {
-				logger.Errorf("get whitelist error, close connection, err:%s", err)
-				wstool.GetLogger(t.session).WithField("ip", t.ipStr).WithError(err).Errorln("get whitelist error! close connection!")
-				t.signalExit(logger, isDebug)
-				return
-			}
-			logger.Tracef("check whitelist, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
-			valid := tool.CheckWhitelist(whitelist, t.ip)
-			if !valid {
-				logger.Errorf("ip not in whitelist, close connection, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
-				t.signalExit(logger, isDebug)
-				return
-			}
-			t.Unlock()
-		case <-t.exit:
-			return
-		}
-	}
-}
-
-func (t *TaosSchemaless) signalExit(logger *logrus.Entry, isDebug bool) {
+func (t *TaosSchemaless) UnlockAndExit(logger *logrus.Entry, isDebug bool) {
 	logger.Trace("close session")
 	s := log.GetLogNow(isDebug)
 	_ = t.session.Close()
 	logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
 	t.Unlock()
 	s = log.GetLogNow(isDebug)
-	t.Close(logger)
+	t.Close()
 	logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
 }
 
-func (t *TaosSchemaless) lock(logger *logrus.Entry, isDebug bool) {
+func (t *TaosSchemaless) Lock(logger *logrus.Entry, isDebug bool) {
 	s := log.GetLogNow(isDebug)
 	logger.Trace("get handler lock")
-	t.Lock()
+	t.mutex.Lock()
 	logger.Debugf("get handler lock cost:%s", log.GetLogDuration(isDebug, s))
 }
 
-func (t *TaosSchemaless) Close(logger *logrus.Entry) {
-	t.lock(logger, log.IsDebug())
+func (t *TaosSchemaless) Unlock() {
+	t.mutex.Unlock()
+}
+
+func (t *TaosSchemaless) IsClosed() bool {
+	return atomic.LoadUint32(&t.closed) == 1
+}
+
+func (t *TaosSchemaless) setClosed() {
+	atomic.StoreUint32(&t.closed, 1)
+}
+
+func (t *TaosSchemaless) Close() {
+	t.Lock(t.logger, log.IsDebug())
 	defer t.Unlock()
-	if t.closed {
+	if t.IsClosed() {
 		return
 	}
-	logger.Trace("schemaless close")
-	t.closed = true
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	done := make(chan struct{})
-	go func() {
-		t.wg.Wait()
-		close(done)
-	}()
-	select {
-	case <-ctx.Done():
-		logger.Error("wait for all goroutines to exit timeout")
-	case <-done:
-		logger.Debug("all goroutines exit")
-	}
-	if t.conn != nil {
-		syncinterface.TaosClose(t.conn, logger, log.IsDebug())
-		t.conn = nil
-	}
-	close(t.exit)
+	t.logger.Trace("schemaless close")
+	t.setClosed()
+	t.stop()
+}
+
+func (t *TaosSchemaless) stop() {
+	t.once.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		done := make(chan struct{})
+		go func() {
+			t.wg.Wait()
+			close(done)
+		}()
+		select {
+		case <-ctx.Done():
+			t.logger.Warn("wait stop over 1 minute")
+			<-done
+		case <-done:
+			t.logger.Debug("all goroutines exit")
+		}
+		t.logger.Debug("wait stop done")
+		if t.conn != nil {
+			syncinterface.TaosClose(t.conn, t.logger, log.IsDebug())
+			t.conn = nil
+		}
+		close(t.exit)
+	})
 }
 
 type schemalessConnReq struct {
@@ -265,6 +236,19 @@ type schemalessConnReq struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	DB       string `json:"db"`
+}
+
+func (r *schemalessConnReq) String() string {
+	builder := &strings.Builder{}
+
+	builder.WriteString("{")
+	_, _ = fmt.Fprintf(builder, "req_id: %d,", r.ReqID)
+	_, _ = fmt.Fprintf(builder, "user: %q,", r.User)
+	builder.WriteString("password: \"[HIDDEN]\",")
+	_, _ = fmt.Fprintf(builder, "db: %q,", r.DB)
+	builder.WriteString("}")
+
+	return builder.String()
 }
 
 type schemalessConnResp struct {
@@ -280,9 +264,9 @@ func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, r
 	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
 	logger.Tracef("connect request:%+v", req)
 	isDebug := log.IsDebug()
-	t.lock(logger, isDebug)
+	t.Lock(logger, isDebug)
 	defer t.Unlock()
-	if t.closed {
+	if t.IsClosed() {
 		logger.Trace("server closed")
 		return
 	}
@@ -298,19 +282,21 @@ func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, r
 		return
 	}
 	s := log.GetLogNow(isDebug)
-	whitelist, err := tool.GetWhitelist(conn, logger, isDebug)
+	allowlist, blocklist, err := tool.GetWhitelist(conn, logger, isDebug)
 	logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.Errorf("get whitelist error, close connection, err:%s", err)
-		syncinterface.TaosClose(conn, t.logger, isDebug)
+		syncinterface.TaosClose(conn, logger, isDebug)
 		wstool.WSError(ctx, session, logger, err, action, req.ReqID)
 		return
 	}
-	logger.Tracef("check whitelist, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
-	valid := tool.CheckWhitelist(whitelist, t.ip)
+	allowlistStr := tool.IpNetSliceToString(allowlist)
+	blocklistStr := tool.IpNetSliceToString(blocklist)
+	logger.Tracef("check whitelist, ip: %s, allowlist: %s, blocklist: %s", t.ipStr, allowlistStr, blocklistStr)
+	valid := tool.CheckWhitelist(allowlist, blocklist, t.ip)
 	if !valid {
-		logger.Errorf("ip not in whitelist, close connection, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
-		syncinterface.TaosClose(conn, t.logger, isDebug)
+		logger.Errorf("ip not in whitelist, ip: %s, allowlist: %s, blocklist: %s", t.ipStr, allowlistStr, blocklistStr)
+		syncinterface.TaosClose(conn, logger, isDebug)
 		wstool.WSErrorMsg(ctx, session, logger, 0xffff, "whitelist prohibits current IP access", action, req.ReqID)
 		return
 	}
@@ -332,7 +318,7 @@ func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, r
 	}
 	t.conn = conn
 	logger.Trace("start to wait signal")
-	go t.waitSignal(t.logger)
+	go wstool.WaitSignal(t, conn, t.ip, t.ipStr, t.whitelistChangeHandle, t.dropUserHandle, t.whitelistChangeChan, t.dropUserChan, t.exit, t.logger)
 	wstool.WSWriteJson(session, logger, &schemalessConnResp{
 		Action: action,
 		ReqID:  req.ReqID,

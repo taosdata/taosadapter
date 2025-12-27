@@ -16,9 +16,9 @@ import (
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
-	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 // @author: xftan
@@ -41,6 +41,7 @@ func TestCollectd(t *testing.T) {
 	assert.NoError(t, err)
 	err = exec(conn, "create database if not exists collectd")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("collectd"))
 	//nolint:staticcheck
 	rand.Seed(time.Now().UnixNano())
 	p := &Plugin{}
@@ -89,7 +90,12 @@ func TestCollectd(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	time.Sleep(3 * time.Second)
+
+	var values [][]driver.Value
+	assert.Eventually(t, func() bool {
+		values, err = query(conn, "select * from information_schema.ins_tables where db_name='collectd' and stable_name='cpu_value'")
+		return err == nil && len(values) == 1
+	}, 10*time.Second, 500*time.Millisecond)
 
 	defer func() {
 		r := syncinterface.TaosQuery(conn, "drop database if exists collectd", logger, isDebug)
@@ -100,7 +106,7 @@ func TestCollectd(t *testing.T) {
 		}
 		syncinterface.TaosSyncQueryFree(r, logger, isDebug)
 	}()
-	values, err := query(conn, "select last(`value`) from collectd.`cpu_value`")
+	values, err = query(conn, "select last(`value`) from collectd.`cpu_value`")
 	assert.NoError(t, err)
 	if int32(values[0][0].(float64)) != number {
 		t.Errorf("got %f expect %d", values[0], number)
@@ -121,48 +127,12 @@ func TestCollectd(t *testing.T) {
 
 func exec(conn unsafe.Pointer, sql string) error {
 	logger := log.GetLogger("test")
-	isDebug := log.IsDebug()
-	res := syncinterface.TaosQuery(conn, sql, logger, isDebug)
-	defer syncinterface.TaosSyncQueryFree(res, logger, isDebug)
-	code := syncinterface.TaosError(res, logger, isDebug)
-	if code != 0 {
-		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
-		return errors.NewError(code, errStr)
-	}
-	return nil
+	logger.Debugf("exec sql %s", sql)
+	return testtools.Exec(conn, sql)
 }
 
 func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
 	logger := log.GetLogger("test")
-	isDebug := log.IsDebug()
-	res := syncinterface.TaosQuery(conn, sql, logger, isDebug)
-	defer syncinterface.TaosSyncQueryFree(res, logger, isDebug)
-	code := syncinterface.TaosError(res, logger, isDebug)
-	if code != 0 {
-		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
-		return nil, errors.NewError(code, errStr)
-	}
-	fileCount := syncinterface.TaosNumFields(res, logger, isDebug)
-	rh, err := syncinterface.ReadColumn(res, fileCount, logger, isDebug)
-	if err != nil {
-		return nil, err
-	}
-	precision := syncinterface.TaosResultPrecision(res, logger, isDebug)
-	var result [][]driver.Value
-	for {
-		columns, errCode, block := syncinterface.TaosFetchRawBlock(res, logger, isDebug)
-		if errCode != 0 {
-			errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
-			return nil, errors.NewError(errCode, errStr)
-		}
-		if columns == 0 {
-			break
-		}
-		r, err := parser.ReadBlock(block, columns, rh.ColTypes, precision)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, r...)
-	}
-	return result, nil
+	logger.Debugf("query sql %s", sql)
+	return testtools.Query(conn, sql)
 }

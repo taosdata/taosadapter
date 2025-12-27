@@ -73,7 +73,7 @@ func (p *Plugin) Version() string {
 
 func (p *Plugin) Read(c *gin.Context) {
 	db := c.Param("db")
-	user, password, err := plugin.GetAuth(c)
+	user, password, token, err := plugin.GetAuth(c)
 	if err != nil {
 		c.String(http.StatusUnauthorized, err.Error())
 		return
@@ -99,7 +99,7 @@ func (p *Plugin) Read(c *gin.Context) {
 	}
 	logger.Debug("read protobuf unmarshal cost:", time.Since(start))
 	start = time.Now()
-	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
+	taosConn, err := commonpool.GetConnection(user, password, token, iptool.GetRealIP(c.Request))
 	if err != nil {
 		logger.WithError(err).Error("connect server error")
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {
@@ -154,7 +154,7 @@ func (p *Plugin) Write(c *gin.Context) {
 			c.String(http.StatusBadRequest, err.Error())
 		}
 	}
-	user, password, err := plugin.GetAuth(c)
+	user, password, token, err := plugin.GetAuth(c)
 	if err != nil {
 		c.String(http.StatusUnauthorized, err.Error())
 		return
@@ -190,7 +190,7 @@ func (p *Plugin) Write(c *gin.Context) {
 		return
 	}
 	start = time.Now()
-	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
+	taosConn, err := commonpool.GetConnection(user, password, token, iptool.GetRealIP(c.Request))
 	if err != nil {
 		logger.WithError(err).Error("connect server error")
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {

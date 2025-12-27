@@ -17,6 +17,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	stmtCommon "github.com/taosdata/taosadapter/v3/driver/common/stmt"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 func TestWsStmt2(t *testing.T) {
@@ -26,6 +27,7 @@ func TestWsStmt2(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful("create database if not exists test_ws_stmt2_ws precision 'ns'", "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_stmt2_ws"))
 
 	defer doRestful("drop database if exists test_ws_stmt2_ws", "")
 
@@ -247,7 +249,7 @@ func TestStmt2Prepare(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful("create database if not exists test_ws_stmt2_prepare_ws precision 'ns'", "")
 	assert.Equal(t, 0, code, message)
-
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_stmt2_prepare_ws"))
 	defer doRestful("drop database if exists test_ws_stmt2_prepare_ws", "")
 
 	code, message = doRestful(
@@ -391,6 +393,7 @@ func Stmt2Query(t *testing.T, db string, prepareDataSql []string) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful(fmt.Sprintf("create database if not exists %s", db), "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated(db))
 
 	defer doRestful(fmt.Sprintf("drop database if exists %s", db), "")
 
@@ -541,8 +544,12 @@ func TestStmt2BindWithStbFields(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful("create database if not exists test_ws_stmt2_getstbfields_ws precision 'ns'", "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_stmt2_getstbfields_ws"))
 
-	//defer doRestful("drop database if exists test_ws_stmt2_getstbfields_ws", "")
+	defer func() {
+		code, message = doRestful("drop database if exists test_ws_stmt2_getstbfields_ws", "")
+		assert.Equal(t, 0, code, message)
+	}()
 
 	code, message = doRestful(
 		"create table if not exists stb (ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100)) tags (info json)",

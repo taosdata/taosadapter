@@ -22,6 +22,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/types"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 func Test_parseRowBlockInfo(t *testing.T) {
@@ -108,6 +109,7 @@ func TestWsStmt(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful("create database if not exists test_ws_stmt_ws precision 'ns'", "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_stmt_ws"))
 
 	defer doRestful("drop database if exists test_ws_stmt_ws", "")
 
@@ -625,7 +627,7 @@ func StmtQuery(t *testing.T, db string, prepareDataSql []string) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful(fmt.Sprintf("create database if not exists %s", db), "")
 	assert.Equal(t, 0, code, message)
-
+	assert.NoError(t, testtools.EnsureDBCreated(db))
 	defer doRestful(fmt.Sprintf("drop database if exists %s", db), "")
 
 	for _, sql := range prepareDataSql {
@@ -773,6 +775,7 @@ func TestStmtNumParams(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful(fmt.Sprintf("create database if not exists %s", db), "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated(db))
 	code, message = doRestful(fmt.Sprintf("create stable if not exists %s.meters (ts timestamp,current float,voltage int,phase float) tags (groupid int,location varchar(24))", db), "")
 	assert.Equal(t, 0, code, message)
 
@@ -842,6 +845,7 @@ func TestStmtGetParams(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful(fmt.Sprintf("create database if not exists %s", db), "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated(db))
 	code, message = doRestful(fmt.Sprintf("create stable if not exists %s.meters (ts timestamp,current float,voltage int,phase float) tags (groupid int,location varchar(24))", db), "")
 	assert.Equal(t, 0, code, message)
 

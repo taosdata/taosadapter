@@ -13,9 +13,8 @@ import (
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
-	"github.com/taosdata/taosadapter/v3/driver/common/parser"
-	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 var s = `
@@ -62,8 +61,14 @@ func TestNodeExporter_Gather(t *testing.T) {
 	defer func() {
 		syncinterface.TaosClose(conn, logger, isDebug)
 	}()
+	defer func() {
+		err = exec(conn, "drop database if exists node_exporter")
+		assert.NoError(t, err)
+	}()
 	err = exec(conn, "create database if not exists node_exporter precision 'ns'")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("node_exporter"))
+
 	err = exec(conn, "use node_exporter")
 	assert.NoError(t, err)
 	n := NodeExporter{}
@@ -71,8 +76,12 @@ func TestNodeExporter_Gather(t *testing.T) {
 	assert.NoError(t, err)
 	err = n.Start()
 	assert.NoError(t, err)
-	time.Sleep(time.Second * 2)
-	values, err := query(conn, "select last(`value`) as `value` from node_exporter.test_metric;")
+	var values [][]driver.Value
+	assert.Eventually(t, func() bool {
+		values, err = query(conn, "select * from information_schema.ins_tables where db_name='node_exporter' and stable_name='test_metric'")
+		return err == nil && len(values) == 1
+	}, 10*time.Second, 500*time.Millisecond)
+	values, err = query(conn, "select last(`value`) as `value` from node_exporter.test_metric;")
 	assert.NoError(t, err)
 	assert.Equal(t, float64(1), values[0][0])
 	err = n.Stop()
@@ -89,54 +98,16 @@ func TestNodeExporter_Gather(t *testing.T) {
 	if values[0][0].(int32) != 1000 {
 		t.Fatal("ttl miss")
 	}
-	err = exec(conn, "drop database if exists node_exporter")
-	assert.NoError(t, err)
 }
 
 func exec(conn unsafe.Pointer, sql string) error {
 	logger := log.GetLogger("test")
-	isDebug := log.IsDebug()
-	res := syncinterface.TaosQuery(conn, sql, logger, isDebug)
-	defer syncinterface.TaosSyncQueryFree(res, logger, isDebug)
-	code := syncinterface.TaosError(res, logger, isDebug)
-	if code != 0 {
-		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
-		return errors.NewError(code, errStr)
-	}
-	return nil
+	logger.Debugf("exec sql %s", sql)
+	return testtools.Exec(conn, sql)
 }
 
 func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
 	logger := log.GetLogger("test")
-	isDebug := log.IsDebug()
-	res := syncinterface.TaosQuery(conn, sql, logger, isDebug)
-	defer syncinterface.TaosSyncQueryFree(res, logger, isDebug)
-	code := syncinterface.TaosError(res, logger, isDebug)
-	if code != 0 {
-		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
-		return nil, errors.NewError(code, errStr)
-	}
-	fileCount := syncinterface.TaosNumFields(res, logger, isDebug)
-	rh, err := syncinterface.ReadColumn(res, fileCount, logger, isDebug)
-	if err != nil {
-		return nil, err
-	}
-	precision := syncinterface.TaosResultPrecision(res, logger, isDebug)
-	var result [][]driver.Value
-	for {
-		columns, errCode, block := syncinterface.TaosFetchRawBlock(res, logger, isDebug)
-		if errCode != 0 {
-			errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
-			return nil, errors.NewError(errCode, errStr)
-		}
-		if columns == 0 {
-			break
-		}
-		r, err := parser.ReadBlock(block, columns, rh.ColTypes, precision)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, r...)
-	}
-	return result, nil
+	logger.Debugf("query sql %s", sql)
+	return testtools.Query(conn, sql)
 }

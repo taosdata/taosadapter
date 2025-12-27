@@ -64,6 +64,7 @@ func TestMonitor(t *testing.T) {
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
+		assert.NoError(t, testtools.EnsureDBCreated("t1"))
 
 		w = httptest.NewRecorder()
 		req, _ = http.NewRequest(http.MethodGet, "/-/ping?action=query", body)
@@ -98,7 +99,7 @@ func TestMonitor(t *testing.T) {
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
-
+		assert.NoError(t, testtools.EnsureDBCreated("t1"))
 		w = httptest.NewRecorder()
 		req, _ = http.NewRequest(http.MethodGet, "/-/ping?action=query", body)
 		req.RemoteAddr = testtools.GetRandomRemoteAddr()
@@ -131,7 +132,7 @@ func TestMonitor(t *testing.T) {
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 503, w.Code)
-
+		assert.NoError(t, testtools.EnsureDBCreated("t1"))
 		w = httptest.NewRecorder()
 		req, _ = http.NewRequest(http.MethodGet, "/-/ping?action=query", body)
 		req.RemoteAddr = testtools.GetRandomRemoteAddr()
@@ -167,7 +168,7 @@ func TestMonitor(t *testing.T) {
 		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 		router.ServeHTTP(w, req)
 		assert.Equal(t, 200, w.Code)
-
+		assert.NoError(t, testtools.EnsureDBCreated("t1"))
 		w = httptest.NewRecorder()
 		req, _ = http.NewRequest(http.MethodGet, "/-/ping?action=query", body)
 		req.RemoteAddr = testtools.GetRandomRemoteAddr()

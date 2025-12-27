@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"os"
 	"sync/atomic"
 	"testing"
 
@@ -10,7 +11,7 @@ import (
 
 func TestMain(m *testing.M) {
 	config.Init()
-	m.Run()
+	os.Exit(m.Run())
 
 }
 func TestGetReqID(t *testing.T) {
