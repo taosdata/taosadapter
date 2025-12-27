@@ -67,9 +67,40 @@ func EnsureDBCreated(dbName string) error {
 			return err
 		}
 		if len(value) == 0 {
-			return nil
+			value, err = Query(conn, fmt.Sprintf(`select * from information_schema.ins_databases where name = '%s'`, dbName))
+			if err != nil {
+				return err
+			}
+			if len(value) > 0 {
+				return nil
+			}
 		}
 		time.Sleep(time.Millisecond * 500)
 	}
 	return fmt.Errorf("db %s not created after waiting", dbName)
+}
+
+func EnsureTokenCreated(token string) error {
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		return err
+	}
+	defer wrapper.TaosClose(conn)
+	for i := 0; i < 100; i++ {
+		value, err := Query(conn, `select * from performance_schema.perf_trans where oper = 'create-token'`)
+		if err != nil {
+			return err
+		}
+		if len(value) == 0 {
+			value, err := Query(conn, fmt.Sprintf(`select * from information_schema.ins_token where name = '%s'`, token))
+			if err != nil {
+				return err
+			}
+			if len(value) > 0 {
+				return nil
+			}
+		}
+		time.Sleep(time.Millisecond * 500)
+	}
+	return fmt.Errorf("token not created after waiting")
 }

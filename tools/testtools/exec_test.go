@@ -2,11 +2,13 @@ package testtools
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
+	"github.com/taosdata/taosadapter/v3/tools/testtools/testenv"
 )
 
 func TestExec(t *testing.T) {
@@ -113,5 +115,32 @@ func TestEnsureDBCreated(t *testing.T) {
 	require.NoError(t, err)
 	// clean up
 	err = Exec(conn, "DROP DATABASE IF EXISTS "+dbName)
+	require.NoError(t, err)
+}
+
+func TestEnsureTokenCreated(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("token test only for enterprise edition")
+		return
+	}
+	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
+	require.NoError(t, err)
+	defer func() {
+		wrapper.TaosClose(conn)
+	}()
+	tokenName := "test_ensure_token_created"
+	values, err := Query(conn, fmt.Sprintf("CREATE TOKEN %s from user root", tokenName))
+	require.NoError(t, err)
+	token := values[0][0].(string)
+	err = EnsureTokenCreated(tokenName)
+	require.NoError(t, err)
+	defer func() {
+		// clean up
+		err = Exec(conn, "DROP TOKEN "+tokenName)
+		require.NoError(t, err)
+	}()
+	tokenConn, err := wrapper.TaosConnectToken("", token, "", 0)
+	require.NoError(t, err)
+	wrapper.TaosClose(tokenConn)
 	require.NoError(t, err)
 }

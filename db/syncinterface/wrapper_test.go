@@ -799,6 +799,7 @@ func TestTaosConnectToken(t *testing.T) {
 	}()
 	values, err := query(conn, fmt.Sprintf("create token sync_test_token from user %s", user))
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureTokenCreated("sync_test_token"))
 	defer func() {
 		err = exec(conn, "drop token sync_test_token")
 		assert.NoError(t, err)

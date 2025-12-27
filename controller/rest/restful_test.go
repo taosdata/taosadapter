@@ -1092,6 +1092,7 @@ func TestTokenConnect(t *testing.T) {
 	assert.Equal(t, 0, result.Code)
 	assert.Equal(t, 1, len(result.Data))
 	token := result.Data[0][0].(string)
+	assert.NoError(t, testtools.EnsureTokenCreated("test_token_restful"))
 
 	defer func() {
 		w = executeSQL("drop token test_token_restful")

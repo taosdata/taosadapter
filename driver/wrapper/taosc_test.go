@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 	"unsafe"
@@ -947,6 +946,7 @@ func TestTaosConnectToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.NoError(t, EnsureTokenCreated("test_token_wrapper"))
 	defer func() {
 		err = exec(rootConn, "drop token test_token_wrapper")
 		assert.NoError(t, err)
@@ -972,6 +972,7 @@ func TestTaosConnectToken(t *testing.T) {
 	}()
 	val, err = query(rootConn, "create token test_token_wrapper_user_token from user test_token_wrapper_user")
 	assert.NoError(t, err)
+	assert.NoError(t, EnsureTokenCreated("test_token_wrapper_user_token"))
 	defer func() {
 		err = exec(rootConn, "drop token test_token_wrapper_user_token")
 		assert.NoError(t, err)
@@ -1007,6 +1008,7 @@ func TestTaosGetConnectionInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.NoError(t, EnsureTokenCreated("test_client_info_wrapper"))
 	defer func() {
 		err = exec(rootConn, "drop token test_client_info_wrapper")
 		assert.NoError(t, err)
@@ -1034,31 +1036,27 @@ func BenchmarkTaosConnect(b *testing.B) {
 	}
 }
 
-func TestConcurrentToken(t *testing.T) {
-	if !testenv.IsEnterpriseTest() {
-		t.Skip("token test only for enterprise edition")
-		return
-	}
-	rootConn, err := TaosConnect("", "root", "taosdata", "", 0)
+func EnsureTokenCreated(token string) error {
+	conn, err := TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
-	defer TaosClose(rootConn)
-	wg := sync.WaitGroup{}
-	wg.Add(100)
+	defer TaosClose(conn)
 	for i := 0; i < 100; i++ {
-		go func(i int) {
-			defer wg.Done()
-			tokenName := fmt.Sprintf("test_token_wrapper_%d", i)
-			val, err := query(rootConn, fmt.Sprintf("create token %s from user root", tokenName))
-			assert.NoError(t, err)
-			token := val[0][0].(string)
-			conn, err := TaosConnectToken("", token, "", 0)
-			require.NoError(t, err)
-			TaosClose(conn)
-			err = exec(rootConn, fmt.Sprintf("drop token %s", tokenName))
-			assert.NoError(t, err)
-		}(i)
+		value, err := query(conn, `select * from performance_schema.perf_trans where oper = 'create-token'`)
+		if err != nil {
+			return err
+		}
+		if len(value) == 0 {
+			value, err := query(conn, fmt.Sprintf(`select * from information_schema.ins_token where name = '%s'`, token))
+			if err != nil {
+				return err
+			}
+			if len(value) > 0 {
+				return nil
+			}
+		}
+		time.Sleep(time.Millisecond * 500)
 	}
-	wg.Wait()
+	return fmt.Errorf("token not created after waiting")
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/tools/otp"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 	"github.com/taosdata/taosadapter/v3/tools/testtools/testenv"
 	"github.com/taosdata/taosadapter/v3/version"
 )
@@ -205,6 +206,7 @@ func TestWSConnectToken(t *testing.T) {
 		return
 	}
 	token := createTokenResp.Data[0][0].(string)
+	assert.NoError(t, testtools.EnsureTokenCreated("test_token_ws_conn"))
 	s := httptest.NewServer(router)
 	defer s.Close()
 	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
