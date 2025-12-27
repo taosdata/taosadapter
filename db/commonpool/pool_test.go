@@ -104,7 +104,7 @@ func TestGetConnectionToken(t *testing.T) {
 	assert.NotNil(t, res)
 	token := res[0][0].(string)
 	t.Log("got token:", token)
-	assert.NoError(t, testtools.EnsureTokenCreated(token))
+	assert.NoError(t, testtools.EnsureTokenCreated("test_token_pool"))
 	defer func() {
 		err = testtools.Exec(c.TaosConnection, "drop token test_token_pool")
 		assert.NoError(t, err)
