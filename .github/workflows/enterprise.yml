@@ -30,7 +30,7 @@ jobs:
 
       - name: get TDengine
         run: |
-          wget ${{ secrets.NIGHTLY_TDENGINE_ENTERPRISE_BASE_URL }}/tsdb-nightly-${{ steps.get-branch.outputs.branch }}.tar.gz
+          wget "${{ secrets.NIGHTLY_TDENGINE_ENTERPRISE_BASE_URL }}/tsdb-nightly-${{ steps.get-branch.outputs.branch }}.tar.gz?v=$(date +%s)" -O tsdb-nightly-3.0.tar.gz
 
       - name: install
         run: |
