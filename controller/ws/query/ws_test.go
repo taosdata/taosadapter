@@ -80,6 +80,22 @@ func sendJsonBackBinary(t *testing.T, ws *websocket.Conn, action string, req int
 	return message
 }
 
+func sendBinaryBackJson(t *testing.T, ws *websocket.Conn, req []byte, resp interface{}) error {
+	message, err := sendWSMessage(ws, websocket.BinaryMessage, req)
+	if err != nil {
+		return err
+	}
+	var baseResp BaseResp
+	err = json.Unmarshal(message, &baseResp)
+	assert.NoError(t, err, message)
+	if baseResp.Code != 0 {
+		return taoserrors.NewError(baseResp.Code, baseResp.Message)
+	}
+	err = json.Unmarshal(message, &resp)
+	assert.NoError(t, err)
+	return nil
+}
+
 func conn(t *testing.T, ws *websocket.Conn, req *WSConnectReq) (*WSConnectResp, error) {
 	var resp WSConnectResp
 	err := sendJsonBackJson(t, ws, WSConnect, req, &resp)
@@ -292,7 +308,8 @@ func TestWriteBlock(t *testing.T) {
 		buffer.WriteString("t2")
 		// raw block
 		buffer.Write(blockMessage[16:])
-		err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
+		var resp BaseResp
+		err = sendBinaryBackJson(t, ws, buffer.Bytes(), &resp)
 		assert.NoError(t, err)
 		return err
 	})
@@ -446,7 +463,8 @@ func TestWriteBlockWithFields(t *testing.T) {
 			0x01, 0x00, 0x00, 0x00,
 		}
 		buffer.Write(fields)
-		err = ws.WriteMessage(websocket.BinaryMessage, buffer.Bytes())
+		var resp BaseResp
+		err = sendBinaryBackJson(t, ws, buffer.Bytes(), &resp)
 		assert.NoError(t, err)
 		return err
 	})
