@@ -942,10 +942,10 @@ func MustRandomSecret(length int) string {
 }
 
 func TestTaosConnectToken(t *testing.T) {
-	//if !testenv.IsEnterpriseTest() {
-	//	t.Skip("token test only for enterprise edition")
-	//	return
-	//}
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("token test only for enterprise edition")
+		return
+	}
 	rootConn, err := TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Fatal(err)

@@ -866,10 +866,14 @@ func TMQErr2Str(code int32, logger *logrus.Entry, isDebug bool) string {
 }
 
 func TMQConfSet(conf unsafe.Pointer, key string, value string, logger *logrus.Entry, isDebug bool) int32 {
-	logger.Tracef("call tmq_conf_set, conf:%p, key:%s, value:%s", conf, key, value)
+	if key != "td.connect.pass" {
+		logger.Tracef("call tmq_conf_set, conf:%p, key:%s, value:%s", conf, key, value)
+	} else {
+		logger.Tracef("call tmq_conf_set, conf:%p, key:%s", conf, key)
+	}
 	monitor.TMQConfSetCounter.Inc()
 	code := wrapper.TMQConfSet(conf, key, value)
-	logger.Debugf("tmq_conf_set finish, code:%d", code)
+	logger.Debugf("tmq_conf_set finish, key:%s, code:%d", key, code)
 	if code != 0 {
 		monitor.TMQConfSetFailCounter.Inc()
 	} else {

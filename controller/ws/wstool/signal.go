@@ -35,6 +35,7 @@ func WaitSignal(
 }
 
 func doWaitSignal(h WSHandler, conn unsafe.Pointer, ip net.IP, ipStr string, whitelistChangeHandle cgo.Handle, dropUserHandle cgo.Handle, whitelistChangeChan chan int64, dropUserChan chan struct{}, exit chan struct{}, logger *logrus.Entry, whitelist getWhitelistFunc) {
+	logger.Debug("enter wait signal")
 	defer func() {
 		logger.Debug("exit wait signal")
 		tool.PutRegisterChangeWhiteListHandle(whitelistChangeHandle)
