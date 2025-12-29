@@ -80,7 +80,7 @@ func EnsureDBCreated(dbName string) error {
 	return fmt.Errorf("db %s not created after waiting", dbName)
 }
 
-func EnsureTokenCreated(token string) error {
+func EnsureTokenCreated(tokenName string) error {
 	conn, err := wrapper.TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		return err
@@ -92,7 +92,7 @@ func EnsureTokenCreated(token string) error {
 			return err
 		}
 		if len(value) == 0 {
-			value, err := Query(conn, fmt.Sprintf(`select * from information_schema.ins_tokens where name = '%s'`, token))
+			value, err := Query(conn, fmt.Sprintf(`select * from information_schema.ins_tokens where name = '%s'`, tokenName))
 			if err != nil {
 				return err
 			}

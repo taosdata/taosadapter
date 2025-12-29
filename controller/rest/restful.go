@@ -325,6 +325,7 @@ func (h *SQLQueryHook) beforeConnect() (abort bool) {
 	if recordSql {
 		record.Init(h.sql, h.clientIP.String(), h.clientPort, h.appName, h.user, recordsql.HTTPType, uint64(h.reqID), h.c.MustGet(StartTimeKey).(time.Time))
 		h.startRecordTime = time.Now()
+		h.record = record
 	}
 
 	return false

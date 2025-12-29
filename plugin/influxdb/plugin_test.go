@@ -21,6 +21,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/testtools"
+	"github.com/taosdata/taosadapter/v3/tools/testtools/testenv"
 )
 
 var router *gin.Engine
@@ -173,6 +174,54 @@ func TestInfAndNaN(t *testing.T) {
 	assert.Equal(t, float64(2), values[0][2].(float64))
 	assert.True(t, math.IsNaN(values[1][2].(float64)))
 	assert.True(t, math.IsInf(values[2][2].(float64), 1))
+}
+
+func TestToken(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("totp test only for enterprise edition")
+		return
+	}
+	logger := log.GetLogger("test")
+	isDebug := log.IsDebug()
+	conn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		syncinterface.TaosClose(conn, logger, isDebug)
+	}()
+	err = exec(conn, "drop database if exists test_plugin_influxdb_token")
+	assert.NoError(t, err)
+	res, err := query(conn, "create token test_influxdb_token from user root")
+	assert.NoError(t, err)
+	token := res[0][0].(string)
+	defer func() {
+		err = exec(conn, "drop database if exists test_plugin_influxdb_token")
+		assert.NoError(t, err)
+		_, err = query(conn, "drop token test_influxdb_token")
+		assert.NoError(t, err)
+	}()
+
+	w := httptest.NewRecorder()
+	reader := strings.NewReader(fmt.Sprintf("measurement,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", 1, time.Now().UnixNano()))
+	req, _ := http.NewRequest("POST", "/write?db=test_plugin_influxdb_token", reader)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 204, w.Code)
+	var values [][]driver.Value
+	assert.Eventually(t, func() bool {
+		values, err = query(conn, "select * from information_schema.ins_tables where db_name='test_plugin_influxdb_token' and stable_name='measurement'")
+		return err == nil && len(values) == 1
+	}, 10*time.Second, 500*time.Millisecond)
+
+	values, err = query(conn, "select * from test_plugin_influxdb_token.`measurement`")
+	assert.NoError(t, err)
+	if values[0][3].(string) != "Launch 🚀" {
+		t.Errorf("got %s expect %s", values[0][3], "Launch 🚀")
+		return
+	}
 }
 
 func exec(conn unsafe.Pointer, sql string) error {

@@ -235,16 +235,17 @@ func (p *Influxdb) commonResponse(c *gin.Context, code int, resp *message) {
 }
 
 func getAuth(c *gin.Context) {
+	_, cloudTokenExists := c.GetQuery("token")
 	auth := c.GetHeader("Authorization")
 	if len(auth) != 0 {
 		auth = strings.TrimSpace(auth)
-		if strings.HasPrefix(auth, "Basic") && len(auth) > 6 {
+		if strings.HasPrefix(auth, "Basic ") && len(auth) > 6 {
 			user, password, err := tools.DecodeBasic(auth[6:])
 			if err == nil {
 				c.Set(plugin.UserKey, user)
 				c.Set(plugin.PasswordKey, password)
 			}
-		} else if strings.HasPrefix(auth, "Bearer") && len(auth) > 7 {
+		} else if !cloudTokenExists && strings.HasPrefix(auth, "Bearer ") && len(auth) > 7 {
 			token := strings.TrimSpace(auth[7:])
 			c.Set(plugin.TokenKey, token)
 		}

@@ -903,6 +903,15 @@ func TestTaosConnectTOTP(t *testing.T) {
 	conn3, err := TaosConnectTOTP("", "totp_user", "wrong_pass", "", "", 0)
 	assert.Error(t, err)
 	assert.Nil(t, conn3)
+
+	// connect with host and db
+	conn4, err := TaosConnectTOTP("localhost", "totp_user", "totp_pass_1", totpCodeStr, "information_schema", 0)
+	require.NoError(t, err)
+	defer TaosClose(conn4)
+	res, err = query(conn4, "select database()")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(res))
+	assert.Equal(t, "information_schema", res[0][0])
 }
 
 const (
@@ -933,10 +942,10 @@ func MustRandomSecret(length int) string {
 }
 
 func TestTaosConnectToken(t *testing.T) {
-	if !testenv.IsEnterpriseTest() {
-		t.Skip("token test only for enterprise edition")
-		return
-	}
+	//if !testenv.IsEnterpriseTest() {
+	//	t.Skip("token test only for enterprise edition")
+	//	return
+	//}
 	rootConn, err := TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Fatal(err)
@@ -986,6 +995,15 @@ func TestTaosConnectToken(t *testing.T) {
 	require.Equal(t, 1, len(res))
 	assert.Equal(t, int64(1), res[0][0])
 	assert.NoError(t, err)
+
+	// connect with host and db
+	conn4, err := TaosConnectToken("localhost", token, "information_schema", 0)
+	require.NoError(t, err)
+	defer TaosClose(conn4)
+	res, err = query(conn4, "select database()")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(res))
+	assert.Equal(t, "information_schema", res[0][0])
 }
 
 func TestTaosGetConnectionInfo(t *testing.T) {

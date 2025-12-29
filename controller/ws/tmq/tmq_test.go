@@ -88,12 +88,10 @@ func TestTMQ(t *testing.T) {
 			"drop database if exists test_ws_tmq",
 		}
 		for _, cleanSql := range cleanSqls {
-			for i := 0; i < 10; i++ {
+			assert.Eventually(t, func() bool {
 				code, message = doHttpSql(cleanSql)
-				if code != 0 {
-					time.Sleep(time.Second)
-				}
-			}
+				return code == 0
+			}, 5*time.Second, 500*time.Millisecond, message)
 		}
 	}()
 
@@ -350,12 +348,10 @@ func TestMeta(t *testing.T) {
 			"drop database if exists test_ws_tmq_meta",
 		}
 		for _, cleanSql := range cleanSqls {
-			for i := 0; i < 10; i++ {
+			assert.Eventually(t, func() bool {
 				code, message = doHttpSql(cleanSql)
-				if code != 0 {
-					time.Sleep(time.Second)
-				}
-			}
+				return code == 0
+			}, 5*time.Second, 500*time.Millisecond, message)
 		}
 	}()
 	s := httptest.NewServer(router)
@@ -578,12 +574,10 @@ func TestTMQAutoCommit(t *testing.T) {
 			"drop database if exists test_ws_tmq_auto_commit",
 		}
 		for _, cleanSql := range cleanSqls {
-			for i := 0; i < 10; i++ {
+			assert.Eventually(t, func() bool {
 				code, message = doHttpSql(cleanSql)
-				if code != 0 {
-					time.Sleep(time.Second)
-				}
-			}
+				return code == 0
+			}, 5*time.Second, 500*time.Millisecond, message)
 		}
 	}()
 
@@ -701,12 +695,10 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 			"drop database if exists test_ws_tmq_unsubscribe",
 		}
 		for _, cleanSql := range cleanSqls {
-			for i := 0; i < 10; i++ {
+			assert.Eventually(t, func() bool {
 				code, message = doHttpSql(cleanSql)
-				if code != 0 {
-					time.Sleep(time.Second)
-				}
-			}
+				return code == 0
+			}, 5*time.Second, 500*time.Millisecond, message)
 		}
 	}()
 
@@ -835,56 +827,23 @@ func TestTMQSeek(t *testing.T) {
 	tryPollCount := 3 * insertCount
 	topic := "test_tmq_ws_seek_topic"
 	dbName := "test_ws_tmq_seek"
-	w := httptest.NewRecorder()
-	body := strings.NewReader("create database if not exists " + dbName + " vgroups " + strconv.Itoa(vgroups) + " WAL_RETENTION_PERIOD 86400")
-	req, _ := http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
+	code, message := doHttpSql("create database if not exists " + dbName + " vgroups " + strconv.Itoa(vgroups) + " WAL_RETENTION_PERIOD 86400")
+	assert.Equal(t, 0, code, message)
 	assert.NoError(t, testtools.EnsureDBCreated(dbName))
-
-	w = httptest.NewRecorder()
-	body = strings.NewReader("create table if not exists ct0 (ts timestamp, c1 int)")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/"+dbName, body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-
-	w = httptest.NewRecorder()
-	body = strings.NewReader("create table if not exists ct1 (ts timestamp, c1 int, c2 float)")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/"+dbName, body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-
-	w = httptest.NewRecorder()
-	body = strings.NewReader("create table if not exists ct2 (ts timestamp, c1 int, c2 float, c3 binary(10))")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/"+dbName, body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
+	code, message = doHttpSqlWithDB("create table if not exists ct0 (ts timestamp, c1 int)", dbName)
+	assert.Equal(t, 0, code, message)
+	code, message = doHttpSqlWithDB("create table if not exists ct1 (ts timestamp, c1 int, c2 float)", dbName)
+	assert.Equal(t, 0, code, message)
+	code, message = doHttpSqlWithDB("create table if not exists ct2 (ts timestamp, c1 int, c2 float, c3 binary(10))", dbName)
+	assert.Equal(t, 0, code, message)
 
 	for i := 0; i < insertCount; i++ {
-		w = httptest.NewRecorder()
-		body = strings.NewReader(insertSql[i])
-		req, _ = http.NewRequest(http.MethodPost, "/rest/sql/"+dbName, body)
-		req.RemoteAddr = testtools.GetRandomRemoteAddr()
-		req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-		router.ServeHTTP(w, req)
-		assert.Equal(t, 200, w.Code)
+		code, message = doHttpSqlWithDB(insertSql[i], dbName)
+		assert.Equal(t, 0, code, message)
 	}
 
-	w = httptest.NewRecorder()
-	body = strings.NewReader("create topic if not exists " + topic + " as database " + dbName)
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/"+dbName, body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
+	code, message = doHttpSqlWithDB("create topic if not exists "+topic+" as database "+dbName, dbName)
+	assert.Equal(t, 0, code, message)
 
 	s := httptest.NewServer(router)
 	defer s.Close()
@@ -1064,7 +1023,7 @@ func TestTMQSeek(t *testing.T) {
 		assert.Equal(t, insertCount, rowCount)
 	}
 	//
-	code, message := doHttpSql(fmt.Sprintf("insert into %s.ct0 values(now,2)", dbName))
+	code, message = doHttpSql(fmt.Sprintf("insert into %s.ct0 values(now,2)", dbName))
 	assert.Equal(t, 0, code, message)
 	insertCount += 1
 
@@ -1309,25 +1268,23 @@ func TestTMQSeek(t *testing.T) {
 	assert.NoError(t, err)
 	err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	assert.NoError(t, err)
-	time.Sleep(time.Second * 3)
-	w = httptest.NewRecorder()
-	body = strings.NewReader("drop topic if exists " + topic)
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	w = httptest.NewRecorder()
-	body = strings.NewReader("drop database if exists " + dbName)
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql", body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
+	assert.Eventually(t, func() bool {
+		code, message = doHttpSql("drop topic if exists " + topic)
+		return code == 0
+	}, 5*time.Second, 500*time.Millisecond, message)
+	assert.Eventually(t, func() bool {
+		code, message = doHttpSql("drop database if exists " + dbName)
+		return code == 0
+	}, 5*time.Second, 500*time.Millisecond, message)
 }
 
 func doHttpSql(sql string) (code int, message string) {
 	return doHttpSqlWithDB(sql, "")
+}
+
+type restResp struct {
+	Code int    `json:"code"`
+	Desc string `json:"desc"`
 }
 
 func doHttpSqlWithDB(sql string, dbName string) (code int, message string) {
@@ -1342,9 +1299,9 @@ func doHttpSqlWithDB(sql string, dbName string) (code int, message string) {
 	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 	router.ServeHTTP(w, req)
 	b, _ := io.ReadAll(w.Body)
-	var res WSTMQErrorResp
+	var res restResp
 	_ = json.Unmarshal(b, &res)
-	return res.Code, res.Message
+	return res.Code, res.Desc
 }
 
 func doWebSocket(ws *websocket.Conn, action string, arg []byte) (resp []byte, err error) {
@@ -1389,16 +1346,23 @@ func before(t *testing.T, dbName string, topic string) {
 	assert.Equal(t, 0, code, message)
 }
 
-func after(ws *websocket.Conn, dbName string, topic string) error {
+func after(t *testing.T, ws *websocket.Conn, dbName string, topic string) error {
 	b, _ := json.Marshal(TMQUnsubscribeReq{ReqID: 0})
 	_, _ = doWebSocket(ws, TMQUnsubscribe, b)
 	err := ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	if err != nil {
 		return err
 	}
-	time.Sleep(time.Second * 5)
-	doHttpSql(fmt.Sprintf("drop topic if exists %s", topic))
-	doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
+	var code int
+	var message string
+	assert.Eventually(t, func() bool {
+		code, message = doHttpSql(fmt.Sprintf("drop topic if exists %s", topic))
+		return code == 0
+	}, 5*time.Second, 500*time.Millisecond, message)
+	assert.Eventually(t, func() bool {
+		code, message = doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
+		return code == 0
+	}, 5*time.Second, 500*time.Millisecond, message)
 	return nil
 }
 
@@ -1421,7 +1385,7 @@ func TestTMQ_Position_And_Committed(t *testing.T) {
 	}()
 
 	defer func() {
-		err = after(ws, dbName, topic)
+		err = after(t, ws, dbName, topic)
 		assert.NoError(t, err)
 	}()
 
@@ -1509,7 +1473,7 @@ func TestTMQ_ListTopics(t *testing.T) {
 	}()
 
 	defer func() {
-		err = after(ws, dbName, topic)
+		err = after(t, ws, dbName, topic)
 		assert.NoError(t, err)
 	}()
 
@@ -1559,7 +1523,7 @@ func TestTMQ_CommitOffset(t *testing.T) {
 	}()
 
 	defer func() {
-		err = after(ws, dbName, topic)
+		err = after(t, ws, dbName, topic)
 		assert.NoError(t, err)
 	}()
 
@@ -1645,7 +1609,7 @@ func TestTMQ_PollWithMessageID(t *testing.T) {
 	before(t, dbName, topic)
 
 	defer func() {
-		err = after(ws, dbName, topic)
+		err = after(t, ws, dbName, topic)
 		assert.NoError(t, err)
 	}()
 
@@ -1937,19 +1901,16 @@ func afterAllType(t *testing.T, ws *websocket.Conn, dbName string, topic string)
 	if err != nil {
 		return err
 	}
-	for i := 0; i < 5; i++ {
-		time.Sleep(time.Second * 5)
-		code, message := doHttpSql(fmt.Sprintf("drop topic if exists %s", topic))
-		if code != 0 {
-			t.Log("drop topic failed", message)
-			continue
-		}
-		doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
-		if code != 0 {
-			t.Log("drop database failed", message)
-			continue
-		}
-	}
+	var code int
+	var message string
+	assert.Eventually(t, func() bool {
+		code, message = doHttpSql(fmt.Sprintf("drop topic if exists %s", topic))
+		return code == 0
+	}, 5*time.Second, 500*time.Millisecond, message)
+	assert.Eventually(t, func() bool {
+		code, message = doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
+		return code == 0
+	}, 5*time.Second, 500*time.Millisecond, message)
 	return nil
 }
 
@@ -2135,7 +2096,7 @@ func TestTMQ_SetMsgConsumeExcluded(t *testing.T) {
 	}()
 
 	defer func() {
-		err = after(ws, dbName, topic)
+		err = after(t, ws, dbName, topic)
 		assert.NoError(t, err)
 	}()
 
@@ -2158,57 +2119,63 @@ func TestTMQ_SetMsgConsumeExcluded(t *testing.T) {
 	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
 }
 
-// todo: not implemented
-//func TestDropUser(t *testing.T) {
-//	defer doHttpSql("drop user test_tmq_drop_user")
-//	code, message := doHttpSql("create user test_tmq_drop_user pass 'pass_123'")
-//	assert.Equal(t, 0, code, message)
-//
-//	dbName := "test_ws_tmq_drop_user"
-//	topic := "test_ws_tmq_drop_user_topic"
-//
-//	before(t, dbName, topic)
-//
-//	s := httptest.NewServer(router)
-//	defer s.Close()
-//	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/tmq", nil)
-//	if err != nil {
-//		t.Error(err)
-//		return
-//	}
-//	defer func() {
-//		err = ws.Close()
-//		assert.NoError(t, err)
-//	}()
-//
-//	defer func() {
-//		err = after(ws, dbName, topic)
-//		assert.NoError(t, err)
-//	}()
-//
-//	// subscribe
-//	b, _ := json.Marshal(TMQSubscribeReq{
-//		User:        "test_tmq_drop_user",
-//		Password:    "pass_123",
-//		DB:          dbName,
-//		GroupID:     "test",
-//		Topics:      []string{topic},
-//		AutoCommit:  "false",
-//		OffsetReset: "earliest",
-//	})
-//	msg, err := doWebSocket(ws, TMQSubscribe, b)
-//	assert.NoError(t, err)
-//	var subscribeResp TMQSubscribeResp
-//	err = json.Unmarshal(msg, &subscribeResp)
-//	assert.NoError(t, err)
-//	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
-//	// drop user
-//	code, message = doHttpSql("drop user test_tmq_drop_user")
-//	assert.Equal(t, 0, code, message)
-//	time.Sleep(time.Second * 3)
-//	resp, err := doWebSocket(ws, wstool.ClientVersion, nil)
-//	assert.Error(t, err, string(resp))
-//}
+func TestDropUser(t *testing.T) {
+	dbName := "test_ws_tmq_drop_user"
+	topic := "test_ws_tmq_drop_user_topic"
+
+	before(t, dbName, topic)
+	defer doHttpSql("drop user test_tmq_drop_user")
+	code, message := doHttpSql("create user test_tmq_drop_user pass 'pass_123'")
+	assert.Equal(t, 0, code, message)
+	code, message = doHttpSql(fmt.Sprintf("grant subscribe on %s to test_tmq_drop_user", topic))
+	assert.Equal(t, 0, code, message)
+
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/tmq", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	defer func() {
+		assert.Eventually(t, func() bool {
+			code, message = doHttpSql(fmt.Sprintf("drop topic if exists %s", topic))
+			return code == 0
+		}, 5*time.Second, 500*time.Millisecond, message)
+		assert.Eventually(t, func() bool {
+			code, message = doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
+			return code == 0
+		}, 5*time.Second, 500*time.Millisecond, message)
+	}()
+
+	// subscribe
+	b, _ := json.Marshal(TMQSubscribeReq{
+		User:        "test_tmq_drop_user",
+		Password:    "pass_123",
+		GroupID:     "test",
+		Topics:      []string{topic},
+		AutoCommit:  "false",
+		OffsetReset: "earliest",
+	})
+	msg, err := doWebSocket(ws, TMQSubscribe, b)
+	assert.NoError(t, err)
+	var subscribeResp TMQSubscribeResp
+	err = json.Unmarshal(msg, &subscribeResp)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
+	// drop user
+	code, message = doHttpSql("drop user test_tmq_drop_user")
+	assert.Equal(t, 0, code, message)
+	assert.Eventually(t, func() bool {
+		_, err := doWebSocket(ws, wstool.ClientVersion, nil)
+		return err != nil
+	}, 10*time.Second, 500*time.Millisecond)
+}
 
 type httpQueryResp struct {
 	Code       int              `json:"code,omitempty"`
@@ -2260,8 +2227,16 @@ func TestConnectionOptions(t *testing.T) {
 	}()
 
 	defer func() {
-		err = after(ws, dbName, topic)
-		assert.NoError(t, err)
+		var code int
+		var message string
+		assert.Eventually(t, func() bool {
+			code, message = doHttpSql(fmt.Sprintf("drop topic if exists %s", topic))
+			return code == 0
+		}, 5*time.Second, 500*time.Millisecond, message)
+		assert.Eventually(t, func() bool {
+			code, message = doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
+			return code == 0
+		}, 5*time.Second, 500*time.Millisecond, message)
 	}()
 
 	// subscribe
@@ -2286,17 +2261,29 @@ func TestConnectionOptions(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
 
-	// todo: check connection options,  C not implemented
-	//got := false
-	//for i := 0; i < 10; i++ {
-	//	queryResp := restQuery("select conn_id from performance_schema.perf_connections where user_app = 'tmq_test_conn_protocol' and user_ip = '192.168.55.55'", "")
-	//	if queryResp.Code == 0 && len(queryResp.Data) > 0 {
-	//		got = true
-	//		break
-	//	}
-	//	time.Sleep(time.Second)
-	//}
-	//assert.True(t, got)
+	var connId float64
+	assert.Eventually(t, func() bool {
+		queryResp := restQuery("select conn_id from performance_schema.perf_connections where user_app = 'tmq_test_conn_protocol' and user_ip = '192.168.55.55'", "")
+		got := queryResp.Code == 0 && len(queryResp.Data) > 0
+		if got {
+			connId = queryResp.Data[0][0].(float64)
+		}
+		return got
+	}, 10*time.Second, 500*time.Millisecond)
+
+	b, _ = json.Marshal(TMQUnsubscribeReq{ReqID: 0})
+	_, _ = doWebSocket(ws, TMQUnsubscribe, b)
+	err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	assert.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		queryResp := restQuery("select * from performance_schema.perf_connections where conn_id = "+fmt.Sprintf("%d", int64(connId)), "")
+		return queryResp.Code == 0 && len(queryResp.Data) == 0
+	}, 10*time.Second, 500*time.Millisecond)
+
+	queryResp := restQuery("select conn_id from performance_schema.perf_connections where user_app = 'tmq_test_conn_protocol' and user_ip = '192.168.55.55'", "")
+	assert.Equal(t, 0, queryResp.Code)
+	assert.Equal(t, 0, len(queryResp.Data))
 }
 
 func TestWrongPass(t *testing.T) {
@@ -2352,7 +2339,7 @@ func TestPollError(t *testing.T) {
 	}()
 
 	defer func() {
-		err = after(ws, dbName, topic)
+		err = after(t, ws, dbName, topic)
 		assert.NoError(t, err)
 	}()
 
@@ -2584,18 +2571,11 @@ func TestConsumeRawdata(t *testing.T) {
 
 	err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	assert.NoError(t, err)
-	time.Sleep(time.Second * 5)
-
-	w := httptest.NewRecorder()
-	body := strings.NewReader("describe stb")
-	req, _ := http.NewRequest(http.MethodPost, "/rest/sql/test_ws_rawdata_target", body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	var resp wstool.TDEngineRestfulResp
-	err = jsoniter.Unmarshal(w.Body.Bytes(), &resp)
-	assert.NoError(t, err)
+	var resp *httpQueryResp
+	assert.Eventually(t, func() bool {
+		resp = restQuery("describe stb", "test_ws_rawdata_target")
+		return resp.Code == 0
+	}, 5*time.Second, 500*time.Millisecond, message)
 	expect := [][]driver.Value{
 		{"ts", "TIMESTAMP", float64(8), ""},
 		{"c1", "BOOL", float64(1), ""},
@@ -2637,15 +2617,7 @@ func TestConsumeRawdata(t *testing.T) {
 		}
 	}
 
-	w = httptest.NewRecorder()
-	body = strings.NewReader("select * from stb limit 1")
-	req, _ = http.NewRequest(http.MethodPost, "/rest/sql/test_ws_rawdata_target", body)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	err = jsoniter.Unmarshal(w.Body.Bytes(), &resp)
-	assert.NoError(t, err)
+	resp = restQuery("select * from stb limit 1", "test_ws_rawdata_target")
 	expect = [][]driver.Value{
 		{
 			now.Format(layout.LayoutMillSecond),
@@ -2685,25 +2657,18 @@ func TestConsumeRawdata(t *testing.T) {
 	}
 	assert.Equal(t, expect, resp.Data)
 
-	for i := 0; i < 5; i++ {
-		time.Sleep(time.Second * 3)
-		code, message := doHttpSql("drop topic if exists test_tmq_rawdata_ws_topic")
-		if code != 0 {
-			t.Log(message)
-			continue
-		}
+	assert.Eventually(t, func() bool {
+		code, message = doHttpSql("drop topic if exists test_tmq_rawdata_ws_topic")
+		return code == 0
+	}, 5*time.Second, 500*time.Millisecond, message)
+	assert.Eventually(t, func() bool {
 		code, message = doHttpSql("drop database if exists test_ws_rawdata_target")
-		if code != 0 {
-			t.Log(message)
-			continue
-		}
+		return code == 0
+	}, 5*time.Second, 500*time.Millisecond, message)
+	assert.Eventually(t, func() bool {
 		code, message = doHttpSql("drop database if exists test_ws_rawdata")
-		if code != 0 {
-			t.Log(message)
-			continue
-		}
-		break
-	}
+		return code == 0
+	}, 5*time.Second, 500*time.Millisecond, message)
 }
 
 func TestSetConfig(t *testing.T) {
@@ -2717,20 +2682,14 @@ func TestSetConfig(t *testing.T) {
 		t.Fatalf("create topic failed: %s", message)
 	}
 	defer func() {
-		for i := 0; i < 5; i++ {
-			time.Sleep(time.Second * 3)
-			code, message := doHttpSql("drop topic if exists test_ws_tmq_set_conf_topic")
-			if code != 0 {
-				t.Log(message)
-				continue
-			}
+		assert.Eventually(t, func() bool {
+			code, message = doHttpSql("drop topic if exists test_ws_tmq_set_conf_topic")
+			return code == 0
+		}, 5*time.Second, 500*time.Millisecond, message)
+		assert.Eventually(t, func() bool {
 			code, message = doHttpSql("drop database if exists test_ws_tmq_set_conf")
-			if code != 0 {
-				t.Log(message)
-				continue
-			}
-			break
-		}
+			return code == 0
+		}, 5*time.Second, 500*time.Millisecond, message)
 	}()
 	s := httptest.NewServer(router)
 	defer s.Close()
