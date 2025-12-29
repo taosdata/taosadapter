@@ -196,7 +196,10 @@ jobs:
           cache-dependency-path: taosadapter/go.sum
 
       - name: build taosAdapter
-        run: cd ./taosadapter && go build
+        run: |
+          cd ./taosadapter
+          go mod download
+          go build
 
   test_go_test:
     runs-on: ${{ matrix.os }}
@@ -269,7 +272,9 @@ jobs:
         id: test
         env:
           GO_TEST_DISABLE_DISPLAY_LOG: "true"
-        run: go test -coverpkg=./... -v --count=1 -coverprofile=coverage.txt -covermode=atomic ./...
+        run: |
+          go mod download
+          go test -coverpkg=./... -v --count=1 -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest'
@@ -532,7 +537,9 @@ jobs:
         id: test
         env:
           GO_TEST_DISABLE_DISPLAY_LOG: "true"
-        run: go test -v --count=1 -asan ./...
+        run: |
+          go mod download
+          go test -v --count=1 -asan ./...
 
   govulncheck:
     name: govulncheck
@@ -655,7 +662,9 @@ jobs:
         run: nohup sudo sh ./start.sh & disown
 
       - name: build taosAdapter
-        run: go build -cover
+        run: |
+          go mod download
+          go build -cover
 
       - name: run test
         run: |

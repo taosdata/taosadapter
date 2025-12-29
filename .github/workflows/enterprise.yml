@@ -67,7 +67,9 @@ jobs:
         env:
           GO_TEST_DISABLE_DISPLAY_LOG: "true"
           GO_TEST_ENTERPRISE: "true"
-        run: go test -coverpkg=./... -v --count=1 -coverprofile=coverage.txt -covermode=atomic ./...
+        run: |
+          go mod download
+          go test -coverpkg=./... -v --count=1 -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
