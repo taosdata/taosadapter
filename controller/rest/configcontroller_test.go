@@ -421,7 +421,7 @@ func TestRecordSql(t *testing.T) {
 		assert.Greater(t, len(objResult.Data), 0)
 		token := objResult.Data[0][0].(string)
 		assert.NotEmpty(t, token)
-		t.Log("got token:", token)
+		//t.Log("got token:", token)
 		defer func() {
 			w = httptest.NewRecorder()
 			body = strings.NewReader("drop token test_token_record_sql")

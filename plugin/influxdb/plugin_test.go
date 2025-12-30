@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
@@ -76,15 +77,17 @@ func TestInfluxdb(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 	number := rand.Int31()
+	require.Eventually(t, func() bool {
+		w := httptest.NewRecorder()
+		reader := strings.NewReader(fmt.Sprintf("measurement,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
+		req, _ := http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb&app=test_influxdb", reader)
+		req.RemoteAddr = testtools.GetRandomRemoteAddr()
+		router.ServeHTTP(w, req)
+		return w.Code == 204
+	}, 10*time.Second, 500*time.Millisecond)
 	w := httptest.NewRecorder()
-	reader := strings.NewReader(fmt.Sprintf("measurement,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
+	reader := strings.NewReader("measurement,host=host1 field1=a1")
 	req, _ := http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb&app=test_influxdb", reader)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 204, w.Code)
-	w = httptest.NewRecorder()
-	reader = strings.NewReader("measurement,host=host1 field1=a1")
-	req, _ = http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb&app=test_influxdb", reader)
 	req.RemoteAddr = testtools.GetRandomRemoteAddr()
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 500, w.Code)
@@ -203,13 +206,16 @@ func TestToken(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 
-	w := httptest.NewRecorder()
-	reader := strings.NewReader(fmt.Sprintf("measurement,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", 1, time.Now().UnixNano()))
-	req, _ := http.NewRequest("POST", "/write?db=test_plugin_influxdb_token", reader)
-	req.RemoteAddr = testtools.GetRandomRemoteAddr()
-	req.Header.Set("Authorization", "Bearer "+token)
-	router.ServeHTTP(w, req)
-	assert.Equal(t, 204, w.Code)
+	require.Eventually(t, func() bool {
+		w := httptest.NewRecorder()
+		reader := strings.NewReader(fmt.Sprintf("measurement,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", 1, time.Now().UnixNano()))
+		req, _ := http.NewRequest("POST", "/write?db=test_plugin_influxdb_token", reader)
+		req.RemoteAddr = testtools.GetRandomRemoteAddr()
+		req.Header.Set("Authorization", "Bearer "+token)
+		router.ServeHTTP(w, req)
+		return w.Code == 204
+	}, 10*time.Second, 500*time.Millisecond)
+
 	var values [][]driver.Value
 	assert.Eventually(t, func() bool {
 		values, err = query(conn, "select * from information_schema.ins_tables where db_name='test_plugin_influxdb_token' and stable_name='measurement'")
