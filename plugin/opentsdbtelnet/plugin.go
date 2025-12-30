@@ -70,7 +70,7 @@ func (l *TCPListener) start() error {
 			if conn.RemoteAddr() == nil {
 				logger.Errorf("RemoteAddr is nil")
 			}
-			_, valid, poolExists := commonpool.VerifyClientIP(l.plugin.conf.User, l.plugin.conf.Password, conn.RemoteAddr().(*net.TCPAddr).IP)
+			_, valid, poolExists := commonpool.VerifyClientIP(l.plugin.conf.User, l.plugin.conf.Password, l.plugin.conf.Token, conn.RemoteAddr().(*net.TCPAddr).IP)
 			if poolExists && !valid {
 				logger.WithField("user", l.plugin.conf.User).WithField("clientIP", conn.RemoteAddr().(*net.TCPAddr).IP.String()).Error("forbidden clientIP")
 				_ = conn.Close()
@@ -339,7 +339,7 @@ func (p *Plugin) tcp(port int, index int) error {
 }
 
 func (p *Plugin) handleData(connection *Connection, line []string, clientIP net.IP) {
-	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, clientIP)
+	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, p.conf.Token, clientIP)
 	if err != nil {
 		logger.WithError(err).Error("connect server error")
 		if errors.Is(err, commonpool.ErrWhitelistForbidden) {

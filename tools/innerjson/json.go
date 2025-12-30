@@ -33,6 +33,9 @@ func Marshal(v any) ([]byte, error) {
 	defer encoderPool.Put(encoder)
 	err := encoder.encoder.Encode(v)
 	if err != nil {
+		// currently, The json.Encoder.err is only assigned a value when writing to the writer fails.
+		//Therefore, even if Encode(v) returns an error, this encoder can still be reused.
+		//However, tests need to be added to guard against potential changes in the standard library's behavior.
 		return nil, err
 	}
 	data := encoder.buffer.Bytes()

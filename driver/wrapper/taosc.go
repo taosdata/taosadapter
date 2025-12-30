@@ -59,7 +59,7 @@ func TaosConnect(host, user, pass, db string, port int) (taos unsafe.Pointer, er
 	}
 	var taosObj unsafe.Pointer
 	if len(host) == 0 {
-		taosObj = C.taos_connect(nil, cUser, cPass, cdb, (C.ushort)(0))
+		taosObj = C.taos_connect(nil, cUser, cPass, cdb, (C.ushort)(port))
 	} else {
 		cHost := C.CString(host)
 		defer C.free(unsafe.Pointer(cHost))
@@ -317,4 +317,106 @@ func TaosCheckServerStatus(fqdn *string, port int32) (status int32, details stri
 	status = int32(C.taos_check_server_status(cFqdn, C.int(port), cDetails, 1024))
 	details = C.GoString(cDetails)
 	return
+}
+
+// TaosRegisterInstance int32_t taos_register_instance(const char *id, const char *type, const char *desc,int32_t expire);
+func TaosRegisterInstance(id, registerType, desc string, expire int32) int32 {
+	idC := C.CString(id)
+	defer C.free(unsafe.Pointer(idC))
+	typeC := C.CString(registerType)
+	defer C.free(unsafe.Pointer(typeC))
+	descC := C.CString(desc)
+	defer C.free(unsafe.Pointer(descC))
+	ret := int32(C.taos_register_instance(idC, typeC, descC, C.int32_t(expire)))
+	return ret
+}
+
+// TaosListInstances int32_t taos_list_instances(const char *filter_type, char ***pList, int32_t *pCount);
+func TaosListInstances(filterType string) (instances []string, err error) {
+	typeC := C.CString(filterType)
+	defer C.free(unsafe.Pointer(typeC))
+	var pList **C.char
+	var pCount C.int32_t
+	ret := int32(C.taos_list_instances(typeC, &pList, &pCount))
+	if ret != 0 {
+		return nil, errors.NewError(int(ret), TaosErrorStr(nil))
+	}
+	defer func() {
+		C.taos_free_instances(&pList, pCount)
+	}()
+	count := int(pCount)
+	instances = make([]string, count)
+	ptrSize := unsafe.Sizeof(uintptr(0))
+	for i := 0; i < count; i++ {
+		cStr := *(**C.char)(unsafe.Pointer(uintptr(unsafe.Pointer(pList)) + uintptr(i)*ptrSize))
+		instances[i] = C.GoString(cStr)
+	}
+	return instances, nil
+}
+
+// TaosConnectTOTP TAOS *taos_connect_totp(const char *ip, const char *user, const char *pass, const char* totp, const char *db, uint16_t port);
+func TaosConnectTOTP(host, user, pass, totp, db string, port int) (taos unsafe.Pointer, err error) {
+	cUser := C.CString(user)
+	defer C.free(unsafe.Pointer(cUser))
+	cPass := C.CString(pass)
+	defer C.free(unsafe.Pointer(cPass))
+	cTotp := C.CString(totp)
+	defer C.free(unsafe.Pointer(cTotp))
+	cdb := (*C.char)(nil)
+	if len(db) > 0 {
+		cdb = C.CString(db)
+		defer C.free(unsafe.Pointer(cdb))
+	}
+	var taosObj unsafe.Pointer
+	if len(host) == 0 {
+		taosObj = C.taos_connect_totp(nil, cUser, cPass, cTotp, cdb, (C.ushort)(port))
+	} else {
+		cHost := C.CString(host)
+		defer C.free(unsafe.Pointer(cHost))
+		taosObj = C.taos_connect_totp(cHost, cUser, cPass, cTotp, cdb, (C.ushort)(port))
+	}
+
+	if taosObj == nil {
+		errCode := TaosError(nil)
+		return nil, errors.NewError(errCode, TaosErrorStr(nil))
+	}
+	return taosObj, nil
+}
+
+// TaosConnectToken TAOS *taos_connect_token(const char *ip, const char *token, const char *db, uint16_t port);
+func TaosConnectToken(host, token, db string, port int) (taos unsafe.Pointer, err error) {
+	cToken := C.CString(token)
+	defer C.free(unsafe.Pointer(cToken))
+	cdb := (*C.char)(nil)
+	if len(db) > 0 {
+		cdb = C.CString(db)
+		defer C.free(unsafe.Pointer(cdb))
+	}
+	var taosObj unsafe.Pointer
+	if len(host) == 0 {
+		taosObj = C.taos_connect_token(nil, cToken, cdb, (C.ushort)(port))
+	} else {
+		cHost := C.CString(host)
+		defer C.free(unsafe.Pointer(cHost))
+		taosObj = C.taos_connect_token(cHost, cToken, cdb, (C.ushort)(port))
+	}
+
+	if taosObj == nil {
+		errCode := TaosError(nil)
+		return nil, errors.NewError(errCode, TaosErrorStr(nil))
+	}
+	return taosObj, nil
+}
+
+// TaosGetConnectionInfo int taos_get_connection_info(TAOS* taos, TSDB_CONNECTION_INFO info, char* buffer, int* len)
+func TaosGetConnectionInfo(taos unsafe.Pointer, info int) (string, int) {
+	cBuffer := (*C.char)(C.malloc(256))
+	defer C.free(unsafe.Pointer(cBuffer))
+	var cLen C.int = 256
+	code := C.taos_get_connection_info(taos, (C.TSDB_CONNECTION_INFO)(info), cBuffer, (*C.int)(unsafe.Pointer(&cLen)))
+	if code != 0 {
+		return "", int(code)
+	}
+	value := C.GoStringN(cBuffer, cLen)
+	return value, 0
 }

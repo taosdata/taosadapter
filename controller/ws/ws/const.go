@@ -48,6 +48,8 @@ const (
 
 	// check_server_status
 	CheckServerStatus = "check_server_status"
+
+	GetConnectionInfo = "get_connection_info"
 )
 
 const (

@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -39,9 +40,14 @@ func TestMain(m *testing.M) {
 	}()
 	r := syncinterface.TaosQuery(conn, "create database if not exists test_plugin_prometheus", logger, isDebug)
 	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
-	m.Run()
+	err = testtools.EnsureDBCreated("test_plugin_prometheus")
+	if err != nil {
+		panic(err)
+	}
+	code := m.Run()
 	r = syncinterface.TaosQuery(conn, "drop database if exists test_plugin_prometheus", logger, isDebug)
 	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
+	os.Exit(code)
 }
 
 // @author: xftan

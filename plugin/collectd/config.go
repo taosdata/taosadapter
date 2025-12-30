@@ -14,6 +14,7 @@ type Config struct {
 	Password string
 	Worker   int
 	TTL      int
+	Token    string
 }
 
 func (c *Config) setValue() {
@@ -24,6 +25,7 @@ func (c *Config) setValue() {
 	c.Password = viper.GetString("collectd.password")
 	c.Worker = viper.GetInt("collectd.worker")
 	c.TTL = viper.GetInt("collectd.ttl")
+	c.Token = viper.GetString("collectd.token")
 }
 
 func init() {
@@ -46,6 +48,10 @@ func init() {
 	_ = viper.BindEnv("collectd.password", "TAOS_ADAPTER_COLLECTD_PASSWORD")
 	pflag.String("collectd.password", common.DefaultPassword, `collectd password. Env "TAOS_ADAPTER_COLLECTD_PASSWORD"`)
 	viper.SetDefault("collectd.password", common.DefaultPassword)
+
+	_ = viper.BindEnv("collectd.token", "TAOS_ADAPTER_COLLECTD_TOKEN")
+	pflag.String("collectd.token", "", `collectd token. Env "TAOS_ADAPTER_COLLECTD_TOKEN"`)
+	viper.SetDefault("collectd.token", "")
 
 	_ = viper.BindEnv("collectd.worker", "TAOS_ADAPTER_COLLECTD_WORKER")
 	pflag.Int("collectd.worker", 10, `collectd write worker. Env "TAOS_ADAPTER_COLLECTD_WORKER"`)

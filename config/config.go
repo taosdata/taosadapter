@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	"github.com/spf13/pflag"
@@ -13,6 +14,7 @@ import (
 )
 
 type Config struct {
+	ConfigFile          string
 	InstanceID          uint8
 	TaosConfigDir       string
 	MaxSyncMethodLimit  int
@@ -29,6 +31,8 @@ type Config struct {
 	Monitor             *Monitor
 	UploadKeeper        *UploadKeeper
 	Request             *Request
+	Reject              *Reject
+	Register            *Register
 }
 
 var (
@@ -38,13 +42,17 @@ var (
 func Init() {
 	viper.SetConfigType("toml")
 	viper.SetConfigName(fmt.Sprintf("%sadapter", version.CUS_PROMPT))
+	configFileName := fmt.Sprintf("%sadapter.toml", version.CUS_PROMPT)
+	configFileDir := ""
 	var cp *string
 	switch runtime.GOOS {
 	case "windows":
-		viper.AddConfigPath(fmt.Sprintf("C:\\%s\\cfg", version.CUS_NAME))
+		configFileDir = fmt.Sprintf("C:\\%s\\cfg", version.CUS_NAME)
+		viper.AddConfigPath(configFileDir)
 		cp = pflag.StringP("config", "c", "", fmt.Sprintf("config path default C:\\%s\\cfg\\%sadapter.toml", version.CUS_NAME, version.CUS_PROMPT))
 	default:
-		viper.AddConfigPath(fmt.Sprintf("/etc/%s", version.CUS_PROMPT))
+		configFileDir = fmt.Sprintf("/etc/%s", version.CUS_PROMPT)
+		viper.AddConfigPath(configFileDir)
 		cp = pflag.StringP("config", "c", "", fmt.Sprintf("config path default /etc/%s/%sadapter.toml", version.CUS_PROMPT, version.CUS_PROMPT))
 	}
 	v := pflag.BoolP("version", "V", false, "Print the version and exit")
@@ -61,8 +69,10 @@ func Init() {
 		fmt.Printf("build: %s\n", version.BuildInfo)
 		os.Exit(0)
 	}
+	configFile := filepath.Join(configFileDir, configFileName)
 	if *cp != "" {
 		viper.SetConfigFile(*cp)
+		configFile = *cp
 	}
 	err := viper.BindPFlags(pflag.CommandLine)
 	if err != nil {
@@ -77,6 +87,7 @@ func Init() {
 		}
 	}
 	Conf = &Config{
+		ConfigFile:          configFile,
 		TaosConfigDir:       viper.GetString("taosConfigDir"),
 		Debug:               viper.GetBool("debug"),
 		Port:                viper.GetInt("port"),
@@ -134,6 +145,16 @@ func Init() {
 	if Conf.Pool.MaxConnect == 0 {
 		Conf.Pool.MaxConnect = runtime.GOMAXPROCS(0) * 2
 	}
+	Conf.Reject = &Reject{}
+	err = Conf.Reject.SetValue(viper.GetViper())
+	if err != nil {
+		panic(err)
+	}
+	Conf.Register = &Register{}
+	err = Conf.Register.setValue(viper.GetViper())
+	if err != nil {
+		panic(err)
+	}
 }
 
 func init() {
@@ -184,8 +205,12 @@ func init() {
 	initUploadKeeper()
 	// query request limit
 	initRequest(viper.GetViper())
-	registerFlags()
-
+	registerRequestFlags()
+	// reject config
+	initRejectConfig(viper.GetViper())
+	// register config
+	initRegister(viper.GetViper())
+	registerRegisterFlags()
 	err := viper.BindPFlags(pflag.CommandLine)
 	if err != nil {
 		panic(err)

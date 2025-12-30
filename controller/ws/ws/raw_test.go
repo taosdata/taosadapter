@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 func TestWSTMQWriteRaw(t *testing.T) {
@@ -56,6 +57,7 @@ func TestWSTMQWriteRaw(t *testing.T) {
 	metaType := uint16(531)
 	code, message := doRestful("create database if not exists test_ws_tmq_write_raw", "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_tmq_write_raw"))
 	defer func() {
 		code, message := doRestful("drop database if exists test_ws_tmq_write_raw", "")
 		assert.Equal(t, 0, code, message)
@@ -157,6 +159,7 @@ func TestWSWriteRawBlockError(t *testing.T) {
 	}()
 	code, message := doRestful("create database if not exists test_ws_write_raw_block_error", "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_write_raw_block_error"))
 	defer func() {
 		code, message := doRestful("drop database if exists test_ws_write_raw_block_error", "")
 		assert.Equal(t, 0, code, message)

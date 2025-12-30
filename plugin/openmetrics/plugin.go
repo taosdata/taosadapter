@@ -57,7 +57,7 @@ type Mission struct {
 func (p *OpenMetrics) Init(_ gin.IRouter) error {
 	p.conf.setValue(viper.GetViper())
 	if !p.conf.Enable {
-		logger.Debug("node_exporter disabled")
+		logger.Debug("open metrics disabled")
 		return nil
 	}
 	err := p.conf.CheckConfig()
@@ -246,7 +246,7 @@ func (p *OpenMetrics) requestSingle(mission *Mission) error {
 		buffer.Write(data)
 	}
 	mission.logger.Trace("start get connection from pool")
-	conn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, localhost)
+	conn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, p.conf.Token, localhost)
 	if err != nil {
 		mission.logger.Errorf("commonpool.GetConnection error, err:%s", err)
 		return err

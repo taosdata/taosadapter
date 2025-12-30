@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -18,14 +19,18 @@ import (
 	"unsafe"
 
 	"github.com/gorilla/websocket"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
+	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
+	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
 	"github.com/taosdata/taosadapter/v3/tools/limiter"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 func TestWsQuery(t *testing.T) {
@@ -35,6 +40,7 @@ func TestWsQuery(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful("create database if not exists test_ws_query", "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_ws_query"))
 	code, message = doRestful(
 		"create table if not exists stb1 (ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100),v16 decimal(20,4)) tags (info json)",
 		"test_ws_query")
@@ -526,6 +532,7 @@ func TestWsBinaryQuery(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful(fmt.Sprintf("create database if not exists %s", dbName), "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated(dbName))
 	code, message = doRestful(
 		"create table if not exists stb1 (ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100),v16 decimal(20,4)) tags (info json)",
 		dbName)
@@ -1248,8 +1255,13 @@ func TestQueryRecordSql(t *testing.T) {
 	var host string
 	const appName = "test_record_app"
 	defer func() {
-		bs, err := os.ReadFile(output)
+		err = f.Close()
 		require.NoError(t, err)
+		var bs []byte
+		require.Eventually(t, func() bool {
+			bs, err = os.ReadFile(output)
+			return err == nil && len(bs) > 0
+		}, 5*time.Second, 500*time.Millisecond)
 		t.Log(string(bs))
 		csvReader := csv.NewReader(bytes.NewReader(bs))
 		records, err := csvReader.ReadAll()
@@ -1282,11 +1294,12 @@ func TestQueryRecordSql(t *testing.T) {
 		checkRecord(records[1], "0x223", sql2)
 	}()
 	start := time.Now().Format(recordsql.InputTimeFormat)
-	end := time.Now().Add(time.Second).Format(recordsql.InputTimeFormat)
+	end := time.Now().Add(time.Second * 5).Format(recordsql.InputTimeFormat)
 	err = recordsql.StartRecordSqlWithTestWriter(start, end, "", f)
 	require.NoError(t, err)
 	defer func() {
-		_ = recordsql.StopRecordSql()
+		info := recordsql.StopRecordSql()
+		require.NotNil(t, info)
 	}()
 	s := httptest.NewServer(router)
 	defer s.Close()
@@ -1465,7 +1478,7 @@ func TestLimitQuery(t *testing.T) {
 			// second query will be limited
 			reqID++
 			queryResp = queryFunc(t, ws, uint64(reqID), "select 2")
-			assert.Equal(t, 0xfffe, queryResp.Code, queryResp.Message)
+			assert.Equal(t, httperror.RequestOverLimit, queryResp.Code, queryResp.Message)
 			// query with unlimited sql
 			reqID++
 			queryResp = queryFunc(t, ws, uint64(reqID), "select 1")
@@ -1493,6 +1506,55 @@ func TestLimitQuery(t *testing.T) {
 			require.NoError(t, err)
 		}
 	}
+}
+
+func TestRejectSql(t *testing.T) {
+	v := viper.New()
+	v.Set("rejectQuerySqlRegex", []string{"(?i)^drop\\s+database\\s+.*", "(?i)^drop\\s+table\\s+.*", "(?i)^alter\\s+table\\s+.*", `(?i)^select\s+.*from\s+testdb.*`})
+	err := config.Conf.Reject.SetValue(v)
+	require.NoError(t, err)
+	defer func() {
+		err = config.Conf.Reject.SetValue(viper.New())
+		require.NoError(t, err)
+	}()
+	s := httptest.NewServer(router)
+	defer s.Close()
+
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	// connect
+	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata"}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp connResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+	assert.Equal(t, Connect, connResp.Action)
+
+	queryResp := binaryQuery(t, ws, 0x111, "DROP DATABASE testdb")
+	assert.Equal(t, httperror.SQLForbidden, queryResp.Code, queryResp.Message)
+	queryResp = binaryQuery(t, ws, 0x112, "DROP taBle testdb.stb")
+	assert.Equal(t, httperror.SQLForbidden, queryResp.Code, queryResp.Message)
+	queryResp = binaryQuery(t, ws, 0x113, "ALTER TABLE testdb.stb ADD COLUMN c1 INT")
+	assert.Equal(t, httperror.SQLForbidden, queryResp.Code, queryResp.Message)
+
+	queryResp = binaryQuery(t, ws, 0x114, "select * from information_schema.ins_databases")
+	assert.Equal(t, 0, queryResp.Code, queryResp.Message)
+	err = freeResult(t, ws, 0x115, queryResp.ID)
+	require.NoError(t, err)
+
+	queryResp = binaryQuery(t, ws, 0x117, " select * from testdb.testtb ")
+	assert.Equal(t, httperror.SQLForbidden, queryResp.Code, queryResp.Message)
 }
 
 func binaryQuery(t *testing.T, ws *websocket.Conn, reqID uint64, sql string) queryResponse {
@@ -1576,4 +1638,25 @@ func fetchAllResultWithBinary(t *testing.T, ws *websocket.Conn, reqID uint64, id
 		assert.Equal(t, uint32(0), fetchRawBlockResp.Code, fetchRawBlockResp.Message)
 	}
 	return nil
+}
+
+type stringHeader struct {
+	data unsafe.Pointer
+	len  int
+}
+
+func TestUnsafeString(t *testing.T) {
+	bs := []byte(" hello world ")
+	bsDataP := unsafe.Pointer(&bs[0])
+	str := bytesutil.ToUnsafeString(bs)
+	strDataP := (*stringHeader)(unsafe.Pointer(&str)).data
+	trimStr := strings.TrimSpace(str)
+	trimStrDataP := (*stringHeader)(unsafe.Pointer(&trimStr)).data
+	assert.Equal(t, bsDataP, strDataP)
+	assert.Equal(t, unsafe.Add(strDataP, 1), trimStrDataP)
+	// force gc to check trimStr is valid
+	for i := 0; i < 1000; i++ {
+		runtime.GC()
+	}
+	assert.Equal(t, "hello world", trimStr)
 }

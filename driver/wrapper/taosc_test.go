@@ -4,6 +4,10 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"io"
+	"math/rand"
+	"sort"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 	"unsafe"
@@ -14,6 +18,8 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
+	"github.com/taosdata/taosadapter/v3/tools/otp"
+	"github.com/taosdata/taosadapter/v3/tools/testtools/testenv"
 )
 
 // @author: xftan
@@ -187,6 +193,7 @@ func TestAffectedRows(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists affected_rows_test")
 	require.NoError(t, err)
+	assert.NoError(t, ensureDBCreated(conn, "affected_rows_test"))
 	err = exec(conn, "create table if not exists affected_rows_test.t0(ts timestamp,v int)")
 	require.NoError(t, err)
 	res := TaosQuery(conn, "insert into affected_rows_test.t0 values(now,1)")
@@ -232,6 +239,7 @@ func TestTaosResetCurrentDB(t *testing.T) {
 				t.Error(err)
 				return
 			}
+			assert.NoError(t, ensureDBCreated(conn, "log"))
 			TaosSelectDB(tt.args.taosConnect, "log")
 			result := TaosQuery(tt.args.taosConnect, "select database()")
 			code := TaosError(result)
@@ -451,6 +459,7 @@ func TestTaosLoadTableInfo(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "info1"))
 	err = exec(conn, "create table info1.t(ts timestamp,v int)")
 	if err != nil {
 		t.Error(err)
@@ -483,6 +492,7 @@ func TestTaosGetTableVgID(t *testing.T) {
 	if err = exec(conn, fmt.Sprintf("create database %s", dbName)); err != nil {
 		t.Fatal(err)
 	}
+	assert.NoError(t, ensureDBCreated(conn, dbName))
 	if err = exec(conn, fmt.Sprintf("create stable %s.meters (ts timestamp, current float, voltage int, phase float) "+
 		"tags (location binary(64), groupId int)", dbName)); err != nil {
 		t.Fatal(err)
@@ -533,6 +543,7 @@ func TestTaosGetTablesVgID(t *testing.T) {
 	if err = exec(conn, fmt.Sprintf("create database %s", dbName)); err != nil {
 		t.Fatal(err)
 	}
+	assert.NoError(t, ensureDBCreated(conn, dbName))
 	if err = exec(conn, fmt.Sprintf("create stable %s.meters (ts timestamp, current float, voltage int, phase float) "+
 		"tags (location binary(64), groupId int)", dbName)); err != nil {
 		t.Fatal(err)
@@ -579,6 +590,7 @@ func TestTaosGetCurrentDB(t *testing.T) {
 	_ = exec(conn, fmt.Sprintf("drop database if exists %s", dbName))
 	err = exec(conn, fmt.Sprintf("create database %s", dbName))
 	assert.NoError(t, err)
+	assert.NoError(t, ensureDBCreated(conn, dbName))
 	defer func() {
 		_ = exec(conn, fmt.Sprintf("drop database if exists %s", dbName))
 	}()
@@ -794,4 +806,275 @@ func TestTaosCheckServerStatus(t *testing.T) {
 			assert.Equalf(t, tt.wantDetails, gotDetails, "TaosCheckServerStatus(%v, %v)", tt.args.fqdn, tt.args.port)
 		})
 	}
+}
+
+func TestTaosRegisterInstance(t *testing.T) {
+	code := TaosRegisterInstance("test_instance_1", "test_type", "test_desc", 2)
+	if code != 0 {
+		t.Errorf("TaosRegisterInstance() error code= %d, msg: %s", code, TaosErrorStr(nil))
+	}
+	code = TaosRegisterInstance("test_instance_2", "test_type", "test_desc2", 2)
+	if code != 0 {
+		t.Errorf("TaosRegisterInstance() error code= %d, msg: %s", code, TaosErrorStr(nil))
+	}
+	instance, err := TaosListInstances("test_type")
+	assert.NoError(t, err)
+	sort.Strings(instance)
+	assert.Equal(t, []string{"test_instance_1", "test_instance_2"}, instance)
+	time.Sleep(time.Second)
+	instance, err = TaosListInstances("test_type")
+	assert.NoError(t, err)
+	sort.Strings(instance)
+	assert.Equal(t, []string{"test_instance_1", "test_instance_2"}, instance)
+	time.Sleep(time.Second * 1)
+	instance, err = TaosListInstances("test_type")
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(instance))
+	code = TaosRegisterInstance("test_instance_1", "test_type", "test_desc", 1)
+	if code != 0 {
+		t.Errorf("TaosRegisterInstance() error code= %d, msg: %s", code, TaosErrorStr(nil))
+	}
+	code = TaosRegisterInstance("test_instance_2", "test_type", "test_desc2", 1)
+	if code != 0 {
+		t.Errorf("TaosRegisterInstance() error code= %d, msg: %s", code, TaosErrorStr(nil))
+	}
+	instance, err = TaosListInstances("test_type")
+	assert.NoError(t, err)
+	sort.Strings(instance)
+	assert.Equal(t, []string{"test_instance_1", "test_instance_2"}, instance)
+
+	invalidID := strings.Repeat("0", 256)
+	code = TaosRegisterInstance(invalidID, "test_type", "test_desc", 1)
+	if code == 0 {
+		t.Errorf("TaosRegisterInstance() with invalid instance id should return error")
+	}
+	invalidType := strings.Repeat("0", 64)
+	code = TaosRegisterInstance("test_instance_3", invalidType, "test_desc", 1)
+	if code == 0 {
+		t.Errorf("TaosRegisterInstance() with invalid instance type should return error")
+	}
+	invalidDesc := strings.Repeat("0", 512)
+	code = TaosRegisterInstance("test_instance_3", "test_type", invalidDesc, 1)
+	if code == 0 {
+		t.Errorf("TaosRegisterInstance() with invalid instance desc should return error")
+	}
+}
+
+func TestTaosConnectTOTP(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("totp test only for enterprise edition")
+		return
+	}
+	rootConn, err := TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer TaosClose(rootConn)
+	totpSeed := MustRandomSecret(255)
+	err = exec(rootConn, fmt.Sprintf("create user totp_user pass 'totp_pass_1' TOTPSEED '%s'", totpSeed))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		err = exec(rootConn, "drop user totp_user")
+		assert.NoError(t, err)
+	}()
+	res, err := query(rootConn, fmt.Sprintf("SELECT GENERATE_TOTP_SECRET('%s')", totpSeed))
+	require.NoError(t, err)
+	require.Equal(t, 1, len(res))
+	secret := otp.GenerateTOTPSecret([]byte(totpSeed))
+	secretStr := otp.TOTPSecretStr(secret)
+	assert.Equal(t, secretStr, res[0][0])
+	totpCode := otp.GenerateTOTPCode(secret, uint64(time.Now().Unix())/30, 6)
+	totpCodeStr := strconv.Itoa(totpCode)
+	t.Logf("generated totp code: %s", totpCodeStr)
+	conn, err := TaosConnectTOTP("", "totp_user", "totp_pass_1", totpCodeStr, "", 0)
+	require.NoError(t, err)
+	defer TaosClose(conn)
+	res, err = query(conn, "select 1")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(res))
+	assert.Equal(t, int64(1), res[0][0])
+
+	conn2, err := TaosConnectTOTP("", "totp_user", "totp_pass_1", "abcd1234", "", 0)
+	assert.Error(t, err)
+	assert.Nil(t, conn2)
+
+	conn3, err := TaosConnectTOTP("", "totp_user", "wrong_pass", "", "", 0)
+	assert.Error(t, err)
+	assert.Nil(t, conn3)
+
+	// connect with host and db
+	conn4, err := TaosConnectTOTP("localhost", "totp_user", "totp_pass_1", totpCodeStr, "information_schema", 0)
+	require.NoError(t, err)
+	defer TaosClose(conn4)
+	res, err = query(conn4, "select database()")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(res))
+	assert.Equal(t, "information_schema", res[0][0])
+}
+
+const (
+	lowercase = "abcdefghijklmnopqrstuvwxyz"
+	uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	digits    = "0123456789"
+	allChars  = lowercase + uppercase + digits
+)
+
+var seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+func MustRandomSecret(length int) string {
+	if length < 3 {
+		panic("length must be at least 3")
+	}
+	b := make([]byte, length)
+	b[0] = lowercase[seededRand.Intn(len(lowercase))]
+	b[1] = uppercase[seededRand.Intn(len(uppercase))]
+	b[2] = digits[seededRand.Intn(len(digits))]
+	for i := 3; i < length; i++ {
+		b[i] = allChars[seededRand.Intn(len(allChars))]
+	}
+	seededRand.Shuffle(len(b), func(i, j int) {
+		b[i], b[j] = b[j], b[i]
+	})
+
+	return string(b)
+}
+
+func TestTaosConnectToken(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("token test only for enterprise edition")
+		return
+	}
+	rootConn, err := TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer TaosClose(rootConn)
+	val, err := query(rootConn, "create token test_token_wrapper from user root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.NoError(t, EnsureTokenCreated("test_token_wrapper"))
+	defer func() {
+		err = exec(rootConn, "drop token test_token_wrapper")
+		assert.NoError(t, err)
+	}()
+	token := val[0][0].(string)
+	conn, err := TaosConnectToken("", token, "", 0)
+	require.NoError(t, err)
+	defer TaosClose(conn)
+	res, err := query(conn, "select 1")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(res))
+	assert.Equal(t, int64(1), res[0][0])
+
+	conn2, err := TaosConnectToken("", "wrong token", "", 0)
+	assert.Error(t, err)
+	assert.Nil(t, conn2)
+
+	err = exec(rootConn, "create user test_token_wrapper_user pass 'test_pass_1'")
+	assert.NoError(t, err)
+	defer func() {
+		err = exec(rootConn, "drop user test_token_wrapper_user")
+		assert.NoError(t, err)
+	}()
+	val, err = query(rootConn, "create token test_token_wrapper_user_token from user test_token_wrapper_user")
+	assert.NoError(t, err)
+	assert.NoError(t, EnsureTokenCreated("test_token_wrapper_user_token"))
+	defer func() {
+		err = exec(rootConn, "drop token test_token_wrapper_user_token")
+		assert.NoError(t, err)
+	}()
+	token = val[0][0].(string)
+	conn3, err := TaosConnectToken("", token, "", 0)
+	require.NoError(t, err)
+	defer TaosClose(conn3)
+	res, err = query(conn3, "select 1")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(res))
+	assert.Equal(t, int64(1), res[0][0])
+	assert.NoError(t, err)
+
+	// connect with host and db
+	conn4, err := TaosConnectToken("localhost", token, "information_schema", 0)
+	require.NoError(t, err)
+	defer TaosClose(conn4)
+	res, err = query(conn4, "select database()")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(res))
+	assert.Equal(t, "information_schema", res[0][0])
+}
+
+func TestTaosGetConnectionInfo(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("token test only for enterprise edition")
+		return
+	}
+	rootConn, err := TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer TaosClose(rootConn)
+	user, code := TaosGetConnectionInfo(rootConn, common.TSDB_CONNECTION_INFO_USER)
+	if code != 0 {
+		errMessage := TaosErrorStr(nil)
+		t.Fatalf("TaosGetConnectionInfo() error code= %d, msg: %s", code, errMessage)
+	}
+	assert.Equal(t, "root", user)
+	val, err := query(rootConn, "create token test_client_info_wrapper from user root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.NoError(t, EnsureTokenCreated("test_client_info_wrapper"))
+	defer func() {
+		err = exec(rootConn, "drop token test_client_info_wrapper")
+		assert.NoError(t, err)
+	}()
+	token := val[0][0].(string)
+	conn, err := TaosConnectToken("", token, "", 0)
+	require.NoError(t, err)
+	defer TaosClose(conn)
+	user, code = TaosGetConnectionInfo(conn, common.TSDB_CONNECTION_INFO_USER)
+	if code != 0 {
+		errMessage := TaosErrorStr(nil)
+		t.Fatalf("TaosGetConnectionInfo() error code= %d, msg: %s", code, errMessage)
+	}
+	assert.Equal(t, "root", user)
+}
+
+func BenchmarkTaosConnect(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		conn, err := TaosConnect("", "root", "taosdata", "", 0)
+		if err != nil {
+			b.Error(err)
+			return
+		}
+		TaosClose(conn)
+	}
+}
+
+func EnsureTokenCreated(token string) error {
+	conn, err := TaosConnect("", "root", "taosdata", "", 0)
+	if err != nil {
+		return err
+	}
+	defer TaosClose(conn)
+	for i := 0; i < 100; i++ {
+		value, err := query(conn, `select * from performance_schema.perf_trans where oper = 'create-token'`)
+		if err != nil {
+			return err
+		}
+		if len(value) == 0 {
+			value, err := query(conn, fmt.Sprintf(`select * from information_schema.ins_tokens where name = '%s'`, token))
+			if err != nil {
+				return err
+			}
+			if len(value) > 0 {
+				return nil
+			}
+		}
+		time.Sleep(time.Millisecond * 500)
+	}
+	return fmt.Errorf("token not created after waiting")
 }

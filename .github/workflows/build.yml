@@ -196,7 +196,10 @@ jobs:
           cache-dependency-path: taosadapter/go.sum
 
       - name: build taosAdapter
-        run: cd ./taosadapter && go build
+        run: |
+          cd ./taosadapter
+          go mod download
+          go build
 
   test_go_test:
     runs-on: ${{ matrix.os }}
@@ -267,7 +270,11 @@ jobs:
 
       - name: test
         id: test
-        run: sudo go test -coverpkg=./... -v --count=1 -coverprofile=coverage.txt -covermode=atomic ./...
+        env:
+          GO_TEST_DISABLE_DISPLAY_LOG: "true"
+        run: |
+          go mod download
+          go test -coverpkg=./... -v --count=1 -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest'
@@ -351,7 +358,8 @@ jobs:
     name: Build-asan${{ matrix.os }}
     strategy:
       matrix:
-        os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
+        #       asan runs failed on 24.04, see: https://github.com/cockroachdb/pebble/issues/5342
+        os: [ 'ubuntu-22.04' , 'ubuntu-22.04-arm' ]
     outputs:
       commit_id: ${{ steps.get_commit_id.outputs.commit_id }}
     steps:
@@ -469,7 +477,8 @@ jobs:
     strategy:
       matrix:
         go: [ 'stable' ]
-        os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
+        #       asan runs failed on 24.04, see: https://github.com/cockroachdb/pebble/issues/5342
+        os: [ 'ubuntu-22.04' , 'ubuntu-22.04-arm' ]
     name: test taosAdapter with asan ${{ matrix.os }}-${{ matrix.go }}
     steps:
       - name: get cache server by pr
@@ -526,7 +535,11 @@ jobs:
 
       - name: test
         id: test
-        run: sudo go test -v --count=1 -asan ./...
+        env:
+          GO_TEST_DISABLE_DISPLAY_LOG: "true"
+        run: |
+          go mod download
+          go test -v --count=1 -asan ./...
 
   govulncheck:
     name: govulncheck
@@ -582,3 +595,91 @@ jobs:
 
       - name: Run vulnerability scan
         run: govulncheck ./...
+
+  test_e2e:
+    name: test_e2e
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ 'ubuntu-latest' , 'ubuntu-24.04-arm' ]
+    needs: build
+    steps:
+      - name: get cache server by pr
+        if: github.event_name == 'pull_request'
+        id: get-cache-server-pr
+        uses: actions/cache@v4
+        with:
+          path: server.tar.gz
+          key: ${{ matrix.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
+          restore-keys: |
+            ${{ matrix.os }}-build-${{ github.base_ref }}-
+
+      - name: get cache server by push
+        if: github.event_name == 'push'
+        id: get-cache-server-push
+        uses: actions/cache@v4
+        with:
+          path: server.tar.gz
+          key: ${{ matrix.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
+          restore-keys: |
+            ${{ matrix.os }}-build-${{ github.ref_name }}-
+
+      - name: get cache server manually
+        if: github.event_name == 'workflow_dispatch'
+        id: get-cache-server-manually
+        uses: actions/cache@v4
+        with:
+          path: server.tar.gz
+          key: ${{ matrix.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
+          restore-keys: |
+            ${{ matrix.os }}-build-${{ inputs.tbBranch }}-
+
+      - name: install
+        run: |
+          tar -zxvf server.tar.gz
+          cd release && sudo sh install.sh
+
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: copy taos cfg
+        run: |
+          sudo mkdir -p /etc/taos
+          sudo cp ./.github/workflows/taos.cfg /etc/taos/taos.cfg
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: go.sum
+
+      - name: start shell
+        run: |
+          cat >start.sh<<EOF
+          ulimit -n 65535 && TAOS_SUPPORT_VNODES=256 taosd
+          EOF
+
+      - name: start taosd
+        run: nohup sudo sh ./start.sh & disown
+
+      - name: build taosAdapter
+        run: |
+          go mod download
+          go build -cover
+
+      - name: run test
+        run: |
+          sudo chmod +x ./tests/e2e.sh || true
+          sudo bash ./tests/e2e.sh
+
+      - name: merge coverage
+        run: |
+          sudo go tool covdata textfmt -i=coverage -o=cov.txt
+
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./cov.txt
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_ORG_TOKEN }}
+          OS: linux

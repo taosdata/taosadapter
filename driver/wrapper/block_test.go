@@ -30,7 +30,7 @@ func TestReadBlock(t *testing.T) {
 	}()
 	err = exec(conn, "create database test_block_raw")
 	assert.NoError(t, err)
-
+	assert.NoError(t, ensureDBCreated(conn, "test_block_raw"))
 	err = exec(conn, "create table if not exists test_block_raw.all_type (ts timestamp,"+
 		"c1 bool,"+
 		"c2 tinyint,"+
@@ -191,6 +191,7 @@ func TestTaosWriteRawBlock(t *testing.T) {
 	}()
 	err = exec(conn, "create database test_write_block_raw")
 	require.NoError(t, err)
+	assert.NoError(t, ensureDBCreated(conn, "test_write_block_raw"))
 	// todo: TDengine not support taos_write_raw_block with blob data
 	err = exec(conn, "create table if not exists test_write_block_raw.all_type (ts timestamp,"+
 		"c1 bool,"+
@@ -330,6 +331,7 @@ func TestTaosWriteRawBlockWithFields(t *testing.T) {
 	}()
 	err = exec(conn, "create database test_write_block_raw_fields")
 	require.NoError(t, err)
+	assert.NoError(t, ensureDBCreated(conn, "test_write_block_raw_fields"))
 	// todo: TDengine not support taos_write_raw_block_with_fields with blob data
 	err = exec(conn, "create table if not exists test_write_block_raw_fields.all_type (ts timestamp,"+
 		"c1 bool,"+
@@ -437,6 +439,7 @@ func TestTaosWriteRawBlockWithReqID(t *testing.T) {
 	}()
 	err = exec(conn, "create database test_write_block_raw_with_reqid")
 	require.NoError(t, err)
+	assert.NoError(t, ensureDBCreated(conn, "test_write_block_raw_with_reqid"))
 	// todo: TDengine not support taos_write_raw_block_with_reqid with blob data
 	err = exec(conn, "create table if not exists test_write_block_raw_with_reqid.all_type (ts timestamp,"+
 		"c1 bool,"+
@@ -579,6 +582,7 @@ func TestTaosWriteRawBlockWithFieldsWithReqID(t *testing.T) {
 	}()
 	err = exec(conn, "create database test_write_block_raw_fields_with_reqid")
 	require.NoError(t, err)
+	assert.NoError(t, ensureDBCreated(conn, "test_write_block_raw_fields_with_reqid"))
 	// todo: TDengine not support taos_write_raw_block_with_fields_with_reqid with blob data
 	err = exec(conn, "create table if not exists test_write_block_raw_fields_with_reqid.all_type (ts timestamp,"+
 		"c1 bool,"+

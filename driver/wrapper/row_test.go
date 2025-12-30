@@ -28,6 +28,7 @@ func TestFetchRowJSON(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists test_json_wrapper")
 	require.NoError(t, err)
+	assert.NoError(t, ensureDBCreated(conn, "test_json_wrapper"))
 	defer func() {
 		err = exec(conn, "drop database if exists test_json_wrapper")
 		require.NoError(t, err)
@@ -98,6 +99,7 @@ func TestFetchRow(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists "+db)
 	require.NoError(t, err)
+	assert.NoError(t, ensureDBCreated(conn, db))
 	err = exec(conn, fmt.Sprintf("create stable if not exists %s.stb1 (ts timestamp, name binary(10)) tags(n int);", db))
 	require.NoError(t, err)
 	err = exec(conn, fmt.Sprintf("create table if not exists %s.tb1 using %s.stb1 tags(1)", db, db))
@@ -175,6 +177,7 @@ func TestFetchRowNchar(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists "+db)
 	require.NoError(t, err)
+	assert.NoError(t, ensureDBCreated(conn, db))
 	err = exec(conn, fmt.Sprintf("create stable if not exists %s.stb1 (ts timestamp, name nchar(10)) tags(n int);", db))
 	require.NoError(t, err)
 
@@ -253,6 +256,7 @@ func TestFetchRowAllType(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists "+db)
 	require.NoError(t, err)
+	assert.NoError(t, ensureDBCreated(conn, db))
 	err = exec(conn, fmt.Sprintf(
 		"create stable if not exists %s.stb1 (ts timestamp,"+
 			"c1 bool,"+

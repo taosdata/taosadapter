@@ -11,13 +11,13 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
-	"github.com/taosdata/taosadapter/v3/driver/common/parser"
-	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/plugin/opentsdbtelnet"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 // @author: xftan
@@ -45,6 +45,7 @@ func TestPlugin(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists opentsdb_telnet")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("opentsdb_telnet"))
 	err = p.Init(nil)
 	assert.NoError(t, err)
 	err = p.Start()
@@ -62,13 +63,24 @@ func TestPlugin(t *testing.T) {
 	}()
 	_, err = fmt.Fprintf(c, "put sys.if.bytes.out 1479496100 %d host=web01 interface=eth0\r\n", number)
 	assert.NoError(t, err)
-	time.Sleep(time.Second)
+
+	var values [][]driver.Value
+	for i := 0; i < 100; i++ {
+		checkSql := "select * from information_schema.ins_tables where db_name='opentsdb_telnet' and stable_name='sys_if_bytes_out'"
+		values, err = query(conn, checkSql)
+		require.NoError(t, err)
+		if len(values) > 0 {
+			break
+		}
+		time.Sleep(time.Millisecond * 500)
+	}
+	require.Equal(t, 1, len(values))
 
 	defer func() {
 		err = exec(conn, "drop database if exists opentsdb_telnet")
 		assert.NoError(t, err)
 	}()
-	values, err := query(conn, "select last(_value) from opentsdb_telnet.`sys_if_bytes_out`")
+	values, err = query(conn, "select last(_value) from opentsdb_telnet.`sys_if_bytes_out`")
 	assert.NoError(t, err)
 	if int32(values[0][0].(float64)) != number {
 		t.Errorf("got %f expect %d", values[0], number)
@@ -89,48 +101,12 @@ func TestPlugin(t *testing.T) {
 
 func exec(conn unsafe.Pointer, sql string) error {
 	logger := log.GetLogger("test")
-	isDebug := log.IsDebug()
-	res := syncinterface.TaosQuery(conn, sql, logger, isDebug)
-	defer syncinterface.TaosSyncQueryFree(res, logger, isDebug)
-	code := syncinterface.TaosError(res, logger, isDebug)
-	if code != 0 {
-		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
-		return errors.NewError(code, errStr)
-	}
-	return nil
+	logger.Debugf("exec sql %s", sql)
+	return testtools.Exec(conn, sql)
 }
 
 func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
 	logger := log.GetLogger("test")
-	isDebug := log.IsDebug()
-	res := syncinterface.TaosQuery(conn, sql, logger, isDebug)
-	defer syncinterface.TaosSyncQueryFree(res, logger, isDebug)
-	code := syncinterface.TaosError(res, logger, isDebug)
-	if code != 0 {
-		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
-		return nil, errors.NewError(code, errStr)
-	}
-	fileCount := syncinterface.TaosNumFields(res, logger, isDebug)
-	rh, err := syncinterface.ReadColumn(res, fileCount, logger, isDebug)
-	if err != nil {
-		return nil, err
-	}
-	precision := syncinterface.TaosResultPrecision(res, logger, isDebug)
-	var result [][]driver.Value
-	for {
-		columns, errCode, block := syncinterface.TaosFetchRawBlock(res, logger, isDebug)
-		if errCode != 0 {
-			errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
-			return nil, errors.NewError(errCode, errStr)
-		}
-		if columns == 0 {
-			break
-		}
-		r, err := parser.ReadBlock(block, columns, rh.ColTypes, precision)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, r...)
-	}
-	return result, nil
+	logger.Debugf("query sql %s", sql)
+	return testtools.Query(conn, sql)
 }

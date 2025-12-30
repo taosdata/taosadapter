@@ -81,3 +81,7 @@ const (
 const (
 	TAOS_CONN_MODE_BI = 0
 )
+
+const (
+	TSDB_CONNECTION_INFO_USER = 0
+)

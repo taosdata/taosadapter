@@ -19,6 +19,7 @@ type Config struct {
 	BatchSize         int
 	FlushInterval     time.Duration
 	TTL               int
+	Token             string
 }
 
 func (c *Config) setValue() {
@@ -35,6 +36,7 @@ func (c *Config) setValue() {
 		c.BatchSize = 1
 	}
 	c.TTL = viper.GetInt("opentsdb_telnet.ttl")
+	c.Token = viper.GetString("opentsdb_telnet.token")
 }
 func init() {
 	_ = viper.BindEnv("opentsdb_telnet.enable", "TAOS_ADAPTER_OPENTSDB_TELNET_ENABLE")
@@ -76,4 +78,8 @@ func init() {
 	_ = viper.BindEnv("opentsdb_telnet.ttl", "TAOS_ADAPTER_OPENTSDB_TELNET_TTL")
 	pflag.Int("opentsdb_telnet.ttl", 0, `opentsdb_telnet data ttl. Env "TAOS_ADAPTER_OPENTSDB_TELNET_TTL"`)
 	viper.SetDefault("opentsdb_telnet.ttl", 0)
+
+	_ = viper.BindEnv("opentsdb_telnet.token", "TAOS_ADAPTER_OPENTSDB_TELNET_TOKEN")
+	pflag.String("opentsdb_telnet.token", "", `opentsdb_telnet token. Env "TAOS_ADAPTER_OPENTSDB_TELNET_TOKEN"`)
+	viper.SetDefault("opentsdb_telnet.token", "")
 }

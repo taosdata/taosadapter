@@ -44,13 +44,13 @@ func initController() *webSocketCtl {
 	})
 	m.HandleMessage(func(session *melody.Session, data []byte) {
 		h := session.MustGet(TaosKey).(*messageHandler)
-		if h.isClosed() {
+		if h.IsClosed() {
 			return
 		}
 		h.wait.Add(1)
 		go func() {
 			defer h.wait.Done()
-			if h.isClosed() {
+			if h.IsClosed() {
 				return
 			}
 			h.handleMessage(session, data)
@@ -58,13 +58,13 @@ func initController() *webSocketCtl {
 	})
 	m.HandleMessageBinary(func(session *melody.Session, data []byte) {
 		h := session.MustGet(TaosKey).(*messageHandler)
-		if h.isClosed() {
+		if h.IsClosed() {
 			return
 		}
 		h.wait.Add(1)
 		go func() {
 			defer h.wait.Done()
-			if h.isClosed() {
+			if h.IsClosed() {
 				return
 			}
 			h.handleMessageBinary(session, data)
@@ -95,5 +95,4 @@ func CloseWs(session *melody.Session) {
 	if exist && t != nil {
 		t.(*messageHandler).Close()
 	}
-	session.Set(TaosKey, nil)
 }
