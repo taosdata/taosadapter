@@ -21,6 +21,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller"
 	_ "github.com/taosdata/taosadapter/v3/controller/rest"
@@ -35,6 +36,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/tools/layout"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 	"github.com/taosdata/taosadapter/v3/tools/testtools"
+	"github.com/taosdata/taosadapter/v3/tools/testtools/testenv"
 	"github.com/taosdata/taosadapter/v3/version"
 )
 
@@ -2127,8 +2129,18 @@ func TestDropUser(t *testing.T) {
 	defer doHttpSql("drop user test_tmq_drop_user")
 	code, message := doHttpSql("create user test_tmq_drop_user pass 'pass_123'")
 	assert.Equal(t, 0, code, message)
-	code, message = doHttpSql(fmt.Sprintf("grant subscribe on %s to test_tmq_drop_user", topic))
-	assert.Equal(t, 0, code, message)
+	code, message = doHttpSql(fmt.Sprintf("grant subscribe on topic %s.%s to test_tmq_drop_user", dbName, topic))
+	if testenv.IsEnterpriseTest() {
+		require.Equal(t, 0, code, message)
+	} else {
+		require.NotEqual(t, 0, code, message)
+	}
+	code, message = doHttpSql(fmt.Sprintf("grant all on database %s to test_tmq_drop_user", dbName))
+	if testenv.IsEnterpriseTest() {
+		require.Equal(t, 0, code, message)
+	} else {
+		require.NotEqual(t, 0, code, message)
+	}
 
 	s := httptest.NewServer(router)
 	defer s.Close()
@@ -2166,8 +2178,8 @@ func TestDropUser(t *testing.T) {
 	assert.NoError(t, err)
 	var subscribeResp TMQSubscribeResp
 	err = json.Unmarshal(msg, &subscribeResp)
-	assert.NoError(t, err)
-	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
+	require.NoError(t, err)
+	require.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
 	// drop user
 	code, message = doHttpSql("drop user test_tmq_drop_user")
 	assert.Equal(t, 0, code, message)
