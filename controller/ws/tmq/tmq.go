@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -55,17 +56,19 @@ func NewTMQController() *TMQController {
 
 	tmqM.HandleMessage(func(session *melody.Session, data []byte) {
 		t := session.MustGet(TaosTMQKey).(*TMQ)
-		if t.isClosed() {
+		if t.IsClosed() {
 			return
 		}
 		ctx := context.WithValue(context.Background(), wstool.StartTimeKey, time.Now())
 		logger := wstool.GetLogger(session)
-		logger.Debugf("get ws message data:%s", data)
 		var action wstool.WSAction
 		err := json.Unmarshal(data, &action)
 		if err != nil {
 			logger.Errorf("unmarshal ws request error, err:%s", err)
 			return
+		}
+		if action.Action != TMQSubscribe {
+			logger.Debugf("get ws message data:%s", data)
 		}
 		if action.Action == TMQPoll {
 			var req TMQPollReq
@@ -81,7 +84,7 @@ func NewTMQController() *TMQController {
 		t.wg.Add(1)
 		go func() {
 			defer t.wg.Done()
-			if t.isClosed() {
+			if t.IsClosed() {
 				return
 			}
 			switch action.Action {
@@ -104,6 +107,7 @@ func NewTMQController() *TMQController {
 					logger.Errorf("unmarshal subscribe args, err:%s, args:%s", err.Error(), action.Args)
 					return
 				}
+				logger.Debugf("get ws message, subscribe action:%s", &req)
 				t.subscribe(ctx, session, &req)
 			case TMQFetch:
 				var req TMQFetchReq
@@ -220,32 +224,29 @@ func NewTMQController() *TMQController {
 		//session.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
 		logger := wstool.GetLogger(session)
 		logger.Debugf("ws close, code:%d, msg %s", i, s)
-		t, exist := session.Get(TaosTMQKey)
-		if exist && t != nil {
-			t.(*TMQ).Close(logger)
-		}
+		CloseWs(session)
 		return nil
 	})
 
 	tmqM.HandleError(func(session *melody.Session, err error) {
 		wstool.LogWSError(session, err)
-		logger := wstool.GetLogger(session)
-		t, exist := session.Get(TaosTMQKey)
-		if exist && t != nil {
-			t.(*TMQ).Close(logger)
-		}
+		CloseWs(session)
 	})
 
 	tmqM.HandleDisconnect(func(session *melody.Session) {
 		monitor.RecordWSTMQDisconnect()
 		logger := wstool.GetLogger(session)
 		logger.Debug("ws disconnect")
-		t, exist := session.Get(TaosTMQKey)
-		if exist && t != nil {
-			t.(*TMQ).Close(logger)
-		}
+		CloseWs(session)
 	})
 	return &TMQController{tmqM: tmqM}
+}
+
+func CloseWs(session *melody.Session) {
+	t, exist := session.Get(TaosTMQKey)
+	if exist && t != nil {
+		t.(*TMQ).Close()
+	}
 }
 
 func (s *TMQController) Init(ctl gin.IRouter) {
@@ -267,8 +268,7 @@ type TMQ struct {
 	handler               *tmqhandle.TMQHandler
 	isAutoCommit          bool
 	unsubscribed          bool
-	closed                bool
-	closedLock            sync.RWMutex
+	closed                uint32
 	autocommitInterval    time.Duration
 	nextTime              time.Time
 	exit                  chan struct{}
@@ -281,7 +281,8 @@ type TMQ struct {
 	conn                  unsafe.Pointer
 	whitelistChangeHandle cgo.Handle
 	dropUserHandle        cgo.Handle
-	sync.Mutex
+	mutex                 sync.Mutex
+	once                  sync.Once
 }
 
 func (t *TMQ) setPollRequest(req *TMQPollReq) {
@@ -303,10 +304,12 @@ func (t *TMQ) setPollRequest(req *TMQPollReq) {
 	}
 }
 
-func (t *TMQ) isClosed() bool {
-	t.closedLock.RLock()
-	defer t.closedLock.RUnlock()
-	return t.closed
+func (t *TMQ) IsClosed() bool {
+	return atomic.LoadUint32(&t.closed) == 1
+}
+
+func (t *TMQ) setClosed() {
+	atomic.StoreUint32(&t.closed, 1)
 }
 
 type Message struct {
@@ -345,58 +348,6 @@ func NewTaosTMQ(session *melody.Session) *TMQ {
 	}
 }
 
-func (t *TMQ) waitSignal(logger *logrus.Entry) {
-	defer func() {
-		logger.Trace("exit wait signal")
-		tool.PutRegisterChangeWhiteListHandle(t.whitelistChangeHandle)
-		tool.PutRegisterDropUserHandle(t.dropUserHandle)
-	}()
-	for {
-		select {
-		case <-t.dropUserChan:
-			logger.Trace("get drop user signal")
-			isDebug := log.IsDebug()
-			t.lock(logger, isDebug)
-			if t.isClosed() {
-				logger.Trace("server closed")
-				t.Unlock()
-				return
-			}
-			logger.Trace("user dropped! close connection!")
-			t.signalExit(logger, isDebug)
-			return
-		case <-t.whitelistChangeChan:
-			logger.Trace("get whitelist change signal")
-			isDebug := log.IsDebug()
-			t.lock(logger, isDebug)
-			if t.isClosed() {
-				logger.Trace("server closed")
-				t.Unlock()
-				return
-			}
-			logger.Trace("get whitelist")
-			s := log.GetLogNow(isDebug)
-			whitelist, err := tool.GetWhitelist(t.conn, logger, isDebug)
-			logger.Debugf("get whitelist cost:%s", log.GetLogDuration(isDebug, s))
-			if err != nil {
-				logger.Errorf("get whitelist error, close connection, err:%s", err)
-				t.signalExit(logger, isDebug)
-				return
-			}
-			logger.Tracef("check whitelist, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
-			valid := tool.CheckWhitelist(whitelist, t.ip)
-			if !valid {
-				logger.Errorf("ip not in whitelist, close connection, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
-				t.signalExit(logger, isDebug)
-				return
-			}
-			t.Unlock()
-		case <-t.exit:
-			return
-		}
-	}
-}
-
 func (t *TMQ) waitPoll(logger *logrus.Entry) {
 	defer func() {
 		logger.Trace("exit wait poll")
@@ -411,22 +362,26 @@ func (t *TMQ) waitPoll(logger *logrus.Entry) {
 	}
 }
 
-func (t *TMQ) signalExit(logger *logrus.Entry, isDebug bool) {
+func (t *TMQ) UnlockAndExit(logger *logrus.Entry, isDebug bool) {
 	logger.Trace("close session")
 	s := log.GetLogNow(isDebug)
 	_ = t.session.Close()
 	logger.Debugf("close session cost:%s", log.GetLogDuration(isDebug, s))
 	t.Unlock()
 	s = log.GetLogNow(isDebug)
-	t.Close(logger)
+	t.Close()
 	logger.Debugf("close handler cost:%s", log.GetLogDuration(isDebug, s))
 }
 
-func (t *TMQ) lock(logger *logrus.Entry, isDebug bool) {
+func (t *TMQ) Lock(logger *logrus.Entry, isDebug bool) {
 	s := log.GetLogNow(isDebug)
 	logger.Debug("get handler lock")
-	t.Lock()
+	t.mutex.Lock()
 	logger.Debugf("get handler lock finish, cost:%s", log.GetLogDuration(isDebug, s))
+}
+
+func (t *TMQ) Unlock() {
+	t.mutex.Unlock()
 }
 
 type TMQSubscribeReq struct {
@@ -453,6 +408,53 @@ type TMQSubscribeReq struct {
 	Connector            string            `json:"connector"`
 	MsgConsumeRawdata    string            `json:"msg_consume_rawdata"`
 	Config               map[string]string `json:"config"`
+}
+
+func (r *TMQSubscribeReq) String() string {
+	builder := &strings.Builder{}
+
+	builder.WriteString("{")
+	_, _ = fmt.Fprintf(builder, "req_id: %d,", r.ReqID)
+	_, _ = fmt.Fprintf(builder, "user: %q,", r.User)
+	builder.WriteString("password: \"[HIDDEN]\",")
+	_, _ = fmt.Fprintf(builder, "db: %q,", r.DB)
+	_, _ = fmt.Fprintf(builder, "group_id: %q,", r.GroupID)
+	_, _ = fmt.Fprintf(builder, "client_id: %q,", r.ClientID)
+	_, _ = fmt.Fprintf(builder, "offset_rest: %q,", r.OffsetRest)
+	_, _ = fmt.Fprintf(builder, "offset_reset: %q,", r.OffsetReset)
+	_, _ = fmt.Fprintf(builder, "topics: %v,", r.Topics)
+	_, _ = fmt.Fprintf(builder, "auto_commit: %q,", r.AutoCommit)
+	_, _ = fmt.Fprintf(builder, "auto_commit_interval_ms: %q,", r.AutoCommitIntervalMS)
+	_, _ = fmt.Fprintf(builder, "snapshot_enable: %q,", r.SnapshotEnable)
+	_, _ = fmt.Fprintf(builder, "with_table_name: %q,", r.WithTableName)
+	_, _ = fmt.Fprintf(builder, "enable_batch_meta: %q,", r.EnableBatchMeta)
+	_, _ = fmt.Fprintf(builder, "msg_consume_excluded: %q,", r.MsgConsumeExcluded)
+	_, _ = fmt.Fprintf(builder, "session_timeout_ms: %q,", r.SessionTimeoutMS)
+	_, _ = fmt.Fprintf(builder, "max_poll_interval_ms: %q,", r.MaxPollIntervalMS)
+	_, _ = fmt.Fprintf(builder, "tz: %q,", r.TZ)
+	_, _ = fmt.Fprintf(builder, "app: %q,", r.App)
+	_, _ = fmt.Fprintf(builder, "ip: %q,", r.IP)
+	_, _ = fmt.Fprintf(builder, "connector: %q,", r.Connector)
+	_, _ = fmt.Fprintf(builder, "msg_consume_rawdata: %q,", r.MsgConsumeRawdata)
+
+	builder.WriteString(" config: {")
+	if len(r.Config) > 0 {
+		first := true
+		for k, v := range r.Config {
+			if k == "td.connect.pass" {
+				continue
+			}
+			if !first {
+				builder.WriteString(", ")
+			}
+			_, _ = fmt.Fprintf(builder, "%q: %q", k, v)
+			first = false
+		}
+	}
+	builder.WriteString("},")
+	builder.WriteString("}")
+
+	return builder.String()
 }
 
 type TMQSubscribeResp struct {
@@ -498,12 +500,11 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	action := TMQSubscribe
 	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
 	isDebug := log.IsDebug()
-	logger.Tracef("subscribe request:%+v", req)
 	// lock for consumer and unsubscribed
 	// used for subscribe and unsubscribe
-	t.lock(logger, isDebug)
+	t.Lock(logger, isDebug)
 	defer t.Unlock()
-	if t.isClosed() {
+	if t.IsClosed() {
 		logger.Trace("server closed")
 		return
 	}
@@ -690,16 +691,18 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	}
 	conn := syncinterface.TMQGetConnect(cPointer, logger, isDebug)
 	logger.Debugf("call taos_fetch_whitelist_a, conn:%p", conn)
-	whitelist, err := tool.GetWhitelist(conn, logger, isDebug)
+	allowlist, blocklist, err := tool.GetWhitelist(conn, logger, isDebug)
 	logger.Debug("taos_fetch_whitelist_a finish")
 	if err != nil {
 		t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, err, "get whitelist error")
 		return
 	}
-	logger.Debugf("check whitelist, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
-	valid := tool.CheckWhitelist(whitelist, t.ip)
+	allowlistStr := tool.IpNetSliceToString(allowlist)
+	blocklistStr := tool.IpNetSliceToString(blocklist)
+	logger.Tracef("check whitelist, ip: %s, allowlist: %s, blocklist: %s", t.ipStr, allowlistStr, blocklistStr)
+	valid := tool.CheckWhitelist(allowlist, blocklist, t.ip)
 	if !valid {
-		errorExt := fmt.Sprintf("whitelist prohibits current IP access, ip:%s, whitelist:%s", t.ipStr, tool.IpNetSliceToString(whitelist))
+		errorExt := fmt.Sprintf("ip not in whitelist, ip: %s, allowlist: %s, blocklist: %s", t.ipStr, allowlistStr, blocklistStr)
 		err = errors.New("whitelist prohibits current IP access")
 		t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, err, errorExt)
 		return
@@ -795,8 +798,8 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	t.conn = conn
 	t.consumer = cPointer
 	logger.Debug("start to wait signal")
-	go t.waitSignal(t.logger)
 	go t.waitPoll(t.logger)
+	go wstool.WaitSignal(t, conn, t.ip, t.ipStr, t.whitelistChangeHandle, t.dropUserHandle, t.whitelistChangeChan, t.dropUserChan, t.exit, t.logger)
 	wstool.WSWriteJson(session, logger, &TMQSubscribeResp{
 		Action:  action,
 		ReqID:   req.ReqID,
@@ -1407,9 +1410,9 @@ func (t *TMQ) unsubscribe(ctx context.Context, session *melody.Session, req *TMQ
 	logger := t.logger.WithField("action", action).WithField(config.ReqIDKey, req.ReqID)
 	logger.Tracef("unsubscribe request:%+v", req)
 	isDebug := log.IsDebug()
-	t.lock(logger, isDebug)
+	t.Lock(logger, isDebug)
 	defer t.Unlock()
-	if t.isClosed() {
+	if t.IsClosed() {
 		logger.Trace("server closed")
 		return
 	}
@@ -1522,66 +1525,71 @@ func (t *TMQ) offsetSeek(ctx context.Context, session *melody.Session, req *TMQO
 	})
 }
 
-func (t *TMQ) Close(logger *logrus.Entry) {
-	t.Lock()
+func (t *TMQ) Close() {
+	t.Lock(t.logger, log.IsDebug())
 	defer t.Unlock()
-	if t.isClosed() {
+	if t.IsClosed() {
 		return
 	}
-	t.closedLock.Lock()
-	t.closed = true
-	t.closedLock.Unlock()
-	start := time.Now()
-	logger.Trace("tmq close")
-	defer func() {
-		logger.Debugf("tmq close end, cost:%s", time.Since(start).String())
-	}()
-	close(t.exit)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	done := make(chan struct{})
-	go func() {
-		t.wg.Wait()
-		close(done)
-	}()
-	select {
-	case <-ctx.Done():
-		logger.Warn("wait stop over 1 minute")
-		<-done
-	case <-done:
-	}
-	logger.Debug("wait stop done")
-	isDebug := log.IsDebug()
+	t.setClosed()
+	t.stop()
+}
 
-	defer func() {
-		s := log.GetLogNow(isDebug)
-		t.asyncLocker.Lock()
-		asynctmq.DestroyTMQThread(t.thread)
-		t.asyncLocker.Unlock()
-		logger.Tracef("destroy tmq thread cost:%s", log.GetLogDuration(isDebug, s))
-		tmqhandle.GlobalTMQHandlerPoll.Put(t.handler)
-	}()
+func (t *TMQ) stop() {
+	t.once.Do(func() {
+		logger := t.logger
+		start := time.Now()
+		logger.Trace("tmq close")
+		defer func() {
+			logger.Debugf("tmq close end, cost:%s", time.Since(start).String())
+		}()
+		close(t.exit)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		done := make(chan struct{})
+		go func() {
+			t.wg.Wait()
+			close(done)
+		}()
+		select {
+		case <-ctx.Done():
+			logger.Warn("wait stop over 1 minute")
+			<-done
+		case <-done:
+		}
+		logger.Debug("wait stop done")
+		isDebug := log.IsDebug()
 
-	defer func() {
-		if t.consumer != nil {
-			if !t.unsubscribed {
-				errCode, _ := t.wrapperUnsubscribe(logger, isDebug, false)
+		defer func() {
+			s := log.GetLogNow(isDebug)
+			t.asyncLocker.Lock()
+			asynctmq.DestroyTMQThread(t.thread)
+			t.asyncLocker.Unlock()
+			logger.Tracef("destroy tmq thread cost:%s", log.GetLogDuration(isDebug, s))
+			tmqhandle.GlobalTMQHandlerPoll.Put(t.handler)
+		}()
+
+		defer func() {
+			if t.consumer != nil {
+				if !t.unsubscribed {
+					errCode, _ := t.wrapperUnsubscribe(logger, isDebug, false)
+					if errCode != 0 {
+						errMsg := syncinterface.TMQErr2Str(errCode, logger, isDebug)
+						logger.Errorf("tmq unsubscribe consumer error, consumer:%p, code:%d, msg:%s", t.consumer, errCode, errMsg)
+					}
+				}
+				errCode := t.wrapperCloseConsumer(logger, log.IsDebug(), t.consumer)
 				if errCode != 0 {
 					errMsg := syncinterface.TMQErr2Str(errCode, logger, isDebug)
-					logger.Errorf("tmq unsubscribe consumer error, consumer:%p, code:%d, msg:%s", t.consumer, errCode, errMsg)
+					logger.Errorf("tmq close consumer error, consumer:%p, code:%d, msg:%s", t.consumer, errCode, errMsg)
 				}
 			}
-			errCode := t.wrapperCloseConsumer(logger, log.IsDebug(), t.consumer)
-			if errCode != 0 {
-				errMsg := syncinterface.TMQErr2Str(errCode, logger, isDebug)
-				logger.Errorf("tmq close consumer error, consumer:%p, code:%d, msg:%s", t.consumer, errCode, errMsg)
-			}
-		}
-	}()
-	logger.Trace("start to free message")
-	s := log.GetLogNow(isDebug)
-	t.freeMessage(true)
-	logger.Debugf("free message cost:%s", log.GetLogDuration(isDebug, s))
+		}()
+		logger.Trace("start to free message")
+		s := log.GetLogNow(isDebug)
+		t.freeMessage(true)
+		logger.Debugf("free message cost:%s", log.GetLogDuration(isDebug, s))
+	})
 }
 
 func (t *TMQ) freeMessage(closing bool) {
@@ -1592,7 +1600,7 @@ func (t *TMQ) freeMessage(closing bool) {
 		defer func() {
 			t.asyncLocker.Unlock()
 		}()
-		if !closing && t.isClosed() {
+		if !closing && t.IsClosed() {
 			return
 		}
 		monitor.TMQFreeResultCounter.Inc()
@@ -1761,7 +1769,7 @@ func (t *TMQ) listTopics(ctx context.Context, session *melody.Session, req *TMQL
 		wsTMQErrorMsg(ctx, session, logger, 0xffff, "tmq not init", action, req.ReqID, nil)
 		return
 	}
-	if t.isClosed() {
+	if t.IsClosed() {
 		logger.Trace("server closed")
 		return
 	}
@@ -1921,7 +1929,7 @@ func (t *TMQ) wrapperCommit(logger *logrus.Entry, isDebug bool) (int32, bool) {
 		t.asyncLocker.Unlock()
 		logger.Trace("tmq_commit_sync async locker unlocked")
 	}()
-	if t.isClosed() {
+	if t.IsClosed() {
 		logger.Debug("tmq_commit_sync finish, server closed")
 		return 0, true
 	}
@@ -1947,7 +1955,7 @@ func (t *TMQ) wrapperPoll(logger *logrus.Entry, isDebug bool, blockingTime int64
 		t.asyncLocker.Unlock()
 		logger.Trace("tmq_poll async locker unlocked")
 	}()
-	if t.isClosed() {
+	if t.IsClosed() {
 		logger.Debug("tmq_poll finish, server closed")
 		return nil, true
 	}
@@ -1976,7 +1984,7 @@ func (t *TMQ) wrapperFreeResult(logger *logrus.Entry, isDebug bool) bool {
 		t.asyncLocker.Unlock()
 		logger.Trace("free result async locker unlocked")
 	}()
-	if t.isClosed() {
+	if t.IsClosed() {
 		logger.Debug("free result finish, server closed")
 		return true
 	}
@@ -2002,7 +2010,7 @@ func (t *TMQ) wrapperFetchRawBlock(logger *logrus.Entry, isDebug bool, res unsaf
 		t.asyncLocker.Unlock()
 		logger.Trace("fetch_raw_block async locker unlocked")
 	}()
-	if t.isClosed() {
+	if t.IsClosed() {
 		logger.Debug("fetch_raw_block finish, server closed")
 		return nil, true
 	}
@@ -2028,7 +2036,7 @@ func (t *TMQ) wrapperGetRaw(logger *logrus.Entry, isDebug bool, res unsafe.Point
 		t.asyncLocker.Unlock()
 		logger.Trace("tmq_get_raw async locker unlocked")
 	}()
-	if t.isClosed() {
+	if t.IsClosed() {
 		logger.Debug("tmq_get_raw finish, server closed")
 		return 0, true
 	}
@@ -2054,7 +2062,7 @@ func (t *TMQ) wrapperGetJsonMeta(logger *logrus.Entry, isDebug bool, res unsafe.
 		t.asyncLocker.Unlock()
 		logger.Trace("tmq_get_json_meta async locker unlocked")
 	}()
-	if t.isClosed() {
+	if t.IsClosed() {
 		logger.Debug("tmq_get_json_meta finish, server closed")
 		return nil, true
 	}
@@ -2076,7 +2084,7 @@ func (t *TMQ) wrapperUnsubscribe(logger *logrus.Entry, isDebug bool, checkClose 
 		t.asyncLocker.Unlock()
 		logger.Trace("unsubscribe async locker unlocked")
 	}()
-	if checkClose && t.isClosed() {
+	if checkClose && t.IsClosed() {
 		logger.Debug("tmq_unsubscribe finish, server closed")
 		return 0, true
 	}
@@ -2102,7 +2110,7 @@ func (t *TMQ) wrapperGetTopicAssignment(logger *logrus.Entry, isDebug bool, topi
 		t.asyncLocker.Unlock()
 		logger.Trace("tmq_get_topic_assignment async locker unlocked")
 	}()
-	if t.isClosed() {
+	if t.IsClosed() {
 		logger.Debug("tmq_get_topic_assignment finish, server closed")
 		return nil, true
 	}
@@ -2128,7 +2136,7 @@ func (t *TMQ) wrapperOffsetSeek(logger *logrus.Entry, isDebug bool, topic string
 		t.asyncLocker.Unlock()
 		logger.Trace("offset_seek async locker unlocked")
 	}()
-	if t.isClosed() {
+	if t.IsClosed() {
 		logger.Debug("tmq_offset_seek finish, server closed")
 		return 0, true
 	}
@@ -2154,7 +2162,7 @@ func (t *TMQ) wrapperCommitted(logger *logrus.Entry, isDebug bool, topic string,
 		t.asyncLocker.Unlock()
 		logger.Trace("tmq_committed async locker unlocked")
 	}()
-	if t.isClosed() {
+	if t.IsClosed() {
 		logger.Debug("tmq_committed finish, server closed")
 		return 0, true
 	}
@@ -2176,7 +2184,7 @@ func (t *TMQ) wrapperPosition(logger *logrus.Entry, isDebug bool, topic string, 
 		t.asyncLocker.Unlock()
 		logger.Trace("tmq_position async locker unlocked")
 	}()
-	if t.isClosed() {
+	if t.IsClosed() {
 		logger.Debug("tmq_position finish, server closed")
 		return 0, true
 	}
@@ -2198,7 +2206,7 @@ func (t *TMQ) wrapperCommitOffset(logger *logrus.Entry, isDebug bool, topic stri
 		t.asyncLocker.Unlock()
 		logger.Trace("commit_offset async locker unlocked")
 	}()
-	if t.isClosed() {
+	if t.IsClosed() {
 		logger.Debug("tmq_commit_offset finish, server closed")
 		return 0, true
 	}

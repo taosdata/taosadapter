@@ -109,6 +109,7 @@ func nearestMultipleOfEight(n int) int {
 const (
 	UserKey     = "user"
 	PasswordKey = "password"
+	TokenKey    = "bearer_token"
 )
 
 func CheckAuth(c *gin.Context) {
@@ -118,6 +119,7 @@ func CheckAuth(c *gin.Context) {
 		UnAuthResponse(c, logger, httperror.HTTP_NO_AUTH_INFO)
 		return
 	}
+	_, cloudTokenExists := c.GetQuery("token")
 	auth = strings.TrimSpace(auth)
 	v, exist := authCache.Get(auth)
 	if exist {
@@ -126,7 +128,7 @@ func CheckAuth(c *gin.Context) {
 		c.Set(PasswordKey, info.Password)
 		return
 	}
-	if strings.HasPrefix(auth, "Basic") && len(auth) > 6 {
+	if strings.HasPrefix(auth, "Basic ") && len(auth) > 6 {
 		user, password, err := tools.DecodeBasic(auth[6:])
 		if err != nil {
 			UnAuthResponse(c, logger, httperror.HTTP_INVALID_BASIC_AUTH)
@@ -142,7 +144,7 @@ func CheckAuth(c *gin.Context) {
 		})
 		c.Set(UserKey, user)
 		c.Set(PasswordKey, password)
-	} else if strings.HasPrefix(auth, "Taosd") && len(auth) > 6 {
+	} else if strings.HasPrefix(auth, "Taosd ") && len(auth) > 6 {
 		user, password, err := DecodeDes(auth[6:])
 		if err != nil {
 			UnAuthResponse(c, logger, httperror.HTTP_INVALID_TAOSD_AUTH)
@@ -158,10 +160,31 @@ func CheckAuth(c *gin.Context) {
 		})
 		c.Set(UserKey, user)
 		c.Set(PasswordKey, password)
+	} else if !cloudTokenExists && strings.HasPrefix(auth, "Bearer ") && len(auth) > 7 {
+		token := strings.TrimSpace(auth[7:])
+		c.Set(UserKey, "")
+		c.Set(PasswordKey, "")
+		c.Set(TokenKey, token)
 	} else {
 		UnAuthResponse(c, logger, httperror.HTTP_INVALID_AUTH_TYPE)
 		return
 	}
+}
+
+func getAuthInfo(c *gin.Context) (user, password, token string) {
+	u, exist := c.Get(UserKey)
+	if exist {
+		user = u.(string)
+	}
+	p, exist := c.Get(PasswordKey)
+	if exist {
+		password = p.(string)
+	}
+	t, exist := c.Get(TokenKey)
+	if exist {
+		token = t.(string)
+	}
+	return user, password, token
 }
 
 type Message struct {

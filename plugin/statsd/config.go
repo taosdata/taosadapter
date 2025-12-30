@@ -25,6 +25,7 @@ type Config struct {
 	DeleteSets             bool
 	DeleteTimings          bool
 	TTL                    int
+	Token                  string
 }
 
 func (c *Config) setValue() {
@@ -44,6 +45,7 @@ func (c *Config) setValue() {
 	c.DeleteSets = viper.GetBool("statsd.deleteSets")
 	c.DeleteTimings = viper.GetBool("statsd.deleteTimings")
 	c.TTL = viper.GetInt("statsd.ttl")
+	c.Token = viper.GetString("statsd.token")
 }
 
 func init() {
@@ -110,4 +112,8 @@ func init() {
 	_ = viper.BindEnv("statsd.ttl", "TAOS_ADAPTER_STATSD_TTL")
 	pflag.Int("statsd.ttl", 0, `statsd data ttl. Env "TAOS_ADAPTER_STATSD_TTL"`)
 	viper.SetDefault("statsd.ttl", 0)
+
+	_ = viper.BindEnv("statsd.token", "TAOS_ADAPTER_STATSD_TOKEN")
+	pflag.String("statsd.token", "", `statsd auth token. Env "TAOS_ADAPTER_STATSD_TOKEN"`)
+	viper.SetDefault("statsd.token", "")
 }

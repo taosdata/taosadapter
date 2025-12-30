@@ -6,6 +6,7 @@ import (
 	"unsafe"
 
 	"github.com/sirupsen/logrus"
+	"github.com/taosdata/taosadapter/v3/driver/common"
 	"github.com/taosdata/taosadapter/v3/driver/types"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
@@ -88,7 +89,7 @@ func TaosConnect(host, user, pass, db string, port int, logger *logrus.Entry, is
 		thread.SyncSemaphore.Release()
 		logger.Trace("sync semaphore release for taos_connect")
 	}()
-	logger.Debugf("call taos_connect, host:%s, user:%s, pass:%s, db:%s, port:%d", host, user, pass, db, port)
+	logger.Debugf("call taos_connect, host:%s, user:%s, db:%s, port:%d", host, user, db, port)
 	monitor.TaosConnectCounter.Inc()
 	s := log.GetLogNow(isDebug)
 	conn, err := wrapper.TaosConnect(host, user, pass, db, port)
@@ -834,20 +835,6 @@ func TaosGetRawBlock(res unsafe.Pointer, logger *logrus.Entry, isDebug bool) uns
 	return rawBlock
 }
 
-func TaosFetchRawBlock(res unsafe.Pointer, logger *logrus.Entry, isDebug bool) (int, int, unsafe.Pointer) {
-	logger.Tracef("call taos_fetch_raw_block, res:%p", res)
-	monitor.TaosFetchRawBlockCounter.Inc()
-	s := log.GetLogNow(isDebug)
-	code, num, block := wrapper.TaosFetchRawBlock(res)
-	logger.Debugf("taos_fetch_raw_block finish, code:%d, num:%d, block:%p, cost:%s", code, num, block, log.GetLogDuration(isDebug, s))
-	if code != 0 {
-		monitor.TaosFetchRawBlockFailCounter.Inc()
-	} else {
-		monitor.TaosFetchRawBlockSuccessCounter.Inc()
-	}
-	return code, num, block
-}
-
 func TaosQuery(taosConnect unsafe.Pointer, sql string, logger *logrus.Entry, isDebug bool) unsafe.Pointer {
 	logger.Trace("sync semaphore acquire for taos_query")
 	thread.SyncSemaphore.Acquire()
@@ -879,10 +866,14 @@ func TMQErr2Str(code int32, logger *logrus.Entry, isDebug bool) string {
 }
 
 func TMQConfSet(conf unsafe.Pointer, key string, value string, logger *logrus.Entry, isDebug bool) int32 {
-	logger.Tracef("call tmq_conf_set, conf:%p, key:%s, value:%s", conf, key, value)
+	if key != "td.connect.pass" {
+		logger.Tracef("call tmq_conf_set, conf:%p, key:%s, value:%s", conf, key, value)
+	} else {
+		logger.Tracef("call tmq_conf_set, conf:%p, key:%s", conf, key)
+	}
 	monitor.TMQConfSetCounter.Inc()
 	code := wrapper.TMQConfSet(conf, key, value)
-	logger.Debugf("tmq_conf_set finish, code:%d", code)
+	logger.Debugf("tmq_conf_set finish, key:%s, code:%d", key, code)
 	if code != 0 {
 		monitor.TMQConfSetFailCounter.Inc()
 	} else {
@@ -1159,11 +1150,11 @@ func TaosResetCurrentDB(conn unsafe.Pointer, logger *logrus.Entry, isDebug bool)
 }
 
 func TaosFetchWhitelistA(conn unsafe.Pointer, caller cgo.Handle, logger *logrus.Entry, isDebug bool) {
-	logger.Tracef("call taos_fetch_whitelist_dual_stack_a, conn:%p", conn)
+	logger.Tracef("call taos_fetch_ip_whitelist_a, conn:%p", conn)
 	monitor.TaosFetchWhitelistACounter.Inc()
 	s := log.GetLogNow(false)
-	wrapper.TaosFetchWhitelistDualStackA(conn, caller)
-	logger.Debugf("taos_fetch_whitelist_dual_stack_a finish, cost:%s", log.GetLogDuration(false, s))
+	wrapper.TaosFetchIPWhitelistA(conn, caller)
+	logger.Debugf("taos_fetch_ip_whitelist_a finish, cost:%s", log.GetLogDuration(false, s))
 	monitor.TaosFetchWhitelistASuccessCounter.Inc()
 }
 
@@ -1176,4 +1167,68 @@ func TaosRegisterInstance(id, registerType, desc string, expire int32, logger *l
 	logger.Debugf("taos_register_instance finish, code:%d, cost:%s", code, log.GetLogDuration(isDebug, s))
 
 	return code
+}
+
+func TaosConnectTOTP(host, user, pass, totp, db string, port int, logger *logrus.Entry, isDebug bool) (unsafe.Pointer, error) {
+	logger.Trace("sync semaphore acquire for taos_connect_totp")
+	thread.SyncSemaphore.Acquire()
+	defer func() {
+		thread.SyncSemaphore.Release()
+		logger.Trace("sync semaphore release for taos_connect_totp")
+	}()
+	logger.Debugf("call taos_connect_totp, host:%s, user:%s, db:%s, port:%d", host, user, db, port)
+	monitor.TaosConnectTOTPCounter.Inc()
+	s := log.GetLogNow(isDebug)
+	conn, err := wrapper.TaosConnectTOTP(host, user, pass, totp, db, port)
+	logger.Debugf("taos_connect finish, conn:%p, err:%v, cost:%s", conn, err, log.GetLogDuration(isDebug, s))
+	if err != nil {
+		monitor.TaosConnectTOTPFailCounter.Inc()
+	} else {
+		monitor.TaosConnectTOTPSuccessCounter.Inc()
+	}
+	return conn, err
+}
+
+func TaosConnectToken(host, token, db string, port int, logger *logrus.Entry, isDebug bool) (unsafe.Pointer, error) {
+	logger.Trace("sync semaphore acquire for taos_connect_token")
+	thread.SyncSemaphore.Acquire()
+	defer func() {
+		thread.SyncSemaphore.Release()
+		logger.Trace("sync semaphore release for taos_connect_token")
+	}()
+	logger.Debugf("call taos_connect_token, host:%s, db:%s, port:%d", host, db, port)
+	monitor.TaosConnectTokenCounter.Inc()
+	s := log.GetLogNow(isDebug)
+	conn, err := wrapper.TaosConnectToken(host, token, db, port)
+	logger.Debugf("taos_connect_token finish, conn:%p, err:%v, cost:%s", conn, err, log.GetLogDuration(isDebug, s))
+	if err != nil {
+		monitor.TaosConnectTokenFailCounter.Inc()
+	} else {
+		monitor.TaosConnectTokenSuccessCounter.Inc()
+	}
+	return conn, err
+}
+
+func TaosGetConnectionUserName(conn unsafe.Pointer, logger *logrus.Entry, isDebug bool) (string, int) {
+	return TaosGetConnectionInfo(conn, common.TSDB_CONNECTION_INFO_USER, logger, isDebug)
+}
+
+func TaosGetConnectionInfo(conn unsafe.Pointer, infoType int, logger *logrus.Entry, isDebug bool) (string, int) {
+	logger.Trace("sync semaphore acquire for taos_get_connection_info")
+	thread.SyncSemaphore.Acquire()
+	defer func() {
+		thread.SyncSemaphore.Release()
+		logger.Trace("sync semaphore release for taos_get_connection_info")
+	}()
+	logger.Debugf("call taos_get_connection_info, conn:%p, infoType:%d", conn, infoType)
+	monitor.TaosGetConnectionInfoCounter.Inc()
+	s := log.GetLogNow(isDebug)
+	info, codeCode := wrapper.TaosGetConnectionInfo(conn, infoType)
+	logger.Debugf("taos_get_connection_info finish, info:%s, cost:%s", info, log.GetLogDuration(isDebug, s))
+	if codeCode != 0 {
+		monitor.TaosGetConnectInfoFailCounter.Inc()
+	} else {
+		monitor.TaosGetConnectionInfoSuccessCounter.Inc()
+	}
+	return info, codeCode
 }

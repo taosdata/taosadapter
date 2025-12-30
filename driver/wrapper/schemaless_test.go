@@ -18,6 +18,10 @@ func prepareEnv() unsafe.Pointer {
 	if err != nil {
 		panic(err)
 	}
+	err = ensureDBCreated(conn, "test_schemaless_common")
+	if err != nil {
+		panic(err)
+	}
 	code := TaosSelectDB(conn, "test_schemaless_common")
 	if code != 0 {
 		panic("use db test_schemaless_common fail")

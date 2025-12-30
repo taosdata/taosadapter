@@ -18,7 +18,7 @@ import (
 
 func TestMain(m *testing.M) {
 	config.Init()
-	m.Run()
+	os.Exit(m.Run())
 }
 
 // @author: xftan

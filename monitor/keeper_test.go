@@ -605,6 +605,16 @@ func TestGenerateExtraMetrics(t *testing.T) {
 		"tmq_position_success",
 		"tmq_commit_offset_sync_total",
 		"tmq_commit_offset_sync_success",
+
+		"taos_connect_totp_total",
+		"taos_connect_totp_success",
+		"taos_connect_totp_fail",
+		"taos_connect_token_total",
+		"taos_connect_token_success",
+		"taos_connect_token_fail",
+		"taos_get_connection_info_total",
+		"taos_get_connection_info_success",
+		"taos_get_connection_info_fail",
 	}
 	metric := metrics[0]
 	assert.Equal(t, strconv.FormatInt(ts.UnixMilli(), 10), metric.Ts)

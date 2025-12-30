@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"unsafe"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
@@ -42,10 +44,19 @@ func prepareCtx(c *gin.Context) {
 }
 
 func checkTDengineConnection(c *gin.Context) {
-	user := c.MustGet(UserKey).(string)
-	password := c.MustGet(PasswordKey).(string)
-	conn, err := syncinterface.TaosConnect("", user, password, "", 0, logger, log.IsDebug())
+	token := c.GetString(TokenKey)
+	user := c.GetString(UserKey)
+	password := c.GetString(PasswordKey)
+	logger := c.MustGet(LoggerKey).(*logrus.Entry)
+	var conn unsafe.Pointer
+	var err error
+	if len(token) != 0 {
+		conn, err = syncinterface.TaosConnectToken("", token, "", 0, logger, log.IsDebug())
+	} else {
+		conn, err = syncinterface.TaosConnect("", user, password, "", 0, logger, log.IsDebug())
+	}
 	if err != nil {
+		logger.Errorf("connect TDengine failed, err: %s", err)
 		taosErr := err.(*taoserrors.TaosError)
 		ErrorResponse(c, logger, http.StatusUnauthorized, int(taosErr.Code), taosErr.ErrStr)
 		return
@@ -53,16 +64,16 @@ func checkTDengineConnection(c *gin.Context) {
 	defer func() {
 		syncinterface.TaosClose(conn, logger, log.IsDebug())
 	}()
-	whitelist, err := tool.GetWhitelist(conn, logger, log.IsDebug())
+	allowlist, blocklist, err := tool.GetWhitelist(conn, logger, log.IsDebug())
 	if err != nil {
 		logger.Errorf("get whitelist failed, err: %s", err)
 		taosErr := err.(*taoserrors.TaosError)
 		InternalErrorResponse(c, logger, int(taosErr.Code), taosErr.ErrStr)
 		return
 	}
-	valid := tool.CheckWhitelist(whitelist, iptool.GetRealIP(c.Request))
+	valid := tool.CheckWhitelist(allowlist, blocklist, iptool.GetRealIP(c.Request))
 	if !valid {
-		logger.Errorf("whitelist prohibits current IP access, ip:%s, whitelist:%s", iptool.GetRealIP(c.Request), tool.IpNetSliceToString(whitelist))
+		logger.Errorf("whitelist prohibits current IP access, ip:%s, allowlist:%s, blocklist:%s", iptool.GetRealIP(c.Request), tool.IpNetSliceToString(allowlist), tool.IpNetSliceToString(blocklist))
 		ForbiddenResponse(c, logger, commonpool.ErrWhitelistForbidden.Error())
 		return
 	}

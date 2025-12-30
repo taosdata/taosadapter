@@ -3,6 +3,7 @@ package async
 import (
 	"database/sql/driver"
 	"fmt"
+	"os"
 	"testing"
 	"unsafe"
 
@@ -17,7 +18,7 @@ import (
 func TestMain(m *testing.M) {
 	config.Init()
 	_ = log.SetLevel("trace")
-	m.Run()
+	os.Exit(m.Run())
 }
 
 // @author: xftan

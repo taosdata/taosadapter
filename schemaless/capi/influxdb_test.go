@@ -4,10 +4,12 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/schemaless/capi"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 // @author: xftan
@@ -38,6 +40,7 @@ func TestInsertInfluxdb(t *testing.T) {
 		t.Error(errors.NewError(code, errStr))
 	}
 	syncinterface.TaosSyncQueryFree(r, logger, isDebug)
+	assert.NoError(t, testtools.EnsureDBCreated("test_capi_influxdb"))
 	type args struct {
 		taosConnect unsafe.Pointer
 		data        []byte

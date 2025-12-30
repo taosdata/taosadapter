@@ -10,9 +10,10 @@ package wrapper
 #include <string.h>
 #include <taos.h>
 extern void WhitelistCallback(void *param, int code, TAOS *taos, int numOfWhiteLists, char ** pWhiteLists);
-void taos_fetch_whitelist_dual_stack_a_wrapper(TAOS *taos, void *param){
-    taos_fetch_whitelist_dual_stack_a(taos, WhitelistCallback, param);
+void taos_fetch_ip_whitelist_a_wrapper(TAOS *taos, void *param){
+    taos_fetch_ip_whitelist_a(taos, WhitelistCallback, param);
 };
+
 */
 import "C"
 import (
@@ -21,9 +22,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 )
 
-//typedef void (*__taos_async_whitelist_dual_stack_fn_t)(void *param, int code, TAOS *taos, int numOfWhiteLists,char **pWhiteLists);
-
-// TaosFetchWhitelistDualStackA DLL_EXPORT void taos_fetch_whitelist_dual_stack_a(TAOS *taos, __taos_async_whitelist_dual_stack_fn_t fp, void *param);
-func TaosFetchWhitelistDualStackA(taosConnect unsafe.Pointer, caller cgo.Handle) {
-	C.taos_fetch_whitelist_dual_stack_a_wrapper(taosConnect, caller.Pointer())
+// TaosFetchIPWhitelistA DLL_EXPORT void taos_fetch_ip_whitelist_a(TAOS *taos, __taos_async_ip_whitelist_fn_t fp, void *param);
+func TaosFetchIPWhitelistA(taosConnect unsafe.Pointer, caller cgo.Handle) {
+	C.taos_fetch_ip_whitelist_a_wrapper(taosConnect, caller.Pointer())
 }

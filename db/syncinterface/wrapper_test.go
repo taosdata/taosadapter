@@ -2,6 +2,9 @@ package syncinterface
 
 import (
 	"database/sql/driver"
+	"fmt"
+	"os"
+	"strconv"
 	"testing"
 	"time"
 	"unsafe"
@@ -9,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/driver/common"
-	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	stmtCommon "github.com/taosdata/taosadapter/v3/driver/common/stmt"
 	taoserrors "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/types"
@@ -17,6 +19,9 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
+	"github.com/taosdata/taosadapter/v3/tools/otp"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
+	"github.com/taosdata/taosadapter/v3/tools/testtools/testenv"
 )
 
 var logger = log.GetLogger("test")
@@ -27,7 +32,7 @@ func TestMain(m *testing.M) {
 	config.Init()
 	log.ConfigLog()
 	_ = log.SetLevel("trace")
-	m.Run()
+	os.Exit(m.Run())
 }
 func TestTaosConnect(t *testing.T) {
 	reqID := generator.GetReqID()
@@ -66,6 +71,7 @@ func TestTaosSchemalessInsertRawTTLWithReqIDTBNameKey(t *testing.T) {
 	defer TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create database if not exists `syncinterface_test_sml`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_sml"))
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_sml`")
 		assert.NoError(t, err)
@@ -88,6 +94,8 @@ func TestTaosGetTablesVgID(t *testing.T) {
 	defer TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create database if not exists `syncinterface_test_vgid`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_vgid"))
+
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_vgid`")
 		assert.NoError(t, err)
@@ -109,6 +117,7 @@ func TestTaosStmt(t *testing.T) {
 	defer TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create database if not exists `syncinterface_test_stmt`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_stmt"))
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_stmt`")
 		assert.NoError(t, err)
@@ -217,6 +226,7 @@ func TestTaosGetCurrentDB(t *testing.T) {
 	assert.Equal(t, "", currentDb)
 	err = exec(conn, "create database if not exists `syncinterface_test_current_db`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_current_db"))
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_current_db`")
 		assert.NoError(t, err)
@@ -277,6 +287,7 @@ func TestTMQWriteRaw(t *testing.T) {
 	defer TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create database if not exists `syncinterface_test_write_raw`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_write_raw"))
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_write_raw`")
 		assert.NoError(t, err)
@@ -358,6 +369,8 @@ func TestTaosWriteRawBlockWithReqID(t *testing.T) {
 	defer TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create database if not exists `syncinterface_test_write_raw_block`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_write_raw_block"))
+
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_write_raw_block`")
 		assert.NoError(t, err)
@@ -399,6 +412,8 @@ func TestTaosWriteRawBlockWithFieldsWithReqID(t *testing.T) {
 	defer TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create database if not exists `syncinterface_test_write_raw_block_with_fields`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_write_raw_block_with_fields"))
+
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_write_raw_block_with_fields`")
 		assert.NoError(t, err)
@@ -477,6 +492,7 @@ func TestTaosStmt2(t *testing.T) {
 	defer TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create database if not exists `syncinterface_test_stmt2`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_stmt2"))
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_stmt2`")
 		assert.NoError(t, err)
@@ -595,46 +611,15 @@ func TestTaosStmt2(t *testing.T) {
 }
 
 func exec(conn unsafe.Pointer, sql string) error {
-	result := TaosQuery(conn, sql, logger, isDebug)
-	defer TaosSyncQueryFree(result, logger, isDebug)
-	code := TaosError(result, logger, isDebug)
-	if code != 0 {
-		return taoserrors.NewError(code, TaosErrorStr(result, logger, isDebug))
-	}
-	return nil
+	logger := log.GetLogger("test")
+	logger.Debugf("exec sql %s", sql)
+	return testtools.Exec(conn, sql)
 }
 
 func query(conn unsafe.Pointer, sql string) ([][]driver.Value, error) {
-	res := TaosQuery(conn, sql, logger, isDebug)
-	defer TaosSyncQueryFree(res, logger, isDebug)
-	code := TaosError(res, logger, isDebug)
-	if code != 0 {
-		errStr := TaosErrorStr(res, logger, isDebug)
-		return nil, taoserrors.NewError(code, errStr)
-	}
-	fileCount := TaosNumFields(res, logger, isDebug)
-	rh, err := ReadColumn(res, fileCount, logger, isDebug)
-	if err != nil {
-		return nil, err
-	}
-	precision := TaosResultPrecision(res, logger, isDebug)
-	var result [][]driver.Value
-	for {
-		columns, errCode, block := TaosFetchRawBlock(res, logger, isDebug)
-		if errCode != 0 {
-			errStr := TaosErrorStr(res, logger, isDebug)
-			return nil, taoserrors.NewError(errCode, errStr)
-		}
-		if columns == 0 {
-			break
-		}
-		r, err := parser.ReadBlock(block, columns, rh.ColTypes, precision)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, r...)
-	}
-	return result, nil
+	logger := log.GetLogger("test")
+	logger.Debugf("query sql %s", sql)
+	return testtools.Query(conn, sql)
 }
 
 func TestTaosOptionsConnection(t *testing.T) {
@@ -696,6 +681,8 @@ func TestTMQSubscription(t *testing.T) {
 	defer TaosClose(conn, logger, isDebug)
 	err = exec(conn, "create database if not exists `syncinterface_test_subscription`")
 	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureDBCreated("syncinterface_test_subscription"))
+
 	defer func() {
 		err = exec(conn, "drop database if exists `syncinterface_test_subscription`")
 		assert.NoError(t, err)
@@ -756,4 +743,72 @@ func TestTaosRegisterInstance(t *testing.T) {
 	assert.Equal(t, "test_wrapper", result[0][1])
 	assert.Equal(t, "test_wrapper_desc", result[0][2])
 	assert.Equal(t, int32(1), result[0][3])
+}
+
+func TestTaosConnectTOTP(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("totp test only for enterprise edition")
+		return
+	}
+	reqID := generator.GetReqID()
+	var logger = logger.WithField("test", "TestTaosConnectTOTP").WithField(config.ReqIDKey, reqID)
+	conn, err := TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer TaosClose(conn, logger, isDebug)
+	user := "sync_test_totp_user"
+	totpSeed := "aNmLs6lz81qqmqxE"
+	pass := "CqsC7QprLq1sJuhc"
+	err = exec(conn, fmt.Sprintf("create user %s pass '%s' TOTPSEED '%s'", user, pass, totpSeed))
+	assert.NoError(t, err)
+	defer func() {
+		err = exec(conn, fmt.Sprintf("drop user %s", user))
+		assert.NoError(t, err)
+	}()
+	totpSecret := otp.GenerateTOTPSecret([]byte(totpSeed))
+	totpCode := strconv.Itoa(otp.GenerateTOTPCode(totpSecret, uint64(time.Now().Unix())/30, 6))
+	assert.NoError(t, err)
+	totpConn, err := TaosConnectTOTP("", user, pass, totpCode, "", 0, logger, isDebug)
+	assert.NoError(t, err)
+	defer TaosClose(totpConn, logger, isDebug)
+	res, err := query(totpConn, "select 1")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), res[0][0])
+}
+
+func TestTaosConnectToken(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("token test only for enterprise edition")
+		return
+	}
+	reqID := generator.GetReqID()
+	var logger = logger.WithField("test", "TestTaosConnectTOTP").WithField(config.ReqIDKey, reqID)
+	conn, err := TaosConnect("", "root", "taosdata", "", 0, logger, isDebug)
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer TaosClose(conn, logger, isDebug)
+	user := "sync_test_token_user"
+	pass := "1oOnD8ythDkZc5Sk"
+	err = exec(conn, fmt.Sprintf("create user %s pass '%s'", user, pass))
+	assert.NoError(t, err)
+	defer func() {
+		err = exec(conn, fmt.Sprintf("drop user %s", user))
+		assert.NoError(t, err)
+	}()
+	values, err := query(conn, fmt.Sprintf("create token sync_test_token from user %s", user))
+	assert.NoError(t, err)
+	assert.NoError(t, testtools.EnsureTokenCreated("sync_test_token"))
+	defer func() {
+		err = exec(conn, "drop token sync_test_token")
+		assert.NoError(t, err)
+	}()
+	token := values[0][0].(string)
+	tokenConn, err := TaosConnectToken("", token, "", 0, logger, isDebug)
+	assert.NoError(t, err)
+	defer TaosClose(tokenConn, logger, isDebug)
+	res, err := query(tokenConn, "select 1")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), res[0][0])
 }

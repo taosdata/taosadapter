@@ -399,7 +399,7 @@ fields = [
 	assert.Equal(t, 0, insertResp.Affected)
 
 	// create db and table for insert test
-	taosConn, err := commonpool.GetConnection(testUser, testPass, iptool.GetRealIP(req))
+	taosConn, err := commonpool.GetConnection(testUser, testPass, "", iptool.GetRealIP(req))
 	require.NoError(t, err)
 	defer func() {
 		err = taosConn.Put()
