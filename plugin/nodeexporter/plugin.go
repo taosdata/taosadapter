@@ -193,7 +193,7 @@ func (p *NodeExporter) prepareUrls() error {
 var localhost = net.IPv4(127, 0, 0, 1)
 
 func (p *NodeExporter) Gather() {
-	conn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, localhost)
+	conn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, p.conf.Token, localhost)
 	if err != nil {
 		logger.WithError(err).Errorln("commonpool.GetConnection error")
 		return
@@ -247,7 +247,7 @@ func (p *NodeExporter) requestSingle(conn unsafe.Pointer, req *Req) error {
 		execLogger := logger.WithField(config.ReqIDKey, reqID)
 		err = inserter.InsertInfluxdb(conn, data, p.conf.DB, "ns", p.conf.TTL, uint64(reqID), "", execLogger)
 		if err != nil {
-			logger.WithError(err).Error("insert influxdb error", string(data))
+			logger.Errorf("insert influxdb error, err: %s, data: %s", err, data)
 			return err
 		}
 	}

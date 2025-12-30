@@ -216,6 +216,15 @@ type ExecResult struct {
 }
 
 func (a *Async) TaosExecWithoutResult(taosConnect unsafe.Pointer, logger *logrus.Entry, isDebug bool, sql string, reqID int64) error {
+	_, err := a.doExec(taosConnect, logger, isDebug, sql, reqID, false)
+	return err
+}
+
+func (a *Async) TaosExecWithAffectedRows(taosConnect unsafe.Pointer, logger *logrus.Entry, isDebug bool, sql string, reqID int64) (int, error) {
+	return a.doExec(taosConnect, logger, isDebug, sql, reqID, true)
+}
+
+func (a *Async) doExec(taosConnect unsafe.Pointer, logger *logrus.Entry, isDebug bool, sql string, reqID int64, getAffectedRows bool) (int, error) {
 	logger.Trace("get handler from pool")
 	handler := a.HandlerPool.Get()
 	defer func() {
@@ -233,9 +242,14 @@ func (a *Async) TaosExecWithoutResult(taosConnect unsafe.Pointer, logger *logrus
 	if code != httperror.SUCCESS {
 		errStr := syncinterface.TaosErrorStr(res, logger, isDebug)
 		logger.Errorf("taos query error, code:%d, msg:%s", code, errStr)
-		return tErrors.NewError(code, errStr)
+		return 0, tErrors.NewError(code, errStr)
 	}
-	return nil
+	if getAffectedRows {
+		affectRows := syncinterface.TaosAffectedRows(res, logger, isDebug)
+		logger.Tracef("get affectRows:%d", affectRows)
+		return affectRows, nil
+	}
+	return 0, nil
 }
 
 func FreeResultAsync(res unsafe.Pointer, logger *logrus.Entry, isDebug bool) {

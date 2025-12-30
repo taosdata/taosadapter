@@ -112,7 +112,7 @@ func (p *Plugin) insertJson(c *gin.Context) {
 		return
 	}
 	logger.Debugf("request data:%s", data)
-	user, password, err := plugin.GetAuth(c)
+	user, password, token, err := plugin.GetAuth(c)
 	if err != nil {
 		logger.Errorf("get auth error, err:%s", err)
 		p.errorResponse(c, http.StatusBadRequest, err)
@@ -132,7 +132,7 @@ func (p *Plugin) insertJson(c *gin.Context) {
 	tableNameKey := c.Query("table_name_key")
 	logger.Tracef("request table_name_key:%s", tableNameKey)
 	s := log.GetLogNow(isDebug)
-	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
+	taosConn, err := commonpool.GetConnection(user, password, token, iptool.GetRealIP(c.Request))
 	logger.Debugf("get connection finish, cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.Errorf("connect server error, err:%s", err)
@@ -251,14 +251,14 @@ func (p *Plugin) insertTelnet(c *gin.Context) {
 		}
 	}
 	logger.Debugf("request lines:%v", lines)
-	user, password, err := plugin.GetAuth(c)
+	user, password, token, err := plugin.GetAuth(c)
 	if err != nil {
 		logger.Errorf("get auth error, err:%s", err)
 		p.errorResponse(c, http.StatusBadRequest, err)
 		return
 	}
 	s := log.GetLogNow(isDebug)
-	taosConn, err := commonpool.GetConnection(user, password, iptool.GetRealIP(c.Request))
+	taosConn, err := commonpool.GetConnection(user, password, token, iptool.GetRealIP(c.Request))
 	logger.Debugf("get connection finish, cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.Errorf("connect server error, err:%s", err)

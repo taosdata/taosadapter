@@ -60,6 +60,7 @@ func (p *Plugin) Start() error {
 	p.input = &Statsd{
 		User:                   p.conf.User,
 		Password:               p.conf.Password,
+		Token:                  p.conf.Token,
 		Protocol:               p.conf.Protocol,
 		ServiceAddress:         fmt.Sprintf(":%d", p.conf.Port),
 		MaxTCPConnections:      p.conf.MaxTCPConnections,
@@ -124,7 +125,7 @@ func (p *Plugin) HandleMetrics(serializer *influx.Serializer, metric telegraf.Me
 		logger.WithError(err).Error("serialize statsd error")
 		return
 	}
-	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, localhost)
+	taosConn, err := commonpool.GetConnection(p.conf.User, p.conf.Password, p.conf.Token, localhost)
 	if err != nil {
 		logger.WithError(err).Errorln("connect server error")
 		return

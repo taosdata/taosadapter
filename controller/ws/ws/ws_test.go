@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -53,7 +54,7 @@ func TestMain(m *testing.M) {
 	for _, webController := range controllers {
 		webController.Init(router)
 	}
-	m.Run()
+	os.Exit(m.Run())
 }
 
 type restResp struct {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func TestMain(m *testing.M) {
 	for _, webController := range controllers {
 		webController.Init(router)
 	}
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func TestRestful_InitSchemaless(t *testing.T) {
@@ -48,6 +49,8 @@ func TestRestful_InitSchemaless(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful("create database if not exists test_schemaless_ws", "")
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated("test_schemaless_ws"))
+
 	defer func() {
 		code, message = doRestful("drop database if exists test_schemaless_ws", "")
 		assert.Equal(t, 0, code, message)

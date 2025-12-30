@@ -46,6 +46,7 @@ func TestTMQ(t *testing.T) {
 		return
 	}
 	TaosFreeResult(result)
+	assert.NoError(t, ensureDBCreated(conn, "abc1"))
 
 	result = TaosQuery(conn, "use abc1")
 	code = TaosError(result)
@@ -282,7 +283,7 @@ func TestTMQDB(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists tmq_test_db vgroups 2 WAL_RETENTION_PERIOD 86400")
 	require.NoError(t, err)
-
+	assert.NoError(t, ensureDBCreated(conn, "tmq_test_db"))
 	err = exec(conn, "use tmq_test_db")
 	require.NoError(t, err)
 
@@ -433,7 +434,7 @@ func TestTMQDBMultiTable(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists tmq_test_db_multi vgroups 2 WAL_RETENTION_PERIOD 86400")
 	require.NoError(t, err)
-
+	assert.NoError(t, ensureDBCreated(conn, "tmq_test_db_multi"))
 	err = exec(conn, "use tmq_test_db_multi")
 	require.NoError(t, err)
 
@@ -597,7 +598,7 @@ func TestTMQDBMultiInsert(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists tmq_test_db_multi_insert vgroups 2 wal_retention_period 3600")
 	require.NoError(t, err)
-
+	assert.NoError(t, ensureDBCreated(conn, "tmq_test_db_multi_insert"))
 	err = exec(conn, "use tmq_test_db_multi_insert")
 	require.NoError(t, err)
 
@@ -754,10 +755,11 @@ func TestTMQModify(t *testing.T) {
 	require.NoError(t, err)
 	err = exec(conn, "create database if not exists tmq_test_db_modify_target vgroups 2 WAL_RETENTION_PERIOD 86400")
 	require.NoError(t, err)
+	assert.NoError(t, ensureDBCreated(conn, "tmq_test_db_modify_target"))
 
 	err = exec(conn, "create database if not exists tmq_test_db_modify vgroups 5 WAL_RETENTION_PERIOD 86400")
 	require.NoError(t, err)
-
+	assert.NoError(t, ensureDBCreated(conn, "tmq_test_db_modify"))
 	err = exec(conn, "use tmq_test_db_modify")
 	require.NoError(t, err)
 
@@ -964,7 +966,7 @@ func TestTMQAutoCreateTable(t *testing.T) {
 	}()
 	err = exec(conn, "create database if not exists tmq_test_auto_create vgroups 2 WAL_RETENTION_PERIOD 86400")
 	require.NoError(t, err)
-
+	assert.NoError(t, ensureDBCreated(conn, "tmq_test_auto_create"))
 	err = exec(conn, "use tmq_test_auto_create")
 	require.NoError(t, err)
 
@@ -1119,6 +1121,7 @@ func TestTMQGetTopicAssignment(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_tmq_get_topic_assignment"))
 	if err = exec(conn, "use test_tmq_get_topic_assignment"); err != nil {
 		t.Fatal(err)
 		return
@@ -1291,6 +1294,7 @@ func TestTMQPosition(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_tmq_position"))
 	if err = exec(conn, "use test_tmq_position"); err != nil {
 		t.Fatal(err)
 		return
@@ -1385,6 +1389,7 @@ func TestTMQCommitOffset(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
+	assert.NoError(t, ensureDBCreated(conn, "test_tmq_commit_offset"))
 	if err = exec(conn, "use test_tmq_commit_offset"); err != nil {
 		t.Fatal(err)
 		return
@@ -1464,7 +1469,7 @@ func TestTMQCommitOffset(t *testing.T) {
 
 func TestTMQCommitOffsetAsync(t *testing.T) {
 	topic := "test_tmq_commit_offset_a_topic"
-	tableName := "test_tmq_commit_offset_a"
+	databaseName := "test_tmq_commit_offset_a"
 	conn, err := TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Fatal(err)
@@ -1473,16 +1478,17 @@ func TestTMQCommitOffsetAsync(t *testing.T) {
 	defer TaosClose(conn)
 
 	defer func() {
-		if err = exec(conn, "drop database if exists "+tableName); err != nil {
+		if err = exec(conn, "drop database if exists "+databaseName); err != nil {
 			t.Error(err)
 		}
 	}()
 
-	if err = exec(conn, "create database if not exists "+tableName+" vgroups 1 WAL_RETENTION_PERIOD 86400"); err != nil {
+	if err = exec(conn, "create database if not exists "+databaseName+" vgroups 1 WAL_RETENTION_PERIOD 86400"); err != nil {
 		t.Fatal(err)
 		return
 	}
-	if err = exec(conn, "use "+tableName); err != nil {
+	assert.NoError(t, ensureDBCreated(conn, databaseName))
+	if err = exec(conn, "use "+databaseName); err != nil {
 		t.Fatal(err)
 		return
 	}
@@ -1573,7 +1579,7 @@ func TestTMQCommitOffsetAsync(t *testing.T) {
 
 func TestTMQCommitAsyncCallback(t *testing.T) {
 	topic := "test_tmq_commit_a_cb_topic"
-	tableName := "test_tmq_commit_a_cb"
+	databaseName := "test_tmq_commit_a_cb"
 	conn, err := TaosConnect("", "root", "taosdata", "", 0)
 	if err != nil {
 		t.Fatal(err)
@@ -1582,16 +1588,17 @@ func TestTMQCommitAsyncCallback(t *testing.T) {
 	defer TaosClose(conn)
 
 	defer func() {
-		if err = exec(conn, "drop database if exists "+tableName); err != nil {
+		if err = exec(conn, "drop database if exists "+databaseName); err != nil {
 			t.Error(err)
 		}
 	}()
 
-	if err = exec(conn, "create database if not exists "+tableName+" vgroups 1 WAL_RETENTION_PERIOD 86400"); err != nil {
+	if err = exec(conn, "create database if not exists "+databaseName+" vgroups 1 WAL_RETENTION_PERIOD 86400"); err != nil {
 		t.Fatal(err)
 		return
 	}
-	if err = exec(conn, "use "+tableName); err != nil {
+	assert.NoError(t, ensureDBCreated(conn, databaseName))
+	if err = exec(conn, "use "+databaseName); err != nil {
 		t.Fatal(err)
 		return
 	}

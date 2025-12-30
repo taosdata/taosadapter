@@ -2,9 +2,14 @@ package rest
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 // @author: xftan
@@ -243,4 +248,73 @@ func Test_nearestMultipleOfEight(t *testing.T) {
 			assert.Equalf(t, tt.want, nearestMultipleOfEight(tt.args.n), "nearestMultipleOfEight(%v)", tt.args.n)
 		})
 	}
+}
+
+func TestAuth(t *testing.T) {
+	logger := log.GetLogger("test")
+	router := gin.Default()
+	setLogger := func(c *gin.Context) {
+		c.Set(LoggerKey, logger)
+	}
+	router.GET("/", setLogger, CheckAuth, func(c *gin.Context) {
+		u, p, token := getAuthInfo(c)
+		assert.Equal(t, u, "root")
+		assert.Equal(t, p, "taosdata")
+		assert.Equal(t, token, "")
+		c.Status(200)
+	})
+	router.GET("/token_test", setLogger, CheckAuth, func(c *gin.Context) {
+		u, p, token := getAuthInfo(c)
+		assert.Equal(t, u, "")
+		assert.Equal(t, p, "")
+		assert.Equal(t, token, "test_token")
+		c.Status(200)
+	})
+	router.GET("/unknown", setLogger, CheckAuth, func(c *gin.Context) {
+		u, p, token := getAuthInfo(c)
+		assert.Equal(t, "", u)
+		assert.Equal(t, "", p)
+		assert.Equal(t, "", token)
+		c.Status(401)
+	})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/", nil)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 401, w.Code)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/", nil)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.SetBasicAuth("root", "taosdata")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/", nil)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Basic wrong_basic")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 401, w.Code)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/token_test", nil)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Bearer test_token")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/unknown", nil)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Bearerx test_token")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 401, w.Code)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/unknown", nil)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.SetBasicAuth("", "")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 401, w.Code)
 }

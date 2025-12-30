@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 const (
 	UserKey     = "user"
 	PasswordKey = "password"
+	TokenKey    = "bearer_token"
 )
 
 type authInfo struct {
@@ -32,6 +34,7 @@ func Auth(errHandler func(c *gin.Context, code int, err error)) func(c *gin.Cont
 			c.Abort()
 			return
 		}
+		_, cloudTokenExists := c.GetQuery("token")
 		auth = strings.TrimSpace(auth)
 		v, exist := authCache.Get(auth)
 		if exist {
@@ -40,7 +43,7 @@ func Auth(errHandler func(c *gin.Context, code int, err error)) func(c *gin.Cont
 			c.Set(PasswordKey, info.Password)
 			return
 		}
-		if strings.HasPrefix(auth, "Basic") && len(auth) > 6 {
+		if strings.HasPrefix(auth, "Basic ") && len(auth) > 6 {
 			user, password, err := tools.DecodeBasic(auth[6:])
 			if err != nil {
 				errHandler(c, http.StatusUnauthorized, err)
@@ -53,6 +56,13 @@ func Auth(errHandler func(c *gin.Context, code int, err error)) func(c *gin.Cont
 			})
 			c.Set(UserKey, user)
 			c.Set(PasswordKey, password)
+		} else if !cloudTokenExists && strings.HasPrefix(auth, "Bearer ") && len(auth) > 7 {
+			token := strings.TrimSpace(auth[7:])
+			c.Set(TokenKey, token)
+		} else {
+			errHandler(c, http.StatusUnauthorized, fmt.Errorf("unsupported auth type"))
+			c.Abort()
+			return
 		}
 	}
 }
@@ -75,14 +85,21 @@ func RegisterGenerateAuth(r gin.IRouter) {
 	})
 }
 
-func GetAuth(c *gin.Context) (user, password string, err error) {
-	defer func() {
-		e := recover()
-		if e != nil {
-			err = errors.New("get auth error")
-		}
-	}()
-	user = c.MustGet(UserKey).(string)
-	password = c.MustGet(PasswordKey).(string)
-	return
+func GetAuth(c *gin.Context) (user, password, token string, err error) {
+	u, exist := c.Get(UserKey)
+	if exist {
+		user = u.(string)
+	}
+	p, exist := c.Get(PasswordKey)
+	if exist {
+		password = p.(string)
+	}
+	t, exist := c.Get(TokenKey)
+	if exist {
+		token = t.(string)
+	}
+	if token == "" && (len(user) == 0 || len(password) == 0) {
+		err = errors.New("no auth info found")
+	}
+	return user, password, token, err
 }

@@ -98,6 +98,33 @@ var (
 	WSWSStmt2Count     = metrics.NewGauge("ws_ws_stmt2_count")
 )
 
+type InputJsonMetric struct {
+	TotalRows    *metrics.Gauge
+	SuccessRows  *metrics.Gauge
+	FailRows     *metrics.Gauge
+	InflightRows *metrics.Gauge
+	AffectedRows *metrics.Gauge
+}
+
+var (
+	InputJsonMetricsMap = make(map[string]*InputJsonMetric)
+)
+
+func NewInputJsonMetric(endpoint string) *InputJsonMetric {
+	if config.Conf.UploadKeeper.Enable {
+		inputJsonMetric := &InputJsonMetric{
+			TotalRows:    metrics.NewGauge("total_rows"),
+			SuccessRows:  metrics.NewGauge("success_rows"),
+			FailRows:     metrics.NewGauge("fail_rows"),
+			InflightRows: metrics.NewGauge("inflight_rows"),
+			AffectedRows: metrics.NewGauge("affected_rows"),
+		}
+		InputJsonMetricsMap[endpoint] = inputJsonMetric
+		return inputJsonMetric
+	}
+	return nil
+}
+
 var (
 	// taos_connect and taos_close
 	TaosConnectCounter        = metrics.NewGauge("taos_connect_total")
@@ -477,6 +504,19 @@ var (
 
 	TMQCommitOffsetCounter        = metrics.NewGauge("tmq_commit_offset_sync_total")
 	TMQCommitOffsetSuccessCounter = metrics.NewGauge("tmq_commit_offset_sync_success")
+
+	// 3.4.0.0
+	TaosConnectTOTPCounter        = metrics.NewGauge("taos_connect_totp_total")
+	TaosConnectTOTPSuccessCounter = metrics.NewGauge("taos_connect_totp_success")
+	TaosConnectTOTPFailCounter    = metrics.NewGauge("taos_connect_totp_fail")
+
+	TaosConnectTokenCounter        = metrics.NewGauge("taos_connect_token_total")
+	TaosConnectTokenSuccessCounter = metrics.NewGauge("taos_connect_token_success")
+	TaosConnectTokenFailCounter    = metrics.NewGauge("taos_connect_token_fail")
+
+	TaosGetConnectionInfoCounter        = metrics.NewGauge("taos_get_connection_info_total")
+	TaosGetConnectionInfoSuccessCounter = metrics.NewGauge("taos_get_connection_info_success")
+	TaosGetConnectInfoFailCounter       = metrics.NewGauge("taos_get_connection_info_fail")
 )
 
 func InitKeeper() {
@@ -854,6 +894,19 @@ var cInterfaceCountMetrics = []*metrics.Gauge{
 	TMQPositionSuccessCounter,
 	TMQCommitOffsetCounter,
 	TMQCommitOffsetSuccessCounter,
+
+	// 3.4.0.0
+	TaosConnectTOTPCounter,
+	TaosConnectTOTPSuccessCounter,
+	TaosConnectTOTPFailCounter,
+
+	TaosConnectTokenCounter,
+	TaosConnectTokenSuccessCounter,
+	TaosConnectTokenFailCounter,
+
+	TaosGetConnectionInfoCounter,
+	TaosGetConnectionInfoSuccessCounter,
+	TaosGetConnectInfoFailCounter,
 }
 
 // RestRecordRequest records a REST request and returns the SQL type.
@@ -1196,6 +1249,67 @@ func getLimiterMetrics() *Table {
 	return table
 }
 
+func getInputJsonMetrics() *Table {
+	if len(InputJsonMetricsMap) == 0 {
+		return nil
+	}
+	table := &Table{
+		Name: "adapter_input_json",
+	}
+	table.MetricGroups = make([]*MetricGroup, 0, len(InputJsonMetricsMap))
+	for key, value := range InputJsonMetricsMap {
+		totalRows := value.TotalRows.Value()
+		value.TotalRows.Sub(totalRows)
+
+		successRows := value.SuccessRows.Value()
+		value.SuccessRows.Sub(successRows)
+
+		failRows := value.FailRows.Value()
+		value.FailRows.Sub(failRows)
+
+		affectedRows := value.AffectedRows.Value()
+		value.AffectedRows.Sub(affectedRows)
+
+		inflightRows := value.InflightRows.Value()
+		table.MetricGroups = append(table.MetricGroups, &MetricGroup{
+			Tags: []*Tag{
+				{
+					Name:  "url_endpoint",
+					Value: key,
+				},
+				{
+					Name:  "endpoint",
+					Value: identity,
+				},
+			},
+
+			Metrics: []*Metric{
+				{
+					Name:  "total_rows",
+					Value: totalRows,
+				},
+				{
+					Name:  "success_rows",
+					Value: successRows,
+				},
+				{
+					Name:  "fail_rows",
+					Value: failRows,
+				},
+				{
+					Name:  "inflight_rows",
+					Value: inflightRows,
+				},
+				{
+					Name:  "affected_rows",
+					Value: affectedRows,
+				},
+			},
+		})
+	}
+	return table
+}
+
 func upload(p *process.Process, client *http.Client, reqID int64) error {
 	ts := time.Now().Round(config.Conf.UploadKeeper.Interval)
 	extraMetric, err := generateExtraMetrics(ts, p)
@@ -1476,6 +1590,10 @@ func generateExtraMetrics(ts time.Time, p *process.Process) ([]*ExtraMetric, err
 	limitTable := getLimiterMetrics()
 	if limitTable != nil {
 		metric.Tables = append(metric.Tables, limitTable)
+	}
+	inputJsonTable := getInputJsonMetrics()
+	if inputJsonTable != nil {
+		metric.Tables = append(metric.Tables, inputJsonTable)
 	}
 	return []*ExtraMetric{metric}, nil
 }

@@ -46,7 +46,7 @@ func initRequest(v *viper.Viper) {
 	_ = v.BindEnv("request.default.queryMaxWait", "TAOS_ADAPTER_REQUEST_DEFAULT_QUERY_MAX_WAIT")
 }
 
-func registerFlags() {
+func registerRequestFlags() {
 	pflag.Bool("request.queryLimitEnable", false, `Whether to enable the request limiting function, default false. ENV "TAOS_ADAPTER_REQUEST_QUERY_LIMIT_ENABLE"`)
 	pflag.StringArray("request.excludeQueryLimitSql", nil, `The sql that does not limit the request, uses prefix matching (case-insensitive, spaces removed), default []. ENV "TAOS_ADAPTER_REQUEST_EXCLUDE_QUERY_LIMIT_SQL"`)
 	pflag.StringArray("request.excludeQueryLimitSqlRegex", nil, `The sql that does not limit the request, support regular expressions, default []. ENV "TAOS_ADAPTER_REQUEST_EXCLUDE_QUERY_LIMIT_SQL_REGEX"`)

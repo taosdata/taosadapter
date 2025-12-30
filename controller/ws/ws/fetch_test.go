@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
 
 func TestNumFields(t *testing.T) {
@@ -19,6 +20,7 @@ func TestNumFields(t *testing.T) {
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful(fmt.Sprintf("create database if not exists %s", db), db)
 	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated(db))
 	code, message = doRestful(fmt.Sprintf("create stable if not exists %s.meters (ts timestamp,current float,voltage int,phase float) tags (groupid int,location varchar(24))", db), db)
 	assert.Equal(t, 0, code, message)
 	code, message = doRestful("INSERT INTO d1 USING meters TAGS (1, 'location1') VALUES (now, 10.2, 219, 0.31) "+
