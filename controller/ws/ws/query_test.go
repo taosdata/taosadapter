@@ -1255,8 +1255,13 @@ func TestQueryRecordSql(t *testing.T) {
 	var host string
 	const appName = "test_record_app"
 	defer func() {
-		bs, err := os.ReadFile(output)
+		err = f.Close()
 		require.NoError(t, err)
+		var bs []byte
+		require.Eventually(t, func() bool {
+			bs, err = os.ReadFile(output)
+			return err == nil && len(bs) > 0
+		}, 5*time.Second, 500*time.Millisecond)
 		t.Log(string(bs))
 		csvReader := csv.NewReader(bytes.NewReader(bs))
 		records, err := csvReader.ReadAll()
@@ -1289,11 +1294,12 @@ func TestQueryRecordSql(t *testing.T) {
 		checkRecord(records[1], "0x223", sql2)
 	}()
 	start := time.Now().Format(recordsql.InputTimeFormat)
-	end := time.Now().Add(time.Second).Format(recordsql.InputTimeFormat)
+	end := time.Now().Add(time.Second * 5).Format(recordsql.InputTimeFormat)
 	err = recordsql.StartRecordSqlWithTestWriter(start, end, "", f)
 	require.NoError(t, err)
 	defer func() {
-		_ = recordsql.StopRecordSql()
+		info := recordsql.StopRecordSql()
+		require.NotNil(t, info)
 	}()
 	s := httptest.NewServer(router)
 	defer s.Close()
