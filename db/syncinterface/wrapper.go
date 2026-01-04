@@ -673,6 +673,20 @@ func TaosStmt2BindBinary(stmt2 unsafe.Pointer, data []byte, colIdx int32, logger
 	return err
 }
 
+func TaosStmt2Result(stmt2 unsafe.Pointer, logger *logrus.Entry, isDebug bool) unsafe.Pointer {
+	logger.Trace("sync semaphore acquire for taos_stmt2_result")
+	thread.SyncSemaphore.Acquire()
+	defer func() {
+		thread.SyncSemaphore.Release()
+		logger.Trace("sync semaphore release for taos_stmt2_result")
+	}()
+	logger.Debugf("call taos_stmt2_result, stmt2:%p", stmt2)
+	s := log.GetLogNow(isDebug)
+	result := wrapper.TaosStmt2Result(stmt2)
+	logger.Debugf("taos_stmt2_result finish, result:%p, cost:%s", result, log.GetLogDuration(isDebug, s))
+	return result
+}
+
 func TaosOptionsConnection(conn unsafe.Pointer, option int, value *string, logger *logrus.Entry, isDebug bool) int {
 	logger.Trace("sync semaphore acquire for taos_options_connection")
 	thread.SyncSemaphore.Acquire()

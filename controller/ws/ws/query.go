@@ -200,17 +200,8 @@ func (h *messageHandler) doQuery(ctx context.Context, session *melody.Session, a
 	s = log.GetLogNow(isDebug)
 	precision := syncinterface.TaosResultPrecision(result.Res, logger, isDebug)
 	logger.Tracef("result_precision cost:%s", log.GetLogDuration(isDebug, s))
-	queryResult := QueryResult{
-		TaosResult:  result.Res,
-		FieldsCount: fieldsCount,
-		Header:      rowsHeader,
-		precision:   precision,
-		limiter:     l, // store limiter in query result, release it when the query result is freed.(maybe nil)
-	}
-	if recordSql {
-		queryResult.record = record
-	}
-	idx := h.queryResults.Add(&queryResult)
+	queryResult := NewQueryResult(result.Res, fieldsCount, rowsHeader, precision, record, l)
+	idx := h.queryResults.Add(queryResult)
 	logger.Debug("query success")
 	resp := &queryResponse{
 		Action:           action,
