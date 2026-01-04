@@ -2,7 +2,7 @@ package ws
 
 import (
 	"container/list"
-	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,9 +30,22 @@ type QueryResult struct {
 	precision   int
 	buf         []byte
 	inStmt      bool
+	isStmt2     bool
 	record      *recordsql.Record
 	limiter     *limiter.Limiter
 	sync.Mutex
+}
+
+func NewStmt2Result(result unsafe.Pointer, fieldsCount int, header *wrapper.RowsHeader, precision int) *QueryResult {
+	return &QueryResult{TaosResult: result, FieldsCount: fieldsCount, Header: header, precision: precision, inStmt: true, isStmt2: true}
+}
+
+func NewStmt1Result(result unsafe.Pointer, fieldsCount int, header *wrapper.RowsHeader, precision int) *QueryResult {
+	return &QueryResult{TaosResult: result, FieldsCount: fieldsCount, Header: header, precision: precision, inStmt: true}
+}
+
+func NewQueryResult(result unsafe.Pointer, fieldsCount int, header *wrapper.RowsHeader, precision int, record *recordsql.Record, limiter *limiter.Limiter) *QueryResult {
+	return &QueryResult{TaosResult: result, FieldsCount: fieldsCount, Header: header, precision: precision, record: record, limiter: limiter}
 }
 
 func (r *QueryResult) free(logger *logrus.Entry) {
@@ -51,7 +64,7 @@ func (r *QueryResult) free(logger *logrus.Entry) {
 	if r.limiter != nil {
 		r.limiter.Release()
 	}
-	if r.inStmt { // stmt result is no need to free
+	if r.inStmt && !r.isStmt2 { // stmt result is no need to free
 		logger.Trace("stmt result is no need to free")
 		r.TaosResult = nil
 		return
@@ -101,19 +114,25 @@ func (h *QueryResultHolder) Get(index uint64) *QueryResult {
 }
 
 func (h *QueryResultHolder) FreeResultByID(index uint64, logger *logrus.Entry) {
+	result := h.removeFromList(index)
+	if result != nil {
+		result.free(logger)
+	}
+}
+
+func (h *QueryResultHolder) removeFromList(index uint64) *QueryResult {
 	h.Lock()
 	defer h.Unlock()
 
 	node := h.results.Front()
 	for {
 		if node == nil || node.Value == nil {
-			return
+			return nil
 		}
 
 		if result := node.Value.(*QueryResult); result.index == index {
-			result.free(logger)
 			h.results.Remove(node)
-			return
+			return result
 		}
 		node = node.Next()
 	}
@@ -230,26 +249,33 @@ func (h *StmtHolder) GetStmt2(index uint64) *StmtItem {
 }
 
 func (h *StmtHolder) FreeStmtByID(index uint64, isStmt2 bool, logger *logrus.Entry) error {
-	h.Lock()
-	defer h.Unlock()
-
-	if h.results.Len() == 0 {
+	// free may cost some time, release lock first
+	item, err := h.removeFromList(index, isStmt2)
+	if err != nil {
+		return err
+	}
+	if item == nil {
 		return nil
 	}
+	item.free(logger)
+	return nil
+}
 
+func (h *StmtHolder) removeFromList(index uint64, isStmt2 bool) (*StmtItem, error) {
+	h.Lock()
+	defer h.Unlock()
 	node := h.results.Front()
 	for {
 		if node == nil || node.Value == nil {
-			return nil
+			return nil, nil
 		}
 		result := node.Value.(*StmtItem)
 		if result.index == index {
 			if result.isStmt2 != isStmt2 {
-				return errors.New("stmt type not match")
+				return nil, fmt.Errorf("stmtID:%d, isStmt2:%t not match", index, isStmt2)
 			}
-			result.free(logger)
 			h.results.Remove(node)
-			return nil
+			return result, nil
 		}
 		node = node.Next()
 	}
