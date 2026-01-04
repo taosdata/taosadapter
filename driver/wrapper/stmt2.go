@@ -711,3 +711,8 @@ func Stmt2ParseAllFields(num int, fields unsafe.Pointer) []*stmt.Stmt2AllField {
 	}
 	return result
 }
+
+// TAOS_RES *taos_stmt2_result(TAOS_STMT2 *stmt);
+func TaosStmt2Result(stmt2 unsafe.Pointer) unsafe.Pointer {
+	return unsafe.Pointer(C.taos_stmt2_result(stmt2))
+}

@@ -178,7 +178,11 @@ func (h *messageHandler) stmt2Exec(ctx context.Context, session *melody.Session,
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, result.N, errStr, req.StmtID)
 		return
 	}
-	stmtItem.result = result.Res
+	if !stmtItem.isInsert {
+		stmtItem.result = syncinterface.TaosStmt2Result(stmtItem.stmt, logger, isDebug)
+	} else {
+		stmtItem.result = nil
+	}
 	resp := &stmt2ExecResponse{
 		Action:   action,
 		ReqID:    req.ReqID,
@@ -219,12 +223,18 @@ func (h *messageHandler) stmt2UseResult(ctx context.Context, session *melody.Ses
 	}
 	defer stmtItem.Unlock()
 	result := stmtItem.result
+	if result == nil {
+		logger.Errorf("stmt2 use result error, result is nil, stmt_id:%d", req.StmtID)
+		stmtErrorResponse(ctx, session, logger, action, req.ReqID, 0xffff, "result is nil", req.StmtID)
+		return
+	}
+	stmtItem.result = nil
 	fieldsCount := syncinterface.TaosNumFields(result, logger, isDebug)
 	rowsHeader, _ := syncinterface.ReadColumn(result, fieldsCount, logger, isDebug)
 	precision := syncinterface.TaosResultPrecision(result, logger, isDebug)
 	logger.Tracef("stmt use result success, stmt_id:%d, fields_count:%d, precision:%d", req.StmtID, fieldsCount, precision)
-	queryResult := QueryResult{TaosResult: result, FieldsCount: fieldsCount, Header: rowsHeader, precision: precision, inStmt: true}
-	idx := h.queryResults.Add(&queryResult)
+	queryResult := NewStmt2Result(result, fieldsCount, rowsHeader, precision)
+	idx := h.queryResults.Add(queryResult)
 	resp := &stmt2UseResultResponse{
 		Action:           action,
 		ReqID:            req.ReqID,
