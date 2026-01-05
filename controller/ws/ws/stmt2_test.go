@@ -32,7 +32,7 @@ func TestWsStmt2(t *testing.T) {
 	defer doRestful("drop database if exists test_ws_stmt2_ws", "")
 
 	code, message = doRestful(
-		"create table if not exists stb (ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100)) tags (info json)",
+		"create table if not exists stb (ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100),c16 decimal(20,4),c17 decimal(10,4),c18 blob) tags (info json)",
 		"test_ws_stmt2_ws")
 	assert.Equal(t, 0, code, message)
 
@@ -74,7 +74,7 @@ func TestWsStmt2(t *testing.T) {
 	prepareReq := stmt2PrepareRequest{
 		ReqID:     3,
 		StmtID:    initResp.StmtID,
-		SQL:       "insert into ? using test_ws_stmt2_ws.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+		SQL:       "insert into ? using test_ws_stmt2_ws.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 		GetFields: true,
 	}
 	resp, err = doWebSocket(ws, STMT2Prepare, &prepareReq)
@@ -85,7 +85,7 @@ func TestWsStmt2(t *testing.T) {
 	assert.Equal(t, uint64(3), prepareResp.ReqID)
 	assert.Equal(t, 0, prepareResp.Code, prepareResp.Message)
 	assert.True(t, prepareResp.IsInsert)
-	assert.Equal(t, 18, len(prepareResp.Fields))
+	assert.Equal(t, 21, len(prepareResp.Fields))
 	// bind
 	now := time.Now()
 	cols := [][]driver.Value{
@@ -121,6 +121,12 @@ func TestWsStmt2(t *testing.T) {
 		{[]byte{0xaa, 0xbb, 0xcc}, []byte{0xaa, 0xbb, 0xcc}, nil},
 		// geometry
 		{[]byte{0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40}, []byte{0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40}, nil},
+		// decimal(20,4)
+		{"12345.6789", "98765.4321", nil},
+		// decimal(10,4)
+		{"1234.5678", "8765.4321", nil},
+		// blob
+		{[]byte("this is blob data"), []byte("this is blob data2"), nil},
 	}
 	tbName := "test_ws_stmt2_ws.ct1"
 	tag := []driver.Value{"{\"a\":\"b\"}"}
@@ -228,6 +234,9 @@ func TestWsStmt2(t *testing.T) {
 	assert.Equal(t, "nchar", blockResult[0][13])
 	assert.Equal(t, []byte{0xaa, 0xbb, 0xcc}, blockResult[1][14])
 	assert.Equal(t, []byte{0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40}, blockResult[0][15])
+	assert.Equal(t, "12345.6789", blockResult[0][16])
+	assert.Equal(t, "1234.5678", blockResult[0][17])
+	assert.Equal(t, []byte("this is blob data"), blockResult[0][18])
 
 	assert.Equal(t, now.Add(time.Second).UnixNano(), blockResult[1][0].(time.Time).UnixNano())
 	assert.Equal(t, false, blockResult[1][1])
@@ -245,9 +254,12 @@ func TestWsStmt2(t *testing.T) {
 	assert.Equal(t, "nchar2", blockResult[1][13])
 	assert.Equal(t, []byte{0xaa, 0xbb, 0xcc}, blockResult[1][14])
 	assert.Equal(t, []byte{0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40}, blockResult[1][15])
+	assert.Equal(t, "98765.4321", blockResult[1][16])
+	assert.Equal(t, "8765.4321", blockResult[1][17])
+	assert.Equal(t, []byte("this is blob data2"), blockResult[1][18])
 
 	assert.Equal(t, now.Add(time.Second*2).UnixNano(), blockResult[2][0].(time.Time).UnixNano())
-	for i := 1; i < 16; i++ {
+	for i := 1; i < 19; i++ {
 		assert.Nil(t, blockResult[2][i])
 	}
 
