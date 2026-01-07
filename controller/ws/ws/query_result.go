@@ -30,7 +30,7 @@ type QueryResult struct {
 	precision   int
 	buf         []byte
 	inStmt      bool
-	record      *recordsql.Record
+	record      *recordsql.SQLRecord
 	limiter     *limiter.Limiter
 	sync.Mutex
 }

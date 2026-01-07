@@ -17,11 +17,11 @@ func TestNewRecordList(t *testing.T) {
 func TestRecordList_Add(t *testing.T) {
 	t.Run("Single Add", func(t *testing.T) {
 		rl := NewRecordList()
-		record := &Record{SQL: "SELECT 1"}
+		record := &SQLRecord{SQL: "SELECT 1"}
 		ele := rl.Add(record)
 
 		assert.NotNil(t, ele)
-		assert.Equal(t, record, ele.Value.(*Record))
+		assert.Equal(t, record, ele.Value.(*SQLRecord))
 		assert.Equal(t, 1, rl.list.Len())
 	})
 
@@ -34,7 +34,7 @@ func TestRecordList_Add(t *testing.T) {
 		for i := 0; i < count; i++ {
 			go func(i int) {
 				defer wg.Done()
-				record := &Record{SQL: "SELECT " + string(rune(i))}
+				record := &SQLRecord{SQL: "SELECT " + string(rune(i))}
 				rl.Add(record)
 			}(i)
 		}
@@ -47,7 +47,7 @@ func TestRecordList_Add(t *testing.T) {
 func TestRecordList_Remove(t *testing.T) {
 	t.Run("Remove Existing Element", func(t *testing.T) {
 		rl := NewRecordList()
-		record := &Record{SQL: "SELECT 1"}
+		record := &SQLRecord{SQL: "SELECT 1"}
 		ele := rl.Add(record)
 
 		removed := rl.Remove(ele)
@@ -57,7 +57,7 @@ func TestRecordList_Remove(t *testing.T) {
 
 	t.Run("Remove Nil Element", func(t *testing.T) {
 		rl := NewRecordList()
-		record := &Record{SQL: "SELECT 1"}
+		record := &SQLRecord{SQL: "SELECT 1"}
 		rl.Add(record)
 
 		removed := rl.Remove(nil)
@@ -67,7 +67,7 @@ func TestRecordList_Remove(t *testing.T) {
 
 	t.Run("Remove Already Removed Element", func(t *testing.T) {
 		rl := NewRecordList()
-		record := &Record{SQL: "SELECT 1"}
+		record := &SQLRecord{SQL: "SELECT 1"}
 		ele := rl.Add(record)
 		rl.Remove(ele)
 
@@ -78,7 +78,7 @@ func TestRecordList_Remove(t *testing.T) {
 
 	t.Run("Concurrent Remove", func(t *testing.T) {
 		rl := NewRecordList()
-		record := &Record{SQL: "SELECT 1"}
+		record := &SQLRecord{SQL: "SELECT 1"}
 		ele := rl.Add(record)
 
 		var wg sync.WaitGroup
@@ -97,20 +97,20 @@ func TestRecordList_Remove(t *testing.T) {
 	})
 }
 
-func TestRecordList_RemoveAll(t *testing.T) {
+func TestRecordList_RemoveAllSqlRecords(t *testing.T) {
 	t.Run("Empty List", func(t *testing.T) {
 		rl := NewRecordList()
-		records := rl.RemoveAll()
+		records := rl.RemoveAllSqlRecords()
 		assert.Empty(t, records)
 		assert.Equal(t, 0, rl.list.Len())
 	})
 
 	t.Run("Single Item", func(t *testing.T) {
 		rl := NewRecordList()
-		record := &Record{SQL: "SELECT 1"}
+		record := &SQLRecord{SQL: "SELECT 1"}
 		rl.Add(record)
 
-		records := rl.RemoveAll()
+		records := rl.RemoveAllSqlRecords()
 		assert.Equal(t, 1, len(records))
 		assert.Equal(t, record, records[0])
 		assert.Equal(t, 0, rl.list.Len())
@@ -119,41 +119,104 @@ func TestRecordList_RemoveAll(t *testing.T) {
 	t.Run("Multiple Items", func(t *testing.T) {
 		rl := NewRecordList()
 		count := 10
-		expectedRecords := make([]*Record, count)
+		expectedRecords := make([]*SQLRecord, count)
 
 		for i := 0; i < count; i++ {
-			record := &Record{SQL: "SELECT " + string(rune(i))}
+			record := &SQLRecord{SQL: "SELECT " + string(rune(i))}
 			expectedRecords[i] = record
 			rl.Add(record)
 		}
 
-		records := rl.RemoveAll()
+		records := rl.RemoveAllSqlRecords()
 		assert.Equal(t, count, len(records))
 		assert.ElementsMatch(t, expectedRecords, records)
 		assert.Equal(t, 0, rl.list.Len())
 	})
 
-	t.Run("Concurrent RemoveAll", func(t *testing.T) {
+	t.Run("Concurrent RemoveAllSqlRecords", func(t *testing.T) {
 		rl := NewRecordList()
 		count := 100
 		for i := 0; i < count; i++ {
-			rl.Add(&Record{SQL: "SELECT " + string(rune(i))})
+			rl.Add(&SQLRecord{SQL: "SELECT " + string(rune(i))})
 		}
 
 		var wg sync.WaitGroup
 		wg.Add(2)
-		var records1, records2 []*Record
+		var records1, records2 []*SQLRecord
 		go func() {
 			defer wg.Done()
-			records1 = rl.RemoveAll()
+			records1 = rl.RemoveAllSqlRecords()
 		}()
 		go func() {
 			defer wg.Done()
-			records2 = rl.RemoveAll()
+			records2 = rl.RemoveAllSqlRecords()
 		}()
 		wg.Wait()
 
-		// Only one RemoveAll should get all records
+		// Only one RemoveAllSqlRecords should get all records
+		assert.True(t, (len(records1) == count && len(records2) == 0) ||
+			(len(records1) == 0 && len(records2) == count))
+		assert.Equal(t, 0, rl.list.Len())
+	})
+}
+
+func TestRecordList_RemoveAllStmtRecords(t *testing.T) {
+	t.Run("Empty List", func(t *testing.T) {
+		rl := NewRecordList()
+		records := rl.RemoveAllStmtRecords()
+		assert.Empty(t, records)
+		assert.Equal(t, 0, rl.list.Len())
+	})
+
+	t.Run("Single Item", func(t *testing.T) {
+		rl := NewRecordList()
+		record := &StmtRecord{SQL: "SELECT 1"}
+		rl.Add(record)
+
+		records := rl.RemoveAllStmtRecords()
+		assert.Equal(t, 1, len(records))
+		assert.Equal(t, record, records[0])
+		assert.Equal(t, 0, rl.list.Len())
+	})
+
+	t.Run("Multiple Items", func(t *testing.T) {
+		rl := NewRecordList()
+		count := 10
+		expectedRecords := make([]*StmtRecord, count)
+
+		for i := 0; i < count; i++ {
+			record := &StmtRecord{SQL: "SELECT " + string(rune(i))}
+			expectedRecords[i] = record
+			rl.Add(record)
+		}
+
+		records := rl.RemoveAllStmtRecords()
+		assert.Equal(t, count, len(records))
+		assert.ElementsMatch(t, expectedRecords, records)
+		assert.Equal(t, 0, rl.list.Len())
+	})
+
+	t.Run("Concurrent RemoveAllStmtRecords", func(t *testing.T) {
+		rl := NewRecordList()
+		count := 100
+		for i := 0; i < count; i++ {
+			rl.Add(&StmtRecord{SQL: "SELECT " + string(rune(i))})
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+		var records1, records2 []*StmtRecord
+		go func() {
+			defer wg.Done()
+			records1 = rl.RemoveAllStmtRecords()
+		}()
+		go func() {
+			defer wg.Done()
+			records2 = rl.RemoveAllStmtRecords()
+		}()
+		wg.Wait()
+
+		// Only one RemoveAllStmtRecords should get all records
 		assert.True(t, (len(records1) == count && len(records2) == 0) ||
 			(len(records1) == 0 && len(records2) == count))
 		assert.Equal(t, 0, rl.list.Len())

@@ -44,7 +44,28 @@ type outputWriter interface {
 	Flush()
 }
 
+type RecordType int
+
+const (
+	RecordTypeSQL RecordType = iota + 1
+	RecordTypeStmt
+)
+
+var recordTypes = []RecordType{RecordTypeSQL, RecordTypeStmt}
+
+func (recordType RecordType) String() string {
+	switch recordType {
+	case RecordTypeSQL:
+		return "Sql"
+	case RecordTypeStmt:
+		return "Stmt"
+	default:
+		return fmt.Sprintf("UNKNOWN %d", int(recordType))
+	}
+}
+
 type RecordMission struct {
+	recordType   RecordType
 	running      bool
 	runningLock  sync.RWMutex
 	ctx          context.Context
@@ -55,9 +76,24 @@ type RecordMission struct {
 	csvWriter    outputWriter
 	startChan    chan struct{}
 	writeLock    sync.Mutex
-	list         *RecordList
+	recordList   *RecordList
 	logger       *logrus.Entry
 	closeOnce    sync.Once
+}
+
+func NewRecordMission(recordType RecordType, startTime, endTime time.Time, writer outputWriter, logger *logrus.Entry) *RecordMission {
+	ctx, cancel := context.WithDeadline(context.Background(), endTime)
+	return &RecordMission{
+		recordType: recordType,
+		startTime:  startTime,
+		endTime:    endTime,
+		csvWriter:  writer,
+		ctx:        ctx,
+		cancelFunc: cancel,
+		startChan:  make(chan struct{}, 1),
+		recordList: NewRecordList(),
+		logger:     logger,
+	}
 }
 
 type RecordState struct {
@@ -68,32 +104,30 @@ type RecordState struct {
 	CurrentConcurrent int32  `json:"current_concurrent"`
 }
 
-var globalRecordMission *RecordMission
-var lock sync.RWMutex
-
-func getGlobalRecordMission() *RecordMission {
-	lock.RLock()
-	defer lock.RUnlock()
-	return globalRecordMission
+type GlobalMission struct {
+	RecordSqlMission  *RecordMission
+	RecordSqlLock     sync.RWMutex
+	RecordStmtMission *RecordMission
+	RecordStmtLock    sync.RWMutex
 }
 
-func setGlobalRecordMission(record *RecordMission) {
-	lock.Lock()
-	defer lock.Unlock()
-	globalRecordMission = record
-}
+var globalMission = &GlobalMission{}
 
 // record sql logger
 var logger = log.GetLogger("RSQ")
 
 func StartRecordSql(startTime, endTime string, location string) error {
-	return StartRecordSqlWithTestWriter(startTime, endTime, location, nil)
+	return StartRecordSqlWithTestWriter(RecordTypeSQL, startTime, endTime, location, nil)
 }
 
-func StartRecordSqlWithTestWriter(startTime, endTime string, location string, testWriter io.Writer) error {
-	logger.Tracef("start record sql, startTime: %s, endTime: %s, location: %s", startTime, endTime, location)
-	if IsRunning() {
-		return fmt.Errorf("record sql is already running")
+func StartRecordStmt(startTime, endTime string, location string) error {
+	return StartRecordSqlWithTestWriter(RecordTypeStmt, startTime, endTime, location, nil)
+}
+
+func StartRecordSqlWithTestWriter(recordType RecordType, startTime, endTime string, location string, testWriter io.Writer) error {
+	logger.Tracef("start record mission, recordType: %s, startTime: %s, endTime: %s, location: %s", recordType, startTime, endTime, location)
+	if IsRunning(recordType) {
+		return fmt.Errorf("record mission is already running")
 	}
 
 	loc := time.Local
@@ -120,23 +154,13 @@ func StartRecordSqlWithTestWriter(startTime, endTime string, location string, te
 	}
 	writer := testWriter
 	if writer == nil {
-		writer, err = getRotateWriter()
+		writer, err = getRotateWriter(recordType)
 		if err != nil {
 			return fmt.Errorf("error getting rotate writer: %s", err)
 		}
 	}
 	csvWriter := csv.NewWriter(writer)
-	ctx, cancel := context.WithDeadline(context.Background(), endTimeParsed)
-	mission := &RecordMission{
-		startTime:  startTimeParsed,
-		endTime:    endTimeParsed,
-		csvWriter:  csvWriter,
-		ctx:        ctx,
-		cancelFunc: cancel,
-		startChan:  make(chan struct{}, 1),
-		list:       NewRecordList(),
-		logger:     logger,
-	}
+	mission := NewRecordMission(recordType, startTimeParsed, endTimeParsed, csvWriter, logger)
 	duration := time.Until(mission.startTime)
 	if duration <= 0 {
 		// run immediately
@@ -146,7 +170,7 @@ func StartRecordSqlWithTestWriter(startTime, endTime string, location string, te
 	} else {
 		go mission.start()
 	}
-	setGlobalRecordMission(mission)
+	setMission(recordType, mission)
 	return nil
 }
 
@@ -155,8 +179,8 @@ type MissionInfo struct {
 	EndTime   string `json:"end_time"`
 }
 
-func StopRecordSql() *MissionInfo {
-	mission := getGlobalRecordMission()
+func stopRecordMission(recordType RecordType) *MissionInfo {
+	mission := getMission(recordType)
 	if mission == nil {
 		return nil
 	}
@@ -167,12 +191,45 @@ func StopRecordSql() *MissionInfo {
 	}
 }
 
-func IsRunning() bool {
-	mission := getGlobalRecordMission()
+func StopRecordSqlMission() *MissionInfo {
+	return stopRecordMission(RecordTypeSQL)
+}
+
+func StopRecordStmtMission() *MissionInfo {
+	return stopRecordMission(RecordTypeStmt)
+}
+
+func IsRunning(recordType RecordType) bool {
+	mission := getMission(recordType)
 	if mission == nil {
 		return false
 	}
 	return mission.isRunning()
+}
+
+func getMission(recordType RecordType) *RecordMission {
+	if recordType == RecordTypeSQL {
+		globalMission.RecordSqlLock.RLock()
+		defer globalMission.RecordSqlLock.RUnlock()
+		return globalMission.RecordSqlMission
+	} else if recordType == RecordTypeStmt {
+		globalMission.RecordStmtLock.RLock()
+		defer globalMission.RecordStmtLock.RUnlock()
+		return globalMission.RecordStmtMission
+	}
+	return nil
+}
+
+func setMission(recordType RecordType, mission *RecordMission) {
+	if recordType == RecordTypeSQL {
+		globalMission.RecordSqlLock.Lock()
+		defer globalMission.RecordSqlLock.Unlock()
+		globalMission.RecordSqlMission = mission
+	} else if recordType == RecordTypeStmt {
+		globalMission.RecordStmtLock.Lock()
+		defer globalMission.RecordStmtLock.Unlock()
+		globalMission.RecordStmtMission = mission
+	}
 }
 
 func (c *RecordMission) isRunning() bool {
@@ -234,25 +291,30 @@ func (c *RecordMission) Stop() {
 	c.closeOnce.Do(func() {
 		c.logger.Infof("stop recording sql")
 		// set flag false to stop
-		c.runningLock.Lock()
-		defer c.runningLock.Unlock()
-		c.running = false
+		c.setRunning(false)
 		// cancel the context to stop the goroutine
 		c.cancelFunc()
 		// wait for the start to complete
 		<-c.startChan
 		// write all remaining records to the csv file
-		records := c.list.RemoveAll()
-		for i := 0; i < len(records); i++ {
-			c.writeRecord(records[i])
+		if c.recordType == RecordTypeSQL {
+			records := c.recordList.RemoveAllSqlRecords()
+			for i := 0; i < len(records); i++ {
+				c.writeSqlRecord(records[i])
+			}
+		} else if c.recordType == RecordTypeStmt {
+			records := c.recordList.RemoveAllStmtRecords()
+			for i := 0; i < len(records); i++ {
+				c.writeStmtRecord(records[i])
+			}
 		}
 		// flush csv
 		c.csvWriter.Flush()
-		setGlobalRecordMission(nil)
+		setMission(c.recordType, nil)
 	})
 }
 
-func (c *RecordMission) writeRecord(record *Record) {
+func (c *RecordMission) writeSqlRecord(record *SQLRecord) {
 	logger.Tracef("write record: %s", record.SQL)
 	c.currentCount.Add(-1)
 	record.Lock()
@@ -271,8 +333,31 @@ func (c *RecordMission) writeRecord(record *Record) {
 	}
 }
 
-func GetState() RecordState {
-	mission := getGlobalRecordMission()
+func (c *RecordMission) writeStmtRecord(record *StmtRecord) {
+	logger.Tracef("write stmt record: %d", record.StmtPointer)
+	c.currentCount.Add(-1)
+	record.Lock()
+	defer record.Unlock()
+	c.writeLock.Lock()
+	defer c.writeLock.Unlock()
+	row := record.toRow()
+	c.logger.Tracef("writing record to csv: %s", row)
+	err := c.csvWriter.Write(row)
+	if err != nil {
+		c.logger.Errorf("error writing record to csv: %s, data: %s", err, row)
+	}
+}
+
+func GetSqlMissionState() RecordState {
+	return getMissionState(RecordTypeSQL)
+}
+
+func GetStmtMissionState() RecordState {
+	return getMissionState(RecordTypeStmt)
+}
+
+func getMissionState(recordType RecordType) RecordState {
+	mission := getMission(recordType)
 	if mission == nil {
 		return RecordState{
 			Exists: false,
@@ -292,20 +377,34 @@ func GetState() RecordState {
 
 func Init() error {
 	if config.Conf.Log.EnableSqlToCsvLogging {
-		return StartRecordSql(time.Now().Format(InputTimeFormat), DefaultRecordSqlEndTime, "")
+		err := StartRecordSql(time.Now().Format(InputTimeFormat), DefaultRecordSqlEndTime, "")
+		if err != nil {
+			return err
+		}
+	}
+	if config.Conf.Log.EnableStmtToCsvLogging {
+		err := StartRecordStmt(time.Now().Format(InputTimeFormat), DefaultRecordSqlEndTime, "")
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func Close() {
 	// close the global record mission and writer
-	mission := getGlobalRecordMission()
-	if mission != nil {
-		mission.Stop()
+	for _, recordType := range recordTypes {
+		mission := getMission(recordType)
+		if mission != nil {
+			mission.Stop()
+		}
+		setMission(recordType, nil)
 	}
-	setGlobalRecordMission(nil)
 	// close the global rotate writer if it exists
-	if globalRotateWriter != nil {
-		_ = globalRotateWriter.Close()
+	if globalSQLRotateWriter != nil {
+		_ = globalSQLRotateWriter.Close()
+	}
+	if globalStmtRotateWriter != nil {
+		_ = globalStmtRotateWriter.Close()
 	}
 }

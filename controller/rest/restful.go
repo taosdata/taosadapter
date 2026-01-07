@@ -245,7 +245,7 @@ type SQLQueryHook struct {
 	logger     *logrus.Entry
 	isDebug    bool
 	// set in beforeConnect
-	record          *recordsql.Record
+	record          *recordsql.SQLRecord
 	startRecordTime time.Time
 	limiter         *limiter.Limiter
 

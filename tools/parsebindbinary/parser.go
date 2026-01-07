@@ -35,7 +35,6 @@ const (
 )
 
 func ParseStmt2BindV(bs []byte) (*Stmt2BindV, error) {
-	// bind data has been inserted, so no need to check available again
 	result := &Stmt2BindV{}
 	count := bs[CountPosition : CountPosition+4]
 	tagCount := bs[TagCountPosition : TagCountPosition+4]

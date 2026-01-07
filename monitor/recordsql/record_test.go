@@ -13,7 +13,7 @@ import (
 )
 
 func TestRecordInit(t *testing.T) {
-	r := &Record{}
+	r := &SQLRecord{}
 	sql := "SELECT * FROM test"
 	ip := "127.0.0.1"
 	user := "testuser"
@@ -36,7 +36,7 @@ func TestRecordInit(t *testing.T) {
 }
 
 func TestRecordDurationSetters(t *testing.T) {
-	r := &Record{}
+	r := &SQLRecord{}
 	duration := 100 * time.Millisecond
 
 	t.Run("SetQueryDuration", func(t *testing.T) {
@@ -65,7 +65,7 @@ func TestRecordDurationSetters(t *testing.T) {
 
 func TestRecordToRow(t *testing.T) {
 	now := time.Now()
-	r := &Record{
+	r := &SQLRecord{
 		SQL:             "SELECT * FROM test",
 		IP:              "127.0.0.1",
 		User:            "testuser",
@@ -102,7 +102,7 @@ func TestRecordToRow(t *testing.T) {
 
 func TestRecordToRowWithZeroFreeTime(t *testing.T) {
 	now := time.Now()
-	r := &Record{
+	r := &SQLRecord{
 		SQL:         "SELECT * FROM test",
 		ReceiveTime: now,
 		// FreeTime is zero
@@ -116,7 +116,7 @@ func TestRecordToRowWithZeroFreeTime(t *testing.T) {
 }
 
 func TestRecordReset(t *testing.T) {
-	r := &Record{
+	r := &SQLRecord{
 		SQL:             "SELECT * FROM test",
 		IP:              "127.0.0.1",
 		User:            "testuser",
@@ -155,21 +155,21 @@ func TestRecordReset(t *testing.T) {
 
 func TestRecordWrite(t *testing.T) {
 	t.Run("with nil mission", func(t *testing.T) {
-		r := &Record{}
+		r := &SQLRecord{}
 		r.write() // should not panic
 	})
 
 	t.Run("with mission", func(t *testing.T) {
 		mission := &RecordMission{
-			list:   NewRecordList(),
-			logger: logrus.NewEntry(logrus.New()),
+			recordList: NewRecordList(),
+			logger:     logrus.NewEntry(logrus.New()),
 		}
-		r := &Record{mission: mission}
-		ele := mission.list.Add(r)
+		r := &SQLRecord{mission: mission}
+		ele := mission.recordList.Add(r)
 		r.ele = ele
 
-		r.write()                               // should remove from list and attempt to write
-		assert.Nil(t, mission.list.Remove(ele)) // should already be removed
+		r.write()                                     // should remove from recordList and attempt to write
+		assert.Nil(t, mission.recordList.Remove(ele)) // should already be removed
 	})
 }
 
@@ -179,8 +179,8 @@ func TestWriteRecord(t *testing.T) {
 			csvWriter: csv.NewWriter(&mockWriter{}),
 			logger:    logrus.NewEntry(logrus.New()),
 		}
-		r := &Record{} // empty SQL
-		mission.writeRecord(r)
+		r := &SQLRecord{} // empty SQL
+		mission.writeSqlRecord(r)
 		// Should return without writing
 	})
 
@@ -190,11 +190,11 @@ func TestWriteRecord(t *testing.T) {
 			csvWriter: mockCSV,
 			logger:    logrus.NewEntry(logrus.New()),
 		}
-		r := &Record{
+		r := &SQLRecord{
 			SQL: "SELECT 1",
 		}
 
-		mission.writeRecord(r)
+		mission.writeSqlRecord(r)
 		assert.True(t, mockCSV.writeCalled)
 	})
 
@@ -204,11 +204,11 @@ func TestWriteRecord(t *testing.T) {
 			csvWriter: mockCSV,
 			logger:    logrus.NewEntry(logrus.New()),
 		}
-		r := &Record{
+		r := &SQLRecord{
 			SQL: "SELECT 1",
 		}
 
-		mission.writeRecord(r)
+		mission.writeSqlRecord(r)
 		assert.True(t, mockCSV.writeCalled)
 	})
 }
@@ -232,7 +232,7 @@ func TestConnTypeString(t *testing.T) {
 
 func TestGetSQLRecord(t *testing.T) {
 	t.Run("no mission", func(t *testing.T) {
-		setGlobalRecordMission(nil)
+		setMission(RecordTypeSQL, nil)
 		record, running := GetSQLRecord()
 		assert.Nil(t, record)
 		assert.False(t, running)
@@ -240,7 +240,7 @@ func TestGetSQLRecord(t *testing.T) {
 
 	t.Run("mission not running", func(t *testing.T) {
 		mission := &RecordMission{running: false}
-		setGlobalRecordMission(mission)
+		setMission(RecordTypeSQL, mission)
 		record, running := GetSQLRecord()
 		assert.Nil(t, record)
 		assert.False(t, running)
@@ -248,11 +248,11 @@ func TestGetSQLRecord(t *testing.T) {
 
 	t.Run("mission running", func(t *testing.T) {
 		mission := &RecordMission{
-			running: true,
-			list:    NewRecordList(),
+			running:    true,
+			recordList: NewRecordList(),
 		}
-		setGlobalRecordMission(mission)
-		defer setGlobalRecordMission(nil)
+		setMission(RecordTypeSQL, mission)
+		defer setMission(RecordTypeSQL, nil)
 
 		record, running := GetSQLRecord()
 		require.NotNil(t, record)
@@ -264,13 +264,13 @@ func TestGetSQLRecord(t *testing.T) {
 
 func TestPutSQLRecord(t *testing.T) {
 	mission := &RecordMission{
-		running:   true,
-		list:      NewRecordList(),
-		logger:    logrus.NewEntry(logrus.New()),
-		csvWriter: csv.NewWriter(&mockWriter{}),
+		running:    true,
+		recordList: NewRecordList(),
+		logger:     logrus.NewEntry(logrus.New()),
+		csvWriter:  csv.NewWriter(&mockWriter{}),
 	}
-	setGlobalRecordMission(mission)
-	defer setGlobalRecordMission(nil)
+	setMission(RecordTypeSQL, mission)
+	defer setMission(RecordTypeSQL, nil)
 
 	record, _ := GetSQLRecord()
 	require.NotNil(t, record)
@@ -314,17 +314,29 @@ func TestRotate(t *testing.T) {
 	defer func() {
 		config.Conf.Log.Path = oldPath
 	}()
-	if globalRotateWriter != nil {
-		_ = globalRotateWriter.Close()
-		globalRotateWriter = nil
+	if globalSQLRotateWriter != nil {
+		err := globalSQLRotateWriter.Close()
+		assert.NoError(t, err, "Failed to close existing globalSQLRotateWriter")
+		globalSQLRotateWriter = nil
+	}
+	if globalStmtRotateWriter != nil {
+		err := globalStmtRotateWriter.Close()
+		assert.NoError(t, err, "Failed to close existing globalStmtRotateWriter")
+		globalStmtRotateWriter = nil
 	}
 	defer func() {
-		if globalRotateWriter != nil {
-			err := globalRotateWriter.Close()
-			assert.NoError(t, err, "Failed to close globalRotateWriter")
-			globalRotateWriter = nil
+		if globalSQLRotateWriter != nil {
+			err := globalSQLRotateWriter.Close()
+			assert.NoError(t, err, "Failed to close globalSQLRotateWriter")
+			globalSQLRotateWriter = nil
+		}
+		if globalStmtRotateWriter != nil {
+			err := globalStmtRotateWriter.Close()
+			assert.NoError(t, err, "Failed to close globalStmtRotateWriter")
+			globalStmtRotateWriter = nil
 		}
 	}()
+
 	config.Conf.Log.Path = tmpDir
 	oldRotateSize := config.Conf.Log.RotationSize
 	defer func() {
@@ -334,9 +346,11 @@ func TestRotate(t *testing.T) {
 	err := StartRecordSql(time.Now().Format(InputTimeFormat), time.Now().Add(time.Second*2).Format(InputTimeFormat), "")
 	require.NoError(t, err)
 	defer func() {
-		_ = StopRecordSql()
+		_ = StopRecordSqlMission()
 	}()
-	record := &Record{
+	err = StartRecordStmt(time.Now().Format(InputTimeFormat), time.Now().Add(time.Second*2).Format(InputTimeFormat), "")
+	require.NoError(t, err)
+	record := &SQLRecord{
 		SQL:             "SELECT * FROM test",
 		IP:              "127.0.0.1",
 		User:            "root",
@@ -351,11 +365,26 @@ func TestRotate(t *testing.T) {
 		SourcePort:      "38000",
 		AppName:         "testapp",
 	}
-	for i := 0; i < 10; i++ {
-		getGlobalRecordMission().writeRecord(record)
-		getGlobalRecordMission().csvWriter.Flush()
+	stmtRecord := &StmtRecord{
+		SQL:         "SELECT * FROM test WHERE id = ?",
+		IP:          "127.0.0.1",
+		User:        "root",
+		ConnType:    WSType,
+		QID:         0x12345,
+		StartTime:   time.Now(),
+		EndTime:     time.Now().Add(time.Second),
+		StmtPointer: 1,
 	}
-	files, err := getRecordFiles(tmpDir)
+	for i := 0; i < 10; i++ {
+		getMission(RecordTypeSQL).writeSqlRecord(record)
+		getMission(RecordTypeSQL).csvWriter.Flush()
+		getMission(RecordTypeStmt).writeStmtRecord(stmtRecord)
+		getMission(RecordTypeStmt).csvWriter.Flush()
+	}
+	files, err := getRecordFiles(tmpDir, RecordTypeSQL)
+	assert.NoError(t, err)
+	assert.Equal(t, 10, len(files), files)
+	files, err = getRecordFiles(tmpDir, RecordTypeStmt)
 	assert.NoError(t, err)
 	assert.Equal(t, 10, len(files), files)
 }
