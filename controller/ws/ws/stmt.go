@@ -564,14 +564,8 @@ func (h *messageHandler) stmtUseResult(ctx context.Context, session *melody.Sess
 	rowsHeader, _ := syncinterface.ReadColumn(result, fieldsCount, logger, isDebug)
 	precision := syncinterface.TaosResultPrecision(result, logger, isDebug)
 	logger.Tracef("stmt use result success, stmt_id:%d, fields_count:%d, precision:%d", req.StmtID, fieldsCount, precision)
-	queryResult := QueryResult{
-		TaosResult:  result,
-		FieldsCount: fieldsCount,
-		Header:      rowsHeader,
-		precision:   precision,
-		inStmt:      true,
-	}
-	idx := h.queryResults.Add(&queryResult)
+	queryResult := NewStmt1Result(result, fieldsCount, rowsHeader, precision)
+	idx := h.queryResults.Add(queryResult)
 	logger.Tracef("add query result, result_id:%d", idx)
 	resp := &stmtUseResultResponse{
 		Action:           action,
