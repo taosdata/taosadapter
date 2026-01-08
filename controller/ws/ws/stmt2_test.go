@@ -163,6 +163,17 @@ func TestWsStmt2(t *testing.T) {
 	assert.Equal(t, 0, execResp.Code, execResp.Message)
 	assert.Equal(t, 3, execResp.Affected)
 
+	// use result will fail for insert stmt
+	useResultReq := stmt2UseResultRequest{ReqID: 9, StmtID: prepareResp.StmtID}
+	resp, err = doWebSocket(ws, STMT2Result, &useResultReq)
+	assert.NoError(t, err)
+	var useResultResp stmt2UseResultResponse
+	err = json.Unmarshal(resp, &useResultResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(9), useResultResp.ReqID)
+	assert.Equal(t, 0xffff, useResultResp.Code)
+	assert.NotEmpty(t, useResultResp.Message)
+
 	// close
 	closeReq := stmt2CloseRequest{ReqID: 11, StmtID: prepareResp.StmtID}
 	resp, err = doWebSocket(ws, STMT2Close, &closeReq)
@@ -495,6 +506,14 @@ func Stmt2Query(t *testing.T, db string, prepareDataSql []string) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(7), useResultResp.ReqID)
 	assert.Equal(t, 0, useResultResp.Code, useResultResp.Message)
+
+	// use result again will get failure
+	resp, err = doWebSocket(ws, STMT2Result, &useResultReq)
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &useResultResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(7), useResultResp.ReqID)
+	assert.NotEqual(t, 0, useResultResp.Code)
 
 	// fetch
 	fetchReq := fetchRequest{ReqID: 8, ID: useResultResp.ID}
