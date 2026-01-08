@@ -65,24 +65,24 @@ func (r *StmtRecord) init(stmtPointer uintptr, action StmtAction, ip string, por
 	r.AppName = AppName
 }
 
-func (r *StmtRecord) InitPrepare(stmtPointer uintptr, action StmtAction, ip string, port string, AppName string, user string, connType ConnType, qid uint64, startTime time.Time, sql string) {
+func (r *StmtRecord) InitPrepare(stmtPointer uintptr, ip string, port string, AppName string, user string, connType ConnType, qid uint64, startTime time.Time, sql string) {
 	r.Lock()
 	defer r.Unlock()
-	r.init(stmtPointer, action, ip, port, AppName, user, connType, qid, startTime)
+	r.init(stmtPointer, StmtActionPrepare, ip, port, AppName, user, connType, qid, startTime)
 	r.SQL = sql
 }
 
-func (r *StmtRecord) InitBind(stmtPointer uintptr, action StmtAction, ip string, port string, AppName string, user string, connType ConnType, qid uint64, startTime time.Time, bindData []byte) {
+func (r *StmtRecord) InitBind(stmtPointer uintptr, ip string, port string, AppName string, user string, connType ConnType, qid uint64, startTime time.Time, bindData []byte) {
 	r.Lock()
 	defer r.Unlock()
-	r.init(stmtPointer, action, ip, port, AppName, user, connType, qid, startTime)
+	r.init(stmtPointer, StmtActionBind, ip, port, AppName, user, connType, qid, startTime)
 	r.BindData = bindData
 }
 
-func (r *StmtRecord) InitExecute(stmtPointer uintptr, action StmtAction, ip string, port string, AppName string, user string, connType ConnType, qid uint64, startTime time.Time) {
+func (r *StmtRecord) InitExecute(stmtPointer uintptr, ip string, port string, AppName string, user string, connType ConnType, qid uint64, startTime time.Time) {
 	r.Lock()
 	defer r.Unlock()
-	r.init(stmtPointer, action, ip, port, AppName, user, connType, qid, startTime)
+	r.init(stmtPointer, StmtActionExecute, ip, port, AppName, user, connType, qid, startTime)
 }
 
 func (r *StmtRecord) SetEnd(resultCode int) {
