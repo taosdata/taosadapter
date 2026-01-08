@@ -220,6 +220,7 @@ func (h *messageHandler) stmt2UseResult(ctx context.Context, session *melody.Ses
 	if stmtItem.isInsert {
 		logger.Errorf("stmt2 use result error, stmt is insert, stmt_id:%d", req.StmtID)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, 0xffff, "stmt is insert, no result set", req.StmtID)
+		return
 	}
 	result := syncinterface.TaosStmt2Result(stmtItem.stmt, logger, isDebug)
 	if result == nil {
