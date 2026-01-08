@@ -712,7 +712,9 @@ func Stmt2ParseAllFields(num int, fields unsafe.Pointer) []*stmt.Stmt2AllField {
 	return result
 }
 
-// TAOS_RES *taos_stmt2_result(TAOS_STMT2 *stmt);
+// TaosStmt2Result wraps the C function `taos_stmt2_result` and returns a pointer to a TAOS_RES.
+// The returned pointer may be nil if the statement has no result or if an error occurred.
+// Callers MUST check the returned pointer for nil before using or dereferencing it.
 func TaosStmt2Result(stmt2 unsafe.Pointer) unsafe.Pointer {
 	return unsafe.Pointer(C.taos_stmt2_result(stmt2))
 }
