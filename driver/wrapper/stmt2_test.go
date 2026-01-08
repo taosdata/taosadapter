@@ -3581,8 +3581,8 @@ func TestStmt2Query(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	fileCount := TaosNumFields(res)
-	rh, err := ReadColumn(res, fileCount)
+	fieldCount := TaosNumFields(res)
+	rh, err := ReadColumn(res, fieldCount)
 	if err != nil {
 		t.Error(err)
 		return
@@ -3782,8 +3782,8 @@ func TestStmt2QueryBytes(t *testing.T) {
 		return
 	}
 	res := r.res
-	fileCount := TaosNumFields(res)
-	rh, err := ReadColumn(res, fileCount)
+	fieldCount := TaosNumFields(res)
+	rh, err := ReadColumn(res, fieldCount)
 	if err != nil {
 		t.Error(err)
 		return
@@ -4082,8 +4082,8 @@ func TestStmt2QueryAllType(t *testing.T) {
 		return
 	}
 	res := r.res
-	fileCount := TaosNumFields(res)
-	rh, err := ReadColumn(res, fileCount)
+	fieldCount := TaosNumFields(res)
+	rh, err := ReadColumn(res, fieldCount)
 	if err != nil {
 		t.Error(err)
 		return
@@ -4239,8 +4239,8 @@ func TestStmt2QueryAllTypeBytes(t *testing.T) {
 	// insert again then fetch result
 	stmt2AllTypeBytesInsert(t, stmt2, caller, now)
 
-	fileCount := TaosNumFields(res)
-	rh, err := ReadColumn(res, fileCount)
+	fieldCount := TaosNumFields(res)
+	rh, err := ReadColumn(res, fieldCount)
 	if err != nil {
 		t.Error(err)
 		return
@@ -4527,8 +4527,8 @@ func TestStmt2Json(t *testing.T) {
 		return
 	}
 	res := r.res
-	fileCount := TaosNumFields(res)
-	rh, err := ReadColumn(res, fileCount)
+	fieldCount := TaosNumFields(res)
+	rh, err := ReadColumn(res, fieldCount)
 	if err != nil {
 		t.Error(err)
 		return
