@@ -161,6 +161,7 @@ func TestRecordWrite(t *testing.T) {
 
 	t.Run("with mission", func(t *testing.T) {
 		mission := &RecordMission{
+			recordType: RecordTypeSQL,
 			recordList: NewRecordList(),
 			logger:     logrus.NewEntry(logrus.New()),
 		}
@@ -176,8 +177,9 @@ func TestRecordWrite(t *testing.T) {
 func TestWriteRecord(t *testing.T) {
 	t.Run("empty SQL", func(t *testing.T) {
 		mission := &RecordMission{
-			csvWriter: csv.NewWriter(&mockWriter{}),
-			logger:    logrus.NewEntry(logrus.New()),
+			recordType: RecordTypeSQL,
+			csvWriter:  csv.NewWriter(&mockWriter{}),
+			logger:     logrus.NewEntry(logrus.New()),
 		}
 		r := &SQLRecord{} // empty SQL
 		mission.writeSqlRecord(r)
@@ -187,8 +189,9 @@ func TestWriteRecord(t *testing.T) {
 	t.Run("successful write", func(t *testing.T) {
 		mockCSV := &mockCSVWriter{}
 		mission := &RecordMission{
-			csvWriter: mockCSV,
-			logger:    logrus.NewEntry(logrus.New()),
+			recordType: RecordTypeSQL,
+			csvWriter:  mockCSV,
+			logger:     logrus.NewEntry(logrus.New()),
 		}
 		r := &SQLRecord{
 			SQL: "SELECT 1",
@@ -201,8 +204,9 @@ func TestWriteRecord(t *testing.T) {
 	t.Run("write error", func(t *testing.T) {
 		mockCSV := &mockCSVWriter{err: assert.AnError}
 		mission := &RecordMission{
-			csvWriter: mockCSV,
-			logger:    logrus.NewEntry(logrus.New()),
+			recordType: RecordTypeSQL,
+			csvWriter:  mockCSV,
+			logger:     logrus.NewEntry(logrus.New()),
 		}
 		r := &SQLRecord{
 			SQL: "SELECT 1",
@@ -239,7 +243,7 @@ func TestGetSQLRecord(t *testing.T) {
 	})
 
 	t.Run("mission not running", func(t *testing.T) {
-		mission := &RecordMission{running: false}
+		mission := &RecordMission{recordType: RecordTypeSQL, running: false}
 		setMission(RecordTypeSQL, mission)
 		record, running := GetSQLRecord()
 		assert.Nil(t, record)
@@ -248,6 +252,7 @@ func TestGetSQLRecord(t *testing.T) {
 
 	t.Run("mission running", func(t *testing.T) {
 		mission := &RecordMission{
+			recordType: RecordTypeSQL,
 			running:    true,
 			recordList: NewRecordList(),
 		}
@@ -264,6 +269,7 @@ func TestGetSQLRecord(t *testing.T) {
 
 func TestPutSQLRecord(t *testing.T) {
 	mission := &RecordMission{
+		recordType: RecordTypeSQL,
 		running:    true,
 		recordList: NewRecordList(),
 		logger:     logrus.NewEntry(logrus.New()),
