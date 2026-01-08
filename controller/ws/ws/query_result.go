@@ -44,6 +44,9 @@ func NewStmt1Result(result unsafe.Pointer, fieldsCount int, header *wrapper.Rows
 	return &QueryResult{TaosResult: result, FieldsCount: fieldsCount, Header: header, precision: precision, inStmt: true}
 }
 
+// NewQueryResult creates a QueryResult for non-statement queries.
+// The record and limiter parameters are optional and may be nil;
+// the free method checks for nil and handles those cases safely.
 func NewQueryResult(result unsafe.Pointer, fieldsCount int, header *wrapper.RowsHeader, precision int, record *recordsql.Record, limiter *limiter.Limiter) *QueryResult {
 	return &QueryResult{TaosResult: result, FieldsCount: fieldsCount, Header: header, precision: precision, record: record, limiter: limiter}
 }
@@ -64,7 +67,7 @@ func (r *QueryResult) free(logger *logrus.Entry) {
 	if r.limiter != nil {
 		r.limiter.Release()
 	}
-	if r.inStmt && !r.isStmt2 { // stmt result is no need to free
+	if r.inStmt && !r.isStmt2 { // stmt1 result does not need to be freed here; stmt2 result must be freed manually
 		logger.Trace("stmt result is no need to free")
 		r.TaosResult = nil
 		return
@@ -166,7 +169,6 @@ type StmtItem struct {
 	stmt     unsafe.Pointer
 	isInsert bool
 	isStmt2  bool
-	result   unsafe.Pointer
 	handler  cgo.Handle
 	caller   *async.Stmt2CallBackCaller
 	sync.Mutex
