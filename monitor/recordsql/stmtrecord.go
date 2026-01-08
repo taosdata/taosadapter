@@ -27,7 +27,7 @@ func (a StmtAction) String() string {
 	case StmtActionBind:
 		return "bind"
 	case StmtActionExecute:
-		return "execute"
+		return "exec"
 	default:
 		return strconv.Itoa(int(a))
 	}
@@ -46,7 +46,7 @@ type StmtRecord struct {
 	StartTime    time.Time      // start time
 	EndTime      time.Time      // end time
 	SQL          string         // prepared SQL
-	AffectedRows uint64         // execute affected rows
+	AffectedRows int            // execute affected rows
 	BindData     []byte         // bind data
 	mission      *RecordMission // mission to which this record belongs
 	ele          *list.Element  // element in the record recordList
@@ -85,11 +85,28 @@ func (r *StmtRecord) InitExecute(stmtPointer uintptr, ip string, port string, Ap
 	r.init(stmtPointer, StmtActionExecute, ip, port, AppName, user, connType, qid, startTime)
 }
 
-func (r *StmtRecord) SetEnd(resultCode int) {
+func (r *StmtRecord) SetPrepareEnd(resultCode int) {
 	end := time.Now()
 	r.Lock()
 	defer r.Unlock()
 	r.ResultCode = resultCode
+	r.EndTime = end
+}
+
+func (r *StmtRecord) SetBindEnd(resultCode int) {
+	end := time.Now()
+	r.Lock()
+	defer r.Unlock()
+	r.ResultCode = resultCode
+	r.EndTime = end
+}
+
+func (r *StmtRecord) SetExecuteEnd(resultCode int, affectedRows int) {
+	end := time.Now()
+	r.Lock()
+	defer r.Unlock()
+	r.ResultCode = resultCode
+	r.AffectedRows = affectedRows
 	r.EndTime = end
 }
 
@@ -151,20 +168,22 @@ func (r *StmtRecord) toRow() []string {
 	row[StmtStartTimeIndex] = r.StartTime.Format(ResultTimeFormat)
 	row[StmtStmtPointerIndex] = fmt.Sprintf("0x%x", r.StmtPointer)
 	row[StmtActionIndex] = r.Action.String()
-	row[StmtResultCodeIndex] = strconv.Itoa(r.ResultCode)
-	// calculate duration
-	var duration time.Duration
-	if !r.EndTime.IsZero() {
-		duration = r.EndTime.Sub(r.StartTime)
+	if r.ResultCode == 0 {
+		row[StmtResultCodeIndex] = "0"
 	} else {
-		duration = now.Sub(r.StartTime)
+		row[StmtResultCodeIndex] = fmt.Sprintf("0x%x", r.ResultCode&0xffff)
 	}
-	row[StmtDurationIndex] = strconv.FormatInt(duration.Microseconds(), 10)
+	// calculate duration
+	if !r.EndTime.IsZero() {
+		row[StmtDurationIndex] = strconv.FormatInt(r.EndTime.Sub(r.StartTime).Microseconds(), 10)
+	} else {
+		row[StmtDurationIndex] = "-1"
+	}
 	switch r.Action {
 	case StmtActionBind:
 		row[StmtDataIndex] = parseBindData(r.BindData)
 	case StmtActionExecute:
-		row[StmtDataIndex] = strconv.FormatUint(r.AffectedRows, 10)
+		row[StmtDataIndex] = strconv.Itoa(r.AffectedRows)
 	case StmtActionPrepare:
 		row[StmtDataIndex] = r.SQL
 	}

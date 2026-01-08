@@ -3,6 +3,7 @@ package recordsql
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -117,14 +118,14 @@ var globalMission = &GlobalMission{}
 var logger = log.GetLogger("RSQ")
 
 func StartRecordSql(startTime, endTime string, location string) error {
-	return StartRecordSqlWithTestWriter(RecordTypeSQL, startTime, endTime, location, nil)
+	return StartRecordWithTestWriter(RecordTypeSQL, startTime, endTime, location, nil)
 }
 
 func StartRecordStmt(startTime, endTime string, location string) error {
-	return StartRecordSqlWithTestWriter(RecordTypeStmt, startTime, endTime, location, nil)
+	return StartRecordWithTestWriter(RecordTypeStmt, startTime, endTime, location, nil)
 }
 
-func StartRecordSqlWithTestWriter(recordType RecordType, startTime, endTime string, location string, testWriter io.Writer) error {
+func StartRecordWithTestWriter(recordType RecordType, startTime, endTime string, location string, testWriter io.Writer) error {
 	logger.Tracef("start record mission, recordType: %s, startTime: %s, endTime: %s, location: %s", recordType, startTime, endTime, location)
 	if IsRunning(recordType) {
 		return fmt.Errorf("record mission is already running")
@@ -376,19 +377,21 @@ func getMissionState(recordType RecordType) RecordState {
 }
 
 func Init() error {
+	errors.Join()
+	var errs []error
 	if config.Conf.Log.EnableSqlToCsvLogging {
 		err := StartRecordSql(time.Now().Format(InputTimeFormat), DefaultRecordSqlEndTime, "")
 		if err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
 	if config.Conf.Log.EnableStmtToCsvLogging {
 		err := StartRecordStmt(time.Now().Format(InputTimeFormat), DefaultRecordSqlEndTime, "")
 		if err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func Close() {

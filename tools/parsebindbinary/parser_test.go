@@ -1694,6 +1694,16 @@ func TestParseStmt2BindV(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "wrong length",
+			args: args{
+				bs: []byte{
+					// total Length
+					0x10, 0x00, 0x00, 0x00,
+				},
+			},
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

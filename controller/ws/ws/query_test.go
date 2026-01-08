@@ -1295,7 +1295,7 @@ func TestQueryRecordSql(t *testing.T) {
 	}()
 	start := time.Now().Format(recordsql.InputTimeFormat)
 	end := time.Now().Add(time.Second * 5).Format(recordsql.InputTimeFormat)
-	err = recordsql.StartRecordSqlWithTestWriter(recordsql.RecordTypeSQL, start, end, "", f)
+	err = recordsql.StartRecordWithTestWriter(recordsql.RecordTypeSQL, start, end, "", f)
 	require.NoError(t, err)
 	defer func() {
 		info := recordsql.StopRecordSqlMission()
