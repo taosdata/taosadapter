@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/taosdata/taosadapter/v3/driver/common"
+	"github.com/taosdata/taosadapter/v3/driver/common/stmt"
 	"github.com/taosdata/taosadapter/v3/tools/jsonbuilder"
 )
 
@@ -24,24 +25,17 @@ type Stmt2BindV struct {
 	Cols       [][]*Bind `json:"cols"`        // [table][col] *Bind
 }
 
-const (
-	TotalLengthPosition      = 0
-	CountPosition            = TotalLengthPosition + 4
-	TagCountPosition         = CountPosition + 4
-	ColCountPosition         = TagCountPosition + 4
-	TableNamesOffsetPosition = ColCountPosition + 4
-	TagsOffsetPosition       = TableNamesOffsetPosition + 4
-	ColsOffsetPosition       = TagsOffsetPosition + 4
-)
-
 func ParseStmt2BindV(bs []byte) (*Stmt2BindV, error) {
 	result := &Stmt2BindV{}
-	count := bs[CountPosition : CountPosition+4]
-	tagCount := bs[TagCountPosition : TagCountPosition+4]
-	colCount := bs[ColCountPosition : ColCountPosition+4]
-	tableNamesOffset := bs[TableNamesOffsetPosition : TableNamesOffsetPosition+4]
-	tagsOffset := bs[TagsOffsetPosition : TagsOffsetPosition+4]
-	colsOffset := bs[ColsOffsetPosition : ColsOffsetPosition+4]
+	if len(bs) < stmt.DataPosition {
+		return nil, fmt.Errorf("data length %d is less than header length %d", len(bs), stmt.DataPosition)
+	}
+	count := bs[stmt.CountPosition : stmt.CountPosition+4]
+	tagCount := bs[stmt.TagCountPosition : stmt.TagCountPosition+4]
+	colCount := bs[stmt.ColCountPosition : stmt.ColCountPosition+4]
+	tableNamesOffset := bs[stmt.TableNamesOffsetPosition : stmt.TableNamesOffsetPosition+4]
+	tagsOffset := bs[stmt.TagsOffsetPosition : stmt.TagsOffsetPosition+4]
+	colsOffset := bs[stmt.ColsOffsetPosition : stmt.ColsOffsetPosition+4]
 	tbOffset := binary.LittleEndian.Uint32(tableNamesOffset)
 	tagOffset := binary.LittleEndian.Uint32(tagsOffset)
 	colOffset := binary.LittleEndian.Uint32(colsOffset)

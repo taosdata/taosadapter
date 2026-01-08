@@ -4,18 +4,25 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"encoding/binary"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/driver/common"
 	stmtCommon "github.com/taosdata/taosadapter/v3/driver/common/stmt"
+	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
 	"github.com/taosdata/taosadapter/v3/tools/parseblock"
 	"github.com/taosdata/taosadapter/v3/tools/testtools"
 )
@@ -839,4 +846,263 @@ func TestStmt2BindWithStbFields(t *testing.T) {
 		assert.Nil(t, blockResult[2][i])
 	}
 
+}
+
+func TestRecordStmt(t *testing.T) {
+	tmpDir := t.TempDir()
+	file := "test.csv"
+	db := "test_ws_stmt2_record"
+	output := filepath.Join(tmpDir, file)
+	f, err := os.Create(output)
+	require.NoError(t, err)
+	now := time.Now()
+	var port string
+	var host string
+	const appName = "test_record_stmt_app"
+	prepareQid := uint64(0x123)
+	bindQid := uint64(0x3456)
+	execQid := uint64(0x5678)
+	prepareSql := fmt.Sprintf("insert into ? using %s.stb tags (?) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", db)
+	defer func() {
+		err = f.Close()
+		require.NoError(t, err)
+		var bs []byte
+		require.Eventually(t, func() bool {
+			bs, err = os.ReadFile(output)
+			return err == nil && len(bs) > 0
+		}, 5*time.Second, 500*time.Millisecond)
+		t.Log(string(bs))
+		csvReader := csv.NewReader(bytes.NewReader(bs))
+		records, err := csvReader.ReadAll()
+		assert.NoError(t, err)
+		require.Equal(t, 5, len(records), records)
+		var checkRecord = func(record []string, qid string, action string, success bool, expectData string) {
+			t.Log(record)
+			assert.Equal(t, host, record[recordsql.StmtIPIndex])
+			assert.Equal(t, port, record[recordsql.StmtSourcePortIndex])
+			assert.Equal(t, appName, record[recordsql.StmtAppNameIndex])
+			assert.Equal(t, "root", record[recordsql.StmtUserIndex])
+			assert.Equal(t, recordsql.WSType.String(), record[recordsql.StmtConnTypeIndex])
+			assert.Equal(t, qid, record[recordsql.StmtQIDIndex])
+			receiveTime, err := time.Parse(recordsql.ResultTimeFormat, record[recordsql.StmtStartTimeIndex])
+			assert.NoError(t, err)
+			assert.True(t, receiveTime.After(now))
+			duration, err := strconv.Atoi(record[recordsql.StmtDurationIndex])
+			assert.NoError(t, err)
+			assert.Greater(t, duration, 0)
+			assert.NotEmpty(t, record[recordsql.StmtStmtPointerIndex])
+			assert.Equal(t, action, record[recordsql.StmtActionIndex])
+			if success {
+				assert.Equal(t, "0", record[recordsql.StmtResultCodeIndex])
+			}
+			assert.Equal(t, expectData, record[recordsql.StmtDataIndex])
+		}
+		checkRecord(records[0], "0x123", "prepare", true, prepareSql)
+		checkRecord(records[1], "0x3456", "bind", true, `{"count":1,"table_names":["test_ws_stmt2_record.ct1"],"tags":[[{"type":15,"data":["{\"a\":\"b\"}"]}]],"cols":[[{"type":9,"data":[1767863488954108976,1767863489954108976,1767863490954108976]},{"type":1,"data":[true,false,null]},{"type":2,"data":[2,22,null]},{"type":3,"data":[3,33,null]},{"type":4,"data":[4,44,null]},{"type":5,"data":[5,55,null]},{"type":11,"data":[6,66,null]},{"type":12,"data":[7,77,null]},{"type":13,"data":[8,88,null]},{"type":14,"data":[9,99,null]},{"type":6,"data":[10,1010,null]},{"type":7,"data":[11,1111,null]},{"type":8,"data":["binary","binary2",null]},{"type":10,"data":["nchar","nchar2",null]},{"type":16,"data":["aabbcc","aabbcc",null]},{"type":20,"data":["010100000000000000000059400000000000005940","010100000000000000000059400000000000005940",null]},{"type":17,"data":["12345.6789","98765.4321",null]},{"type":21,"data":["1234.5678","8765.4321",null]},{"type":18,"data":["7468697320697320626c6f622064617461","7468697320697320626c6f62206461746132",null]}]]}`)
+		checkRecord(records[2], "0x5678", "exec", true, "3")
+		checkRecord(records[3], "0x5678", "exec", false, "0")
+		checkRecord(records[4], "0x3456", "bind", false, "010203")
+	}()
+
+	start := time.Now().Format(recordsql.InputTimeFormat)
+	end := time.Now().Add(time.Second * 5).Format(recordsql.InputTimeFormat)
+	err = recordsql.StartRecordWithTestWriter(recordsql.RecordTypeStmt, start, end, "", f)
+	require.NoError(t, err)
+	defer func() {
+		info := recordsql.StopRecordStmtMission()
+		require.NotNil(t, info)
+	}()
+
+	s := httptest.NewServer(router)
+	defer s.Close()
+	code, message := doRestful("drop database if exists "+db, "")
+	assert.Equal(t, 0, code, message)
+	code, message = doRestful(fmt.Sprintf("create database if not exists %s precision 'ns'", db), "")
+	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated(db))
+
+	defer doRestful(fmt.Sprintf("drop database if exists %s", db), "")
+
+	code, message = doRestful(
+		"create table if not exists stb (ts timestamp,v1 bool,v2 tinyint,v3 smallint,v4 int,v5 bigint,v6 tinyint unsigned,v7 smallint unsigned,v8 int unsigned,v9 bigint unsigned,v10 float,v11 double,v12 binary(20),v13 nchar(20),v14 varbinary(20),v15 geometry(100),c16 decimal(20,4),c17 decimal(10,4),c18 blob) tags (info json)",
+		db)
+	assert.Equal(t, 0, code, message)
+
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+	host, port, err = net.SplitHostPort(strings.TrimSpace(ws.LocalAddr().String()))
+	assert.NoError(t, err)
+	// connect
+	connReq := connRequest{ReqID: 1, User: "root", Password: "taosdata", DB: db, App: appName}
+	resp, err := doWebSocket(ws, Connect, &connReq)
+	assert.NoError(t, err)
+	var connResp connResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+
+	// init
+	initReq := stmt2InitRequest{
+		ReqID:               0x123,
+		SingleStbInsert:     false,
+		SingleTableBindOnce: false,
+	}
+	resp, err = doWebSocket(ws, STMT2Init, &initReq)
+	assert.NoError(t, err)
+	var initResp stmt2InitResponse
+	err = json.Unmarshal(resp, &initResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0x123), initResp.ReqID)
+	assert.Equal(t, 0, initResp.Code, initResp.Message)
+
+	// prepare
+	prepareReq := stmt2PrepareRequest{
+		ReqID:     prepareQid,
+		StmtID:    initResp.StmtID,
+		SQL:       prepareSql,
+		GetFields: true,
+	}
+	resp, err = doWebSocket(ws, STMT2Prepare, &prepareReq)
+	assert.NoError(t, err)
+	var prepareResp stmt2PrepareResponse
+	err = json.Unmarshal(resp, &prepareResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(prepareQid), prepareResp.ReqID)
+	assert.Equal(t, 0, prepareResp.Code, prepareResp.Message)
+	assert.True(t, prepareResp.IsInsert)
+	assert.Equal(t, 21, len(prepareResp.Fields))
+	// bind
+	cols := [][]driver.Value{
+		// ts
+		{int64(1767863488954108976), int64(1767863489954108976), int64(1767863490954108976)},
+		// bool
+		{true, false, nil},
+		// tinyint
+		{int8(2), int8(22), nil},
+		// smallint
+		{int16(3), int16(33), nil},
+		// int
+		{int32(4), int32(44), nil},
+		// bigint
+		{int64(5), int64(55), nil},
+		// tinyint unsigned
+		{uint8(6), uint8(66), nil},
+		// smallint unsigned
+		{uint16(7), uint16(77), nil},
+		// int unsigned
+		{uint32(8), uint32(88), nil},
+		// bigint unsigned
+		{uint64(9), uint64(99), nil},
+		// float
+		{float32(10), float32(1010), nil},
+		// double
+		{float64(11), float64(1111), nil},
+		// binary
+		{"binary", "binary2", nil},
+		// nchar
+		{"nchar", "nchar2", nil},
+		// varbinary
+		{[]byte{0xaa, 0xbb, 0xcc}, []byte{0xaa, 0xbb, 0xcc}, nil},
+		// geometry
+		{[]byte{0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40}, []byte{0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x59, 0x40}, nil},
+		// decimal(20,4)
+		{"12345.6789", "98765.4321", nil},
+		// decimal(10,4)
+		{"1234.5678", "8765.4321", nil},
+		// blob
+		{[]byte("this is blob data"), []byte("this is blob data2"), nil},
+	}
+	tbName := fmt.Sprintf("%s.ct1", db)
+	tag := []driver.Value{"{\"a\":\"b\"}"}
+	binds := &stmtCommon.TaosStmt2BindData{
+		TableName: tbName,
+		Tags:      tag,
+		Cols:      cols,
+	}
+	bs, err := stmtCommon.MarshalStmt2Binary([]*stmtCommon.TaosStmt2BindData{binds}, true, prepareResp.Fields)
+	assert.NoError(t, err)
+	bindReq := make([]byte, len(bs)+30)
+	// req_id
+	binary.LittleEndian.PutUint64(bindReq, bindQid)
+	// stmt_id
+	binary.LittleEndian.PutUint64(bindReq[8:], prepareResp.StmtID)
+	// action
+	binary.LittleEndian.PutUint64(bindReq[16:], Stmt2BindMessage)
+	// version
+	binary.LittleEndian.PutUint16(bindReq[24:], Stmt2BindProtocolVersion1)
+	// col_idx
+	idx := int32(-1)
+	binary.LittleEndian.PutUint32(bindReq[26:], uint32(idx))
+	// data
+	copy(bindReq[30:], bs)
+	err = ws.WriteMessage(websocket.BinaryMessage, bindReq)
+	assert.NoError(t, err)
+	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
+	var bindResp stmt2BindResponse
+	err = json.Unmarshal(resp, &bindResp)
+	assert.NoError(t, err)
+	assert.Equal(t, bindQid, bindResp.ReqID)
+	assert.Equal(t, 0, bindResp.Code, bindResp.Message)
+
+	//exec
+	execReq := stmt2ExecRequest{ReqID: execQid, StmtID: prepareResp.StmtID}
+	resp, err = doWebSocket(ws, STMT2Exec, &execReq)
+	assert.NoError(t, err)
+	var execResp stmt2ExecResponse
+	err = json.Unmarshal(resp, &execResp)
+	assert.NoError(t, err)
+	assert.Equal(t, execQid, execResp.ReqID)
+	assert.Equal(t, 0, execResp.Code, execResp.Message)
+	assert.Equal(t, 3, execResp.Affected)
+
+	//exec
+	resp, err = doWebSocket(ws, STMT2Exec, &execReq)
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &execResp)
+	assert.NoError(t, err)
+	assert.Equal(t, execQid, execResp.ReqID)
+	assert.NotEqual(t, 0, execResp.Code, execResp.Message)
+
+	// bind
+	invalidData := []byte{0x01, 0x02, 0x03}
+	bindReq = make([]byte, len(invalidData)+30)
+	// req_id
+	binary.LittleEndian.PutUint64(bindReq, bindQid)
+	// stmt_id
+	binary.LittleEndian.PutUint64(bindReq[8:], prepareResp.StmtID)
+	// action
+	binary.LittleEndian.PutUint64(bindReq[16:], Stmt2BindMessage)
+	// version
+	binary.LittleEndian.PutUint16(bindReq[24:], Stmt2BindProtocolVersion1)
+	// col_idx
+	binary.LittleEndian.PutUint32(bindReq[26:], uint32(idx))
+	// data
+	copy(bindReq[30:], invalidData)
+	err = ws.WriteMessage(websocket.BinaryMessage, bindReq)
+	assert.NoError(t, err)
+	_, resp, err = ws.ReadMessage()
+	assert.NoError(t, err)
+	err = json.Unmarshal(resp, &bindResp)
+	assert.NoError(t, err)
+	assert.Equal(t, bindQid, bindResp.ReqID)
+	assert.NotEqual(t, 0, bindResp.Code, bindResp.Message)
+
+	// close
+	closeReq := stmt2CloseRequest{ReqID: 11, StmtID: prepareResp.StmtID}
+	resp, err = doWebSocket(ws, STMT2Close, &closeReq)
+	assert.NoError(t, err)
+	var closeResp stmt2CloseResponse
+	err = json.Unmarshal(resp, &closeResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(11), closeResp.ReqID)
+	assert.Equal(t, 0, closeResp.Code, closeResp.Message)
 }

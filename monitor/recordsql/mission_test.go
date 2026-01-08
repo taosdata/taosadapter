@@ -179,7 +179,7 @@ func TestStartRecordSql(t *testing.T) {
 				err = os.Remove(out)
 				assert.NoError(t, err)
 			}()
-			err = StartRecordSqlWithTestWriter(RecordTypeSQL, tt.startTime, tt.endTime, tt.location, f)
+			err = StartRecordWithTestWriter(RecordTypeSQL, tt.startTime, tt.endTime, tt.location, f)
 
 			if tt.expectedErr != "" {
 				require.Error(t, err)

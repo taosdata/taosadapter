@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
@@ -13,6 +14,7 @@ import (
 	errors2 "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
 	"github.com/taosdata/taosadapter/v3/tools/jsontype"
 	"github.com/taosdata/taosadapter/v3/tools/melody"
 )
@@ -101,7 +103,17 @@ func (h *messageHandler) stmt2Prepare(ctx context.Context, session *melody.Sessi
 	}
 	defer stmtItem.Unlock()
 	stmt2 := stmtItem.stmt
+	record, recordStmt := recordsql.GetStmtRecord()
+	if recordStmt {
+		defer func() {
+			recordsql.PutStmtRecord(record)
+		}()
+		record.InitPrepare(uintptr(stmt2), h.ipStr, h.port, h.appName, h.user, recordsql.WSType, req.ReqID, time.Now(), req.SQL)
+	}
 	code := syncinterface.TaosStmt2Prepare(stmt2, req.SQL, logger, isDebug)
+	if recordStmt {
+		record.SetPrepareEnd(code)
+	}
 	if code != 0 {
 		errStr := syncinterface.TaosStmt2Error(stmt2, logger, isDebug)
 		logger.Errorf("stmt2 prepare error, err:%s", errStr)
@@ -161,8 +173,18 @@ func (h *messageHandler) stmt2Exec(ctx context.Context, session *melody.Session,
 		return
 	}
 	defer stmtItem.Unlock()
+	record, recordStmt := recordsql.GetStmtRecord()
+	if recordStmt {
+		defer func() {
+			recordsql.PutStmtRecord(record)
+		}()
+		record.InitExecute(uintptr(stmtItem.stmt), h.ipStr, h.port, h.appName, h.user, recordsql.WSType, req.ReqID, time.Now())
+	}
 	code := syncinterface.TaosStmt2Exec(stmtItem.stmt, logger, isDebug)
 	if code != 0 {
+		if recordStmt {
+			record.SetExecuteEnd(code, 0)
+		}
 		errStr := syncinterface.TaosStmt2Error(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt2 execute error,code:%d, err:%s", code, errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
@@ -173,10 +195,16 @@ func (h *messageHandler) stmt2Exec(ctx context.Context, session *melody.Session,
 	result := <-stmtItem.caller.ExecResult
 	logger.Debugf("stmt2 execute wait callback finish, affected:%d, res:%p, n:%d, cost:%s", result.Affected, result.Res, result.N, log.GetLogDuration(isDebug, s))
 	if result.N < 0 {
+		if recordStmt {
+			record.SetExecuteEnd(result.N, 0)
+		}
 		errStr := syncinterface.TaosStmt2Error(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt2 execute callback error, code:%d, err:%s", result.N, errStr)
 		stmtErrorResponse(ctx, session, logger, action, req.ReqID, result.N, errStr, req.StmtID)
 		return
+	}
+	if recordStmt {
+		record.SetExecuteEnd(result.N, result.Affected)
 	}
 	resp := &stmt2ExecResponse{
 		Action:   action,
@@ -311,16 +339,32 @@ func (h *messageHandler) stmt2BinaryBind(ctx context.Context, session *melody.Se
 	}
 	defer stmtItem.Unlock()
 	bindData := message[30:]
+	record, recordStmt := recordsql.GetStmtRecord()
+	if recordStmt {
+		defer func() {
+			recordsql.PutStmtRecord(record)
+		}()
+		record.InitBind(uintptr(stmtItem.stmt), h.ipStr, h.port, h.appName, h.user, recordsql.WSType, reqID, time.Now(), bindData)
+	}
 	err := syncinterface.TaosStmt2BindBinary(stmtItem.stmt, bindData, colIndex, logger, isDebug)
 	if err != nil {
 		logger.Errorf("stmt2 bind error, err:%s", err.Error())
 		var tError *errors2.TaosError
 		if errors.As(err, &tError) {
+			if recordStmt {
+				record.SetBindEnd(int(tError.Code))
+			}
 			stmtErrorResponse(ctx, session, logger, action, reqID, int(tError.Code), tError.ErrStr, stmtID)
 			return
 		}
+		if recordStmt {
+			record.SetBindEnd(0xffff)
+		}
 		stmtErrorResponse(ctx, session, logger, action, reqID, 0xffff, err.Error(), stmtID)
 		return
+	}
+	if recordStmt {
+		record.SetBindEnd(0)
 	}
 	logger.Trace("stmt2 bind success")
 	resp := &stmt2BindResponse{
