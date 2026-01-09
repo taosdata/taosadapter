@@ -209,11 +209,12 @@ func IsRunning(recordType RecordType) bool {
 }
 
 func getMission(recordType RecordType) *RecordMission {
-	if recordType == RecordTypeSQL {
+	switch recordType {
+	case RecordTypeSQL:
 		globalMission.RecordSqlLock.RLock()
 		defer globalMission.RecordSqlLock.RUnlock()
 		return globalMission.RecordSqlMission
-	} else if recordType == RecordTypeStmt {
+	case RecordTypeStmt:
 		globalMission.RecordStmtLock.RLock()
 		defer globalMission.RecordStmtLock.RUnlock()
 		return globalMission.RecordStmtMission
@@ -222,11 +223,12 @@ func getMission(recordType RecordType) *RecordMission {
 }
 
 func setMission(recordType RecordType, mission *RecordMission) {
-	if recordType == RecordTypeSQL {
+	switch recordType {
+	case RecordTypeSQL:
 		globalMission.RecordSqlLock.Lock()
 		defer globalMission.RecordSqlLock.Unlock()
 		globalMission.RecordSqlMission = mission
-	} else if recordType == RecordTypeStmt {
+	case RecordTypeStmt:
 		globalMission.RecordStmtLock.Lock()
 		defer globalMission.RecordStmtLock.Unlock()
 		globalMission.RecordStmtMission = mission
@@ -298,16 +300,19 @@ func (c *RecordMission) Stop() {
 		// wait for the start to complete
 		<-c.startChan
 		// write all remaining records to the csv file
-		if c.recordType == RecordTypeSQL {
+		switch c.recordType {
+		case RecordTypeSQL:
 			records := c.recordList.RemoveAllSqlRecords()
 			for i := 0; i < len(records); i++ {
 				c.writeSqlRecord(records[i])
 			}
-		} else if c.recordType == RecordTypeStmt {
+		case RecordTypeStmt:
 			records := c.recordList.RemoveAllStmtRecords()
 			for i := 0; i < len(records); i++ {
 				c.writeStmtRecord(records[i])
 			}
+		default:
+			c.logger.Errorf("unknown record type: %d", c.recordType)
 		}
 		// flush csv
 		c.csvWriter.Flush()
@@ -377,7 +382,6 @@ func getMissionState(recordType RecordType) RecordState {
 }
 
 func Init() error {
-	errors.Join()
 	var errs []error
 	if config.Conf.Log.EnableSqlToCsvLogging {
 		err := StartRecordSql(time.Now().Format(InputTimeFormat), DefaultRecordSqlEndTime, "")
