@@ -15,7 +15,8 @@ var globalStmtRotateWriter *rotatelogs.RotateLogs
 
 func getRotateWriter(recordType RecordType) (*rotatelogs.RotateLogs, error) {
 	var err error
-	if recordType == RecordTypeSQL {
+	switch recordType {
+	case RecordTypeSQL:
 		if globalSQLRotateWriter == nil {
 			globalSQLRotateWriter, err = newRotateWriter(recordType)
 			if err != nil {
@@ -28,7 +29,7 @@ func getRotateWriter(recordType RecordType) (*rotatelogs.RotateLogs, error) {
 			}
 		}
 		return globalSQLRotateWriter, nil
-	} else if recordType == RecordTypeStmt {
+	case RecordTypeStmt:
 		if globalStmtRotateWriter == nil {
 			globalStmtRotateWriter, err = newRotateWriter(recordType)
 			if err != nil {
@@ -41,9 +42,8 @@ func getRotateWriter(recordType RecordType) (*rotatelogs.RotateLogs, error) {
 			}
 		}
 		return globalStmtRotateWriter, nil
-	} else {
-		return nil, fmt.Errorf("unknown record type: %d", recordType)
 	}
+	return nil, fmt.Errorf("unknown record type: %d", recordType)
 }
 
 func newRotateWriter(recordType RecordType) (*rotatelogs.RotateLogs, error) {
