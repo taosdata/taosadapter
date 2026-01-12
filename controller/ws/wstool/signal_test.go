@@ -15,6 +15,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/testtools/testenv"
 )
 
 type MockWSHandler struct {
@@ -138,6 +139,9 @@ func TestWaitSignalDropUser(t *testing.T) {
 }
 
 func TestWaitSignalChangeWhitelist(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("skip enterprise only test")
+	}
 	isDebug := log.IsDebug()
 	logger := log.GetLogger("test").WithField("case", "TestWaitSignal")
 	rootConn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, false)
