@@ -177,7 +177,7 @@ func (ctl *ConfigController) startRecord(c *gin.Context, recordType recordsql.Re
 	logger.Debugf("start record success")
 }
 
-type StopRecordSqlResp struct {
+type StopRecordResp struct {
 	Message
 	StartTime string `json:"start_time"`
 	EndTime   string `json:"end_time"`
@@ -203,7 +203,7 @@ func (ctl *ConfigController) stopRecord(c *gin.Context, recordType recordsql.Rec
 	}
 	if info != nil {
 		logger.Tracef("stop record info: %+v", info)
-		c.JSON(http.StatusOK, &StopRecordSqlResp{
+		c.JSON(http.StatusOK, &StopRecordResp{
 			StartTime: info.StartTime,
 			EndTime:   info.EndTime,
 		})
