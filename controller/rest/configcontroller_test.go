@@ -515,7 +515,6 @@ func getRecordFiles(dir string, prefix string) ([]string, error) {
 			}
 			return err
 		}
-		fmt.Println(info.Name())
 		if !info.IsDir() && strings.HasPrefix(info.Name(), fmt.Sprintf("%sadapter%s_", version.CUS_PROMPT, prefix)) && !strings.HasSuffix(info.Name(), "_lock") {
 			files = append(files, info.Name())
 		}

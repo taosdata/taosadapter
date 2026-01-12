@@ -47,7 +47,7 @@ func NewStmt1Result(result unsafe.Pointer, fieldsCount int, header *wrapper.Rows
 // NewQueryResult creates a QueryResult for non-statement queries.
 // The record and limiter parameters are optional and may be nil;
 // the free method checks for nil and handles those cases safely.
-func NewQueryResult(result unsafe.Pointer, fieldsCount int, header *wrapper.RowsHeader, precision int, record *recordsql.Record, limiter *limiter.Limiter) *QueryResult {
+func NewQueryResult(result unsafe.Pointer, fieldsCount int, header *wrapper.RowsHeader, precision int, record *recordsql.SQLRecord, limiter *limiter.Limiter) *QueryResult {
 	return &QueryResult{TaosResult: result, FieldsCount: fieldsCount, Header: header, precision: precision, record: record, limiter: limiter}
 }
 
