@@ -30,20 +30,53 @@ func ParseStmt2BindV(bs []byte) (*Stmt2BindV, error) {
 	if len(bs) < stmt.DataPosition {
 		return nil, fmt.Errorf("data length %d is less than header length %d", len(bs), stmt.DataPosition)
 	}
+	totalLength := len(bs)
+	dataLength := bs[stmt.TotalLengthPosition : stmt.TotalLengthPosition+4]
+	totalDataLength := int(binary.LittleEndian.Uint32(dataLength))
+	if totalDataLength != totalLength {
+		return nil, fmt.Errorf("total length not match, expect %d, but get %d", totalLength, totalDataLength)
+	}
 	count := bs[stmt.CountPosition : stmt.CountPosition+4]
 	tagCount := bs[stmt.TagCountPosition : stmt.TagCountPosition+4]
 	colCount := bs[stmt.ColCountPosition : stmt.ColCountPosition+4]
 	tableNamesOffset := bs[stmt.TableNamesOffsetPosition : stmt.TableNamesOffsetPosition+4]
 	tagsOffset := bs[stmt.TagsOffsetPosition : stmt.TagsOffsetPosition+4]
 	colsOffset := bs[stmt.ColsOffsetPosition : stmt.ColsOffsetPosition+4]
-	tbOffset := binary.LittleEndian.Uint32(tableNamesOffset)
-	tagOffset := binary.LittleEndian.Uint32(tagsOffset)
-	colOffset := binary.LittleEndian.Uint32(colsOffset)
+	tbOffset := int(binary.LittleEndian.Uint32(tableNamesOffset))
+	tagOffset := int(binary.LittleEndian.Uint32(tagsOffset))
+	colOffset := int(binary.LittleEndian.Uint32(colsOffset))
 	bindCount := int(binary.LittleEndian.Uint32(count))
 	colCounts := int(binary.LittleEndian.Uint32(colCount))
 	tagCounts := int(binary.LittleEndian.Uint32(tagCount))
 	result.Count = bindCount
 	if tbOffset > 0 {
+		// check table names offset
+		tableNameEnd := tbOffset + bindCount*2
+		if tableNameEnd > totalLength {
+			return nil, fmt.Errorf("table name lengths out of range, total length: %d, tableNamesLengthEnd: %d", totalLength, tbOffset)
+		}
+	}
+	if tagOffset > 0 {
+		// check tag offset
+		if tagCounts == 0 {
+			return nil, fmt.Errorf("tag count is 0 but tag offset is %d", tagOffset)
+		}
+		tagEnd := tagOffset + bindCount*4
+		if tagEnd > totalLength {
+			return nil, fmt.Errorf("tag lengths out of range, total length: %d, tagLengthsEnd: %d", totalLength, tagEnd)
+		}
+	}
+	if colOffset > 0 {
+		if colCounts == 0 {
+			return nil, fmt.Errorf("column count is 0 but column offset is %d", colOffset)
+		}
+		colEnd := colOffset + bindCount*4
+		if colEnd > totalLength {
+			return nil, fmt.Errorf("column lengths out of range, total length: %d, colLengthsEnd: %d", totalLength, colEnd)
+		}
+	}
+	if tbOffset > 0 {
+		tableNameEnd := tbOffset + bindCount*2
 		// parse table names
 		result.TableNames = make([]string, bindCount)
 		// use tagOffset as end first
@@ -54,14 +87,20 @@ func ParseStmt2BindV(bs []byte) (*Stmt2BindV, error) {
 		}
 		// if no cols, use length of bs as end
 		if end == 0 {
-			end = uint32(len(bs))
+			end = len(bs)
 		}
 		tableNameBuffer := bs[tbOffset:end]
 		tableNameDataBuffer := tableNameBuffer[bindCount*2:]
 		tableNameStart := 0
-		tableNameEnd := 0
 		for i := 0; i < bindCount; i++ {
 			length := binary.LittleEndian.Uint16(tableNameBuffer[i*2:])
+			if length == 0 {
+				return nil, fmt.Errorf("table name length is 0 for table index %d", i)
+			}
+			tableNameEnd += int(length)
+			if tableNameEnd > totalLength {
+				return nil, fmt.Errorf("table names out of range, total length: %d, tableNameTotalLength: %d", totalLength, tableNameEnd)
+			}
 			tableNameEnd = tableNameStart + int(length)
 			// length includes null terminator
 			result.TableNames[i] = string(tableNameDataBuffer[tableNameStart : tableNameEnd-1])
@@ -71,17 +110,22 @@ func ParseStmt2BindV(bs []byte) (*Stmt2BindV, error) {
 	}
 	var err error
 	if tagOffset > 0 {
+		tagEnd := tagOffset + bindCount*4
 		// parse tags
 		// use colOffset as end first
 		end := colOffset
 		if end == 0 {
 			// if no cols, use length of bs as end
-			end = uint32(len(bs))
+			end = len(bs)
 		}
 		tags := bs[tagOffset:end]
 		tagLength := make([]uint32, bindCount)
 		for i := 0; i < bindCount; i++ {
 			tagLength[i] = binary.LittleEndian.Uint32(tags[i*4:])
+			tagEnd += int(tagLength[i])
+		}
+		if tagEnd > totalLength {
+			return nil, fmt.Errorf("tags out of range, total length: %d, tagTotalLength: %d", totalLength, tagEnd)
 		}
 		dataBufferOffset := bindCount * 4
 		tagsLengthsBuffer := tags[:dataBufferOffset]
@@ -92,11 +136,16 @@ func ParseStmt2BindV(bs []byte) (*Stmt2BindV, error) {
 		}
 	}
 	if colOffset > 0 {
+		colEnd := colOffset + bindCount*4
 		// parse cols
 		cols := bs[colOffset:]
 		colLength := make([]uint32, bindCount)
 		for i := 0; i < bindCount; i++ {
 			colLength[i] = binary.LittleEndian.Uint32(cols[i*4:])
+			colEnd += int(colLength[i])
+		}
+		if colEnd > totalLength {
+			return nil, fmt.Errorf("cols out of range, total length: %d, colTotalLength: %d", totalLength, colEnd)
 		}
 		dataBufferOffset := bindCount * 4
 		colsLengthsBuffer := cols[:dataBufferOffset]
@@ -165,6 +214,10 @@ func parseBind(dataBuffer []byte, lengthBuffer []byte, tableCount int, fieldCoun
 				}
 			}
 			bufferLength := int(binary.LittleEndian.Uint32(bs[bufferLengthOffset:]))
+			checkOffset := bufferLengthOffset + 4 + bufferLength
+			if checkOffset != currentLengthBufferLength {
+				return nil, fmt.Errorf("buffer length not match for table %d field %d, expect %d, but get %d", tableIndex, fieldIndex, currentLengthBufferLength, checkOffset)
+			}
 			if bufferLength == 0 {
 				bind.Data = nil
 			} else {
