@@ -706,7 +706,10 @@ func TestRecordStmt(t *testing.T) {
 	t.Log(w.Body.String())
 	err = json.Unmarshal(w.Body.Bytes(), &stateResp)
 	assert.NoError(t, err)
-	assert.Equal(t, recordsql.DefaultRecordSqlEndTime, stateResp.EndTime)
+	startTime, err := time.Parse(recordsql.InputTimeFormat, stateResp.StartTime)
+	assert.NoError(t, err)
+	endTime := startTime.Add(time.Hour).Format(recordsql.InputTimeFormat)
+	assert.Equal(t, endTime, stateResp.EndTime)
 	assert.Equal(t, int32(1), stateResp.CurrentConcurrent)
 	record.SetBindEnd(0)
 
@@ -723,7 +726,7 @@ func TestRecordStmt(t *testing.T) {
 	err = json.Unmarshal(w.Body.Bytes(), &stopResp)
 	assert.NoError(t, err)
 	assert.Equal(t, stateResp.StartTime, stopResp.StartTime)
-	assert.Equal(t, recordsql.DefaultRecordSqlEndTime, stopResp.EndTime)
+	assert.Equal(t, endTime, stopResp.EndTime)
 
 	files, err = getRecordFiles(tmpDir, "Stmt")
 	require.NoError(t, err)

@@ -142,9 +142,13 @@ func (ctl *ConfigController) startRecord(c *gin.Context, recordType recordsql.Re
 	} else {
 		logger.Debugf("no request body, use default record config")
 		now := time.Now()
+		endTime := recordsql.DefaultRecordSqlEndTime
+		if recordType == recordsql.RecordTypeStmt {
+			endTime = now.Add(time.Hour).Format(recordsql.InputTimeFormat)
+		}
 		recordRequest = RecordRequest{
 			StartTime: now.Format(recordsql.InputTimeFormat),
-			EndTime:   recordsql.DefaultRecordSqlEndTime,
+			EndTime:   endTime,
 			Location:  "",
 		}
 	}
