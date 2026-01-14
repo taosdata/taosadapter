@@ -913,7 +913,7 @@ func TestLimitQuery(t *testing.T) {
 			req.RemoteAddr = testtools.GetRandomRemoteAddr()
 			req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 			router.ServeHTTP(w, req)
-			assert.Equal(t, 200, w.Code)
+			assert.Equal(t, 200, w.Code, w.Body.String())
 		}()
 	}
 	wg.Wait()
