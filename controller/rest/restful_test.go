@@ -901,6 +901,11 @@ func TestLimitQuery(t *testing.T) {
 		config.Conf.Request.QueryLimitEnable = false
 		limiter.GlobalLimiterMap.Clear()
 	}()
+	limiter.GlobalLimiterMap.Range(func(key, value interface{}) bool {
+		t.Logf("key:%v,value:%v", key, value)
+		return true
+	})
+	limiter.GlobalLimiterMap.Clear()
 	wg := sync.WaitGroup{}
 	wg.Add(10)
 	// 10 concurrent queries, unlimited query wait time
