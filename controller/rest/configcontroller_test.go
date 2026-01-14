@@ -236,14 +236,14 @@ func TestRecordSql(t *testing.T) {
 	req.SetBasicAuth(user, password)
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code, w.Body.String())
-	var stopResp StopRecordSqlResp
+	var stopResp StopRecordResp
 	err = json.Unmarshal(w.Body.Bytes(), &stopResp)
 	assert.NoError(t, err)
 	assert.Equal(t, stopResp.StartTime, start)
 	assert.Equal(t, stopResp.EndTime, end)
 
 	// check record sql file
-	files, err := getRecordFiles(tmpDir)
+	files, err := getRecordFiles(tmpDir, "Sql")
 	require.NoError(t, err)
 	require.Equal(t, 1, len(files))
 	t.Log(files)
@@ -354,7 +354,7 @@ func TestRecordSql(t *testing.T) {
 	assert.Equal(t, stateResp.StartTime, stopResp.StartTime)
 	assert.Equal(t, recordsql.DefaultRecordSqlEndTime, stopResp.EndTime)
 
-	files, err = getRecordFiles(tmpDir)
+	files, err = getRecordFiles(tmpDir, "Sql")
 	require.NoError(t, err)
 	require.Equal(t, 2, len(files))
 	t.Log(files)
@@ -477,7 +477,7 @@ func TestRecordSql(t *testing.T) {
 		assert.Equal(t, stateResp.StartTime, stopResp.StartTime)
 		assert.Equal(t, recordsql.DefaultRecordSqlEndTime, stopResp.EndTime)
 
-		files, err = getRecordFiles(tmpDir)
+		files, err = getRecordFiles(tmpDir, "Sql")
 		require.NoError(t, err)
 		require.Equal(t, 3, len(files))
 		t.Log(files)
@@ -506,7 +506,7 @@ func TestRecordSql(t *testing.T) {
 	}
 }
 
-func getRecordFiles(dir string) ([]string, error) {
+func getRecordFiles(dir string, prefix string) ([]string, error) {
 	var files []string
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -515,10 +515,248 @@ func getRecordFiles(dir string) ([]string, error) {
 			}
 			return err
 		}
-		if !info.IsDir() && strings.HasPrefix(info.Name(), fmt.Sprintf("%sadapterSql_", version.CUS_PROMPT)) && !strings.HasSuffix(info.Name(), "_lock") {
+		if !info.IsDir() && strings.HasPrefix(info.Name(), fmt.Sprintf("%sadapter%s_", version.CUS_PROMPT, prefix)) && !strings.HasSuffix(info.Name(), "_lock") {
 			files = append(files, info.Name())
 		}
 		return nil
 	})
 	return files, err
+}
+
+func TestRecordStmt(t *testing.T) {
+	//log.SetLevel("debug")
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/record_stmt", nil)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 401, w.Code, w.Body.String())
+
+	// wrong password
+	user := "root"
+	password := "wrong"
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodPost, "/record_stmt", nil)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.SetBasicAuth(user, password)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 401, w.Code, w.Body.String())
+
+	// whitelist error
+	user = "root"
+	password = "taosdata"
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodPost, "/record_stmt", nil)
+	req.SetBasicAuth(user, password)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 403, w.Code, w.Body.String())
+
+	// wrong json
+	user = "root"
+	password = "taosdata"
+	w = httptest.NewRecorder()
+	body := strings.NewReader("xxx")
+	req, _ = http.NewRequest(http.MethodPost, "/record_stmt", body)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.SetBasicAuth(user, password)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 400, w.Code, w.Body.String())
+
+	// wrong config
+	user = "root"
+	password = "taosdata"
+	w = httptest.NewRecorder()
+	body = strings.NewReader(`{"start_time":"xxx"}`)
+	req, _ = http.NewRequest(http.MethodPost, "/record_stmt", body)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.SetBasicAuth(user, password)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 400, w.Code, w.Body.String())
+
+	// get record state
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/record_stmt", nil)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	t.Log(w.Body.String())
+	assert.Equal(t, `{"code":0,"desc":"","exists":false,"running":false,"start_time":"","end_time":"","current_concurrent":0}`, w.Body.String())
+
+	// stop record
+	user = "root"
+	password = "taosdata"
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodDelete, "/record_stmt", nil)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.SetBasicAuth(user, password)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code, w.Body.String())
+	assert.Equal(t, `{"code":0,"desc":""}`, w.Body.String())
+
+	// start record with start time and end time
+	tmpDir := t.TempDir()
+	oldPath := config.Conf.Log.Path
+	config.Conf.Log.Path = tmpDir
+	user = "root"
+	password = "taosdata"
+	w = httptest.NewRecorder()
+	start := time.Now().Format(recordsql.InputTimeFormat)
+	end := time.Now().Add(time.Minute).Format(recordsql.InputTimeFormat)
+	body = strings.NewReader(fmt.Sprintf(`{"start_time":"%s","end_time":"%s"}`, start, end))
+	req, _ = http.NewRequest(http.MethodPost, "/record_stmt", body)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.SetBasicAuth(user, password)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code, w.Body.String())
+	config.Conf.Log.Path = oldPath
+
+	time.Sleep(time.Millisecond * 10)
+
+	record, recordStmt := recordsql.GetStmtRecord()
+	require.True(t, recordStmt)
+	randomAddr := testtools.GetRandomRemoteAddr()
+	host, port, err := net.SplitHostPort(strings.TrimSpace(randomAddr))
+	assert.NoError(t, err)
+	app := "testapp"
+	qid := uint64(0x1234)
+	now := time.Now()
+	testsql := "select * from test where name = ?"
+	record.InitPrepare(0x1234, host, port, app, user, recordsql.WSType, qid, now, testsql)
+
+	// get record sql state
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/record_stmt", nil)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	t.Log(w.Body.String())
+	var stateResp GetRecordSqlStateResp
+	err = json.Unmarshal(w.Body.Bytes(), &stateResp)
+	assert.NoError(t, err)
+	assert.Equal(t, start, stateResp.StartTime)
+	assert.Equal(t, end, stateResp.EndTime)
+	assert.Equal(t, int32(1), stateResp.CurrentConcurrent)
+	record.SetPrepareEnd(0)
+	recordsql.PutStmtRecord(record)
+
+	// stop record sql
+	user = "root"
+	password = "taosdata"
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodDelete, "/record_stmt", nil)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.SetBasicAuth(user, password)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code, w.Body.String())
+	var stopResp StopRecordResp
+	err = json.Unmarshal(w.Body.Bytes(), &stopResp)
+	assert.NoError(t, err)
+	assert.Equal(t, stopResp.StartTime, start)
+	assert.Equal(t, stopResp.EndTime, end)
+
+	// check record sql file
+	files, err := getRecordFiles(tmpDir, "Stmt")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(files))
+	t.Log(files)
+	recordFile := filepath.Join(tmpDir, files[0])
+	recordContent, err := os.ReadFile(recordFile)
+	assert.NoError(t, err)
+	csvReader := csv.NewReader(bytes.NewReader(recordContent))
+	records, err := csvReader.ReadAll()
+	assert.NoError(t, err)
+	require.Equal(t, 1, len(records), records)
+	assert.Equal(t, testsql, records[0][recordsql.StmtDataIndex])
+	assert.Equal(t, host, records[0][recordsql.StmtIPIndex])
+	assert.Equal(t, "root", records[0][recordsql.StmtUserIndex])
+	assert.Equal(t, "ws", records[0][recordsql.StmtConnTypeIndex])
+	assert.Equal(t, "testapp", records[0][recordsql.StmtAppNameIndex])
+	assert.Equal(t, port, records[0][recordsql.StmtSourcePortIndex])
+	assert.Equal(t, "prepare", records[0][recordsql.StmtActionIndex])
+
+	// start record sql without start time and end time
+	config.Conf.Log.Path = tmpDir
+	user = "root"
+	password = "taosdata"
+	w = httptest.NewRecorder()
+	body = strings.NewReader("")
+	req, _ = http.NewRequest(http.MethodPost, "/record_stmt", body)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.SetBasicAuth(user, password)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code, w.Body.String())
+	config.Conf.Log.Path = oldPath
+	t.Log(w.Body.String())
+
+	time.Sleep(time.Millisecond * 10)
+	// execute sql
+
+	record, recordStmt = recordsql.GetStmtRecord()
+	require.True(t, recordStmt)
+	record.InitBind(0x1234, host, port, app, user, recordsql.WSType, qid, now, []byte{0x01, 0x02, 0x03})
+
+	// get record sql state
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/record_stmt", nil)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	t.Log(w.Body.String())
+	err = json.Unmarshal(w.Body.Bytes(), &stateResp)
+	assert.NoError(t, err)
+	startTime, err := time.Parse(recordsql.InputTimeFormat, stateResp.StartTime)
+	assert.NoError(t, err)
+	endTime := startTime.Add(time.Hour).Format(recordsql.InputTimeFormat)
+	assert.Equal(t, endTime, stateResp.EndTime)
+	assert.Equal(t, int32(1), stateResp.CurrentConcurrent)
+	record.SetBindEnd(0)
+
+	// stop record sql
+	user = "root"
+	password = "taosdata"
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodDelete, "/record_stmt", nil)
+	req.RemoteAddr = testtools.GetRandomRemoteAddr()
+	req.SetBasicAuth(user, password)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code, w.Body.String())
+	t.Log(w.Body.String())
+	err = json.Unmarshal(w.Body.Bytes(), &stopResp)
+	assert.NoError(t, err)
+	assert.Equal(t, stateResp.StartTime, stopResp.StartTime)
+	assert.Equal(t, endTime, stopResp.EndTime)
+
+	files, err = getRecordFiles(tmpDir, "Stmt")
+	require.NoError(t, err)
+	require.Equal(t, 2, len(files))
+	t.Log(files)
+	recordFile = ""
+	for _, file := range files {
+		if !strings.HasSuffix(file, ".csv") {
+			recordFile = file
+		}
+	}
+	require.True(t, recordFile != "")
+
+	recordFile = filepath.Join(tmpDir, recordFile)
+	recordContent, err = os.ReadFile(recordFile)
+	assert.NoError(t, err)
+	csvReader = csv.NewReader(bytes.NewReader(recordContent))
+	records, err = csvReader.ReadAll()
+	assert.NoError(t, err)
+	t.Log(records)
+	require.Equal(t, 1, len(records), records)
+
+	assert.Equal(t, "010203", records[0][recordsql.StmtDataIndex])
+	assert.Equal(t, host, records[0][recordsql.StmtIPIndex])
+	assert.Equal(t, "root", records[0][recordsql.StmtUserIndex])
+	assert.Equal(t, "ws", records[0][recordsql.StmtConnTypeIndex])
+	assert.Equal(t, app, records[0][recordsql.StmtAppNameIndex])
+	assert.Equal(t, port, records[0][recordsql.StmtSourcePortIndex])
+	assert.Equal(t, "bind", records[0][recordsql.StmtActionIndex])
+	duration, err := strconv.Atoi(records[0][recordsql.StmtDurationIndex])
+	assert.NoError(t, err)
+	assert.Greater(t, duration, 0)
 }

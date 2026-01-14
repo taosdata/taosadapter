@@ -15,15 +15,24 @@ import (
 
 func TestGetRotateWriter(t *testing.T) {
 	tmpDir := t.TempDir()
-	if globalRotateWriter != nil {
-		_ = globalRotateWriter.Close()
-		globalRotateWriter = nil
+	for _, recordType := range recordTypes {
+		doTestGetRotateWriter(t, tmpDir, recordType)
+	}
+	_, err := getRotateWriter(-100)
+	require.Error(t, err, "Expected error for invalid record type")
+}
+
+func doTestGetRotateWriter(t *testing.T, tmpDir string, recordType RecordType) {
+	if globalSQLRotateWriter != nil {
+		err := globalSQLRotateWriter.Close()
+		assert.NoError(t, err, "Failed to close globalSQLRotateWriter")
+		globalSQLRotateWriter = nil
 	}
 	defer func() {
-		if globalRotateWriter != nil {
-			err := globalRotateWriter.Close()
-			assert.NoError(t, err, "Failed to close globalRotateWriter")
-			globalRotateWriter = nil
+		if globalSQLRotateWriter != nil {
+			err := globalSQLRotateWriter.Close()
+			assert.NoError(t, err, "Failed to close globalSQLRotateWriter")
+			globalSQLRotateWriter = nil
 		}
 	}()
 	oldPath := config.Conf.Log.Path
@@ -31,10 +40,10 @@ func TestGetRotateWriter(t *testing.T) {
 		config.Conf.Log.Path = oldPath
 	}()
 	config.Conf.Log.Path = "/"
-	_, err := getRotateWriter()
+	_, err := getRotateWriter(recordType)
 	require.Error(t, err, "Expected error when log path is root directory")
 	config.Conf.Log.Path = tmpDir
-	writer, err := getRotateWriter()
+	writer, err := getRotateWriter(recordType)
 	require.NoError(t, err)
 	defer func() {
 		err = writer.Close()
@@ -42,13 +51,13 @@ func TestGetRotateWriter(t *testing.T) {
 	}()
 	_, err = writer.Write([]byte("test"))
 	require.NoError(t, err)
-	files, err := getRecordFiles(tmpDir)
+	files, err := getRecordFiles(tmpDir, recordType)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(files))
 	assert.Equal(t, filepath.Base(writer.CurrentFileName()), files[0])
-	writer, err = getRotateWriter()
+	writer, err = getRotateWriter(recordType)
 	require.NoError(t, err)
-	files, err = getRecordFiles(tmpDir)
+	files, err = getRecordFiles(tmpDir, recordType)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(files), "Expected two files after rotation")
 	recordFile := ""
@@ -61,7 +70,7 @@ func TestGetRotateWriter(t *testing.T) {
 	assert.Equal(t, filepath.Base(writer.CurrentFileName()), recordFile)
 }
 
-func getRecordFiles(dir string) ([]string, error) {
+func getRecordFiles(dir string, recordType RecordType) ([]string, error) {
 	var files []string
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -70,7 +79,7 @@ func getRecordFiles(dir string) ([]string, error) {
 			}
 			return err
 		}
-		if !info.IsDir() && strings.HasPrefix(info.Name(), fmt.Sprintf("%sadapterSql_", version.CUS_PROMPT)) && !strings.HasSuffix(info.Name(), "_lock") {
+		if !info.IsDir() && strings.HasPrefix(info.Name(), fmt.Sprintf("%sadapter%s_", version.CUS_PROMPT, recordType)) && !strings.HasSuffix(info.Name(), "_lock") {
 			files = append(files, info.Name())
 		}
 		return nil

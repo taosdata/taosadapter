@@ -19,11 +19,17 @@ type ConfigController struct {
 
 func (ctl *ConfigController) Init(r gin.IRouter) {
 	r.PUT("config", prepareCtx, checkConcurrent(changeConfigLocker), CheckAuth, checkTDengineConnection, ctl.changeConfig)
+
 	r.POST("record_sql", prepareCtx, checkConcurrent(recordSqlLocker), CheckAuth, checkTDengineConnection, ctl.startRecordSql)
 	r.DELETE("record_sql", prepareCtx, checkConcurrent(recordSqlLocker), CheckAuth, checkTDengineConnection, ctl.stopRecordSql)
 	r.GET("record_sql", prepareCtx, CheckAuth, checkTDengineConnection, ctl.getRecordSqlState)
+
+	r.POST("record_stmt", prepareCtx, checkConcurrent(recordStmtLocker), CheckAuth, checkTDengineConnection, ctl.startRecordStmt)
+	r.DELETE("record_stmt", prepareCtx, checkConcurrent(recordStmtLocker), CheckAuth, checkTDengineConnection, ctl.stopRecordStmt)
+	r.GET("record_stmt", prepareCtx, CheckAuth, checkTDengineConnection, ctl.getRecordStmtState)
 }
 
+const defaultStmtRecordDuration = time.Hour
 const (
 	unlocked = 0
 	locked   = 1
@@ -34,6 +40,10 @@ var changeConfigLocker = &locker{
 }
 
 var recordSqlLocker = &locker{
+	locking: unlocked,
+}
+
+var recordStmtLocker = &locker{
 	locking: unlocked,
 }
 
@@ -53,7 +63,7 @@ type ModifyConfig struct {
 	LogLevel *string `json:"log.level"`
 }
 
-type RecordSql struct {
+type RecordRequest struct {
 	StartTime string `json:"start_time"`
 	EndTime   string `json:"end_time"`
 	Location  string `json:"location"`
@@ -105,73 +115,111 @@ func (ctl *ConfigController) changeConfig(c *gin.Context) {
 }
 
 func (ctl *ConfigController) startRecordSql(c *gin.Context) {
+	ctl.startRecord(c, recordsql.RecordTypeSQL)
+}
+
+func (ctl *ConfigController) startRecordStmt(c *gin.Context) {
+	ctl.startRecord(c, recordsql.RecordTypeStmt)
+}
+
+func (ctl *ConfigController) startRecord(c *gin.Context, recordType recordsql.RecordType) {
 	logger := c.MustGet(LoggerKey).(*logrus.Entry)
+	logger.Debugf("start record, type:%s", recordType.String())
 	body, err := c.GetRawData()
 	if err != nil {
 		logger.Errorf("get request body error, err:%s", err)
 		BadRequestResponseWithMsg(c, logger, 0xffff, "get request body error")
 		return
 	}
-	logger.Tracef("get start record sql request, req:%s", body)
-	var recordSql RecordSql
+	logger.Tracef("get start record request, req:%s", body)
+	var recordRequest RecordRequest
 	if len(body) != 0 {
-		err = json.Unmarshal(body, &recordSql)
+		err = json.Unmarshal(body, &recordRequest)
 		if err != nil {
 			logger.Errorf("unmarshal json error, err:%s, req:%s", err, body)
 			BadRequestResponseWithMsg(c, logger, 0xffff, "unmarshal json error")
 			return
 		}
 	} else {
-		logger.Debugf("no request body, use default record sql config")
+		logger.Debugf("no request body, use default record config")
 		now := time.Now()
-		recordSql = RecordSql{
+		endTime := recordsql.DefaultRecordSqlEndTime
+		if recordType == recordsql.RecordTypeStmt {
+			endTime = now.Add(defaultStmtRecordDuration).Format(recordsql.InputTimeFormat)
+		}
+		recordRequest = RecordRequest{
 			StartTime: now.Format(recordsql.InputTimeFormat),
-			EndTime:   recordsql.DefaultRecordSqlEndTime,
+			EndTime:   endTime,
 			Location:  "",
 		}
 	}
 
-	err = recordsql.StartRecordSql(
-		recordSql.StartTime,
-		recordSql.EndTime,
-		recordSql.Location,
-	)
+	switch recordType {
+	case recordsql.RecordTypeSQL:
+		err = recordsql.StartRecordSql(
+			recordRequest.StartTime,
+			recordRequest.EndTime,
+			recordRequest.Location,
+		)
+	case recordsql.RecordTypeStmt:
+		err = recordsql.StartRecordStmt(
+			recordRequest.StartTime,
+			recordRequest.EndTime,
+			recordRequest.Location,
+		)
+	default:
+		err = fmt.Errorf("unknown record type: %d", recordType)
+	}
 	if err != nil {
-		logger.Errorf("start record sql error, err:%s", err)
-		BadRequestResponseWithMsg(c, logger, 0xffff, fmt.Sprintf("start record sql error: %s", err))
+		logger.Errorf("start record error, err:%s", err)
+		BadRequestResponseWithMsg(c, logger, 0xffff, fmt.Sprintf("start record error: %s", err))
 		return
 	}
 	c.JSON(http.StatusOK, &Message{
 		Code: 0,
 		Desc: "",
 	})
-	logger.Debugf("start record sql success")
+	logger.Debugf("start record success")
 }
 
-type StopRecordSqlResp struct {
+type StopRecordResp struct {
 	Message
 	StartTime string `json:"start_time"`
 	EndTime   string `json:"end_time"`
 }
 
 func (ctl *ConfigController) stopRecordSql(c *gin.Context) {
+	ctl.stopRecord(c, recordsql.RecordTypeSQL)
+}
+
+func (ctl *ConfigController) stopRecordStmt(c *gin.Context) {
+	ctl.stopRecord(c, recordsql.RecordTypeStmt)
+}
+
+func (ctl *ConfigController) stopRecord(c *gin.Context, recordType recordsql.RecordType) {
 	logger := c.MustGet(LoggerKey).(*logrus.Entry)
-	logger.Debugf("get stop record sql request")
-	info := recordsql.StopRecordSql()
+	logger.Debugf("get stop record, type:%s", recordType.String())
+	var info *recordsql.MissionInfo
+	switch recordType {
+	case recordsql.RecordTypeSQL:
+		info = recordsql.StopRecordSqlMission()
+	case recordsql.RecordTypeStmt:
+		info = recordsql.StopRecordStmtMission()
+	}
 	if info != nil {
-		logger.Tracef("stop record sql info: %+v", info)
-		c.JSON(http.StatusOK, &StopRecordSqlResp{
+		logger.Tracef("stop record info: %+v", info)
+		c.JSON(http.StatusOK, &StopRecordResp{
 			StartTime: info.StartTime,
 			EndTime:   info.EndTime,
 		})
 	} else {
-		logger.Tracef("no record sql running")
+		logger.Tracef("no record running")
 		c.JSON(http.StatusOK, &Message{
 			Code: 0,
 			Desc: "",
 		})
 	}
-	logger.Debugf("stop record sql success")
+	logger.Debugf("stop record success")
 }
 
 type GetRecordSqlStateResp struct {
@@ -184,9 +232,23 @@ type GetRecordSqlStateResp struct {
 }
 
 func (ctl *ConfigController) getRecordSqlState(c *gin.Context) {
+	ctl.getRecordState(c, recordsql.RecordTypeSQL)
+}
+
+func (ctl *ConfigController) getRecordStmtState(c *gin.Context) {
+	ctl.getRecordState(c, recordsql.RecordTypeStmt)
+}
+
+func (ctl *ConfigController) getRecordState(c *gin.Context, recordType recordsql.RecordType) {
 	logger := c.MustGet(LoggerKey).(*logrus.Entry)
-	logger.Debugf("get record sql state request")
-	state := recordsql.GetState()
+	logger.Debugf("get record state, type:%s", recordType.String())
+	var state recordsql.RecordState
+	switch recordType {
+	case recordsql.RecordTypeSQL:
+		state = recordsql.GetSqlMissionState()
+	case recordsql.RecordTypeStmt:
+		state = recordsql.GetStmtMissionState()
+	}
 	resp := &GetRecordSqlStateResp{
 		Exists:            state.Exists,
 		Running:           state.Running,
@@ -194,9 +256,9 @@ func (ctl *ConfigController) getRecordSqlState(c *gin.Context) {
 		EndTime:           state.EndTime,
 		CurrentConcurrent: state.CurrentConcurrent,
 	}
-	logger.Tracef("get record sql state: %+v", state)
+	logger.Tracef("get record state: %+v", state)
 	c.JSON(http.StatusOK, resp)
-	logger.Debugf("get stop record sql success")
+	logger.Debugf("get record success")
 }
 
 func init() {
