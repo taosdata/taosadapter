@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 		ExcludeQueryLimitSqlRegex:        []*regexp.Regexp{regexp.MustCompile(`(?i)^select\s+.*from\s+information_schema.*`)},
 		Default: &config.LimitConfig{
 			QueryLimit:       1,
-			QueryWaitTimeout: 1,
+			QueryWaitTimeout: 2,
 			QueryMaxWait:     0,
 		},
 	}
