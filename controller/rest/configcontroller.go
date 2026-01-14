@@ -29,6 +29,7 @@ func (ctl *ConfigController) Init(r gin.IRouter) {
 	r.GET("record_stmt", prepareCtx, CheckAuth, checkTDengineConnection, ctl.getRecordStmtState)
 }
 
+const defaultStmtRecordDuration = time.Hour
 const (
 	unlocked = 0
 	locked   = 1
@@ -144,7 +145,7 @@ func (ctl *ConfigController) startRecord(c *gin.Context, recordType recordsql.Re
 		now := time.Now()
 		endTime := recordsql.DefaultRecordSqlEndTime
 		if recordType == recordsql.RecordTypeStmt {
-			endTime = now.Add(time.Hour).Format(recordsql.InputTimeFormat)
+			endTime = now.Add(defaultStmtRecordDuration).Format(recordsql.InputTimeFormat)
 		}
 		recordRequest = RecordRequest{
 			StartTime: now.Format(recordsql.InputTimeFormat),
