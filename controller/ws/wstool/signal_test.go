@@ -166,6 +166,7 @@ func TestWaitSignalChangeWhitelist(t *testing.T) {
 		syncinterface.TaosClose(conn, logger, isDebug)
 	}()
 	h := NewMockWSHandler(conn, "192.168.3.100", logger, isDebug)
+	h.whitelistChangeChan <- 1
 	go doWaitSignal(h, conn, h.ip, h.ipStr, h.whitelistChangeHandle, h.dropUserHandle, h.whitelistChangeChan, h.dropUserChan, h.exit, logger, mockGetWhitelist)
 	timeout := time.NewTimer(time.Second * 5)
 	select {
