@@ -15,6 +15,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/log"
+	"github.com/taosdata/taosadapter/v3/tools/testtools/testenv"
 )
 
 type MockWSHandler struct {
@@ -138,6 +139,9 @@ func TestWaitSignalDropUser(t *testing.T) {
 }
 
 func TestWaitSignalChangeWhitelist(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("skip enterprise only test")
+	}
 	isDebug := log.IsDebug()
 	logger := log.GetLogger("test").WithField("case", "TestWaitSignal")
 	rootConn, err := syncinterface.TaosConnect("", "root", "taosdata", "", 0, logger, false)
@@ -162,6 +166,7 @@ func TestWaitSignalChangeWhitelist(t *testing.T) {
 		syncinterface.TaosClose(conn, logger, isDebug)
 	}()
 	h := NewMockWSHandler(conn, "192.168.3.100", logger, isDebug)
+	h.whitelistChangeChan <- 1
 	go doWaitSignal(h, conn, h.ip, h.ipStr, h.whitelistChangeHandle, h.dropUserHandle, h.whitelistChangeChan, h.dropUserChan, h.exit, logger, mockGetWhitelist)
 	timeout := time.NewTimer(time.Second * 5)
 	select {
