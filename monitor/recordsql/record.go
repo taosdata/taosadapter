@@ -165,7 +165,7 @@ func GetSQLRecord() (record *SQLRecord, running bool) {
 	mission.currentCount.Add(1)
 	ele := mission.recordList.Add(record)
 	record.ele = ele
-	logger.Tracef("get record scuccess")
+	logger.Tracef("get record success")
 	return record, true
 }
 

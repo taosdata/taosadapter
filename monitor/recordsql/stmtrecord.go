@@ -243,7 +243,7 @@ func GetStmtRecord() (record *StmtRecord, running bool) {
 	mission.currentCount.Add(1)
 	ele := mission.recordList.Add(record)
 	record.ele = ele
-	logger.Tracef("get stmt record scuccess")
+	logger.Tracef("get stmt record success")
 	return record, true
 }
 
