@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 		ExcludeQueryLimitSqlRegex:        []*regexp.Regexp{regexp.MustCompile(`(?i)^select\s+.*from\s+information_schema.*`)},
 		Default: &config.LimitConfig{
 			QueryLimit:       1,
-			QueryWaitTimeout: 1,
+			QueryWaitTimeout: 2,
 			QueryMaxWait:     0,
 		},
 	}
@@ -901,6 +901,11 @@ func TestLimitQuery(t *testing.T) {
 		config.Conf.Request.QueryLimitEnable = false
 		limiter.GlobalLimiterMap.Clear()
 	}()
+	limiter.GlobalLimiterMap.Range(func(key, value interface{}) bool {
+		t.Logf("key:%v,value:%v", key, value)
+		return true
+	})
+	limiter.GlobalLimiterMap.Clear()
 	wg := sync.WaitGroup{}
 	wg.Add(10)
 	// 10 concurrent queries, unlimited query wait time
@@ -913,7 +918,7 @@ func TestLimitQuery(t *testing.T) {
 			req.RemoteAddr = testtools.GetRandomRemoteAddr()
 			req.Header.Set("Authorization", "Taosd /KfeAzX/f9na8qdtNZmtONryp201ma04bEl8LcvLUd7a8qdtNZmtONryp201ma04")
 			router.ServeHTTP(w, req)
-			assert.Equal(t, 200, w.Code)
+			assert.Equal(t, 200, w.Code, w.Body.String())
 		}()
 	}
 	wg.Wait()
