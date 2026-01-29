@@ -31,21 +31,21 @@ jobs:
     steps:
       - name: checkout TDengine by pr
         if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: 'taosdata/TDengine'
           ref: ${{ github.base_ref }}
 
       - name: checkout TDengine by push
         if: github.event_name == 'push'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: 'taosdata/TDengine'
           ref: ${{ github.ref_name }}
 
       - name: checkout TDengine manually
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: 'taosdata/TDengine'
           ref: ${{ inputs.tbBranch }}
@@ -58,7 +58,7 @@ jobs:
       - name: Cache server by pr
         if: github.event_name == 'pull_request'
         id: cache-server-pr
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: C:/TDengine
           key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ steps.get_commit_id.outputs.commit_id }}
@@ -66,7 +66,7 @@ jobs:
       - name: Cache server by pr
         if: github.event_name == 'push'
         id: cache-server-push
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: C:/TDengine
           key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ steps.get_commit_id.outputs.commit_id }}
@@ -74,7 +74,7 @@ jobs:
       - name: Cache server manually
         if: github.event_name == 'workflow_dispatch'
         id: cache-server-manually
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: C:/TDengine
           key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ steps.get_commit_id.outputs.commit_id }}
@@ -103,7 +103,7 @@ jobs:
           (github.event_name == 'workflow_dispatch' && steps.cache-server-manually.outputs.cache-hit != 'true') ||
           (github.event_name == 'pull_request' && steps.cache-server-pr.outputs.cache-hit != 'true') ||
           (github.event_name == 'push' && steps.cache-server-push.outputs.cache-hit != 'true')
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: cache-ext
         with:
           path: .externals
@@ -135,7 +135,7 @@ jobs:
       - name: get cache server by pr
         if: github.event_name == 'pull_request'
         id: get-cache-server-pr
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: C:/TDengine
           key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
@@ -145,7 +145,7 @@ jobs:
       - name: get cache server by push
         if: github.event_name == 'push'
         id: get-cache-server-push
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: C:/TDengine
           key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
@@ -155,7 +155,7 @@ jobs:
       - name: cache server manually
         if: github.event_name == 'workflow_dispatch'
         id: get-cache-server-manually
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: C:/TDengine
           key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
@@ -163,9 +163,9 @@ jobs:
             ${{ runner.os }}-build-${{ inputs.tbBranch }}-
 
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go }}
           cache-dependency-path: go.sum
@@ -184,7 +184,7 @@ jobs:
 #      - name: get cache server by pr
 #        if: github.event_name == 'pull_request'
 #        id: get-cache-server-pr
-#        uses: actions/cache@v4
+#        uses: actions/cache@v5
 #        with:
 #          path: C:/TDengine
 #          key: ${{ runner.os }}-build-${{ github.base_ref }}-${{ needs.build.outputs.commit_id }}
@@ -194,7 +194,7 @@ jobs:
 #      - name: get cache server by push
 #        if: github.event_name == 'push'
 #        id: get-cache-server-push
-#        uses: actions/cache@v4
+#        uses: actions/cache@v5
 #        with:
 #          path: C:/TDengine
 #          key: ${{ runner.os }}-build-${{ github.ref_name }}-${{ needs.build.outputs.commit_id }}
@@ -204,7 +204,7 @@ jobs:
 #      - name: cache server manually
 #        if: github.event_name == 'workflow_dispatch'
 #        id: get-cache-server-manually
-#        uses: actions/cache@v4
+#        uses: actions/cache@v5
 #        with:
 #          path: C:/TDengine
 #          key: ${{ runner.os }}-build-${{ inputs.tbBranch }}-${{ needs.build.outputs.commit_id }}
@@ -212,15 +212,15 @@ jobs:
 #            ${{ runner.os }}-build-${{ inputs.tbBranch }}-
 #
 #      - name: upload artifact
-#        uses: actions/upload-artifact@v4
+#        uses: actions/upload-artifact@v6
 #        with:
 #          name: cache-windows
 #          path: C:/TDengine
 #
 #      - name: checkout
-#        uses: actions/checkout@v4
+#        uses: actions/checkout@v6
 #
-#      - uses: actions/setup-go@v5
+#      - uses: actions/setup-go@v6
 #        with:
 #          go-version: ${{ matrix.go }}
 #          cache-dependency-path: go.sum
