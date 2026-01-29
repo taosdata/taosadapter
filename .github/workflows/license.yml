@@ -1,4 +1,4 @@
-name: license.yml
+name: License Check
 on:
   push:
   schedule:
