@@ -880,7 +880,7 @@ func TMQErr2Str(code int32, logger *logrus.Entry, isDebug bool) string {
 }
 
 func TMQConfSet(conf unsafe.Pointer, key string, value string, logger *logrus.Entry, isDebug bool) int32 {
-	if key != "td.connect.pass" {
+	if key != "td.connect.pass" && key != "td.connect.token" {
 		logger.Tracef("call tmq_conf_set, conf:%p, key:%s, value:%s", conf, key, value)
 	} else {
 		logger.Tracef("call tmq_conf_set, conf:%p, key:%s", conf, key)

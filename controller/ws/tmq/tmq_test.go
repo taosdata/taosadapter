@@ -60,14 +60,25 @@ func TestMain(m *testing.M) {
 }
 
 func TestTMQ(t *testing.T) {
+	doTMQTest(t, "test_ws_tmq", "test_tmq_ws_topic", "")
+}
+
+func doTMQTest(t *testing.T, dbName string, topicName string, token string) {
+	if token != "" {
+		t.Log("token test")
+		if !testenv.IsEnterpriseTest() {
+			t.Skip("token test only for enterprise edition")
+			return
+		}
+	}
 	ts1 := time.Now()
 	ts2 := ts1.Add(time.Second)
 	ts3 := ts2.Add(time.Second)
-	code, message := doHttpSql("create database if not exists test_ws_tmq WAL_RETENTION_PERIOD 86400")
+	code, message := doHttpSql(fmt.Sprintf("create database if not exists %s WAL_RETENTION_PERIOD 86400", dbName))
 	assert.Equal(t, 0, code, message)
-	assert.NoError(t, testtools.EnsureDBCreated("test_ws_tmq"))
+	assert.NoError(t, testtools.EnsureDBCreated(dbName))
 	defer func() {
-		code, message := doHttpSql("drop database if exists test_ws_tmq")
+		code, message := doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
 		assert.Equal(t, 0, code, message)
 	}()
 
@@ -75,19 +86,19 @@ func TestTMQ(t *testing.T) {
 		"create table if not exists ct0 (ts timestamp, c1 int)",
 		"create table if not exists ct1 (ts timestamp, c1 int, c2 float)",
 		"create table if not exists ct2 (ts timestamp, c1 int, c2 float, c3 binary(10))",
-		"create topic if not exists test_tmq_ws_topic as DATABASE test_ws_tmq",
+		fmt.Sprintf("create topic if not exists %s as DATABASE %s", topicName, dbName),
 		fmt.Sprintf(`insert into ct0 values('%s',1)`, ts1.Format(time.RFC3339Nano)),
 		fmt.Sprintf(`insert into ct1 values('%s',1,2)`, ts2.Format(time.RFC3339Nano)),
 		fmt.Sprintf(`insert into ct2 values('%s',1,2,'3')`, ts3.Format(time.RFC3339Nano)),
 	}
 	for _, initSql := range initSqls {
-		code, message = doHttpSqlWithDB(initSql, "test_ws_tmq")
+		code, message = doHttpSqlWithDB(initSql, dbName)
 		assert.Equal(t, 0, code, message)
 	}
 	defer func() {
 		cleanSqls := []string{
-			"drop topic if exists test_tmq_ws_topic",
-			"drop database if exists test_ws_tmq",
+			fmt.Sprintf("drop topic if exists %s", topicName),
+			fmt.Sprintf("drop database if exists %s", dbName),
 		}
 		for _, cleanSql := range cleanSqls {
 			assert.Eventually(t, func() bool {
@@ -111,15 +122,20 @@ func TestTMQ(t *testing.T) {
 	// subscribe
 	initReq := &TMQSubscribeReq{
 		ReqID:                0,
-		User:                 "root",
-		Password:             "taosdata",
 		GroupID:              "test",
-		Topics:               []string{"test_tmq_ws_topic"},
+		Topics:               []string{topicName},
 		AutoCommit:           "true",
 		AutoCommitIntervalMS: "5000",
 		SnapshotEnable:       "true",
 		WithTableName:        "true",
 		OffsetReset:          "earliest",
+		Config:               map[string]string{},
+	}
+	if token != "" {
+		initReq.Config["td.connect.token"] = token
+	} else {
+		initReq.User = "root"
+		initReq.Password = "taosdata"
 	}
 	_, err = subscribe(t, ws, initReq)
 	assert.NoError(t, err)
@@ -2888,4 +2904,47 @@ func TestVersion(t *testing.T) {
 	assert.Equal(t, 0, versionResp.Code, string(msg))
 	assert.Equal(t, version.TaosClientVersion, versionResp.Version)
 	assert.Equal(t, uint64(0), versionResp.ReqID, string(msg))
+}
+
+func TestConnectToken(t *testing.T) {
+	if !testenv.IsEnterpriseTest() {
+		t.Skip("token test only for enterprise edition")
+		return
+	}
+	user := "tmq_test_token_user"
+	pass := "M^$RiK*vOLXQU5rD"
+	tokenName := "tmq_test_token"
+	dbName := "test_ws_tmq_token"
+	topic := "test_ws_tmq_token_topic"
+	code, message := doHttpSql(fmt.Sprintf("drop topic if exists %s", topic))
+	assert.Equal(t, 0, code, message)
+	code, message = doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
+	assert.Equal(t, 0, code, message)
+	code, message = doHttpSql(fmt.Sprintf("create database if not exists %s WAL_RETENTION_PERIOD 86400", dbName))
+	assert.Equal(t, 0, code, message)
+	code, message = doHttpSql(fmt.Sprintf("create topic if not exists %s as database %s", topic, dbName))
+	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated(dbName))
+
+	code, message = doHttpSql(fmt.Sprintf("create user %s pass '%s'", user, pass))
+	assert.Equal(t, 0, code, message)
+	defer func() {
+		code, message = doHttpSql(fmt.Sprintf("drop user %s", user))
+		assert.Equal(t, 0, code, message)
+	}()
+	createTokenResp := restQuery(fmt.Sprintf("create token %s from user %s", tokenName, user), "")
+	if createTokenResp.Code != 0 {
+		t.Errorf("create token failed: %d,%s", createTokenResp.Code, createTokenResp.Desc)
+		return
+	}
+	token := createTokenResp.Data[0][0].(string)
+	assert.NoError(t, testtools.EnsureTokenCreated(tokenName))
+
+	code, message = doHttpSql(fmt.Sprintf("grant subscribe on topic %s.%s to %s", dbName, topic, user))
+	require.Equal(t, 0, code, message)
+
+	code, message = doHttpSql(fmt.Sprintf("grant all on database %s to %s", dbName, user))
+	require.Equal(t, 0, code, message)
+
+	doTMQTest(t, dbName, topic, token)
 }
