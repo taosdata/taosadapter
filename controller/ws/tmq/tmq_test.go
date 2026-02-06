@@ -2937,9 +2937,16 @@ func TestConnectToken(t *testing.T) {
 		t.Errorf("create token failed: %d,%s", createTokenResp.Code, createTokenResp.Desc)
 		return
 	}
+	if len(createTokenResp.Data) < 1 || len(createTokenResp.Data[0]) < 1 {
+		t.Error("create token response is empty")
+		return
+	}
 	token := createTokenResp.Data[0][0].(string)
 	assert.NoError(t, testtools.EnsureTokenCreated(tokenName))
-
+	defer func() {
+		code, message = doHttpSql(fmt.Sprintf("drop token %s", tokenName))
+		assert.Equal(t, 0, code, message)
+	}()
 	code, message = doHttpSql(fmt.Sprintf("grant subscribe on topic %s.%s to %s", dbName, topic, user))
 	require.Equal(t, 0, code, message)
 
