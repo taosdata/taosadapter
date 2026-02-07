@@ -441,7 +441,7 @@ func (r *TMQSubscribeReq) String() string {
 	if len(r.Config) > 0 {
 		first := true
 		for k, v := range r.Config {
-			if k == "td.connect.pass" {
+			if k == "td.connect.pass" || k == "td.connect.token" {
 				continue
 			}
 			if !first {
