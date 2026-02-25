@@ -102,6 +102,13 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "ip not in whitelist")
 		return
 	}
+	h.initNotifyHandles()
+	notifyRegistered := false
+	defer func() {
+		if !notifyRegistered {
+			h.putNotifyHandles()
+		}
+	}()
 	s = log.GetLogNow(isDebug)
 	logger.Trace("register whitelist change")
 	err = tool.RegisterChangeWhitelist(conn, h.whitelistChangeHandle, logger, isDebug)
@@ -211,6 +218,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	h.user = req.User
 	h.appName = req.App
 	logger.Trace("start wait signal goroutine")
+	notifyRegistered = true
 	go wstool.WaitSignal(h, conn, h.ip, h.ipStr, h.whitelistChangeHandle, h.dropUserHandle, h.whitelistChangeChan, h.dropUserChan, h.exit, h.logger)
 	resp := &connResponse{
 		Action:  action,

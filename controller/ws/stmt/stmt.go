@@ -271,19 +271,35 @@ type TaosStmt struct {
 
 func NewTaosStmt(session *melody.Session, logger *logrus.Entry) *TaosStmt {
 	ipAddr := iptool.GetRealIP(session.Request)
-	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
-	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
 	return &TaosStmt{
-		StmtList:              list.New(),
-		exit:                  make(chan struct{}),
-		whitelistChangeChan:   whitelistChangeChan,
-		whitelistChangeHandle: whitelistChangeHandle,
-		dropUserChan:          dropUserChan,
-		dropUserHandle:        dropUserHandle,
-		session:               session,
-		ip:                    ipAddr,
-		ipStr:                 ipAddr.String(),
-		logger:                logger,
+		StmtList: list.New(),
+		exit:     make(chan struct{}),
+		session:  session,
+		ip:       ipAddr,
+		ipStr:    ipAddr.String(),
+		logger:   logger,
+	}
+}
+
+func (t *TaosStmt) initNotifyHandles() {
+	if t.whitelistChangeHandle == 0 {
+		t.whitelistChangeChan, t.whitelistChangeHandle = tool.GetRegisterChangeWhiteListHandle()
+	}
+	if t.dropUserHandle == 0 {
+		t.dropUserChan, t.dropUserHandle = tool.GetRegisterDropUserHandle()
+	}
+}
+
+func (t *TaosStmt) putNotifyHandles() {
+	if t.whitelistChangeHandle != 0 {
+		tool.PutRegisterChangeWhiteListHandle(t.whitelistChangeHandle)
+		t.whitelistChangeHandle = 0
+		t.whitelistChangeChan = nil
+	}
+	if t.dropUserHandle != 0 {
+		tool.PutRegisterDropUserHandle(t.dropUserHandle)
+		t.dropUserHandle = 0
+		t.dropUserChan = nil
 	}
 }
 
@@ -439,6 +455,13 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 		wstool.WSErrorMsg(ctx, session, logger, 0xffff, "whitelist prohibits current IP access", action, req.ReqID)
 		return
 	}
+	t.initNotifyHandles()
+	notifyRegistered := false
+	defer func() {
+		if !notifyRegistered {
+			t.putNotifyHandles()
+		}
+	}()
 	logger.Trace("register change whitelist")
 	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle, logger, isDebug)
 	if err != nil {
@@ -456,6 +479,7 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 		return
 	}
 	t.conn = conn
+	notifyRegistered = true
 	go wstool.WaitSignal(t, conn, t.ip, t.ipStr, t.whitelistChangeHandle, t.dropUserHandle, t.whitelistChangeChan, t.dropUserChan, t.exit, t.logger)
 	wstool.WSWriteJson(session, logger, &StmtConnectResp{
 		Action: action,
