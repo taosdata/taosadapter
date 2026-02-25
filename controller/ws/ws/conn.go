@@ -72,6 +72,13 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "ip not in whitelist")
 		return
 	}
+	h.initNotifyHandles()
+	notifyRegistered := false
+	defer func() {
+		if !notifyRegistered {
+			h.putNotifyHandles()
+		}
+	}()
 	s = log.GetLogNow(isDebug)
 	logger.Trace("register whitelist change")
 	err = tool.RegisterChangeWhitelist(conn, h.whitelistChangeHandle, logger, isDebug)
@@ -178,6 +185,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	}
 	h.conn = conn
 	logger.Trace("start wait signal goroutine")
+	notifyRegistered = true
 	go h.waitSignal(h.logger)
 	resp := &connResponse{
 		Action:  action,
