@@ -52,29 +52,44 @@ func newHandler(session *melody.Session) *messageHandler {
 	logger := wstool.GetLogger(session)
 	ipAddr := iptool.GetRealIP(session.Request)
 	port, _ := iptool.GetRealPort(session.Request) // ignore error, this port is for sql recording
-	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
-	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
 	return &messageHandler{
-		queryResults:          NewQueryResultHolder(),
-		stmts:                 NewStmtHolder(),
-		exit:                  make(chan struct{}),
-		whitelistChangeChan:   whitelistChangeChan,
-		whitelistChangeHandle: whitelistChangeHandle,
-		dropUserChan:          dropUserChan,
-		dropUserHandle:        dropUserHandle,
-		session:               session,
-		ip:                    ipAddr,
-		ipStr:                 ipAddr.String(),
-		logger:                logger,
-		port:                  port,
+		queryResults: NewQueryResultHolder(),
+		stmts:        NewStmtHolder(),
+		exit:         make(chan struct{}),
+		session:      session,
+		ip:           ipAddr,
+		ipStr:        ipAddr.String(),
+		logger:       logger,
+		port:         port,
+	}
+}
+
+func (h *messageHandler) initNotifyHandles() {
+	if h.whitelistChangeHandle == 0 {
+		h.whitelistChangeChan, h.whitelistChangeHandle = tool.GetRegisterChangeWhiteListHandle()
+	}
+	if h.dropUserHandle == 0 {
+		h.dropUserChan, h.dropUserHandle = tool.GetRegisterDropUserHandle()
+	}
+}
+
+func (h *messageHandler) putNotifyHandles() {
+	if h.whitelistChangeHandle != 0 {
+		tool.PutRegisterChangeWhiteListHandle(h.whitelistChangeHandle)
+		h.whitelistChangeHandle = 0
+		h.whitelistChangeChan = nil
+	}
+	if h.dropUserHandle != 0 {
+		tool.PutRegisterDropUserHandle(h.dropUserHandle)
+		h.dropUserHandle = 0
+		h.dropUserChan = nil
 	}
 }
 
 func (h *messageHandler) waitSignal(logger *logrus.Entry) {
 	defer func() {
 		logger.Trace("exit wait signal")
-		tool.PutRegisterChangeWhiteListHandle(h.whitelistChangeHandle)
-		tool.PutRegisterDropUserHandle(h.dropUserHandle)
+		h.putNotifyHandles()
 	}()
 	for {
 		select {
