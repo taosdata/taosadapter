@@ -23,7 +23,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: 'stable'
+          go-version: '1.25'
 
       - name: Install go-licenses
         run: go install github.com/google/go-licenses/v2@latest
@@ -34,4 +34,8 @@ jobs:
       - name: check license report
         run: |
           go-licenses report --include_tests --ignore github.com/taosdata/taosadapter ./... > tmp_license_report.csv
-          cmp -s tmp_license_report.csv license_report.csv
+          if ! cmp -s tmp_license_report.csv license_report.csv; then
+            echo "license_report.csv differs from generated tmp_license_report.csv"
+            diff -u license_report.csv tmp_license_report.csv | head -n 200
+            exit 1
+          fi

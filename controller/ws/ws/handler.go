@@ -15,8 +15,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/controller/ws/wstool"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
-	"github.com/taosdata/taosadapter/v3/db/tool"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/tools"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
@@ -25,28 +23,25 @@ import (
 )
 
 type messageHandler struct {
-	conn         unsafe.Pointer
-	logger       *logrus.Entry
-	closed       uint32
-	once         sync.Once
-	wait         sync.WaitGroup
-	dropUserChan chan struct{}
-	mutex        sync.RWMutex
+	conn   unsafe.Pointer
+	logger *logrus.Entry
+	closed uint32
+	once   sync.Once
+	wait   sync.WaitGroup
+	mutex  sync.RWMutex
 
 	queryResults *QueryResultHolder // ws query
 	stmts        *StmtHolder        // stmt bind message
 
-	exit                  chan struct{}
-	whitelistChangeChan   chan int64
-	session               *melody.Session
-	ip                    net.IP
-	ipStr                 string
-	user                  string
-	port                  string
-	appName               string
-	whitelistChangeHandle cgo.Handle
-	dropUserHandle        cgo.Handle
-	cloudTokenExists      bool
+	exit chan struct{}
+	wstool.NotifyHandles
+	session          *melody.Session
+	ip               net.IP
+	ipStr            string
+	user             string
+	port             string
+	appName          string
+	cloudTokenExists bool
 }
 
 func newHandler(session *melody.Session) *messageHandler {
@@ -54,22 +49,16 @@ func newHandler(session *melody.Session) *messageHandler {
 	logger := wstool.GetLogger(session)
 	ipAddr := iptool.GetRealIP(session.Request)
 	port, _ := iptool.GetRealPort(session.Request) // ignore error, this port is for sql recording
-	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
-	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
 	return &messageHandler{
-		queryResults:          NewQueryResultHolder(),
-		stmts:                 NewStmtHolder(),
-		exit:                  make(chan struct{}),
-		whitelistChangeChan:   whitelistChangeChan,
-		whitelistChangeHandle: whitelistChangeHandle,
-		dropUserChan:          dropUserChan,
-		dropUserHandle:        dropUserHandle,
-		session:               session,
-		ip:                    ipAddr,
-		ipStr:                 ipAddr.String(),
-		logger:                logger,
-		port:                  port,
-		cloudTokenExists:      cloudTokenExists,
+		queryResults:     NewQueryResultHolder(),
+		stmts:            NewStmtHolder(),
+		exit:             make(chan struct{}),
+		session:          session,
+		ip:               ipAddr,
+		ipStr:            ipAddr.String(),
+		logger:           logger,
+		port:             port,
+		cloudTokenExists: cloudTokenExists,
 	}
 }
 

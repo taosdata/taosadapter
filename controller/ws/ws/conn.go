@@ -102,9 +102,16 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "ip not in whitelist")
 		return
 	}
+	h.InitNotifyHandles()
+	notifyRegistered := false
+	defer func() {
+		if !notifyRegistered {
+			h.PutNotifyHandles()
+		}
+	}()
 	s = log.GetLogNow(isDebug)
 	logger.Trace("register whitelist change")
-	err = tool.RegisterChangeWhitelist(conn, h.whitelistChangeHandle, logger, isDebug)
+	err = tool.RegisterChangeWhitelist(conn, h.WhitelistChangeHandle, logger, isDebug)
 	logger.Debugf("register whitelist change cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "register whitelist change error")
@@ -112,7 +119,7 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	}
 	s = log.GetLogNow(isDebug)
 	logger.Trace("register drop user")
-	err = tool.RegisterDropUser(conn, h.dropUserHandle, logger, isDebug)
+	err = tool.RegisterDropUser(conn, h.DropUserHandle, logger, isDebug)
 	logger.Debugf("register drop user cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "register drop user error")
@@ -211,7 +218,8 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 	h.user = req.User
 	h.appName = req.App
 	logger.Trace("start wait signal goroutine")
-	go wstool.WaitSignal(h, conn, h.ip, h.ipStr, h.whitelistChangeHandle, h.dropUserHandle, h.whitelistChangeChan, h.dropUserChan, h.exit, h.logger)
+	notifyRegistered = true
+	go wstool.WaitSignal(h, conn, h.ip, h.ipStr, h.WhitelistChangeHandle, h.DropUserHandle, h.WhitelistChangeChan, h.DropUserChan, h.exit, h.logger)
 	resp := &connResponse{
 		Action:  action,
 		ReqID:   req.ReqID,
