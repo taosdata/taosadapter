@@ -233,27 +233,42 @@ type Taos struct {
 
 func NewTaos(session *melody.Session, logger *logrus.Entry) *Taos {
 	ipAddr := iptool.GetRealIP(session.Request)
-	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
-	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
 	return &Taos{
-		Results:               list.New(),
-		exit:                  make(chan struct{}, 1),
-		whitelistChangeChan:   whitelistChangeChan,
-		whitelistChangeHandle: whitelistChangeHandle,
-		dropUserChan:          dropUserChan,
-		dropUserHandle:        dropUserHandle,
-		session:               session,
-		ip:                    ipAddr,
-		ipStr:                 ipAddr.String(),
-		logger:                logger,
+		Results: list.New(),
+		exit:    make(chan struct{}, 1),
+		session: session,
+		ip:      ipAddr,
+		ipStr:   ipAddr.String(),
+		logger:  logger,
+	}
+}
+
+func (t *Taos) initNotifyHandles() {
+	if t.whitelistChangeHandle == 0 {
+		t.whitelistChangeChan, t.whitelistChangeHandle = tool.GetRegisterChangeWhiteListHandle()
+	}
+	if t.dropUserHandle == 0 {
+		t.dropUserChan, t.dropUserHandle = tool.GetRegisterDropUserHandle()
+	}
+}
+
+func (t *Taos) putNotifyHandles() {
+	if t.whitelistChangeHandle != 0 {
+		tool.PutRegisterChangeWhiteListHandle(t.whitelistChangeHandle)
+		t.whitelistChangeHandle = 0
+		t.whitelistChangeChan = nil
+	}
+	if t.dropUserHandle != 0 {
+		tool.PutRegisterDropUserHandle(t.dropUserHandle)
+		t.dropUserHandle = 0
+		t.dropUserChan = nil
 	}
 }
 
 func (t *Taos) waitSignal(logger *logrus.Entry) {
 	defer func() {
 		logger.Trace("exit wait signal")
-		tool.PutRegisterChangeWhiteListHandle(t.whitelistChangeHandle)
-		tool.PutRegisterDropUserHandle(t.dropUserHandle)
+		t.putNotifyHandles()
 	}()
 	for {
 		select {
@@ -445,6 +460,13 @@ func (t *Taos) connect(ctx context.Context, session *melody.Session, req *WSConn
 		wstool.WSErrorMsg(ctx, session, logger, 0xffff, "whitelist prohibits current IP access", WSConnect, req.ReqID)
 		return
 	}
+	t.initNotifyHandles()
+	notifyRegistered := false
+	defer func() {
+		if !notifyRegistered {
+			t.putNotifyHandles()
+		}
+	}()
 	s = log.GetLogNow(isDebug)
 	logger.Trace("register whitelist change")
 	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle, logger, isDebug)
@@ -467,6 +489,7 @@ func (t *Taos) connect(ctx context.Context, session *melody.Session, req *WSConn
 	}
 	t.conn = conn
 	logger.Trace("start wait signal goroutine")
+	notifyRegistered = true
 	go t.waitSignal(t.logger)
 	wstool.WSWriteJson(session, logger, &WSConnectResp{
 		Action: WSConnect,

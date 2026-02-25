@@ -324,32 +324,47 @@ type Message struct {
 func NewTaosTMQ(session *melody.Session) *TMQ {
 	logger := wstool.GetLogger(session)
 	ipAddr := iptool.GetRealIP(session.Request)
-	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
-	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
 	return &TMQ{
-		tmpMessage:            &Message{},
-		handler:               tmqhandle.GlobalTMQHandlerPoll.Get(),
-		thread:                asynctmq.InitTMQThread(),
-		isAutoCommit:          true,
-		autocommitInterval:    time.Second * 5,
-		exit:                  make(chan struct{}),
-		whitelistChangeChan:   whitelistChangeChan,
-		whitelistChangeHandle: whitelistChangeHandle,
-		dropUserChan:          dropUserChan,
-		dropUserHandle:        dropUserHandle,
-		session:               session,
-		ip:                    ipAddr,
-		ipStr:                 ipAddr.String(),
-		logger:                logger,
-		pollReqChan:           make(chan *TMQPollReq, 1),
+		tmpMessage:         &Message{},
+		handler:            tmqhandle.GlobalTMQHandlerPoll.Get(),
+		thread:             asynctmq.InitTMQThread(),
+		isAutoCommit:       true,
+		autocommitInterval: time.Second * 5,
+		exit:               make(chan struct{}),
+		session:            session,
+		ip:                 ipAddr,
+		ipStr:              ipAddr.String(),
+		logger:             logger,
+		pollReqChan:        make(chan *TMQPollReq, 1),
+	}
+}
+
+func (t *TMQ) initNotifyHandles() {
+	if t.whitelistChangeHandle == 0 {
+		t.whitelistChangeChan, t.whitelistChangeHandle = tool.GetRegisterChangeWhiteListHandle()
+	}
+	if t.dropUserHandle == 0 {
+		t.dropUserChan, t.dropUserHandle = tool.GetRegisterDropUserHandle()
+	}
+}
+
+func (t *TMQ) putNotifyHandles() {
+	if t.whitelistChangeHandle != 0 {
+		tool.PutRegisterChangeWhiteListHandle(t.whitelistChangeHandle)
+		t.whitelistChangeHandle = 0
+		t.whitelistChangeChan = nil
+	}
+	if t.dropUserHandle != 0 {
+		tool.PutRegisterDropUserHandle(t.dropUserHandle)
+		t.dropUserHandle = 0
+		t.dropUserChan = nil
 	}
 }
 
 func (t *TMQ) waitSignal(logger *logrus.Entry) {
 	defer func() {
 		logger.Trace("exit wait signal")
-		tool.PutRegisterChangeWhiteListHandle(t.whitelistChangeHandle)
-		tool.PutRegisterDropUserHandle(t.dropUserHandle)
+		t.putNotifyHandles()
 	}()
 	for {
 		select {
@@ -704,6 +719,13 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, err, errorExt)
 		return
 	}
+	t.initNotifyHandles()
+	notifyRegistered := false
+	defer func() {
+		if !notifyRegistered {
+			t.putNotifyHandles()
+		}
+	}()
 	logger.Debug("register change whitelist")
 	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle, logger, isDebug)
 	if err != nil {
@@ -795,6 +817,7 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	t.conn = conn
 	t.consumer = cPointer
 	logger.Debug("start to wait signal")
+	notifyRegistered = true
 	go t.waitSignal(t.logger)
 	go t.waitPoll(t.logger)
 	wstool.WSWriteJson(session, logger, &TMQSubscribeResp{
