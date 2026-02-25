@@ -19,7 +19,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/tools/generator"
@@ -131,20 +130,17 @@ func (s *SchemalessController) Init(ctl gin.IRouter) {
 }
 
 type TaosSchemaless struct {
-	conn                  unsafe.Pointer
-	logger                *logrus.Entry
-	closed                uint32
-	exit                  chan struct{}
-	whitelistChangeChan   chan int64
-	dropUserChan          chan struct{}
-	session               *melody.Session
-	ip                    net.IP
-	ipStr                 string
-	wg                    sync.WaitGroup
-	whitelistChangeHandle cgo.Handle
-	dropUserHandle        cgo.Handle
-	mutex                 sync.Mutex
-	once                  sync.Once
+	conn   unsafe.Pointer
+	logger *logrus.Entry
+	closed uint32
+	exit   chan struct{}
+	wstool.NotifyHandles
+	session *melody.Session
+	ip      net.IP
+	ipStr   string
+	wg      sync.WaitGroup
+	mutex   sync.Mutex
+	once    sync.Once
 }
 
 func NewTaosSchemaless(session *melody.Session) *TaosSchemaless {
@@ -156,28 +152,6 @@ func NewTaosSchemaless(session *melody.Session) *TaosSchemaless {
 		ip:      ipAddr,
 		ipStr:   ipAddr.String(),
 		logger:  logger,
-	}
-}
-
-func (t *TaosSchemaless) initNotifyHandles() {
-	if t.whitelistChangeHandle == 0 {
-		t.whitelistChangeChan, t.whitelistChangeHandle = tool.GetRegisterChangeWhiteListHandle()
-	}
-	if t.dropUserHandle == 0 {
-		t.dropUserChan, t.dropUserHandle = tool.GetRegisterDropUserHandle()
-	}
-}
-
-func (t *TaosSchemaless) putNotifyHandles() {
-	if t.whitelistChangeHandle != 0 {
-		tool.PutRegisterChangeWhiteListHandle(t.whitelistChangeHandle)
-		t.whitelistChangeHandle = 0
-		t.whitelistChangeChan = nil
-	}
-	if t.dropUserHandle != 0 {
-		tool.PutRegisterDropUserHandle(t.dropUserHandle)
-		t.dropUserHandle = 0
-		t.dropUserChan = nil
 	}
 }
 
@@ -316,15 +290,15 @@ func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, r
 		wstool.WSErrorMsg(ctx, session, logger, 0xffff, "whitelist prohibits current IP access", action, req.ReqID)
 		return
 	}
-	t.initNotifyHandles()
+	t.InitNotifyHandles()
 	notifyRegistered := false
 	defer func() {
 		if !notifyRegistered {
-			t.putNotifyHandles()
+			t.PutNotifyHandles()
 		}
 	}()
 	logger.Trace("register change whitelist")
-	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle, logger, isDebug)
+	err = tool.RegisterChangeWhitelist(conn, t.WhitelistChangeHandle, logger, isDebug)
 	if err != nil {
 		logger.Errorf("register change whitelist error:%s", err)
 		syncinterface.TaosClose(conn, t.logger, isDebug)
@@ -332,7 +306,7 @@ func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, r
 		return
 	}
 	logger.Trace("register drop user")
-	err = tool.RegisterDropUser(conn, t.dropUserHandle, logger, isDebug)
+	err = tool.RegisterDropUser(conn, t.DropUserHandle, logger, isDebug)
 	if err != nil {
 		logger.Errorf("register drop user error:%s", err)
 		syncinterface.TaosClose(conn, t.logger, isDebug)
@@ -342,7 +316,7 @@ func (t *TaosSchemaless) connect(ctx context.Context, session *melody.Session, r
 	t.conn = conn
 	logger.Trace("start to wait signal")
 	notifyRegistered = true
-	go wstool.WaitSignal(t, conn, t.ip, t.ipStr, t.whitelistChangeHandle, t.dropUserHandle, t.whitelistChangeChan, t.dropUserChan, t.exit, t.logger)
+	go wstool.WaitSignal(t, conn, t.ip, t.ipStr, t.WhitelistChangeHandle, t.DropUserHandle, t.WhitelistChangeChan, t.DropUserChan, t.exit, t.logger)
 	wstool.WSWriteJson(session, logger, &schemalessConnResp{
 		Action: action,
 		ReqID:  req.ReqID,
