@@ -327,10 +327,13 @@ func TestRotate(t *testing.T) {
 	}()
 	config.Conf.Log.Path = tmpDir
 	oldRotateSize := config.Conf.Log.RotationSize
+	oldRotationCount := config.Conf.Log.RotationCount
 	defer func() {
 		config.Conf.Log.RotationSize = oldRotateSize
+		config.Conf.Log.RotationCount = oldRotationCount
 	}()
 	config.Conf.Log.RotationSize = 20
+	config.Conf.Log.RotationCount = 10
 	err := StartRecordSql(time.Now().Format(InputTimeFormat), time.Now().Add(time.Second*2).Format(InputTimeFormat), "")
 	require.NoError(t, err)
 	defer func() {
