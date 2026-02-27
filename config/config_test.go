@@ -49,10 +49,10 @@ func TestInit(t *testing.T) {
 				Log: &Log{
 					Level:                 "info",
 					Path:                  logPath,
-					RotationCount:         30,
+					RotationCount:         3,
 					RotationTime:          time.Hour * 24,
 					RotationSize:          1 * 1024 * 1024 * 1024, // 1G
-					KeepDays:              30,
+					KeepDays:              3,
 					Compress:              false,
 					ReservedDiskSize:      1 * 1024 * 1024 * 1024,
 					EnableSqlToCsvLogging: false,
