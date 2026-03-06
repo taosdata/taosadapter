@@ -62,9 +62,9 @@ func TestInit(t *testing.T) {
 				Port:                6041,
 				Http: &Http{
 					ReadHeaderTimeout: 10 * time.Second,
-					ReadTimeout:       120 * time.Second,
+					ReadTimeout:       0,
 					WriteTimeout:      0,
-					IdleTimeout:       90 * time.Second,
+					IdleTimeout:       0,
 					MaxHeaderBytes:    1 << 20,
 				},
 				LogLevel:            "info",

@@ -10,9 +10,9 @@ import (
 
 const (
 	defaultHTTPReadHeaderTimeout = 10 * time.Second
-	defaultHTTPReadTimeout       = 120 * time.Second
+	defaultHTTPReadTimeout       = 0
 	defaultHTTPWriteTimeout      = 0
-	defaultHTTPIdleTimeout       = 90 * time.Second
+	defaultHTTPIdleTimeout       = 0
 	defaultHTTPMaxHeaderBytes    = 1 << 20 // 1 MiB
 )
 
@@ -42,7 +42,7 @@ func initHTTP(v *viper.Viper) {
 }
 
 func registerHTTPFlags() {
-	pflag.Duration("http.readHeaderTimeout", defaultHTTPReadHeaderTimeout, `Maximum duration to read request headers. Env "TAOS_ADAPTER_HTTP_READ_HEADER_TIMEOUT"`)
+	pflag.Duration("http.readHeaderTimeout", defaultHTTPReadHeaderTimeout, `Maximum duration to read request headers (helps mitigate Slowloris attacks). Env "TAOS_ADAPTER_HTTP_READ_HEADER_TIMEOUT"`)
 	pflag.Duration("http.readTimeout", defaultHTTPReadTimeout, `Maximum duration to read the full request (headers + body). 0 disables timeout. Env "TAOS_ADAPTER_HTTP_READ_TIMEOUT"`)
 	pflag.Duration("http.writeTimeout", defaultHTTPWriteTimeout, `Maximum duration before timing out response writes. 0 disables timeout. Env "TAOS_ADAPTER_HTTP_WRITE_TIMEOUT"`)
 	pflag.Duration("http.idleTimeout", defaultHTTPIdleTimeout, `Maximum amount of time to wait for the next request when keep-alive is enabled. Env "TAOS_ADAPTER_HTTP_IDLE_TIMEOUT"`)

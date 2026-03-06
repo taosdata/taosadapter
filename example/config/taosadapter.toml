@@ -27,17 +27,17 @@ instanceId = 32
 
 # HTTP server hardening settings for slow HTTP DoS protection.
 [http]
-# Maximum time to read request headers.
+# Maximum time to read request headers. Helps mitigate Slowloris attacks.
 readHeaderTimeout = "10s"
 
 # Maximum time to read full request (headers + body). 0 means no timeout.
-readTimeout = "120s"
+readTimeout = "0s"
 
 # Maximum time to write the response. 0 means no timeout.
 writeTimeout = "0s"
 
 # Maximum idle keep-alive time waiting for the next request.
-idleTimeout = "90s"
+idleTimeout = "0s"
 
 # Maximum size of request headers in bytes.
 maxHeaderBytes = 1048576
