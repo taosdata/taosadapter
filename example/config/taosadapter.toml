@@ -25,6 +25,23 @@ instanceId = 32
 # List of SQL Reject patterns. If a SQL statement matches any of these patterns, it will be rejected.
 #rejectQuerySqlRegex = ['(?i)^drop\s+database\s+.*','(?i)^alter\s+table\s+.*','(?i)^select\s+.*from\s+testdb.*']
 
+# HTTP server hardening settings for slow HTTP DoS protection.
+[http]
+# Maximum time to read request headers.
+readHeaderTimeout = "10s"
+
+# Maximum time to read full request (headers + body). 0 means no timeout.
+readTimeout = "120s"
+
+# Maximum time to write the response. 0 means no timeout.
+writeTimeout = "0s"
+
+# Maximum idle keep-alive time waiting for the next request.
+idleTimeout = "90s"
+
+# Maximum size of request headers in bytes.
+maxHeaderBytes = 1048576
+
 [register]
 # The address of this taosAdapter instance. eg: "192.168.1.100:6041" or "https://192.168.1.100:6041" if SSL enabled.
 #instance = "localhost:6041"

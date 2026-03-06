@@ -21,6 +21,7 @@ type Config struct {
 	MaxAsyncMethodLimit int
 	Debug               bool
 	Port                int
+	Http                *Http
 	LogLevel            string
 	RestfulRowLimit     int
 	HttpCodeServerError bool
@@ -107,6 +108,12 @@ func Init() {
 
 	Conf.Pool = &Pool{}
 	Conf.Pool.setValue()
+
+	Conf.Http = &Http{}
+	err = Conf.Http.setValue(viper.GetViper())
+	if err != nil {
+		panic(err)
+	}
 
 	Conf.Monitor = &Monitor{}
 	Conf.Monitor.setValue()
@@ -201,6 +208,8 @@ func init() {
 	initLog()
 	initCors()
 	initPool()
+	initHTTP(viper.GetViper())
+	registerHTTPFlags()
 	initMonitor()
 	initUploadKeeper()
 	// query request limit
