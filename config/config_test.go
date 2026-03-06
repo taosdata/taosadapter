@@ -60,6 +60,13 @@ func TestInit(t *testing.T) {
 				MaxAsyncMethodLimit: runtime.GOMAXPROCS(0),
 				Debug:               true,
 				Port:                6041,
+				Http: &Http{
+					ReadHeaderTimeout: 10 * time.Second,
+					ReadTimeout:       0,
+					WriteTimeout:      0,
+					IdleTimeout:       0,
+					MaxHeaderBytes:    1 << 20,
+				},
 				LogLevel:            "info",
 				RestfulRowLimit:     -1,
 				HttpCodeServerError: false,

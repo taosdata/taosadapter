@@ -6,9 +6,36 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/config"
 )
+
+func TestNewProgramApplyHTTPServerConfig(t *testing.T) {
+	oldConf := config.Conf
+	t.Cleanup(func() {
+		config.Conf = oldConf
+	})
+
+	config.Conf = &config.Config{
+		Port: 6041,
+		Http: &config.Http{
+			ReadHeaderTimeout: 6 * time.Second,
+			ReadTimeout:       70 * time.Second,
+			WriteTimeout:      0,
+			IdleTimeout:       50 * time.Second,
+			MaxHeaderBytes:    256 * 1024,
+		},
+	}
+
+	p := newProgram(gin.New(), func(server *http.Server) {}, nil)
+	assert.Equal(t, ":6041", p.server.Addr)
+	assert.Equal(t, 6*time.Second, p.server.ReadHeaderTimeout)
+	assert.Equal(t, 70*time.Second, p.server.ReadTimeout)
+	assert.Equal(t, time.Duration(0), p.server.WriteTimeout)
+	assert.Equal(t, 50*time.Second, p.server.IdleTimeout)
+	assert.Equal(t, 256*1024, p.server.MaxHeaderBytes)
+}
 
 func TestStart(t *testing.T) {
 	r := Init()

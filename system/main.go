@@ -123,6 +123,13 @@ func newProgram(router *gin.Engine, startHttpServer func(server *http.Server), w
 		Addr:    ":" + strconv.Itoa(config.Conf.Port),
 		Handler: router,
 	}
+	if config.Conf.Http != nil {
+		server.ReadHeaderTimeout = config.Conf.Http.ReadHeaderTimeout
+		server.ReadTimeout = config.Conf.Http.ReadTimeout
+		server.WriteTimeout = config.Conf.Http.WriteTimeout
+		server.IdleTimeout = config.Conf.Http.IdleTimeout
+		server.MaxHeaderBytes = config.Conf.Http.MaxHeaderBytes
+	}
 	return &program{
 		router:          router,
 		server:          server,
