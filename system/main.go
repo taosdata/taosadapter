@@ -120,8 +120,9 @@ type program struct {
 
 func newProgram(router *gin.Engine, startHttpServer func(server *http.Server), w *watcher.Watcher) *program {
 	server := &http.Server{
-		Addr:    ":" + strconv.Itoa(config.Conf.Port),
-		Handler: router,
+		Addr:              ":" + strconv.Itoa(config.Conf.Port),
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 	return &program{
 		router:          router,
