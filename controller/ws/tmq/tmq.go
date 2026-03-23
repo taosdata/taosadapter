@@ -27,7 +27,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	taoserrors "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/tools/bytesutil"
@@ -259,30 +258,27 @@ func (s *TMQController) Init(ctl gin.IRouter) {
 }
 
 type TMQ struct {
-	consumer              unsafe.Pointer
-	logger                *logrus.Entry
-	pollReqChan           chan *TMQPollReq
-	tmpMessage            *Message
-	asyncLocker           sync.Mutex
-	thread                unsafe.Pointer
-	handler               *tmqhandle.TMQHandler
-	isAutoCommit          bool
-	unsubscribed          bool
-	closed                uint32
-	autocommitInterval    time.Duration
-	nextTime              time.Time
-	exit                  chan struct{}
-	dropUserChan          chan struct{}
-	whitelistChangeChan   chan int64
-	session               *melody.Session
-	ip                    net.IP
-	ipStr                 string
-	wg                    sync.WaitGroup
-	conn                  unsafe.Pointer
-	whitelistChangeHandle cgo.Handle
-	dropUserHandle        cgo.Handle
-	mutex                 sync.Mutex
-	once                  sync.Once
+	consumer           unsafe.Pointer
+	logger             *logrus.Entry
+	pollReqChan        chan *TMQPollReq
+	tmpMessage         *Message
+	asyncLocker        sync.Mutex
+	thread             unsafe.Pointer
+	handler            *tmqhandle.TMQHandler
+	isAutoCommit       bool
+	unsubscribed       bool
+	closed             uint32
+	autocommitInterval time.Duration
+	nextTime           time.Time
+	exit               chan struct{}
+	wstool.NotifyHandles
+	session *melody.Session
+	ip      net.IP
+	ipStr   string
+	wg      sync.WaitGroup
+	conn    unsafe.Pointer
+	mutex   sync.Mutex
+	once    sync.Once
 }
 
 func (t *TMQ) setPollRequest(req *TMQPollReq) {
@@ -327,24 +323,18 @@ type Message struct {
 func NewTaosTMQ(session *melody.Session) *TMQ {
 	logger := wstool.GetLogger(session)
 	ipAddr := iptool.GetRealIP(session.Request)
-	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
-	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
 	return &TMQ{
-		tmpMessage:            &Message{},
-		handler:               tmqhandle.GlobalTMQHandlerPoll.Get(),
-		thread:                asynctmq.InitTMQThread(),
-		isAutoCommit:          true,
-		autocommitInterval:    time.Second * 5,
-		exit:                  make(chan struct{}),
-		whitelistChangeChan:   whitelistChangeChan,
-		whitelistChangeHandle: whitelistChangeHandle,
-		dropUserChan:          dropUserChan,
-		dropUserHandle:        dropUserHandle,
-		session:               session,
-		ip:                    ipAddr,
-		ipStr:                 ipAddr.String(),
-		logger:                logger,
-		pollReqChan:           make(chan *TMQPollReq, 1),
+		tmpMessage:         &Message{},
+		handler:            tmqhandle.GlobalTMQHandlerPoll.Get(),
+		thread:             asynctmq.InitTMQThread(),
+		isAutoCommit:       true,
+		autocommitInterval: time.Second * 5,
+		exit:               make(chan struct{}),
+		session:            session,
+		ip:                 ipAddr,
+		ipStr:              ipAddr.String(),
+		logger:             logger,
+		pollReqChan:        make(chan *TMQPollReq, 1),
 	}
 }
 
@@ -707,14 +697,21 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, err, errorExt)
 		return
 	}
+	t.InitNotifyHandles()
+	notifyRegistered := false
+	defer func() {
+		if !notifyRegistered {
+			t.PutNotifyHandles()
+		}
+	}()
 	logger.Debug("register change whitelist")
-	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle, logger, isDebug)
+	err = tool.RegisterChangeWhitelist(conn, t.WhitelistChangeHandle, logger, isDebug)
 	if err != nil {
 		t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, err, "register change whitelist error")
 		return
 	}
 	logger.Debug("register drop user")
-	err = tool.RegisterDropUser(conn, t.dropUserHandle, logger, isDebug)
+	err = tool.RegisterDropUser(conn, t.DropUserHandle, logger, isDebug)
 	if err != nil {
 		t.closeConsumerWithErrLog(ctx, cPointer, session, logger, isDebug, action, req.ReqID, err, "register drop user error")
 		return
@@ -798,8 +795,9 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	t.conn = conn
 	t.consumer = cPointer
 	logger.Debug("start to wait signal")
+	notifyRegistered = true
 	go t.waitPoll(t.logger)
-	go wstool.WaitSignal(t, conn, t.ip, t.ipStr, t.whitelistChangeHandle, t.dropUserHandle, t.whitelistChangeChan, t.dropUserChan, t.exit, t.logger)
+	go wstool.WaitSignal(t, conn, t.ip, t.ipStr, t.WhitelistChangeHandle, t.DropUserHandle, t.WhitelistChangeChan, t.DropUserChan, t.exit, t.logger)
 	wstool.WSWriteJson(session, logger, &TMQSubscribeResp{
 		Action:  action,
 		ReqID:   req.ReqID,

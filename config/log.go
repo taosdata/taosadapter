@@ -44,9 +44,9 @@ func initLog() {
 	_ = viper.BindEnv("log.level", "TAOS_ADAPTER_LOG_LEVEL")
 	pflag.String("log.level", "info", `log level (trace debug info warning error). Env "TAOS_ADAPTER_LOG_LEVEL"`)
 
-	viper.SetDefault("log.rotationCount", 30)
+	viper.SetDefault("log.rotationCount", 3)
 	_ = viper.BindEnv("log.rotationCount", "TAOS_ADAPTER_LOG_ROTATION_COUNT")
-	pflag.Uint("log.rotationCount", 30, `log rotation count. Env "TAOS_ADAPTER_LOG_ROTATION_COUNT"`)
+	pflag.Uint("log.rotationCount", 3, `log rotation count. Env "TAOS_ADAPTER_LOG_ROTATION_COUNT"`)
 
 	viper.SetDefault("log.rotationTime", time.Hour*24)
 	_ = viper.BindEnv("log.rotationTime", "TAOS_ADAPTER_LOG_ROTATION_TIME")
@@ -56,9 +56,9 @@ func initLog() {
 	_ = viper.BindEnv("log.rotationSize", "TAOS_ADAPTER_LOG_ROTATION_SIZE")
 	pflag.String("log.rotationSize", "1GB", `log rotation size(KB MB GB), must be a positive integer. Env "TAOS_ADAPTER_LOG_ROTATION_SIZE"`)
 
-	viper.SetDefault("log.keepDays", 30)
+	viper.SetDefault("log.keepDays", 3)
 	_ = viper.BindEnv("log.keepDays", "TAOS_ADAPTER_LOG_KEEP_DAYS")
-	pflag.Uint("log.keepDays", 30, `log retention days, must be a positive integer. Env "TAOS_ADAPTER_LOG_KEEP_DAYS"`)
+	pflag.Uint("log.keepDays", 3, `log retention days, must be a positive integer. Env "TAOS_ADAPTER_LOG_KEEP_DAYS"`)
 
 	viper.SetDefault("log.compress", false)
 	_ = viper.BindEnv("log.compress", "TAOS_ADAPTER_LOG_COMPRESS")

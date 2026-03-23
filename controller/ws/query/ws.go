@@ -25,7 +25,6 @@ import (
 	"github.com/taosdata/taosadapter/v3/db/tool"
 	"github.com/taosdata/taosadapter/v3/driver/common/parser"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
@@ -217,23 +216,20 @@ func (s *QueryController) Init(ctl gin.IRouter) {
 }
 
 type Taos struct {
-	conn                  unsafe.Pointer
-	resultLocker          sync.RWMutex
-	Results               *list.List
-	resultIndex           uint64
-	logger                *logrus.Entry
-	closed                uint32
-	exit                  chan struct{}
-	whitelistChangeChan   chan int64
-	dropUserChan          chan struct{}
-	session               *melody.Session
-	ip                    net.IP
-	wg                    sync.WaitGroup
-	ipStr                 string
-	whitelistChangeHandle cgo.Handle
-	dropUserHandle        cgo.Handle
-	mutex                 sync.Mutex
-	once                  sync.Once
+	conn         unsafe.Pointer
+	resultLocker sync.RWMutex
+	Results      *list.List
+	resultIndex  uint64
+	logger       *logrus.Entry
+	closed       uint32
+	exit         chan struct{}
+	wstool.NotifyHandles
+	session *melody.Session
+	ip      net.IP
+	wg      sync.WaitGroup
+	ipStr   string
+	mutex   sync.Mutex
+	once    sync.Once
 }
 
 func (t *Taos) Lock(logger *logrus.Entry, isDebug bool) {
@@ -249,19 +245,13 @@ func (t *Taos) Unlock() {
 
 func NewTaos(session *melody.Session, logger *logrus.Entry) *Taos {
 	ipAddr := iptool.GetRealIP(session.Request)
-	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
-	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
 	return &Taos{
-		Results:               list.New(),
-		exit:                  make(chan struct{}, 1),
-		whitelistChangeChan:   whitelistChangeChan,
-		whitelistChangeHandle: whitelistChangeHandle,
-		dropUserChan:          dropUserChan,
-		dropUserHandle:        dropUserHandle,
-		session:               session,
-		ip:                    ipAddr,
-		ipStr:                 ipAddr.String(),
-		logger:                logger,
+		Results: list.New(),
+		exit:    make(chan struct{}, 1),
+		session: session,
+		ip:      ipAddr,
+		ipStr:   ipAddr.String(),
+		logger:  logger,
 	}
 }
 
@@ -432,9 +422,16 @@ func (t *Taos) connect(ctx context.Context, session *melody.Session, req *WSConn
 		wstool.WSErrorMsg(ctx, session, logger, 0xffff, "whitelist prohibits current IP access", WSConnect, req.ReqID)
 		return
 	}
+	t.InitNotifyHandles()
+	notifyRegistered := false
+	defer func() {
+		if !notifyRegistered {
+			t.PutNotifyHandles()
+		}
+	}()
 	s = log.GetLogNow(isDebug)
 	logger.Trace("register whitelist change")
-	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle, logger, isDebug)
+	err = tool.RegisterChangeWhitelist(conn, t.WhitelistChangeHandle, logger, isDebug)
 	logger.Debugf("register whitelist change cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.WithError(err).Errorln("register whitelist change error")
@@ -444,7 +441,7 @@ func (t *Taos) connect(ctx context.Context, session *melody.Session, req *WSConn
 	}
 	s = log.GetLogNow(isDebug)
 	logger.Trace("register drop user")
-	err = tool.RegisterDropUser(conn, t.dropUserHandle, logger, isDebug)
+	err = tool.RegisterDropUser(conn, t.DropUserHandle, logger, isDebug)
 	logger.Debugf("register drop user cost:%s", log.GetLogDuration(isDebug, s))
 	if err != nil {
 		logger.WithError(err).Errorln("register drop user error")
@@ -454,7 +451,8 @@ func (t *Taos) connect(ctx context.Context, session *melody.Session, req *WSConn
 	}
 	t.conn = conn
 	logger.Trace("start wait signal goroutine")
-	go wstool.WaitSignal(t, conn, t.ip, t.ipStr, t.whitelistChangeHandle, t.dropUserHandle, t.whitelistChangeChan, t.dropUserChan, t.exit, t.logger)
+	notifyRegistered = true
+	go wstool.WaitSignal(t, conn, t.ip, t.ipStr, t.WhitelistChangeHandle, t.DropUserHandle, t.WhitelistChangeChan, t.DropUserChan, t.exit, t.logger)
 	wstool.WSWriteJson(session, logger, &WSConnectResp{
 		Action: WSConnect,
 		ReqID:  req.ReqID,

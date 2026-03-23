@@ -25,7 +25,6 @@ import (
 	tErrors "github.com/taosdata/taosadapter/v3/driver/errors"
 	"github.com/taosdata/taosadapter/v3/driver/types"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
-	"github.com/taosdata/taosadapter/v3/driver/wrapper/cgo"
 	"github.com/taosdata/taosadapter/v3/httperror"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
@@ -250,40 +249,31 @@ func (s *STMTController) Init(ctl gin.IRouter) {
 }
 
 type TaosStmt struct {
-	conn                  unsafe.Pointer
-	stmtIndexLocker       sync.RWMutex
-	StmtList              *list.List
-	logger                *logrus.Entry
-	stmtIndex             uint64
-	closed                uint32
-	exit                  chan struct{}
-	whitelistChangeChan   chan int64
-	dropUserChan          chan struct{}
-	session               *melody.Session
-	ip                    net.IP
-	ipStr                 string
-	wg                    sync.WaitGroup
-	whitelistChangeHandle cgo.Handle
-	dropUserHandle        cgo.Handle
-	mutex                 sync.Mutex
-	once                  sync.Once
+	conn            unsafe.Pointer
+	stmtIndexLocker sync.RWMutex
+	StmtList        *list.List
+	logger          *logrus.Entry
+	stmtIndex       uint64
+	closed          uint32
+	exit            chan struct{}
+	wstool.NotifyHandles
+	session *melody.Session
+	ip      net.IP
+	ipStr   string
+	wg      sync.WaitGroup
+	mutex   sync.Mutex
+	once    sync.Once
 }
 
 func NewTaosStmt(session *melody.Session, logger *logrus.Entry) *TaosStmt {
 	ipAddr := iptool.GetRealIP(session.Request)
-	whitelistChangeChan, whitelistChangeHandle := tool.GetRegisterChangeWhiteListHandle()
-	dropUserChan, dropUserHandle := tool.GetRegisterDropUserHandle()
 	return &TaosStmt{
-		StmtList:              list.New(),
-		exit:                  make(chan struct{}),
-		whitelistChangeChan:   whitelistChangeChan,
-		whitelistChangeHandle: whitelistChangeHandle,
-		dropUserChan:          dropUserChan,
-		dropUserHandle:        dropUserHandle,
-		session:               session,
-		ip:                    ipAddr,
-		ipStr:                 ipAddr.String(),
-		logger:                logger,
+		StmtList: list.New(),
+		exit:     make(chan struct{}),
+		session:  session,
+		ip:       ipAddr,
+		ipStr:    ipAddr.String(),
+		logger:   logger,
 	}
 }
 
@@ -439,8 +429,15 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 		wstool.WSErrorMsg(ctx, session, logger, 0xffff, "whitelist prohibits current IP access", action, req.ReqID)
 		return
 	}
+	t.InitNotifyHandles()
+	notifyRegistered := false
+	defer func() {
+		if !notifyRegistered {
+			t.PutNotifyHandles()
+		}
+	}()
 	logger.Trace("register change whitelist")
-	err = tool.RegisterChangeWhitelist(conn, t.whitelistChangeHandle, logger, isDebug)
+	err = tool.RegisterChangeWhitelist(conn, t.WhitelistChangeHandle, logger, isDebug)
 	if err != nil {
 		logger.Errorf("register change whitelist error, err:%s", err)
 		syncinterface.TaosClose(conn, logger, isDebug)
@@ -448,7 +445,7 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 		return
 	}
 	logger.Trace("register drop user")
-	err = tool.RegisterDropUser(conn, t.dropUserHandle, logger, isDebug)
+	err = tool.RegisterDropUser(conn, t.DropUserHandle, logger, isDebug)
 	if err != nil {
 		logger.Errorf("register drop user error, err:%s", err)
 		syncinterface.TaosClose(conn, logger, isDebug)
@@ -456,7 +453,8 @@ func (t *TaosStmt) connect(ctx context.Context, session *melody.Session, req *St
 		return
 	}
 	t.conn = conn
-	go wstool.WaitSignal(t, conn, t.ip, t.ipStr, t.whitelistChangeHandle, t.dropUserHandle, t.whitelistChangeChan, t.dropUserChan, t.exit, t.logger)
+	notifyRegistered = true
+	go wstool.WaitSignal(t, conn, t.ip, t.ipStr, t.WhitelistChangeHandle, t.DropUserHandle, t.WhitelistChangeChan, t.DropUserChan, t.exit, t.logger)
 	wstool.WSWriteJson(session, logger, &StmtConnectResp{
 		Action: action,
 		ReqID:  req.ReqID,
