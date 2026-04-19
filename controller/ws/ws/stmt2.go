@@ -173,12 +173,16 @@ func (h *messageHandler) stmt2Exec(ctx context.Context, session *melody.Session,
 		return
 	}
 	defer stmtItem.Unlock()
+	h.stmt2ExecLocked(ctx, session, action, req.ReqID, req.StmtID, stmtItem, logger, isDebug)
+}
+
+func (h *messageHandler) stmt2ExecLocked(ctx context.Context, session *melody.Session, action string, reqID uint64, stmtID uint64, stmtItem *StmtItem, logger *logrus.Entry, isDebug bool) {
 	record, recordStmt := recordsql.GetStmtRecord()
 	if recordStmt {
 		defer func() {
 			recordsql.PutStmtRecord(record)
 		}()
-		record.InitExecute(uintptr(stmtItem.stmt), h.ipStr, h.port, h.appName, h.user, recordsql.WSType, req.ReqID, time.Now())
+		record.InitExecute(uintptr(stmtItem.stmt), h.ipStr, h.port, h.appName, h.user, recordsql.WSType, reqID, time.Now())
 	}
 	code := syncinterface.TaosStmt2Exec(stmtItem.stmt, logger, isDebug)
 	if code != 0 {
@@ -187,11 +191,11 @@ func (h *messageHandler) stmt2Exec(ctx context.Context, session *melody.Session,
 		}
 		errStr := syncinterface.TaosStmt2Error(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt2 execute error,code:%d, err:%s", code, errStr)
-		stmtErrorResponse(ctx, session, logger, action, req.ReqID, code, errStr, req.StmtID)
+		stmtErrorResponse(ctx, session, logger, action, reqID, code, errStr, stmtID)
 		return
 	}
 	s := log.GetLogNow(isDebug)
-	logger.Tracef("stmt2 execute wait callback, stmt_id:%d", req.StmtID)
+	logger.Tracef("stmt2 execute wait callback, stmt_id:%d", stmtID)
 	result := <-stmtItem.caller.ExecResult
 	logger.Debugf("stmt2 execute wait callback finish, affected:%d, res:%p, n:%d, cost:%s", result.Affected, result.Res, result.N, log.GetLogDuration(isDebug, s))
 	if result.N < 0 {
@@ -200,7 +204,7 @@ func (h *messageHandler) stmt2Exec(ctx context.Context, session *melody.Session,
 		}
 		errStr := syncinterface.TaosStmt2Error(stmtItem.stmt, logger, isDebug)
 		logger.Errorf("stmt2 execute callback error, code:%d, err:%s", result.N, errStr)
-		stmtErrorResponse(ctx, session, logger, action, req.ReqID, result.N, errStr, req.StmtID)
+		stmtErrorResponse(ctx, session, logger, action, reqID, result.N, errStr, stmtID)
 		return
 	}
 	if recordStmt {
@@ -208,9 +212,9 @@ func (h *messageHandler) stmt2Exec(ctx context.Context, session *melody.Session,
 	}
 	resp := &stmt2ExecResponse{
 		Action:   action,
-		ReqID:    req.ReqID,
+		ReqID:    reqID,
 		Timing:   wstool.GetDuration(ctx),
-		StmtID:   req.StmtID,
+		StmtID:   stmtID,
 		Affected: result.Affected,
 	}
 	wstool.WSWriteJson(session, logger, resp)
@@ -374,4 +378,61 @@ func (h *messageHandler) stmt2BinaryBind(ctx context.Context, session *melody.Se
 		StmtID: stmtID,
 	}
 	wstool.WSWriteJson(session, logger, resp)
+}
+
+func (h *messageHandler) stmt2BinaryBindExec(ctx context.Context, session *melody.Session, action string, reqID uint64, stmtID uint64, message []byte, logger *logrus.Entry, isDebug bool) {
+	if len(message) < 26 {
+		logger.Errorf("message length is too short, len:%d, stmt_id:%d", len(message), stmtID)
+		stmtErrorResponse(ctx, session, logger, action, reqID, 0xffff, "message length is too short", stmtID)
+		return
+	}
+	v := binary.LittleEndian.Uint16(message[24:])
+	if v != Stmt2BindExecProtocolVersion1 {
+		logger.Errorf("unknown stmt2 bind exec version, version:%d, stmt_id:%d", v, stmtID)
+		stmtErrorResponse(ctx, session, logger, action, reqID, 0xffff, "unknown stmt2 bind exec version", stmtID)
+		return
+	}
+	stmtItem, locked := h.stmt2ValidateAndLock(ctx, session, action, reqID, stmtID, logger, isDebug)
+	if !locked {
+		return
+	}
+	defer stmtItem.Unlock()
+	bindData := message[26:]
+	if !stmtItem.isInsert && len(bindData) >= stmt.Stmt2ColumnDataPosition {
+		rowCount := binary.LittleEndian.Uint32(bindData[stmt.Stmt2ColumnRowCountPosition:])
+		if rowCount != 1 {
+			logger.Errorf("stmt2 bind exec query row count invalid, row_count:%d, stmt_id:%d", rowCount, stmtID)
+			stmtErrorResponse(ctx, session, logger, action, reqID, 0xffff, "query only supports one row", stmtID)
+			return
+		}
+	}
+
+	bindRecord, bindRecording := recordsql.GetStmtRecord()
+	if bindRecording {
+		defer func() {
+			recordsql.PutStmtRecord(bindRecord)
+		}()
+		bindRecord.InitBind(uintptr(stmtItem.stmt), h.ipStr, h.port, h.appName, h.user, recordsql.WSType, reqID, time.Now(), bindData)
+	}
+	err := syncinterface.TaosStmt2BindColumnBinary(stmtItem.stmt, bindData, logger, isDebug)
+	if err != nil {
+		logger.Errorf("stmt2 bind exec bind error, err:%s", err.Error())
+		var tError *errors2.TaosError
+		if errors.As(err, &tError) {
+			if bindRecording {
+				bindRecord.SetBindEnd(int(tError.Code))
+			}
+			stmtErrorResponse(ctx, session, logger, action, reqID, int(tError.Code), tError.ErrStr, stmtID)
+			return
+		}
+		if bindRecording {
+			bindRecord.SetBindEnd(0xffff)
+		}
+		stmtErrorResponse(ctx, session, logger, action, reqID, 0xffff, err.Error(), stmtID)
+		return
+	}
+	if bindRecording {
+		bindRecord.SetBindEnd(0)
+	}
+	h.stmt2ExecLocked(ctx, session, action, reqID, stmtID, stmtItem, logger, isDebug)
 }

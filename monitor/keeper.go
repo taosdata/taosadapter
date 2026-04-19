@@ -289,6 +289,10 @@ var (
 	TaosStmt2BindBinarySuccessCounter = metrics.NewGauge("taos_stmt2_bind_param_success")
 	TaosStmt2BindBinaryFailCounter    = metrics.NewGauge("taos_stmt2_bind_param_fail")
 
+	TaosStmt2BindColumnBinaryCounter        = metrics.NewGauge("taos_stmt2_bind_param_column_total")
+	TaosStmt2BindColumnBinarySuccessCounter = metrics.NewGauge("taos_stmt2_bind_param_column_success")
+	TaosStmt2BindColumnBinaryFailCounter    = metrics.NewGauge("taos_stmt2_bind_param_column_fail")
+
 	TaosStmt2ExecCounter        = metrics.NewGauge("taos_stmt2_exec_total")
 	TaosStmt2ExecSuccessCounter = metrics.NewGauge("taos_stmt2_exec_success")
 	TaosStmt2ExecFailCounter    = metrics.NewGauge("taos_stmt2_exec_fail")
@@ -743,6 +747,9 @@ var cInterfaceCountMetrics = []*metrics.Gauge{
 	TaosStmt2BindBinaryCounter,
 	TaosStmt2BindBinarySuccessCounter,
 	TaosStmt2BindBinaryFailCounter,
+	TaosStmt2BindColumnBinaryCounter,
+	TaosStmt2BindColumnBinarySuccessCounter,
+	TaosStmt2BindColumnBinaryFailCounter,
 	TaosStmt2ExecCounter,
 	TaosStmt2ExecSuccessCounter,
 	TaosStmt2ExecFailCounter,

@@ -674,6 +674,26 @@ func TaosStmt2BindBinary(stmt2 unsafe.Pointer, data []byte, colIdx int32, logger
 	return err
 }
 
+func TaosStmt2BindColumnBinary(stmt2 unsafe.Pointer, data []byte, logger *logrus.Entry, isDebug bool) error {
+	logger.Trace("sync semaphore acquire for taos_stmt2_bind_column_binary")
+	thread.SyncSemaphore.Acquire()
+	defer func() {
+		thread.SyncSemaphore.Release()
+		logger.Trace("sync semaphore release for taos_stmt2_bind_column_binary")
+	}()
+	logger.Debugf("call taos_stmt2_bind_column_binary, stmt2:%p, data:%v", stmt2, data)
+	monitor.TaosStmt2BindColumnBinaryCounter.Inc()
+	s := log.GetLogNow(isDebug)
+	err := wrapper.TaosStmt2BindColumnBinary(stmt2, data)
+	logger.Debugf("taos_stmt2_bind_column_binary finish, err:%v, cost:%s", err, log.GetLogDuration(isDebug, s))
+	if err != nil {
+		monitor.TaosStmt2BindColumnBinaryFailCounter.Inc()
+	} else {
+		monitor.TaosStmt2BindColumnBinarySuccessCounter.Inc()
+	}
+	return err
+}
+
 func TaosStmt2Result(stmt2 unsafe.Pointer, logger *logrus.Entry, isDebug bool) unsafe.Pointer {
 	logger.Trace("sync semaphore acquire for taos_stmt2_result")
 	thread.SyncSemaphore.Acquire()
