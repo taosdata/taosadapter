@@ -27,12 +27,20 @@ typedef struct adapter_stmt2_column_bindv {
 
 typedef int (*taos_stmt2_bind_param_column_fn)(TAOS_STMT2 *stmt, adapter_stmt2_column_bindv *bindv);
 
+#define ADAPTER_STMT2_COLUMN_STACK_CAP 64
+
 static taos_stmt2_bind_param_column_fn lookup_stmt2_bind_param_column() {
   return (taos_stmt2_bind_param_column_fn)dlsym(RTLD_DEFAULT, "taos_stmt2_bind_param_column");
 }
 
 static int go_stmt2_bind_param_column_supported() {
   return lookup_stmt2_bind_param_column() != NULL;
+}
+
+static void free_stmt2_column_bindv_columns(adapter_stmt2_column_bind *columns, adapter_stmt2_column_bind *stack_columns) {
+  if (columns != NULL && columns != stack_columns) {
+    free(columns);
+  }
 }
 
 static int go_stmt2_bind_column_binary(TAOS_STMT2 *stmt, char *data, char *err_msg) {
@@ -45,6 +53,7 @@ static int go_stmt2_bind_column_binary(TAOS_STMT2 *stmt, char *data, char *err_m
   char *data_end = data + total_length;
   char *column_ptr;
   adapter_stmt2_column_bindv bindv;
+  adapter_stmt2_column_bind stack_columns[ADAPTER_STMT2_COLUMN_STACK_CAP];
   memset(&bindv, 0, sizeof(bindv));
 
   if (row_count == 0) {
@@ -60,7 +69,12 @@ static int go_stmt2_bind_column_binary(TAOS_STMT2 *stmt, char *data, char *err_m
     return -1;
   }
 
-  bindv.columns = (adapter_stmt2_column_bind *)calloc(field_count, sizeof(adapter_stmt2_column_bind));
+  if (field_count <= ADAPTER_STMT2_COLUMN_STACK_CAP) {
+    bindv.columns = stack_columns;
+    memset(bindv.columns, 0, field_count * sizeof(adapter_stmt2_column_bind));
+  } else {
+    bindv.columns = (adapter_stmt2_column_bind *)calloc(field_count, sizeof(adapter_stmt2_column_bind));
+  }
   if (bindv.columns == NULL) {
     snprintf(err_msg, 256, "malloc columns error");
     return -1;
@@ -80,7 +94,7 @@ static int go_stmt2_bind_column_binary(TAOS_STMT2 *stmt, char *data, char *err_m
 
     if (column_ptr + 18 > data_end) {
       snprintf(err_msg, 256, "column %u header out of range", i);
-      free(bindv.columns);
+      free_stmt2_column_bindv_columns(bindv.columns, stack_columns);
       return -1;
     }
 
@@ -88,13 +102,13 @@ static int go_stmt2_bind_column_binary(TAOS_STMT2 *stmt, char *data, char *err_m
     column_length = *(uint32_t *)current;
     if (column_length < 18) {
       snprintf(err_msg, 256, "column %u length too short: %u", i, column_length);
-      free(bindv.columns);
+      free_stmt2_column_bindv_columns(bindv.columns, stack_columns);
       return -1;
     }
     column_end = current + column_length;
     if (column_end > data_end) {
       snprintf(err_msg, 256, "column %u out of range, total length: %u", i, total_length);
-      free(bindv.columns);
+      free_stmt2_column_bindv_columns(bindv.columns, stack_columns);
       return -1;
     }
 
@@ -102,7 +116,12 @@ static int go_stmt2_bind_column_binary(TAOS_STMT2 *stmt, char *data, char *err_m
     num = *(uint32_t *)(current + 8);
     if (num != row_count) {
       snprintf(err_msg, 256, "column %u row count not match, got: %u, expect: %u", i, num, row_count);
-      free(bindv.columns);
+      free_stmt2_column_bindv_columns(bindv.columns, stack_columns);
+      return -1;
+    }
+    if (num > column_length - 13) {
+      snprintf(err_msg, 256, "column %u is_null array out of range", i);
+      free_stmt2_column_bindv_columns(bindv.columns, stack_columns);
       return -1;
     }
     bindv.columns[i].is_null = current + 12;
@@ -115,7 +134,7 @@ static int go_stmt2_bind_column_binary(TAOS_STMT2 *stmt, char *data, char *err_m
     } else {
       if (current + num * 4 > column_end) {
         snprintf(err_msg, 256, "column %u length array out of range", i);
-        free(bindv.columns);
+        free_stmt2_column_bindv_columns(bindv.columns, stack_columns);
         return -1;
       }
       bindv.columns[i].length = (int32_t *)current;
@@ -124,19 +143,19 @@ static int go_stmt2_bind_column_binary(TAOS_STMT2 *stmt, char *data, char *err_m
 
     if (current + 4 > column_end) {
       snprintf(err_msg, 256, "column %u buffer length out of range", i);
-      free(bindv.columns);
+      free_stmt2_column_bindv_columns(bindv.columns, stack_columns);
       return -1;
     }
     buffer_length = *(int32_t *)current;
     current += 4;
     if (buffer_length < 0) {
       snprintf(err_msg, 256, "column %u buffer length invalid: %d", i, buffer_length);
-      free(bindv.columns);
+      free_stmt2_column_bindv_columns(bindv.columns, stack_columns);
       return -1;
     }
     if (current + buffer_length != column_end) {
       snprintf(err_msg, 256, "column %u data length error", i);
-      free(bindv.columns);
+      free_stmt2_column_bindv_columns(bindv.columns, stack_columns);
       return -1;
     }
     bindv.columns[i].buffer = buffer_length == 0 ? NULL : current;
@@ -145,14 +164,14 @@ static int go_stmt2_bind_column_binary(TAOS_STMT2 *stmt, char *data, char *err_m
 
   if (column_ptr != data_end) {
     snprintf(err_msg, 256, "payload has trailing bytes");
-    free(bindv.columns);
+    free_stmt2_column_bindv_columns(bindv.columns, stack_columns);
     return -1;
   }
 
   taos_stmt2_bind_param_column_fn fn = lookup_stmt2_bind_param_column();
   if (fn == NULL) {
     snprintf(err_msg, 256, "taos_stmt2_bind_param_column not supported by current taosnative");
-    free(bindv.columns);
+    free_stmt2_column_bindv_columns(bindv.columns, stack_columns);
     return -1;
   }
 
@@ -160,7 +179,7 @@ static int go_stmt2_bind_column_binary(TAOS_STMT2 *stmt, char *data, char *err_m
   if (code != 0) {
     snprintf(err_msg, 256, "%s", taos_stmt2_error(stmt));
   }
-  free(bindv.columns);
+  free_stmt2_column_bindv_columns(bindv.columns, stack_columns);
   return code;
 }
 */
@@ -169,6 +188,7 @@ import "C"
 import (
 	"encoding/binary"
 	"fmt"
+	"runtime"
 	"unsafe"
 
 	"github.com/taosdata/taosadapter/v3/driver/common/stmt"
@@ -187,12 +207,12 @@ func TaosStmt2BindColumnBinary(stmt2 unsafe.Pointer, data []byte) error {
 	if totalLength != uint32(len(data)) {
 		return fmt.Errorf("total length not match, expect %d, but get %d", len(data), totalLength)
 	}
-	dataP := C.CBytes(data)
-	defer C.free(dataP)
-	errMsg := (*C.char)(C.malloc(256))
-	defer C.free(unsafe.Pointer(errMsg))
+	dataP := unsafe.Pointer(unsafe.SliceData(data))
+	var errBuf [256]byte
+	errMsg := (*C.char)(unsafe.Pointer(&errBuf[0]))
 
 	code := C.go_stmt2_bind_column_binary(stmt2, (*C.char)(dataP), errMsg)
+	runtime.KeepAlive(data)
 	if code == -1 {
 		return fmt.Errorf("%s", C.GoString(errMsg))
 	}

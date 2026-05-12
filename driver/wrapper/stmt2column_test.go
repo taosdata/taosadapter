@@ -2,6 +2,7 @@ package wrapper
 
 import (
 	"database/sql/driver"
+	"encoding/binary"
 	"testing"
 	"unsafe"
 
@@ -27,4 +28,43 @@ func TestTaosStmt2BindColumnBinaryProtocolErrors(t *testing.T) {
 	data[0] = 0
 	err = TaosStmt2BindColumnBinary(unsafe.Pointer(uintptr(1)), data)
 	assert.ErrorContains(t, err, "total length not match")
+}
+
+func TestTaosStmt2BindColumnBinaryRejectsColumnNumBeyondColumnLength(t *testing.T) {
+	data := make([]byte, stmtcommon.Stmt2ColumnDataPosition+64)
+	binary.LittleEndian.PutUint32(data[stmtcommon.Stmt2ColumnTotalLengthPosition:], uint32(len(data)))
+	binary.LittleEndian.PutUint32(data[stmtcommon.Stmt2ColumnRowCountPosition:], 7)
+	binary.LittleEndian.PutUint32(data[stmtcommon.Stmt2ColumnTableCountPosition:], 1)
+	binary.LittleEndian.PutUint32(data[stmtcommon.Stmt2ColumnFieldCountPosition:], 1)
+	binary.LittleEndian.PutUint32(data[stmtcommon.Stmt2ColumnFieldOffsetPosition:], stmtcommon.Stmt2ColumnDataPosition)
+
+	column := data[stmtcommon.Stmt2ColumnDataPosition:]
+	binary.LittleEndian.PutUint32(column, 18)
+	binary.LittleEndian.PutUint32(column[4:], uint32(common.TSDB_DATA_TYPE_INT))
+	binary.LittleEndian.PutUint32(column[8:], 7)
+
+	err := TaosStmt2BindColumnBinary(unsafe.Pointer(uintptr(1)), data)
+	assert.ErrorContains(t, err, "column 0 is_null array out of range")
+}
+
+func BenchmarkTaosStmt2BindColumnBinaryRejectsLargeInvalidPayload(b *testing.B) {
+	data := make([]byte, 1<<20)
+	binary.LittleEndian.PutUint32(data[stmtcommon.Stmt2ColumnTotalLengthPosition:], uint32(len(data)))
+	binary.LittleEndian.PutUint32(data[stmtcommon.Stmt2ColumnRowCountPosition:], 1)
+	binary.LittleEndian.PutUint32(data[stmtcommon.Stmt2ColumnTableCountPosition:], 1)
+	binary.LittleEndian.PutUint32(data[stmtcommon.Stmt2ColumnFieldCountPosition:], 1)
+	binary.LittleEndian.PutUint32(data[stmtcommon.Stmt2ColumnFieldOffsetPosition:], stmtcommon.Stmt2ColumnDataPosition)
+
+	column := data[stmtcommon.Stmt2ColumnDataPosition:]
+	binary.LittleEndian.PutUint32(column, 18)
+	binary.LittleEndian.PutUint32(column[4:], uint32(common.TSDB_DATA_TYPE_INT))
+	binary.LittleEndian.PutUint32(column[8:], 1)
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		err := TaosStmt2BindColumnBinary(unsafe.Pointer(uintptr(1)), data)
+		if err == nil {
+			b.Fatal("expected invalid payload error")
+		}
+	}
 }
