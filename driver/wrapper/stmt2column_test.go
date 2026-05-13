@@ -3,6 +3,8 @@ package wrapper
 import (
 	"database/sql/driver"
 	"encoding/binary"
+	"os"
+	"strings"
 	"testing"
 	"unsafe"
 
@@ -45,6 +47,18 @@ func TestTaosStmt2BindColumnBinaryRejectsColumnNumBeyondColumnLength(t *testing.
 
 	err := TaosStmt2BindColumnBinary(unsafe.Pointer(uintptr(1)), data)
 	assert.ErrorContains(t, err, "column 0 is_null array out of range")
+}
+
+func TestStmt2ColumnWrapperUsesDirectTaosLinkage(t *testing.T) {
+	source, err := os.ReadFile("stmt2column.go")
+	assert.NoError(t, err)
+	content := string(source)
+
+	assert.NotContains(t, content, "dlsym")
+	assert.NotContains(t, content, "RTLD_DEFAULT")
+	assert.NotContains(t, content, "<dlfcn.h>")
+	assert.Contains(t, content, "taos_stmt2_bind_param_column(stmt, &bindv)")
+	assert.True(t, strings.Contains(content, "TAOS_STMT2_COLUMN_BINDV bindv"))
 }
 
 func BenchmarkTaosStmt2BindColumnBinaryRejectsLargeInvalidPayload(b *testing.B) {
