@@ -397,6 +397,7 @@ type TMQSubscribeReq struct {
 	IP                   string            `json:"ip"`
 	Connector            string            `json:"connector"`
 	MsgConsumeRawdata    string            `json:"msg_consume_rawdata"`
+	ListInstances        bool              `json:"list_instances"`
 	Config               map[string]string `json:"config"`
 }
 
@@ -426,6 +427,7 @@ func (r *TMQSubscribeReq) String() string {
 	_, _ = fmt.Fprintf(builder, "ip: %q,", r.IP)
 	_, _ = fmt.Fprintf(builder, "connector: %q,", r.Connector)
 	_, _ = fmt.Fprintf(builder, "msg_consume_rawdata: %q,", r.MsgConsumeRawdata)
+	_, _ = fmt.Fprintf(builder, "list_instances: %t,", r.ListInstances)
 
 	builder.WriteString(" config: {")
 	if len(r.Config) > 0 {
@@ -448,12 +450,23 @@ func (r *TMQSubscribeReq) String() string {
 }
 
 type TMQSubscribeResp struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Action  string `json:"action"`
-	ReqID   uint64 `json:"req_id"`
-	Timing  int64  `json:"timing"`
-	Version string `json:"version"`
+	Code          int       `json:"code"`
+	Message       string    `json:"message"`
+	Action        string    `json:"action"`
+	ReqID         uint64    `json:"req_id"`
+	Timing        int64     `json:"timing"`
+	Version       string    `json:"version"`
+	ListInstances *[]string `json:"list_instances,omitempty"`
+}
+
+func newTMQSubscribeResp(ctx context.Context, action string, req *TMQSubscribeReq, instances *[]string) *TMQSubscribeResp {
+	return &TMQSubscribeResp{
+		Action:        action,
+		ReqID:         req.ReqID,
+		Timing:        wstool.GetDuration(ctx),
+		Version:       version.TaosClientVersion,
+		ListInstances: instances,
+	}
 }
 
 var ignoreSubscribeConfig = map[string]struct{}{
@@ -498,6 +511,16 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 		logger.Trace("server closed")
 		return
 	}
+	var instances *[]string
+	if req.ListInstances {
+		list, err := syncinterface.TaosListInstances(fmt.Sprintf("%sadapter", version.CUS_PROMPT), logger, isDebug)
+		if err != nil {
+			logger.Errorf("list instances error:%s", err)
+			wsTMQErrorMsg(ctx, session, logger, 0xffff, err.Error(), action, req.ReqID, nil)
+			return
+		}
+		instances = &list
+	}
 	if t.consumer != nil {
 		if t.unsubscribed {
 			logger.Debug("tmq resubscribe")
@@ -526,12 +549,7 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 				return
 			}
 			t.unsubscribed = false
-			wstool.WSWriteJson(session, logger, &TMQSubscribeResp{
-				Action:  action,
-				ReqID:   req.ReqID,
-				Timing:  wstool.GetDuration(ctx),
-				Version: version.TaosClientVersion,
-			})
+			wstool.WSWriteJson(session, logger, newTMQSubscribeResp(ctx, action, req, instances))
 			return
 		}
 		logger.Errorf("tmq should have unsubscribed first")
@@ -798,12 +816,7 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	notifyRegistered = true
 	go t.waitPoll(t.logger)
 	go wstool.WaitSignal(t, conn, t.ip, t.ipStr, t.WhitelistChangeHandle, t.DropUserHandle, t.WhitelistChangeChan, t.DropUserChan, t.exit, t.logger)
-	wstool.WSWriteJson(session, logger, &TMQSubscribeResp{
-		Action:  action,
-		ReqID:   req.ReqID,
-		Timing:  wstool.GetDuration(ctx),
-		Version: version.TaosClientVersion,
-	})
+	wstool.WSWriteJson(session, logger, newTMQSubscribeResp(ctx, action, req, instances))
 }
 
 func (t *TMQ) setConnectOption(ctx context.Context, cPointer, conn unsafe.Pointer, session *melody.Session, logger *logrus.Entry, isDebug bool, action string, reqID uint64, option int, value string, optionName string) bool {

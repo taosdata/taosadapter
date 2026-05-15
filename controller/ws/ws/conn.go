@@ -19,17 +19,18 @@ import (
 )
 
 type connRequest struct {
-	ReqID       uint64 `json:"req_id"`
-	User        string `json:"user"`
-	Password    string `json:"password"`
-	DB          string `json:"db"`
-	Mode        *int   `json:"mode"`
-	TZ          string `json:"tz"`
-	App         string `json:"app"`
-	IP          string `json:"ip"`
-	Connector   string `json:"connector"`
-	TOTPCode    string `json:"totp_code"`
-	BearerToken string `json:"bearer_token"`
+	ReqID         uint64 `json:"req_id"`
+	User          string `json:"user"`
+	Password      string `json:"password"`
+	DB            string `json:"db"`
+	Mode          *int   `json:"mode"`
+	TZ            string `json:"tz"`
+	App           string `json:"app"`
+	IP            string `json:"ip"`
+	Connector     string `json:"connector"`
+	TOTPCode      string `json:"totp_code"`
+	BearerToken   string `json:"bearer_token"`
+	ListInstances bool   `json:"list_instances"`
 }
 
 func (r *connRequest) String() string {
@@ -58,12 +59,13 @@ func (r *connRequest) String() string {
 }
 
 type connResponse struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Action  string `json:"action"`
-	ReqID   uint64 `json:"req_id"`
-	Timing  int64  `json:"timing"`
-	Version string `json:"version"`
+	Code          int       `json:"code"`
+	Message       string    `json:"message"`
+	Action        string    `json:"action"`
+	ReqID         uint64    `json:"req_id"`
+	Timing        int64     `json:"timing"`
+	Version       string    `json:"version"`
+	ListInstances *[]string `json:"list_instances,omitempty"`
 }
 
 func (h *messageHandler) connect(ctx context.Context, session *melody.Session, action string, req connRequest, innerReqID uint64, logger *logrus.Entry, isDebug bool) {
@@ -213,6 +215,15 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 			return
 		}
 	}
+	var instances []string
+	if req.ListInstances {
+		registerType := fmt.Sprintf("%sadapter", version.CUS_PROMPT)
+		instances, err = syncinterface.TaosListInstances(registerType, logger, isDebug)
+		if err != nil {
+			handleConnectError(ctx, conn, session, logger, isDebug, action, req.ReqID, err, "list instances error")
+			return
+		}
+	}
 	h.conn = conn
 	// save user for record
 	h.user = req.User
@@ -225,6 +236,9 @@ func (h *messageHandler) connect(ctx context.Context, session *melody.Session, a
 		ReqID:   req.ReqID,
 		Timing:  wstool.GetDuration(ctx),
 		Version: version.TaosClientVersion,
+	}
+	if req.ListInstances {
+		resp.ListInstances = &instances
 	}
 	wstool.WSWriteJson(session, logger, resp)
 }
