@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -239,6 +241,83 @@ func TestTMQSubscribeListInstancesBackwardCompatibility(t *testing.T) {
 	assert.Equal(t, 0, currentResp.Code, currentResp.Message)
 	assert.Equal(t, uint64(1), currentResp.ReqID)
 	assert.Nil(t, currentResp.ListInstances)
+}
+
+func TestTMQSubscribeListInstancesErrorDoesNotFailSubscribe(t *testing.T) {
+	origin := listInstances
+	listInstances = func(_ string, _ *logrus.Entry, _ bool) ([]string, error) {
+		return nil, errors.New("list instances unavailable")
+	}
+	t.Cleanup(func() {
+		listInstances = origin
+	})
+
+	dbName := "test_ws_tmq_list_instances_error"
+	topicName := "test_tmq_ws_list_instances_error_topic"
+	code, message := doHttpSql(fmt.Sprintf("create database if not exists %s WAL_RETENTION_PERIOD 86400", dbName))
+	assert.Equal(t, 0, code, message)
+	assert.NoError(t, testtools.EnsureDBCreated(dbName))
+	defer func() {
+		cleanSqls := []string{
+			fmt.Sprintf("drop topic if exists %s", topicName),
+			fmt.Sprintf("drop database if exists %s", dbName),
+		}
+		for _, cleanSql := range cleanSqls {
+			assert.Eventually(t, func() bool {
+				code, message = doHttpSql(cleanSql)
+				return code == 0
+			}, 5*time.Second, 500*time.Millisecond, message)
+		}
+	}()
+
+	initSqls := []string{
+		"create table if not exists ct0 (ts timestamp, c1 int)",
+		fmt.Sprintf("create topic if not exists %s as DATABASE %s", topicName, dbName),
+	}
+	for _, initSql := range initSqls {
+		code, message = doHttpSqlWithDB(initSql, dbName)
+		assert.Equal(t, 0, code, message)
+	}
+
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/rest/tmq", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	req := map[string]interface{}{
+		"req_id":          uint64(1),
+		"user":            "root",
+		"password":        "taosdata",
+		"group_id":        "test_list_instances_error",
+		"topics":          []string{topicName},
+		"auto_commit":     "true",
+		"offset_reset":    "earliest",
+		"snapshot_enable": "true",
+		"list_instances":  true,
+		"config":          map[string]string{},
+	}
+	bs, err := json.Marshal(req)
+	assert.NoError(t, err)
+	resp, err := doWebSocket(ws, TMQSubscribe, bs)
+	assert.NoError(t, err)
+	var subscribeResp TMQSubscribeResp
+	err = json.Unmarshal(resp, &subscribeResp)
+	assert.NoError(t, err)
+	var subscribeRespMap map[string]interface{}
+	err = json.Unmarshal(resp, &subscribeRespMap)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), subscribeResp.ReqID)
+	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
+	assert.Nil(t, subscribeResp.ListInstances)
+	assert.NotContains(t, subscribeRespMap, "list_instances")
+	unsubscribe(t, ws, &TMQUnsubscribeReq{ReqID: 2})
 }
 
 func doTMQTest(t *testing.T, dbName string, topicName string, token string) {

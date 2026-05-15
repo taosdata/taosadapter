@@ -2,6 +2,7 @@ package ws
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http/httptest"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/driver/wrapper"
 	"github.com/taosdata/taosadapter/v3/tools/otp"
@@ -109,6 +111,47 @@ func TestWSConnectListInstances(t *testing.T) {
 	assert.Contains(t, connResp.ListInstances, instanceID)
 }
 
+func TestWSConnectListInstancesErrorDoesNotFailConnect(t *testing.T) {
+	origin := listInstances
+	listInstances = func(_ string, _ *logrus.Entry, _ bool) ([]string, error) {
+		return nil, errors.New("list instances unavailable")
+	}
+	t.Cleanup(func() {
+		listInstances = origin
+	})
+
+	s := httptest.NewServer(router)
+	defer s.Close()
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(s.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer func() {
+		err = ws.Close()
+		assert.NoError(t, err)
+	}()
+
+	connReq := map[string]interface{}{
+		"req_id":         uint64(1),
+		"user":           "root",
+		"password":       "taosdata",
+		"list_instances": true,
+	}
+	resp, err := doWebSocket(ws, Connect, connReq)
+	assert.NoError(t, err)
+	var connResp connResponse
+	err = json.Unmarshal(resp, &connResp)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), connResp.ReqID)
+	assert.Equal(t, 0, connResp.Code, connResp.Message)
+	assert.Nil(t, connResp.ListInstances)
+	var connRespMap map[string]interface{}
+	err = json.Unmarshal(resp, &connRespMap)
+	assert.NoError(t, err)
+	assert.NotContains(t, connRespMap, "list_instances")
+}
+
 func TestWSConnectListInstancesBackwardCompatibility(t *testing.T) {
 	type oldConnRequest struct {
 		ReqID       uint64 `json:"req_id"`
@@ -155,6 +198,23 @@ func TestWSConnectListInstancesBackwardCompatibility(t *testing.T) {
 	assert.Equal(t, 0, currentResp.Code, currentResp.Message)
 	assert.Equal(t, uint64(1), currentResp.ReqID)
 	assert.Nil(t, currentResp.ListInstances)
+}
+
+func TestConnRequestStringIncludesListInstances(t *testing.T) {
+	req := connRequest{
+		ReqID:         1,
+		User:          "root",
+		Password:      "secret-password",
+		TOTPCode:      "123456",
+		BearerToken:   "bearer-secret-token",
+		ListInstances: true,
+	}
+
+	got := req.String()
+	assert.Contains(t, got, "list_instances: true")
+	assert.NotContains(t, got, "secret-password")
+	assert.NotContains(t, got, "123456")
+	assert.NotContains(t, got, "bearer-secret-token")
 }
 
 func TestMode(t *testing.T) {

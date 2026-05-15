@@ -469,6 +469,8 @@ func newTMQSubscribeResp(ctx context.Context, action string, req *TMQSubscribeRe
 	}
 }
 
+var listInstances = syncinterface.TaosListInstances
+
 var ignoreSubscribeConfig = map[string]struct{}{
 	"td.connect.user": {},
 	"td.connect.pass": {},
@@ -513,13 +515,12 @@ func (t *TMQ) subscribe(ctx context.Context, session *melody.Session, req *TMQSu
 	}
 	var instances *[]string
 	if req.ListInstances {
-		list, err := syncinterface.TaosListInstances(fmt.Sprintf("%sadapter", version.CUS_PROMPT), logger, isDebug)
+		list, err := listInstances(fmt.Sprintf("%sadapter", version.CUS_PROMPT), logger, isDebug)
 		if err != nil {
 			logger.Errorf("list instances error:%s", err)
-			wsTMQErrorMsg(ctx, session, logger, 0xffff, err.Error(), action, req.ReqID, nil)
-			return
+		} else {
+			instances = &list
 		}
-		instances = &list
 	}
 	if t.consumer != nil {
 		if t.unsubscribed {

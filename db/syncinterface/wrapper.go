@@ -1183,6 +1183,8 @@ func TaosRegisterInstance(id, registerType, desc string, expire int32, logger *l
 	return code
 }
 
+// TaosListInstances lists registered instances without a connection object.
+// Like TaosRegisterInstance, this function should not be blocked by semaphore.
 func TaosListInstances(filterType string, logger *logrus.Entry, isDebug bool) ([]string, error) {
 	logger.Debugf("call taos_list_instances, filter_type:%s", filterType)
 	s := log.GetLogNow(isDebug)
