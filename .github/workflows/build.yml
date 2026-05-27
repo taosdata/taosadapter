@@ -115,7 +115,7 @@ jobs:
           cd TDengine
           mkdir debug
           cd debug
-          cmake .. -DBUILD_TEST=off -DBUILD_DEPENDENCY_TESTS=0
+          cmake .. -DBUILD_TEST=off -DBUILD_CONTRIB=ON -DBUILD_DEPENDENCY_TESTS=0
           make -j 8
 
       - name: package
@@ -446,7 +446,7 @@ jobs:
           cd TDengine
           mkdir debug
           cd debug
-          cmake .. -DBUILD_TEST=off -DBUILD_DEPENDENCY_TESTS=0 -DBUILD_SANITIZER=1
+          cmake .. -DBUILD_TEST=off -DBUILD_CONTRIB=ON -DBUILD_DEPENDENCY_TESTS=0 -DBUILD_SANITIZER=1
           make -j 8
 
       - name: package
