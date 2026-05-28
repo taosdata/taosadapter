@@ -42,6 +42,10 @@ static int go_stmt2_bind_column_binary(TAOS_STMT2 *stmt, char *data, char *err_m
     snprintf(err_msg, 256, "field offset out of range, total length: %u, field offset: %u", total_length, field_offset);
     return -1;
   }
+  if (field_count > 4096) {
+    snprintf(err_msg, 256, "field count exceeds maximum 4096: %u", field_count);
+    return -1;
+  }
 
   if (field_count <= ADAPTER_STMT2_COLUMN_STACK_CAP) {
     bindv.columns = stack_columns;
