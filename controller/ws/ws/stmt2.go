@@ -140,15 +140,9 @@ func (h *messageHandler) stmt2Prepare(ctx context.Context, session *melody.Sessi
 			return
 		}
 		defer syncinterface.TaosStmt2FreeFields(stmt2, fields, logger, isDebug)
-		var stbFields []*stmt.Stmt2AllField
-		if isInsert {
-			stbFields = wrapper.Stmt2ParseAllFields(count, fields)
-		} else {
-			stbFields = wrapper.Stmt2ParseAllFields(1, fields)
-		}
+		stbFields := wrapper.Stmt2ParseAllFields(count, fields)
 		prepareResp.Fields = stbFields
 		prepareResp.FieldsCount = count
-
 	}
 	prepareResp.ReqID = req.ReqID
 	prepareResp.Action = action
