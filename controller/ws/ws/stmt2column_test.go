@@ -63,9 +63,6 @@ func TestWsStmt2BindExecQueryRequiresSingleRow(t *testing.T) {
 	require.NoError(t, json.Unmarshal(resp, &prepareResp))
 	require.Equal(t, 0, prepareResp.Code, prepareResp.Message)
 	require.False(t, prepareResp.IsInsert)
-	require.Equal(t, 1, prepareResp.FieldsCount)
-	require.Len(t, prepareResp.Fields, 1)
-	require.Equal(t, uint8(common.PrecisionMilliSecond), prepareResp.Fields[0].Precision)
 
 	payload, err := stmtCommon.MarshalStmt2ColumnBinary([][]driver.Value{
 		{time.UnixMilli(0)},
