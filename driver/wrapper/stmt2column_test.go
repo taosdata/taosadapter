@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/taosdata/taosadapter/v3/driver/common"
@@ -28,7 +27,7 @@ func TestTaosStmt2BindColumnBinaryProtocolErrors(t *testing.T) {
 	}, fields)
 	assert.NoError(t, err)
 	data[0] = 0
-	err = TaosStmt2BindColumnBinary(unsafe.Pointer(uintptr(1)), data)
+	err = TaosStmt2BindColumnBinary(nil, data)
 	assert.ErrorContains(t, err, "total length not match")
 }
 
@@ -45,7 +44,7 @@ func TestTaosStmt2BindColumnBinaryRejectsColumnNumBeyondColumnLength(t *testing.
 	binary.LittleEndian.PutUint32(column[4:], uint32(common.TSDB_DATA_TYPE_INT))
 	binary.LittleEndian.PutUint32(column[8:], 7)
 
-	err := TaosStmt2BindColumnBinary(unsafe.Pointer(uintptr(1)), data)
+	err := TaosStmt2BindColumnBinary(nil, data)
 	assert.ErrorContains(t, err, "column 0 is_null array out of range")
 }
 
@@ -76,7 +75,7 @@ func BenchmarkTaosStmt2BindColumnBinaryRejectsLargeInvalidPayload(b *testing.B) 
 
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		err := TaosStmt2BindColumnBinary(unsafe.Pointer(uintptr(1)), data)
+		err := TaosStmt2BindColumnBinary(nil, data)
 		if err == nil {
 			b.Fatal("expected invalid payload error")
 		}
