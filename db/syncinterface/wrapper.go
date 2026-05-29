@@ -661,7 +661,11 @@ func TaosStmt2BindBinary(stmt2 unsafe.Pointer, data []byte, colIdx int32, logger
 		thread.SyncSemaphore.Release()
 		logger.Trace("sync semaphore release for taos_stmt2_bind_binary")
 	}()
-	logger.Debugf("call taos_stmt2_bind_binary, stmt2:%p, colIdx:%d, data:%v", stmt2, colIdx, data)
+	if logger.Logger.IsLevelEnabled(logrus.TraceLevel) {
+		logger.Tracef("call taos_stmt2_bind_binary, stmt2:%p, colIdx:%d, data:%v", stmt2, colIdx, data)
+	} else {
+		logger.Debugf("call taos_stmt2_bind_binary, stmt2:%p, colIdx:%d, dataLen:%d", stmt2, colIdx, len(data))
+	}
 	monitor.TaosStmt2BindBinaryCounter.Inc()
 	s := log.GetLogNow(isDebug)
 	err := wrapper.TaosStmt2BindBinary(stmt2, data, colIdx)
@@ -681,7 +685,11 @@ func TaosStmt2BindColumnBinary(stmt2 unsafe.Pointer, data []byte, logger *logrus
 		thread.SyncSemaphore.Release()
 		logger.Trace("sync semaphore release for taos_stmt2_bind_column_binary")
 	}()
-	logger.Debugf("call taos_stmt2_bind_column_binary, stmt2:%p, data:%v", stmt2, data)
+	if logger.Logger.IsLevelEnabled(logrus.TraceLevel) {
+		logger.Tracef("call taos_stmt2_bind_column_binary, stmt2:%p, data:%v", stmt2, data)
+	} else {
+		logger.Debugf("call taos_stmt2_bind_column_binary, stmt2:%p, dataLen:%d", stmt2, len(data))
+	}
 	monitor.TaosStmt2BindColumnBinaryCounter.Inc()
 	s := log.GetLogNow(isDebug)
 	err := wrapper.TaosStmt2BindColumnBinary(stmt2, data)
