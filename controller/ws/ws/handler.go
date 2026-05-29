@@ -580,6 +580,8 @@ func (h *messageHandler) handleMessageBinary(session *melody.Session, message []
 		h.fetchRawBlock(ctx, session, reqID, resourceID, message, logger, log.IsDebug())
 	case Stmt2BindMessage:
 		h.stmt2BinaryBind(ctx, session, actionStr, reqID, resourceID, message, logger, log.IsDebug())
+	case Stmt2BindExecMessage:
+		h.stmt2BinaryBindExec(ctx, session, actionStr, reqID, resourceID, message, logger, log.IsDebug())
 	case ValidateSQL:
 		h.validateSQL(ctx, session, actionStr, reqID, message, logger, log.IsDebug())
 	default:

@@ -37,11 +37,12 @@ const (
 	STMTGetParam     = "stmt_get_param"
 
 	// stmt2
-	STMT2Init    = "stmt2_init"
-	STMT2Prepare = "stmt2_prepare"
-	STMT2Exec    = "stmt2_exec"
-	STMT2Result  = "stmt2_result"
-	STMT2Close   = "stmt2_close"
+	STMT2Init     = "stmt2_init"
+	STMT2Prepare  = "stmt2_prepare"
+	STMT2Exec     = "stmt2_exec"
+	STMT2BindExec = "stmt2_bind_exec"
+	STMT2Result   = "stmt2_result"
+	STMT2Close    = "stmt2_close"
 
 	// options
 	OptionsConnection = "options_connection"
@@ -62,6 +63,7 @@ const (
 	FetchRawBlockMessage      = 7
 	Stmt2BindMessage          = 9
 	ValidateSQL               = 10
+	Stmt2BindExecMessage      = 11
 )
 
 func getActionString(binaryAction uint64) string {
@@ -84,12 +86,15 @@ func getActionString(binaryAction uint64) string {
 		return "stmt2_bind"
 	case ValidateSQL:
 		return "validate_sql"
+	case Stmt2BindExecMessage:
+		return STMT2BindExec
 	default:
 		return "unknown"
 	}
 }
 
 const (
-	BinaryProtocolVersion1    uint16 = 1
-	Stmt2BindProtocolVersion1 uint16 = 1
+	BinaryProtocolVersion1        uint16 = 1
+	Stmt2BindProtocolVersion1     uint16 = 1
+	Stmt2BindExecProtocolVersion1 uint16 = 1
 )
