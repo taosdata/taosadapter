@@ -19,3 +19,4 @@ jmeter.log
 vendor
 /.idea/
 /debug/
+/.worktrees/
