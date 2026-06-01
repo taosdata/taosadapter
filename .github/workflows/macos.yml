@@ -116,7 +116,7 @@ jobs:
           cd TDengine
           mkdir debug
           cd debug
-          cmake .. -DBUILD_TEST=off
+          cmake .. -DBUILD_TEST=off -DBUILD_CONTRIB=ON
           make -j 8
 
       - name: package
