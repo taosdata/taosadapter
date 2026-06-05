@@ -126,29 +126,29 @@ func init() {
 
 	// Authentication methods
 	_ = viper.BindEnv("open_metrics.httpUsernames", "TAOS_ADAPTER_OPEN_METRICS_HTTP_USERNAMES")
-	pflag.StringArray("open_metrics.httpUsernames", []string(nil), `Basic auth usernames for protected OpenMetrics endpoints. Env var: "TAOS_ADAPTER_OPEN_METRICS_HTTP_USERNAMES"`)
-	viper.SetDefault("open_metrics.httpUsernames", []string(nil))
+	pflag.StringArray("open_metrics.httpUsernames", []string{}, `Basic auth usernames for protected OpenMetrics endpoints. Env var: "TAOS_ADAPTER_OPEN_METRICS_HTTP_USERNAMES"`)
+	viper.SetDefault("open_metrics.httpUsernames", []string{})
 
 	_ = viper.BindEnv("open_metrics.httpPasswords", "TAOS_ADAPTER_OPEN_METRICS_HTTP_PASSWORDS")
-	pflag.StringArray("open_metrics.httpPasswords", []string(nil), `Basic auth passwords for protected OpenMetrics endpoints. Env var: "TAOS_ADAPTER_OPEN_METRICS_HTTP_PASSWORDS"`)
-	viper.SetDefault("open_metrics.httpPasswords", []string(nil))
+	pflag.StringArray("open_metrics.httpPasswords", []string{}, `Basic auth passwords for protected OpenMetrics endpoints. Env var: "TAOS_ADAPTER_OPEN_METRICS_HTTP_PASSWORDS"`)
+	viper.SetDefault("open_metrics.httpPasswords", []string{})
 
 	_ = viper.BindEnv("open_metrics.httpBearerTokenStrings", "TAOS_ADAPTER_OPEN_METRICS_HTTP_BEARER_TOKEN_STRINGS")
-	pflag.StringArray("open_metrics.httpBearerTokenStrings", []string(nil), `Bearer tokens for OpenMetrics endpoint authentication. Env var: "TAOS_ADAPTER_OPEN_METRICS_HTTP_BEARER_TOKEN_STRINGS"`)
-	viper.SetDefault("open_metrics.httpBearerTokenStrings", []string(nil))
+	pflag.StringArray("open_metrics.httpBearerTokenStrings", []string{}, `Bearer tokens for OpenMetrics endpoint authentication. Env var: "TAOS_ADAPTER_OPEN_METRICS_HTTP_BEARER_TOKEN_STRINGS"`)
+	viper.SetDefault("open_metrics.httpBearerTokenStrings", []string{})
 
 	// TLS configuration
 	_ = viper.BindEnv("open_metrics.caCertFiles", "TAOS_ADAPTER_OPEN_METRICS_CA_CERT_FILES")
-	pflag.StringArray("open_metrics.caCertFiles", []string(nil), `Paths to CA certificate files for TLS verification. Env var: "TAOS_ADAPTER_OPEN_METRICS_CA_CERT_FILES"`)
-	viper.SetDefault("open_metrics.caCertFiles", []string(nil))
+	pflag.StringArray("open_metrics.caCertFiles", []string{}, `Paths to CA certificate files for TLS verification. Env var: "TAOS_ADAPTER_OPEN_METRICS_CA_CERT_FILES"`)
+	viper.SetDefault("open_metrics.caCertFiles", []string{})
 
 	_ = viper.BindEnv("open_metrics.certFiles", "TAOS_ADAPTER_OPEN_METRICS_CERT_FILES")
-	pflag.StringArray("open_metrics.certFiles", []string(nil), `Paths to client certificate files for mTLS. Env var: "TAOS_ADAPTER_OPEN_METRICS_CERT_FILES"`)
-	viper.SetDefault("open_metrics.certFiles", []string(nil))
+	pflag.StringArray("open_metrics.certFiles", []string{}, `Paths to client certificate files for mTLS. Env var: "TAOS_ADAPTER_OPEN_METRICS_CERT_FILES"`)
+	viper.SetDefault("open_metrics.certFiles", []string{})
 
 	_ = viper.BindEnv("open_metrics.keyFiles", "TAOS_ADAPTER_OPEN_METRICS_KEY_FILES")
-	pflag.StringArray("open_metrics.keyFiles", []string(nil), `Paths to private key files for mTLS. Env var: "TAOS_ADAPTER_OPEN_METRICS_KEY_FILES"`)
-	viper.SetDefault("open_metrics.keyFiles", []string(nil))
+	pflag.StringArray("open_metrics.keyFiles", []string{}, `Paths to private key files for mTLS. Env var: "TAOS_ADAPTER_OPEN_METRICS_KEY_FILES"`)
+	viper.SetDefault("open_metrics.keyFiles", []string{})
 
 	_ = viper.BindEnv("open_metrics.insecureSkipVerify", "TAOS_ADAPTER_OPEN_METRICS_INSECURE_SKIP_VERIFY")
 	pflag.Bool("open_metrics.insecureSkipVerify", true, `Skip TLS certificate verification (insecure). Env var: "TAOS_ADAPTER_OPEN_METRICS_INSECURE_SKIP_VERIFY"`)
