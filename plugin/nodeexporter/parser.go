@@ -10,16 +10,19 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/influxdata/telegraf"
+	"github.com/influxdata/telegraf/metric"
 	"github.com/matttproud/golang_protobuf_extensions/v2/pbutil"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
-
-	"github.com/influxdata/telegraf"
-	"github.com/influxdata/telegraf/metric"
+	"github.com/prometheus/common/model"
 )
 
 func Parse(buf []byte, header http.Header, ignoreTimestamp bool) ([]telegraf.Metric, error) {
-	var parser expfmt.TextParser
+	// Since prometheus/common v0.67.0, TextParser requires an explicit name
+	// validation scheme; the zero value (UnsetValidation) panics when parsing.
+	// Use UTF8Validation to preserve the previous permissive behavior.
+	parser := expfmt.NewTextParser(model.UTF8Validation)
 	var metrics []telegraf.Metric
 	var err error
 	// parse even if the buffer begins with a newline
