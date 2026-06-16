@@ -70,7 +70,10 @@ func TestTMQSubscribeListInstances(t *testing.T) {
 	dbName := "test_ws_tmq_list_instances"
 	topicName := "test_tmq_ws_list_instances_topic"
 	instanceID := fmt.Sprintf("tmq-list-instances-%d", time.Now().UnixNano())
-	registerCode := wrapper.TaosRegisterInstance(instanceID, "taosadapter", "tmq list instances test", 10)
+	// expire (TTL seconds) must comfortably outlast the list_instances poll below.
+	// The original 10s could lapse before the server-side registry became
+	// queryable on a slow/loaded runner (arm64), so the instance never showed up.
+	registerCode := wrapper.TaosRegisterInstance(instanceID, "taosadapter", "tmq list instances test", 120)
 	assert.Equal(t, int32(0), registerCode, wrapper.TaosErrorStr(nil))
 	defer wrapper.TaosRegisterInstance(instanceID, "taosadapter", "", -1)
 
@@ -154,20 +157,42 @@ func TestTMQSubscribeListInstances(t *testing.T) {
 	}
 	bs, err = json.Marshal(initReq)
 	assert.NoError(t, err)
-	resp, err := doWebSocket(ws, TMQSubscribe, bs)
-	assert.NoError(t, err)
 	var subscribeResp struct {
 		TMQSubscribeResp
 		ListInstances []string `json:"list_instances"`
 	}
-	err = json.Unmarshal(resp, &subscribeResp)
-	assert.NoError(t, err)
 	var subscribeRespMap map[string]interface{}
-	err = json.Unmarshal(resp, &subscribeRespMap)
-	assert.NoError(t, err)
+	// Instance registration (TaosRegisterInstance above) propagates
+	// asynchronously, so the freshly-registered instanceID may not appear in the
+	// first subscribe's list_instances on a slow runner. Re-subscribe (req_id
+	// stays 1, unsubscribe between attempts) until it shows up or we time out,
+	// then assert on that final response.
+	assert.Eventually(t, func() bool {
+		resp, derr := doWebSocket(ws, TMQSubscribe, bs)
+		if derr != nil {
+			return false
+		}
+		subscribeResp = struct {
+			TMQSubscribeResp
+			ListInstances []string `json:"list_instances"`
+		}{}
+		if derr = json.Unmarshal(resp, &subscribeResp); derr != nil {
+			return false
+		}
+		subscribeRespMap = nil
+		if derr = json.Unmarshal(resp, &subscribeRespMap); derr != nil {
+			return false
+		}
+		unsubscribe(t, ws, &TMQUnsubscribeReq{ReqID: 2})
+		for _, inst := range subscribeResp.ListInstances {
+			if inst == instanceID {
+				return true
+			}
+		}
+		return false
+	}, 60*time.Second, time.Second)
 	assert.Contains(t, subscribeRespMap, "list_instances")
 	assert.NotContains(t, subscribeRespMap, "instances")
-	unsubscribe(t, ws, &TMQUnsubscribeReq{ReqID: 2})
 	assert.Equal(t, uint64(1), subscribeResp.ReqID)
 	assert.Equal(t, 0, subscribeResp.Code, subscribeResp.Message)
 	assert.Contains(t, subscribeResp.ListInstances, instanceID)
