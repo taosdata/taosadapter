@@ -867,7 +867,7 @@ func TestRecordStmt(t *testing.T) {
 		require.Eventually(t, func() bool {
 			bs, err = os.ReadFile(output)
 			return err == nil && len(bs) > 0
-		}, 5*time.Second, 500*time.Millisecond)
+		}, 30*time.Second, 500*time.Millisecond)
 		t.Log(string(bs))
 		csvReader := csv.NewReader(bytes.NewReader(bs))
 		records, err := csvReader.ReadAll()
@@ -902,7 +902,11 @@ func TestRecordStmt(t *testing.T) {
 	}()
 
 	start := time.Now().Format(recordsql.InputTimeFormat)
-	end := time.Now().Add(time.Second * 5).Format(recordsql.InputTimeFormat)
+	// Recording window must outlast the websocket prepare/bind/exec round-trips
+	// below. On slow CI runners (e.g. arm64) those take well over 5s, which would
+	// close the window early and drop records (fewer than the expected 5), so use
+	// a generous window — the test work itself is bounded and finishes long before.
+	end := time.Now().Add(time.Second * 60).Format(recordsql.InputTimeFormat)
 	err = recordsql.StartRecordWithTestWriter(recordsql.RecordTypeStmt, start, end, "", f)
 	require.NoError(t, err)
 	defer func() {
