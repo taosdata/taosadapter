@@ -29,8 +29,11 @@ jobs:
 
       - name: Run vulnerability scan
         run: |
-          govulncheck -show verbose -test ./...  | tee govulncheck.out
-          if grep -q "Vulnerability #" govulncheck.out; then
+          set +e
+          govulncheck -show verbose -test ./... | tee govulncheck.out
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
             echo "❌ Vulnerabilities found"
             exit 1
           fi
