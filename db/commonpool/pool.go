@@ -32,6 +32,8 @@ type AuthInfo struct {
 	Token    string
 }
 
+const DefaultUserApp = "taosAdapter"
+
 type ConnectorPool struct {
 	changePassChan        chan int32
 	whitelistChan         chan int64
@@ -368,6 +370,15 @@ func getConnectDirect(connectionPool *ConnectorPool, clientIP net.IP) (*Conn, er
 	ipStr := clientIP.String()
 	// ignore error, because we have checked the ip
 	syncinterface.TaosOptionsConnection(c, common.TSDB_OPTION_CONNECTION_USER_IP, &ipStr, connectionPool.logger, log.IsDebug())
+	userApp := DefaultUserApp
+	code := syncinterface.TaosOptionsConnection(c, common.TSDB_OPTION_CONNECTION_USER_APP, &userApp, connectionPool.logger, log.IsDebug())
+	if code != httperror.SUCCESS {
+		errStr := syncinterface.TaosErrorStr(nil, connectionPool.logger, log.IsDebug())
+		if err := connectionPool.Put(c); err != nil {
+			connectionPool.logger.WithError(err).Error("put connection after setting default user app failed")
+		}
+		return nil, tErrors.NewError(code, errStr)
+	}
 	return &Conn{
 		TaosConnection: c,
 		pool:           connectionPool,

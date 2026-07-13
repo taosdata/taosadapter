@@ -166,6 +166,9 @@ func DoQuery(c *gin.Context, db string, location *time.Location, reqID int64, re
 	c.Set("sql", sql)
 	user, password, token := getAuthInfo(c)
 	appName := c.Query(AppNameQueryParamKey)
+	if appName == "" {
+		appName = commonpool.DefaultUserApp
+	}
 	hook := NewRestfulContext(c, sql, user, password, token, ip, port, appName, sqlType, reqID, logger, isDebug)
 	defer hook.cleanup()
 	// before connect
