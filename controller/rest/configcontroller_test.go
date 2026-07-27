@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/config"
+	"github.com/taosdata/taosadapter/v3/db/commonpool"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
 	"github.com/taosdata/taosadapter/v3/tools/testtools"
@@ -403,7 +404,7 @@ func TestRecordSql(t *testing.T) {
 	assert.Equal(t, host, records[3][recordsql.IPIndex])
 	assert.Equal(t, "root", records[3][recordsql.UserIndex])
 	assert.Equal(t, "http", records[3][recordsql.ConnTypeIndex])
-	assert.Equal(t, "", records[3][recordsql.AppNameIndex])
+	assert.Equal(t, commonpool.DefaultUserApp, records[3][recordsql.AppNameIndex])
 	assert.Equal(t, port, records[3][recordsql.SourcePortIndex])
 
 	if testenv.IsEnterpriseTest() {

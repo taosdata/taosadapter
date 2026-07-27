@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/taosdata/taosadapter/v3/config"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
 	"github.com/taosdata/taosadapter/v3/log"
@@ -86,6 +87,35 @@ func TestGetConnection(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
+}
+
+func TestGetConnectionSetsDefaultUserApp(t *testing.T) {
+	conn, err := GetConnection("root", "taosdata", "", net.ParseIP("127.0.0.1"))
+	require.NoError(t, err)
+	require.NotNil(t, conn)
+
+	assertDefaultUserApp(t, conn.TaosConnection)
+
+	err = conn.Put()
+	assert.NoError(t, err)
+
+	conn, err = GetConnection("root", "taosdata", "", net.ParseIP("127.0.0.1"))
+	require.NoError(t, err)
+	defer func() {
+		err = conn.Put()
+		assert.NoError(t, err)
+	}()
+
+	assertDefaultUserApp(t, conn.TaosConnection)
+}
+
+func assertDefaultUserApp(t *testing.T, conn unsafe.Pointer) {
+	t.Helper()
+
+	require.Eventually(t, func() bool {
+		rows, err := testtools.Query(conn, "select conn_id from performance_schema.perf_connections where user_app = '"+DefaultUserApp+"' and user_ip = '127.0.0.1'")
+		return err == nil && len(rows) > 0
+	}, 10*time.Second, time.Second)
 }
 
 func TestGetConnectionToken(t *testing.T) {
