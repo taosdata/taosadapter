@@ -356,8 +356,12 @@ func TestRecordMissionStart(t *testing.T) {
 			expectRun: true,
 		},
 		{
-			name:      "context canceled before start",
-			startTime: time.Now().Add(100 * time.Millisecond),
+			name: "context canceled before start",
+			// Far-future start so the canceled ctx always wins start()'s select.
+			// A 100ms offset could let the start timer fire first when the
+			// goroutine is scheduled late on a slow/loaded CI runner (arm64),
+			// flipping running=true and making this case flaky.
+			startTime: time.Now().Add(10 * time.Second),
 			ctxCancel: true,
 			expectRun: false,
 		},
