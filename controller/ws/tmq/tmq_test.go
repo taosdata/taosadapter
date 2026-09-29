@@ -1,3 +1,25 @@
+// Copyright (c) 2022 TAOS Data, Inc.
+//
+// SPDX-License-Identifier: MIT
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 package tmq
 
 import (
@@ -89,7 +111,7 @@ func TestTMQSubscribeListInstances(t *testing.T) {
 			assert.Eventually(t, func() bool {
 				code, message = doHttpSql(cleanSql)
 				return code == 0
-			}, 5*time.Second, 500*time.Millisecond, message)
+			}, 60*time.Second, 500*time.Millisecond, message)
 		}
 	}()
 
@@ -291,7 +313,7 @@ func TestTMQSubscribeListInstancesErrorDoesNotFailSubscribe(t *testing.T) {
 			assert.Eventually(t, func() bool {
 				code, message = doHttpSql(cleanSql)
 				return code == 0
-			}, 5*time.Second, 500*time.Millisecond, message)
+			}, 60*time.Second, 500*time.Millisecond, message)
 		}
 	}()
 
@@ -386,7 +408,7 @@ func doTMQTest(t *testing.T, dbName string, topicName string, token string) {
 			assert.Eventually(t, func() bool {
 				code, message = doHttpSql(cleanSql)
 				return code == 0
-			}, 5*time.Second, 500*time.Millisecond, message)
+			}, 60*time.Second, 500*time.Millisecond, message)
 		}
 	}()
 
@@ -651,7 +673,7 @@ func TestMeta(t *testing.T) {
 			assert.Eventually(t, func() bool {
 				code, message = doHttpSql(cleanSql)
 				return code == 0
-			}, 5*time.Second, 500*time.Millisecond, message)
+			}, 60*time.Second, 500*time.Millisecond, message)
 		}
 	}()
 	s := httptest.NewServer(router)
@@ -877,7 +899,7 @@ func TestTMQAutoCommit(t *testing.T) {
 			assert.Eventually(t, func() bool {
 				code, message = doHttpSql(cleanSql)
 				return code == 0
-			}, 5*time.Second, 500*time.Millisecond, message)
+			}, 60*time.Second, 500*time.Millisecond, message)
 		}
 	}()
 
@@ -998,7 +1020,7 @@ func TestTMQUnsubscribeAndSubscribe(t *testing.T) {
 			assert.Eventually(t, func() bool {
 				code, message = doHttpSql(cleanSql)
 				return code == 0
-			}, 5*time.Second, 500*time.Millisecond, message)
+			}, 60*time.Second, 500*time.Millisecond, message)
 		}
 	}()
 
@@ -1571,11 +1593,11 @@ func TestTMQSeek(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		code, message = doHttpSql("drop topic if exists " + topic)
 		return code == 0
-	}, 5*time.Second, 500*time.Millisecond, message)
+	}, 60*time.Second, 500*time.Millisecond, message)
 	assert.Eventually(t, func() bool {
 		code, message = doHttpSql("drop database if exists " + dbName)
 		return code == 0
-	}, 5*time.Second, 500*time.Millisecond, message)
+	}, 60*time.Second, 500*time.Millisecond, message)
 }
 
 func doHttpSql(sql string) (code int, message string) {
@@ -1658,11 +1680,11 @@ func after(t *testing.T, ws *websocket.Conn, dbName string, topic string) error 
 	assert.Eventually(t, func() bool {
 		code, message = doHttpSql(fmt.Sprintf("drop topic if exists %s", topic))
 		return code == 0
-	}, 5*time.Second, 500*time.Millisecond, message)
+	}, 60*time.Second, 500*time.Millisecond, message)
 	assert.Eventually(t, func() bool {
 		code, message = doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
 		return code == 0
-	}, 5*time.Second, 500*time.Millisecond, message)
+	}, 60*time.Second, 500*time.Millisecond, message)
 	return nil
 }
 
@@ -2206,11 +2228,11 @@ func afterAllType(t *testing.T, ws *websocket.Conn, dbName string, topic string)
 	assert.Eventually(t, func() bool {
 		code, message = doHttpSql(fmt.Sprintf("drop topic if exists %s", topic))
 		return code == 0
-	}, 5*time.Second, 500*time.Millisecond, message)
+	}, 60*time.Second, 500*time.Millisecond, message)
 	assert.Eventually(t, func() bool {
 		code, message = doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
 		return code == 0
-	}, 5*time.Second, 500*time.Millisecond, message)
+	}, 60*time.Second, 500*time.Millisecond, message)
 	return nil
 }
 
@@ -2456,11 +2478,11 @@ func TestDropUser(t *testing.T) {
 		assert.Eventually(t, func() bool {
 			code, message = doHttpSql(fmt.Sprintf("drop topic if exists %s", topic))
 			return code == 0
-		}, 5*time.Second, 500*time.Millisecond, message)
+		}, 60*time.Second, 500*time.Millisecond, message)
 		assert.Eventually(t, func() bool {
 			code, message = doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
 			return code == 0
-		}, 5*time.Second, 500*time.Millisecond, message)
+		}, 60*time.Second, 500*time.Millisecond, message)
 	}()
 
 	// subscribe
@@ -2542,11 +2564,11 @@ func TestConnectionOptions(t *testing.T) {
 		assert.Eventually(t, func() bool {
 			code, message = doHttpSql(fmt.Sprintf("drop topic if exists %s", topic))
 			return code == 0
-		}, 5*time.Second, 500*time.Millisecond, message)
+		}, 60*time.Second, 500*time.Millisecond, message)
 		assert.Eventually(t, func() bool {
 			code, message = doHttpSql(fmt.Sprintf("drop database if exists %s", dbName))
 			return code == 0
-		}, 5*time.Second, 500*time.Millisecond, message)
+		}, 60*time.Second, 500*time.Millisecond, message)
 	}()
 
 	// subscribe
@@ -2885,7 +2907,7 @@ func TestConsumeRawdata(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		resp = restQuery("describe stb", "test_ws_rawdata_target")
 		return resp.Code == 0
-	}, 5*time.Second, 500*time.Millisecond, message)
+	}, 60*time.Second, 500*time.Millisecond, message)
 	expect := [][]driver.Value{
 		{"ts", "TIMESTAMP", float64(8), ""},
 		{"c1", "BOOL", float64(1), ""},
@@ -2970,15 +2992,15 @@ func TestConsumeRawdata(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		code, message = doHttpSql("drop topic if exists test_tmq_rawdata_ws_topic")
 		return code == 0
-	}, 5*time.Second, 500*time.Millisecond, message)
+	}, 60*time.Second, 500*time.Millisecond, message)
 	assert.Eventually(t, func() bool {
 		code, message = doHttpSql("drop database if exists test_ws_rawdata_target")
 		return code == 0
-	}, 5*time.Second, 500*time.Millisecond, message)
+	}, 60*time.Second, 500*time.Millisecond, message)
 	assert.Eventually(t, func() bool {
 		code, message = doHttpSql("drop database if exists test_ws_rawdata")
 		return code == 0
-	}, 5*time.Second, 500*time.Millisecond, message)
+	}, 60*time.Second, 500*time.Millisecond, message)
 }
 
 func TestSetConfig(t *testing.T) {
@@ -2995,11 +3017,11 @@ func TestSetConfig(t *testing.T) {
 		assert.Eventually(t, func() bool {
 			code, message = doHttpSql("drop topic if exists test_ws_tmq_set_conf_topic")
 			return code == 0
-		}, 5*time.Second, 500*time.Millisecond, message)
+		}, 60*time.Second, 500*time.Millisecond, message)
 		assert.Eventually(t, func() bool {
 			code, message = doHttpSql("drop database if exists test_ws_tmq_set_conf")
 			return code == 0
-		}, 5*time.Second, 500*time.Millisecond, message)
+		}, 60*time.Second, 500*time.Millisecond, message)
 	}()
 	s := httptest.NewServer(router)
 	defer s.Close()

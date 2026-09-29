@@ -61,7 +61,7 @@ Before building, testing, or running taosAdapter, install TDengine so that the r
 ### 3.1 System Requirements
 
 - Linux x86_64 or ARM64
-- TDengine server or client package **installed** (provides `libtaosnative.so` and header files)
+- TDengine server or client package **installed** (the client header for the build, `libtaosnative.so` for run time)
 - Go >= 1.23
 
 ### 3.2 Installing Build Tools
@@ -87,7 +87,12 @@ Same Go installation steps as above.
 
 ### 3.3 TDengine Client Library
 
-taosAdapter builds against `libtaosnative.so` (via CGO) and uses TDengine client libraries at runtime. You must install a TDengine server or client package first.
+taosAdapter needs the TDengine client header (`taos.h`) to build and the native client
+driver (`libtaosnative.so`, or `libtaosnative.dylib` / `taosnative.dll`) at run time.
+The driver is **not linked**: taosAdapter loads it when it starts (see
+`driver/native/`), so the adapter does not have to be rebuilt against the exact client
+version that is installed, and running it does not drag the `libtaos.so` dispatcher
+in. You must install a TDengine server or client package first.
 
 **Option A: Install from official release package (recommended)**
 
@@ -121,10 +126,19 @@ ls /usr/lib/libtaosnative.so   # symlink should exist
 ls /usr/local/taos/include/taos.h
 ```
 
-If `libtaos.so` is not in your runtime library path, export it explicitly before running taosAdapter or the test suite:
+The driver is looked up in this order (the same order the `libtaos.so` dispatcher uses),
+and taosAdapter logs the file it loaded at startup as `native client driver: <path>`:
 
-```bash
-export LD_LIBRARY_PATH=/usr/local/taos/driver:$LD_LIBRARY_PATH
+1. `TDENGINE_DRIVER_PATH`, when set -- use it to pin a client that is not installed
+2. next to the taosAdapter binary
+3. `<taosAdapter>/../lib` (build tree) and `<taosAdapter>/../driver` (package layout)
+4. the `LD_LIBRARY_PATH` entries (`DYLD_LIBRARY_PATH` on macOS)
+5. the system library path (`ldconfig` cache, `/usr/lib`, ...; plus `/usr/local/lib` on macOS)
+
+If the driver cannot be loaded, taosAdapter reports it and exits:
+
+```
+load TDengine client driver failed: cannot load libtaosnative.so; tried: ...
 ```
 
 ## 4. Building
@@ -152,7 +166,10 @@ go build -ldflags "-X main.version=3.x.x.x -X main.commitID=$(git rev-parse HEAD
 
 1. Before running tests, ensure that the TDengine server is installed and the `taosd` is running.
    The database should be empty.
-2. Most tests require access to `libtaos.so`. If needed, export `LD_LIBRARY_PATH=/usr/local/taos/driver:$LD_LIBRARY_PATH` first.
+2. Most tests require a usable native client driver. taosAdapter loads it at run time,
+   so if it is installed outside the searched paths, point at it explicitly:
+   `export TDENGINE_DRIVER_PATH=/usr/local/taos/driver/libtaosnative.so` (or export
+   `LD_LIBRARY_PATH=/usr/local/taos/driver:$LD_LIBRARY_PATH`).
 3. In the project directory, run `go test ./...` to execute the tests. The tests will connect to the local TDengine
    server and taosAdapter for testing.
 4. For detailed output, run `go test -v ./...`.
@@ -179,7 +196,7 @@ Performance testing is in progress.
 - **Inner `package.tar.gz`**: `bin/taosadapter`, `cfg/taosadapter.toml`, `cfg/taosadapter.service`
 - **Outer package**: `install_adapter.sh`, `uninstall_adapter.sh`, `package.tar.gz`
 
-Before packaging or installing taosAdapter, install the taos-community package first so that `libtaos.so` is available on the target system.
+Before packaging or installing taosAdapter, install the taos-community package first so that the client header is available to build against and the native client driver (`libtaosnative.so`) is available on the target system at run time.
 
 ### 6.1 Build the release binary
 

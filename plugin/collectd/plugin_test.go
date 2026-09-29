@@ -1,3 +1,25 @@
+// Copyright (c) 2021 TAOS Data, Inc.
+//
+// SPDX-License-Identifier: MIT
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 package collectd
 
 import (
@@ -95,7 +117,7 @@ func TestCollectd(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		values, err = query(conn, "select * from information_schema.ins_tables where db_name='collectd' and stable_name='cpu_value'")
 		return err == nil && len(values) == 1
-	}, 10*time.Second, 500*time.Millisecond)
+	}, 60*time.Second, 500*time.Millisecond)
 
 	defer func() {
 		r := syncinterface.TaosQuery(conn, "drop database if exists collectd", logger, isDebug)

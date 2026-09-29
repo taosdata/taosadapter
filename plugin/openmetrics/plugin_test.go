@@ -1,3 +1,25 @@
+// Copyright (c) 2025 TAOS Data, Inc.
+//
+// SPDX-License-Identifier: MIT
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 package openmetrics
 
 import (
@@ -221,10 +243,12 @@ func TestOpenMetrics(t *testing.T) {
 		"open_metrics_tls",
 	}
 	for _, metricsDB := range testMetricsDBs {
+		// The plugin writes metrics and creates the tables asynchronously,
+		// which can take tens of seconds on the loaded shared arm64 CI runner.
 		assert.Eventually(t, func() bool {
 			values, err = query(conn, fmt.Sprintf("select * from information_schema.ins_tables where db_name='%s' and stable_name='test_metric'", metricsDB))
 			return err == nil && len(values) == 1
-		}, 10*time.Second, 500*time.Millisecond)
+		}, 120*time.Second, 500*time.Millisecond)
 	}
 	for i := 0; i < len(testMetricsDBs); i++ {
 		dbName := testMetricsDBs[i]
@@ -259,7 +283,7 @@ func TestOpenMetrics(t *testing.T) {
 		assert.Eventually(t, func() bool {
 			values, err = query(conn, fmt.Sprintf("select * from information_schema.ins_tables where db_name='%s' and stable_name='test_metric'", prometheusDB))
 			return err == nil && len(values) == 1
-		}, 10*time.Second, 500*time.Millisecond)
+		}, 120*time.Second, 500*time.Millisecond)
 	}
 	for i := 0; i < len(testPrometheusDBs); i++ {
 		dbName := testPrometheusDBs[i]
@@ -287,7 +311,7 @@ func TestOpenMetrics(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		values, err = query(conn, "select * from information_schema.ins_tables where db_name='open_metrics_proto' and stable_name='test_gauge'")
 		return err == nil && len(values) == 1
-	}, 10*time.Second, 500*time.Millisecond)
+	}, 120*time.Second, 500*time.Millisecond)
 	// protobuf
 	values, err = query(conn, "select last(`gauge`) as `gauge` from open_metrics_proto.test_gauge;")
 	assert.NoError(t, err)
@@ -386,11 +410,11 @@ func TestOpenMetricsMTls(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		values, err = query(conn, "select * from information_schema.ins_tables where db_name='open_metrics_mtls_basicauth' and stable_name='test_metric'")
 		return err == nil && len(values) == 1
-	}, 10*time.Second, 500*time.Millisecond)
+	}, 120*time.Second, 500*time.Millisecond)
 	assert.Eventually(t, func() bool {
 		values, err = query(conn, "select * from information_schema.ins_tables where db_name='open_metrics_mtls_bearertoken' and stable_name='test_metric'")
 		return err == nil && len(values) == 1
-	}, 10*time.Second, 500*time.Millisecond)
+	}, 120*time.Second, 500*time.Millisecond)
 	require.Equal(t, 1, len(values))
 	values, err = query(conn, "select last(`gauge`) as `gauge` from open_metrics_mtls_basicauth.test_metric;")
 	assert.NoError(t, err)

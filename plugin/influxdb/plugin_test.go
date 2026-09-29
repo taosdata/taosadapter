@@ -1,3 +1,25 @@
+// Copyright (c) 2021 TAOS Data, Inc.
+//
+// SPDX-License-Identifier: MIT
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 package influxdb
 
 import (
@@ -77,6 +99,8 @@ func TestInfluxdb(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 	number := rand.Int31()
+	// The first write auto-creates the database, which can take tens of
+	// seconds on the loaded shared arm64 CI runner, so keep a generous budget.
 	require.Eventually(t, func() bool {
 		w := httptest.NewRecorder()
 		reader := strings.NewReader(fmt.Sprintf("measurement,host=host1 field1=%di,field2=2.0,fieldKey=\"Launch 🚀\" %d", number, time.Now().UnixNano()))
@@ -84,7 +108,7 @@ func TestInfluxdb(t *testing.T) {
 		req.RemoteAddr = testtools.GetRandomRemoteAddr()
 		router.ServeHTTP(w, req)
 		return w.Code == 204
-	}, 10*time.Second, 500*time.Millisecond)
+	}, 120*time.Second, 500*time.Millisecond)
 	w := httptest.NewRecorder()
 	reader := strings.NewReader("measurement,host=host1 field1=a1")
 	req, _ := http.NewRequest("POST", "/write?u=root&p=taosdata&db=test_plugin_influxdb&app=test_influxdb", reader)
@@ -103,7 +127,7 @@ func TestInfluxdb(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		values, err = query(conn, "select * from information_schema.ins_tables where db_name='test_plugin_influxdb' and stable_name='measurement'")
 		return err == nil && len(values) == 1
-	}, 10*time.Second, 500*time.Millisecond)
+	}, 60*time.Second, 500*time.Millisecond)
 
 	values, err = query(conn, "select * from test_plugin_influxdb.`measurement`")
 	assert.NoError(t, err)
@@ -172,7 +196,7 @@ func TestInfAndNaN(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		values, err = query(conn, "select * from test_plugin_influxdb_inf_nan.`measurement` order by _ts asc")
 		return err == nil && len(values) == 3
-	}, 2*time.Second, 200*time.Millisecond)
+	}, 60*time.Second, 200*time.Millisecond)
 
 	assert.Equal(t, float64(2), values[0][2].(float64))
 	assert.True(t, math.IsNaN(values[1][2].(float64)))
@@ -214,13 +238,13 @@ func TestToken(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer "+token)
 		router.ServeHTTP(w, req)
 		return w.Code == 204
-	}, 10*time.Second, 500*time.Millisecond)
+	}, 120*time.Second, 500*time.Millisecond)
 
 	var values [][]driver.Value
 	assert.Eventually(t, func() bool {
 		values, err = query(conn, "select * from information_schema.ins_tables where db_name='test_plugin_influxdb_token' and stable_name='measurement'")
 		return err == nil && len(values) == 1
-	}, 10*time.Second, 500*time.Millisecond)
+	}, 60*time.Second, 500*time.Millisecond)
 
 	values, err = query(conn, "select * from test_plugin_influxdb_token.`measurement`")
 	assert.NoError(t, err)

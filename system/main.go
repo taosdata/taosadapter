@@ -1,3 +1,25 @@
+// Copyright (c) 2021 TAOS Data, Inc.
+//
+// SPDX-License-Identifier: MIT
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 package system
 
 import (
@@ -20,6 +42,7 @@ import (
 	"github.com/taosdata/taosadapter/v3/controller"
 	"github.com/taosdata/taosadapter/v3/db"
 	"github.com/taosdata/taosadapter/v3/db/syncinterface"
+	"github.com/taosdata/taosadapter/v3/driver/native"
 	"github.com/taosdata/taosadapter/v3/log"
 	"github.com/taosdata/taosadapter/v3/monitor"
 	"github.com/taosdata/taosadapter/v3/monitor/recordsql"
@@ -35,6 +58,15 @@ var testProg *program
 func Init() *gin.Engine {
 	config.Init()
 	log.ConfigLog()
+
+	// The native client driver is loaded at run time (driver/native), not by the
+	// linker, so a client that is missing or cannot be loaded is reported here:
+	// without it every request fails, with nothing saying why.
+	if err := native.Preload(); err != nil {
+		logger.Fatal(err)
+	}
+	logger.Infof("native client driver: %s", native.DriverPath())
+
 	db.PrepareConnection()
 	err := recordsql.Init()
 	if err != nil {
@@ -82,7 +114,15 @@ func createRouter(debug bool, corsConf *config.CorsConfig, enableGzip bool) *gin
 		pprof.Register(router)
 	}
 	if enableGzip {
-		router.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithDecompressFn(gzip.DefaultDecompressHandle)))
+		// /metrics is excluded because promhttp does its own Accept-Encoding
+		// negotiation and compresses the response itself. Letting this
+		// middleware compress it again produces a doubly-gzipped body while
+		// only one Content-Encoding: gzip is advertised, which clients cannot
+		// decode.
+		router.Use(gzip.Gzip(gzip.DefaultCompression,
+			gzip.WithDecompressFn(gzip.DefaultDecompressHandle),
+			gzip.WithExcludedPaths([]string{"/metrics"}),
+		))
 	}
 	router.Use(cors.New(corsConf.GetConfig()))
 	return router
