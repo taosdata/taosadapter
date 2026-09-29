@@ -1,4 +1,27 @@
 #!/bin/bash
+
+# Copyright (c) 2021 TAOS Data, Inc.
+#
+# SPDX-License-Identifier: MIT
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 # install_adapter.sh — install taosAdapter from package.tar.gz
 
 set -e
@@ -104,12 +127,12 @@ fi
 
 lib_found=0
 if command -v ldconfig >/dev/null 2>&1; then
-  if ldconfig -p 2>/dev/null | grep -q 'libtaos\.so'; then
+  if ldconfig -p 2>/dev/null | grep -q 'libtaosnative\.so'; then
     lib_found=1
   fi
 fi
 if [ "$lib_found" -eq 0 ]; then
-  for path in /usr/local/taos/driver/libtaos.so /usr/lib/libtaos.so /usr/lib64/libtaos.so /usr/local/lib/libtaos.so; do
+  for path in /usr/local/taos/driver/libtaosnative.so /usr/lib/libtaosnative.so /usr/lib64/libtaosnative.so /usr/local/lib/libtaosnative.so; do
     if [ -e "$path" ]; then
       lib_found=1
       break
@@ -117,8 +140,12 @@ if [ "$lib_found" -eq 0 ]; then
   done
 fi
 if [ "$lib_found" -eq 0 ]; then
-  echo "Warning: libtaos.so was not found in the system library paths."
-  echo "         Install the taos-community package first or export LD_LIBRARY_PATH accordingly."
+  echo "Warning: libtaosnative.so was not found in the system library paths."
+  echo "         ${productName} loads the TDengine client driver at run time, so it also"
+  echo "         searches its own directory, <dir>/../lib, <dir>/../driver and"
+  echo "         LD_LIBRARY_PATH (DYLD_LIBRARY_PATH on macOS)."
+  echo "         Install the taos-community package first, or point TDENGINE_DRIVER_PATH"
+  echo "         at the driver to use."
 fi
 
 rm -rf "$work_dir"
