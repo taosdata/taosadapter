@@ -240,6 +240,12 @@ func (h *messageHandler) fetchRawBlock(ctx context.Context, session *melody.Sess
 	logger.Debugf("get_raw_block cost:%s", log.GetLogDuration(isDebug, s))
 	item.Size = result.N
 	s = log.GetLogNow(isDebug)
+	if item.Block == nil {
+		item.Unlock()
+		logger.Errorf("block is nil, result_id:%d, rows:%d", resultID, result.N)
+		fetchRawBlockErrorResponse(session, logger, 0xffff, "block is nil", reqID, resultID, uint64(wstool.GetDuration(ctx)))
+		return
+	}
 	blockLength := int(parser.RawBlockGetLength(item.Block))
 	if blockLength <= 0 {
 		item.Unlock()
